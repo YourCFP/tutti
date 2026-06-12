@@ -20,9 +20,14 @@ const openWithApplicationsByCacheKey = new Map<
   DesktopOpenWithApplication[]
 >();
 const applicationIconDataUrlByPath = new Map<string, string | null>();
+const defaultApplicationIconDataUrlByCacheKey = new Map<
+  string,
+  string | null
+>();
 let cachedListOpenWithApplicationsSwiftScriptPath: string | null = null;
 let cachedOpenFileWithDefaultBrowserSwiftScriptPath: string | null = null;
 let cachedReadApplicationIconSwiftScriptPath: string | null = null;
+let cachedResolveDefaultApplicationSwiftScriptPath: string | null = null;
 
 const videoPlayerApplicationPathPattern =
   /\/(QuickTime Player|QuickTime|TV|IINA|VLC|Elmedia Player|Movist|MPV|Fig Player|5KPlayer|NicePlayer)\.app$/i;
@@ -72,6 +77,21 @@ guard let tiff = icon.tiffRepresentation,
     exit(1)
 }
 print(png.base64EncodedString())
+`;
+
+const resolveDefaultApplicationSwiftSource = `
+import AppKit
+import Foundation
+
+let targetPath = CommandLine.arguments[1]
+let targetURL = URL(fileURLWithPath: targetPath)
+let workspace = NSWorkspace.shared
+guard let appURL = workspace.urlForApplication(toOpen: targetURL) else {
+    exit(1)
+}
+let bundlePath = appURL.path
+let name = FileManager.default.displayName(atPath: bundlePath)
+print("\\(name)\\t\\(bundlePath)")
 `;
 
 const openFileWithDefaultBrowserSwiftSource = `
@@ -182,9 +202,11 @@ export async function openFileWithDefaultBrowser(
 export function resetOpenWithApplicationsCacheForTests(): void {
   openWithApplicationsByCacheKey.clear();
   applicationIconDataUrlByPath.clear();
+  defaultApplicationIconDataUrlByCacheKey.clear();
   cachedListOpenWithApplicationsSwiftScriptPath = null;
   cachedOpenFileWithDefaultBrowserSwiftScriptPath = null;
   cachedReadApplicationIconSwiftScriptPath = null;
+  cachedResolveDefaultApplicationSwiftScriptPath = null;
 }
 
 export function parseListOpenWithApplicationsLine(line: string): {
@@ -379,6 +401,57 @@ export async function readApplicationIconDataUrl(
   return workspaceIconDataUrl;
 }
 
+export async function readDefaultApplicationIconDataUrl(
+  targetPath: string
+): Promise<string | null> {
+  if (process.platform !== "darwin") {
+    return null;
+  }
+
+  const normalizedTargetPath = path.resolve(targetPath);
+  const cacheKey = resolveOpenWithApplicationsCacheKey(normalizedTargetPath);
+  if (defaultApplicationIconDataUrlByCacheKey.has(cacheKey)) {
+    return defaultApplicationIconDataUrlByCacheKey.get(cacheKey) ?? null;
+  }
+
+  try {
+    const scriptPath = await resolveDefaultApplicationSwiftScriptPath();
+    const { stdout } = await execFileAsync(
+      "swift",
+      [scriptPath, normalizedTargetPath],
+      {
+        maxBuffer: openWithSwiftMaxBufferBytes
+      }
+    );
+    const application = parseDefaultApplicationLine(stdout);
+    const iconDataUrl = application
+      ? await readApplicationIconDataUrl(
+          application.applicationPath,
+          application.name
+        )
+      : null;
+    defaultApplicationIconDataUrlByCacheKey.set(cacheKey, iconDataUrl);
+    return iconDataUrl;
+  } catch {
+    defaultApplicationIconDataUrlByCacheKey.set(cacheKey, null);
+    return null;
+  }
+}
+
+function parseDefaultApplicationLine(line: string): {
+  applicationPath: string;
+  name: string;
+} | null {
+  const parsedLine = parseListOpenWithApplicationsLine(line);
+  if (!parsedLine) {
+    return null;
+  }
+  return {
+    applicationPath: parsedLine.applicationPath,
+    name: parsedLine.name
+  };
+}
+
 async function readApplicationIconDataUrlFromWorkspace(
   applicationPath: string
 ): Promise<string | null> {
@@ -416,6 +489,23 @@ async function resolveReadApplicationIconSwiftScriptPath(): Promise<string> {
   const scriptPath = path.join(tempDirectory, "readApplicationIcon.swift");
   await writeFile(scriptPath, readApplicationIconSwiftSource, "utf8");
   cachedReadApplicationIconSwiftScriptPath = scriptPath;
+  return scriptPath;
+}
+
+async function resolveDefaultApplicationSwiftScriptPath(): Promise<string> {
+  if (cachedResolveDefaultApplicationSwiftScriptPath) {
+    return cachedResolveDefaultApplicationSwiftScriptPath;
+  }
+
+  const tempDirectory = await mkdtemp(
+    path.join(tmpdir(), "nextop-default-app-swift-")
+  );
+  const scriptPath = path.join(
+    tempDirectory,
+    "resolveDefaultApplication.swift"
+  );
+  await writeFile(scriptPath, resolveDefaultApplicationSwiftSource, "utf8");
+  cachedResolveDefaultApplicationSwiftScriptPath = scriptPath;
   return scriptPath;
 }
 

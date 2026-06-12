@@ -29,8 +29,8 @@ test("resolves icons for image files", () => {
   );
 });
 
-test("skips non-image files and regular directories", () => {
-  assert.equal(shouldResolveWorkspaceFileEntryIcon(createEntry()), false);
+test("resolves icons for regular files and skips regular directories", () => {
+  assert.equal(shouldResolveWorkspaceFileEntryIcon(createEntry()), true);
   assert.equal(
     shouldResolveWorkspaceFileEntryIcon(
       createEntry({

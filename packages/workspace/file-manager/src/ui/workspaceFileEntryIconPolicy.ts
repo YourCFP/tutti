@@ -1,5 +1,4 @@
 import type { WorkspaceFileEntry } from "../services/workspaceFileManagerTypes.ts";
-import { resolveWorkspaceFileVisualKind } from "../services/workspaceFileManagerModel.ts";
 
 export function shouldResolveWorkspaceFileEntryIcon(
   entry: WorkspaceFileEntry
@@ -7,9 +6,7 @@ export function shouldResolveWorkspaceFileEntryIcon(
   if (isWorkspaceApplicationBundle(entry)) {
     return true;
   }
-  return (
-    entry.kind === "file" && resolveWorkspaceFileVisualKind(entry) === "image"
-  );
+  return entry.kind === "file";
 }
 
 export function isWorkspaceApplicationBundle(

@@ -10,6 +10,7 @@ import {
   openFileWithDefaultBrowser,
   parseListOpenWithApplicationsLine,
   pickOpenWithApplication,
+  readDefaultApplicationIconDataUrl,
   resetOpenWithApplicationsCacheForTests
 } from "./openWithApplications.ts";
 import { resolveOpenWithApplicationIconOverrideDataUrl } from "../../shared/openWithApplicationIconOverrides.ts";
@@ -128,6 +129,28 @@ test("listOpenWithApplications returns installed handlers on macOS", async (t) =
         application.iconDataUrl.startsWith("data:image/png;base64,")
     )
   );
+});
+
+test("readDefaultApplicationIconDataUrl returns default handler icon on macOS", async (t) => {
+  if (process.platform !== "darwin") {
+    t.skip("macOS only");
+    return;
+  }
+
+  const workspaceRoot = await mkdtemp(
+    path.join(tmpdir(), "nextop-default-app-icon-")
+  );
+  const targetPath = path.join(workspaceRoot, "notes.txt");
+  await writeFile(targetPath, "hello", "utf8");
+
+  resetOpenWithApplicationsCacheForTests();
+  const iconDataUrl = await readDefaultApplicationIconDataUrl(targetPath);
+  if (!iconDataUrl) {
+    t.skip("default application icon unavailable in this test environment");
+    return;
+  }
+
+  assert.match(iconDataUrl, /^data:image\/png;base64,/);
 });
 
 test("openFileWithDefaultBrowser delegates to the macOS browser opener without launching it in tests", async (t) => {
