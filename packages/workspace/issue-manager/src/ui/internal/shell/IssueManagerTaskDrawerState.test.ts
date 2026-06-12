@@ -173,6 +173,14 @@ test("task drawer title wraps long unbroken text inside the panel", () => {
   );
 });
 
+test("task delete confirmation wraps long unbroken titles", () => {
+  assert.match(
+    taskDrawerSectionsSource,
+    /<span className="block max-w-full whitespace-normal \[overflow-wrap:anywhere\]">/
+  );
+  assert.match(taskDrawerSectionsSource, /description=\{\s*<span/);
+});
+
 test("clamped issue and task titles expose the full text in shared tooltips", () => {
   assert.match(
     titleTooltipSource,

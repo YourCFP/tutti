@@ -478,7 +478,7 @@ describe("AgentFileMentionPalette", () => {
     expect(title).toHaveClass(
       "min-w-0",
       "truncate",
-      "text-[11px]",
+      "text-[13px]",
       "text-[var(--text-primary)]"
     );
     expect(title.parentElement).toHaveClass(
@@ -1053,12 +1053,12 @@ describe("AgentFileMentionPalette", () => {
       "border-[var(--line-1)]"
     );
     expect(screen.getByText("事项")).toHaveClass(
-      "text-[11px]",
+      "text-[13px]",
       "font-normal",
       "text-[var(--text-secondary)]"
     );
     expect(screen.getByText("暂无事项")).toHaveClass(
-      "text-[11px]",
+      "text-[13px]",
       "font-normal",
       "text-[var(--text-tertiary)]"
     );
@@ -1134,7 +1134,7 @@ describe("AgentFileMentionPalette", () => {
       "gap-1"
     );
     expect(screen.getByText("Automation")).toHaveClass(
-      "text-[11px]",
+      "text-[13px]",
       "text-[var(--text-primary)]",
       "max-w-[40%]",
       "shrink-0"
@@ -1144,7 +1144,7 @@ describe("AgentFileMentionPalette", () => {
         "Schedule and review recurring automation runs for this workspace."
       )
     ).toHaveClass(
-      "text-[11px]",
+      "text-[13px]",
       "font-normal",
       "truncate",
       "text-[var(--text-secondary)]"

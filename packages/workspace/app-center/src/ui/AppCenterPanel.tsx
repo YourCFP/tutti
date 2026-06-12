@@ -639,9 +639,10 @@ export function AppCenterPanel({
         ) : null}
 
         <section className="flex min-w-0 flex-col gap-3">
-          <div className="flex min-w-0 items-center justify-between gap-3">
+          <div className="flex h-8 min-w-0 items-center justify-between gap-3">
             <SectionTabs
               ariaLabel={copy.t("labels.appList")}
+              className="h-8"
               tabs={[
                 {
                   label: copy.t("labels.recommendedApps"),
@@ -655,7 +656,7 @@ export function AppCenterPanel({
               value={activeAppTab}
               onValueChange={setActiveAppTab}
             />
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="flex h-8 shrink-0 items-center gap-1">
               {activeAppTab === "my" ? (
                 <AppCenterHeaderActions
                   copy={copy}

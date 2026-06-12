@@ -110,7 +110,11 @@ export function IssueManagerTaskDrawerHeader({
           cancelLabel={copy.t("actions.cancel")}
           confirmBusy={deleteBusy}
           confirmLabel={copy.t("actions.delete")}
-          description={selectedTask.title}
+          description={
+            <span className="block max-w-full whitespace-normal [overflow-wrap:anywhere]">
+              {selectedTask.title}
+            </span>
+          }
           open={deleteDialogOpen}
           title={copy.t("confirmations.deleteTask")}
           tone="destructive"

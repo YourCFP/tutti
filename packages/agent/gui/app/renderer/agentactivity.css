@@ -2101,7 +2101,7 @@ aside.workspace-agents-status-panel
   height: 36px;
   padding: 0 16px 1px;
   color: var(--agent-gui-text-secondary, var(--text-secondary));
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 20px;
   pointer-events: auto;
@@ -2137,7 +2137,7 @@ aside.workspace-agents-status-panel
   border-radius: 4px;
   background: color-mix(in srgb, var(--transparency-block) 72%, transparent);
   color: var(--agent-gui-text-secondary, var(--text-secondary));
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1;
   padding: 4px 6px;
