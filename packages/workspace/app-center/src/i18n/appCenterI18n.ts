@@ -177,8 +177,7 @@ export const appCenterEn = {
     },
     groupChat: {
       category: "Productivity",
-      description:
-        "Bring workspace conversations, team updates, and collaboration context into one place.",
+      description: "Get work done with your agents in group chat.",
       name: "Group Chat"
     },
     aiPpt: {
@@ -462,7 +461,7 @@ export const appCenterZhCN = {
     },
     groupChat: {
       category: "工具",
-      description: "聚合工作区会话、团队同步和协作上下文。",
+      description: "在群里跟你的 Agents 一起干活",
       name: "群聊"
     },
     aiPpt: {
@@ -508,9 +507,9 @@ export const appCenterZhCN = {
       tertiary: "评审"
     },
     groupChat: {
-      primary: "会话",
-      secondary: "团队",
-      tertiary: "同步"
+      primary: "团队",
+      secondary: "协同",
+      tertiary: "工作"
     },
     aiPpt: {
       primary: "幻灯片",
