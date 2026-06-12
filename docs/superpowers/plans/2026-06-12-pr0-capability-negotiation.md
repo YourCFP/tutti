@@ -342,7 +342,7 @@ git commit -m "feat(nextopd): static capability defaults in composer options"
 - Modify: `packages/agent/activity-core/src/index.ts`（或該包的導出入口，先 grep `resolveAgentActivityPromptImagesSupported` 的導出位置照做）
 - Test: `packages/agent/activity-core/src/capabilities.test.ts`
 
-- [ ] **Step 1: 寫失敗測試**
+- [x] **Step 1: 寫失敗測試**
 
 ```ts
 import assert from "node:assert/strict";
@@ -414,12 +414,12 @@ test("vocabulary matches the Go side", () => {
 
 （`composerOptions` 字面量若類型不滿足 `AgentActivityComposerOptions`，按該類型補必填字段或用 `as` 收窄——以現有 selectors.test.ts 的寫法為準。）
 
-- [ ] **Step 2: 跑測試確認失敗**
+- [x] **Step 2: 跑測試確認失敗**
 
 Run: `cd packages/agent/activity-core && node --test --experimental-strip-types ./src/capabilities.test.ts`
 Expected: FAIL（模塊不存在）
 
-- [ ] **Step 3: 實現 capabilities.ts**
+- [x] **Step 3: 實現 capabilities.ts**
 
 ```ts
 import type { AgentActivityComposerOptions } from "./types.ts";
@@ -473,12 +473,12 @@ function capabilityFromRuntimeContext(
 
 並在包導出入口補導出（與 `resolveAgentActivityPromptImagesSupported` 同處）。
 
-- [ ] **Step 4: 跑包測試**
+- [x] **Step 4: 跑包測試**
 
 Run: `cd packages/agent/activity-core && pnpm test`
 Expected: 全 PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/agent/activity-core/src/

@@ -1,5 +1,11 @@
 export type { AgentActivityAdapter } from "./adapter.ts";
 export {
+  AGENT_CAPABILITY_KEYS,
+  resolveAgentActivityCapability,
+  type AgentActivityCapabilityInput,
+  type AgentCapabilityKey
+} from "./capabilities.ts";
+export {
   cloneAgentActivitySnapshot,
   createAgentActivityController,
   createEmptyAgentActivitySnapshot,
