@@ -12,10 +12,12 @@ export function shouldOfferPlanImplementation(input: {
   previousStatus: string | null;
   status: string | null;
   planModeActive: boolean;
+  planItemProduced: boolean;
 }): boolean {
   return (
     input.provider === "codex" &&
     input.planModeActive &&
+    input.planItemProduced &&
     input.previousStatus === "working" &&
     input.status === "ready"
   );

@@ -6404,7 +6404,9 @@ export function useAgentGUINodeController({
         provider: dataRef.current.provider,
         previousStatus: previous.status,
         status,
-        planModeActive: composerSupport.plan && Boolean(draftSettings.planMode)
+        planModeActive: composerSupport.plan && Boolean(draftSettings.planMode),
+        planItemProduced:
+          activeSessionRuntimeContext?.lastTurnProducedPlan === true
       })
     ) {
       setPlanImplementationSessionIds((current) =>
@@ -6414,6 +6416,7 @@ export function useAgentGUINodeController({
   }, [
     activeConversation?.id,
     activeConversation?.status,
+    activeSessionRuntimeContext?.lastTurnProducedPlan,
     composerSupport.plan,
     draftSettings.planMode
   ]);

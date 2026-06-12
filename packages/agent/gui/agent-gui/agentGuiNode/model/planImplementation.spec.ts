@@ -9,11 +9,20 @@ describe("shouldOfferPlanImplementation", () => {
     provider: "codex",
     previousStatus: "working",
     status: "ready",
-    planModeActive: true
+    planModeActive: true,
+    planItemProduced: true
   };
 
   it("offers after a codex plan-mode turn completes", () => {
     expect(shouldOfferPlanImplementation(base)).toBe(true);
+  });
+
+  it("does not offer when the turn produced no plan item", () => {
+    // Mirrors the codex TUI's saw_plan_item_this_turn gate: clarifying
+    // questions or plain replies in plan mode must not trigger the offer.
+    expect(
+      shouldOfferPlanImplementation({ ...base, planItemProduced: false })
+    ).toBe(false);
   });
 
   it("does not offer outside plan mode", () => {

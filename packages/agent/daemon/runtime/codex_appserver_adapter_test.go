@@ -54,6 +54,7 @@ type scriptedAppServerConnection struct {
 
 	requiresAuth                 bool
 	collaborationModeUnsupported bool
+	emitPlanItem                 bool
 	accountReadError             bool
 	turnStatus                   string // completed (default) | failed | interrupted
 	turnError                    map[string]any
@@ -254,6 +255,7 @@ func (c *scriptedAppServerConnection) Send(data []byte) error {
 			hold := c.holdTurn
 			approval := c.commandApproval
 			userInput := c.userInputRequest
+			emitPlan := c.emitPlanItem
 			c.mu.Unlock()
 			// Mirror the real app-server: the RPC responds immediately with
 			// the inProgress turn; output streams as notifications.
@@ -297,6 +299,17 @@ func (c *scriptedAppServerConnection) Send(data []byte) error {
 					},
 				})
 				continue
+			}
+			if emitPlan {
+				c.notify(appServerNotifyItemCompleted, map[string]any{
+					"threadId": "codex-thread-1",
+					"turnId":   "turn-1",
+					"item": map[string]any{
+						"type": "plan",
+						"id":   "item-plan-1",
+						"text": "# Plan\n1. inspect\n2. fix",
+					},
+				})
 			}
 			c.notify(appServerNotifyReasoningDelta, map[string]any{
 				"threadId": "codex-thread-1", "turnId": "turn-1", "itemId": "item-think",
@@ -1477,5 +1490,37 @@ func TestCodexAppServerAdapterSendsCollaborationModeForPlanTurns(t *testing.T) {
 	overrideSettings, _ := overrideMode["settings"].(map[string]any)
 	if asString(overrideSettings["model"]) != "gpt-5.1-codex-mini" || asString(overrideSettings["reasoning_effort"]) != "low" {
 		t.Fatalf("collaborationMode settings = %#v, want session overrides", overrideSettings)
+	}
+}
+
+func TestCodexAppServerAdapterTracksPlanItemPerTurn(t *testing.T) {
+	t.Parallel()
+
+	adapter, transport, session := startedAppServerAdapter(t)
+	transport.conn.mu.Lock()
+	transport.conn.emitPlanItem = true
+	transport.conn.mu.Unlock()
+	session.Settings = &SessionSettings{PlanMode: true}
+	if _, err := adapter.Exec(context.Background(), session, []PromptContentBlock{{
+		Type: "text", Text: "plan it",
+	}}, "", "turn-plan-track-1", nil, nil); err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	state := adapter.SessionState(session)
+	if state.RuntimeContext["lastTurnProducedPlan"] != true {
+		t.Fatalf("runtimeContext lastTurnProducedPlan = %#v, want true after plan item", state.RuntimeContext["lastTurnProducedPlan"])
+	}
+
+	transport.conn.mu.Lock()
+	transport.conn.emitPlanItem = false
+	transport.conn.mu.Unlock()
+	if _, err := adapter.Exec(context.Background(), session, []PromptContentBlock{{
+		Type: "text", Text: "just chatting",
+	}}, "", "turn-plan-track-2", nil, nil); err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	state = adapter.SessionState(session)
+	if state.RuntimeContext["lastTurnProducedPlan"] == true {
+		t.Fatalf("runtimeContext lastTurnProducedPlan = %#v, want cleared after non-plan turn", state.RuntimeContext["lastTurnProducedPlan"])
 	}
 }

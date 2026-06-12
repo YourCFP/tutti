@@ -164,6 +164,7 @@ func (a *CodexAppServerAdapter) appServerItemEvents(
 		if !completed {
 			return nil
 		}
+		a.markSessionPlanItem(session.AgentSessionID)
 		events := normalizer.AppendAssistantChunk(session, turnID, asStringRaw(item["text"]))
 		events = append(events, normalizer.Finish(session, turnID, messageStreamStateCompleted)...)
 		return events

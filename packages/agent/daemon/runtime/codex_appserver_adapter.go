@@ -99,10 +99,16 @@ type codexAppServerSession struct {
 	// CollaborationMode.settings.model when no session override is set.
 	planModeMask map[string]any
 	defaultModel string
-	authState    string
-	authMessage  string
-	activeTurnID string
-	activeTurn   *codexAppServerActiveTurn
+	// Mirrors the codex TUI's saw_plan_item_this_turn: set when the active
+	// turn completes a `plan` item, latched into lastTurnProducedPlan when
+	// the turn ends so clients can offer the implement-plan prompt only for
+	// turns that actually proposed a plan.
+	activeTurnSawPlanItem bool
+	lastTurnProducedPlan  bool
+	authState             string
+	authMessage           string
+	activeTurnID          string
+	activeTurn            *codexAppServerActiveTurn
 	acpLiveState
 	pendingRequests map[string]*pendingACPRequest
 }
@@ -1053,6 +1059,7 @@ func (a *CodexAppServerAdapter) SessionState(session Session) SessionStateSnapsh
 		snapshot.RuntimeContext["usage"] = usage
 	}
 	snapshot.RuntimeContext["capabilities"] = codexAppServerCapabilities(state.planModeSupported)
+	snapshot.RuntimeContext["lastTurnProducedPlan"] = state.lastTurnProducedPlan
 	snapshot.Settings = sessionSettingsWithACPConfig(
 		session.Settings,
 		session.Provider,
@@ -1072,12 +1079,13 @@ func (a *CodexAppServerAdapter) SessionState(session Session) SessionStateSnapsh
 }
 
 type codexAppServerSessionStateSnapshot struct {
-	serverInfo        map[string]any
-	account           map[string]any
-	rateLimits        map[string]any
-	authState         string
-	authMessage       string
-	planModeSupported bool
+	serverInfo           map[string]any
+	account              map[string]any
+	rateLimits           map[string]any
+	authState            string
+	authMessage          string
+	planModeSupported    bool
+	lastTurnProducedPlan bool
 	acpLiveStateSnapshot
 	pendingPrompt *SessionInteractivePrompt
 }
@@ -1104,6 +1112,7 @@ func (a *CodexAppServerAdapter) snapshotSessionState(agentSessionID string) (cod
 		authState:            strings.TrimSpace(appSession.authState),
 		authMessage:          strings.TrimSpace(appSession.authMessage),
 		planModeSupported:    appSession.planModeMask != nil,
+		lastTurnProducedPlan: appSession.lastTurnProducedPlan,
 		acpLiveStateSnapshot: snapshotACPLiveState(appSession.acpLiveState),
 		pendingPrompt:        prompt,
 	}, true
@@ -1227,7 +1236,19 @@ func (a *CodexAppServerAdapter) beginActiveTurn(
 		return false
 	}
 	appSession.activeTurn = turn
+	appSession.activeTurnSawPlanItem = false
 	return true
+}
+
+func (a *CodexAppServerAdapter) markSessionPlanItem(agentSessionID string) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if appSession := a.sessions[strings.TrimSpace(agentSessionID)]; appSession != nil {
+		appSession.activeTurnSawPlanItem = true
+	}
 }
 
 func (a *CodexAppServerAdapter) endActiveTurn(agentSessionID string, turn *codexAppServerActiveTurn) {
@@ -1269,6 +1290,10 @@ func (a *CodexAppServerAdapter) completeActiveTurn(agentSessionID string, turn m
 	if appSession != nil {
 		activeTurn = appSession.activeTurn
 		appSession.activeTurnID = ""
+		if activeTurn != nil {
+			appSession.lastTurnProducedPlan = appSession.activeTurnSawPlanItem
+			appSession.activeTurnSawPlanItem = false
+		}
 	}
 	a.mu.Unlock()
 	if activeTurn == nil {
