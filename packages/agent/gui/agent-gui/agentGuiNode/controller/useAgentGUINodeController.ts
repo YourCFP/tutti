@@ -4836,8 +4836,14 @@ export function useAgentGUINodeController({
             input.action === "allow"
           ) {
             // Plan approved: leave plan mode so the next turn executes
-            // instead of replanning.
-            updateComposerSettingsRef.current({ planMode: false });
+            // instead of replanning. The approved option is the permission
+            // mode the provider switches to, so mirror it in the dropdown.
+            updateComposerSettingsRef.current({
+              planMode: false,
+              ...(normalizedOptionId
+                ? { permissionModeId: normalizedOptionId }
+                : {})
+            });
           }
           void refreshMessagesFromSnapshot(agentSessionId);
           void loadSessionState(agentSessionId);

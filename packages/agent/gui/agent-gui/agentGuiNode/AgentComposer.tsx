@@ -31,13 +31,12 @@ import type { AgentConversationPromptVM } from "../../shared/agentConversation/c
 import { cn } from "../../app/renderer/lib/utils";
 import {
   AddIcon,
-  CloseIcon,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger
 } from "@tutti-os/ui-system";
-import { ListChecks, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { WorkspaceFileReference } from "@tutti-os/workspace-file-reference/contracts";
 import {
   clampSlashCommandHighlight,
@@ -1677,19 +1676,6 @@ export function AgentComposer({
   const sendButtonBusy = isSendingTurn && !isQueueMode;
   const settingsControlsDisabled =
     isSendingTurn || isSubmittingPrompt || showStopButton;
-  const planModeEnabled =
-    composerSettings.effectivePlanMode ??
-    composerSettings.draftSettings.planMode;
-  const planModeToggleDisabled =
-    settingsControlsDisabled ||
-    composerSettings.isSettingsLoading ||
-    composerSettings.planUnavailable;
-  const planModeStateLabel = composerSettings.planUnavailable
-    ? labels.planUnavailable
-    : planModeEnabled
-      ? labels.planModeOnLabel
-      : labels.planModeOffLabel;
-  const planModeToggleLabel = `${labels.planModeLabel}: ${planModeStateLabel}`;
   const activePromptRequestId = activePrompt?.requestId ?? null;
   const [dismissedPromptRequestId, setDismissedPromptRequestId] = useState<
     string | null
@@ -2067,59 +2053,14 @@ export function AgentComposer({
               </Select>
             </div>
             <div className={composerStyles.footerGroupRight}>
-              {composerSettings.supportsPlanMode ? (
-                <button
-                  type="button"
-                  className={cn(
-                    styles.composerMenuTrigger,
-                    "group/plan-mode nodrag h-8 w-auto max-w-[160px] shrink-0 gap-1.5 rounded-full px-2.5 transition-[background-color,color,opacity] duration-150 hover:bg-[var(--transparency-hover)] hover:text-[var(--text-secondary)] [-webkit-app-region:no-drag]",
-                    !planModeEnabled &&
-                      "text-[var(--agent-gui-text-tertiary)] hover:text-[var(--text-secondary)]",
-                    planModeToggleDisabled &&
-                      "cursor-not-allowed text-[var(--agent-gui-text-tertiary)] opacity-60 hover:text-[var(--agent-gui-text-tertiary)]"
-                  )}
-                  data-agent-plan-mode-toggle="true"
-                  data-state={planModeEnabled ? "on" : "off"}
-                  aria-label={planModeToggleLabel}
-                  aria-pressed={planModeEnabled}
-                  disabled={planModeToggleDisabled}
-                  title={planModeToggleLabel}
-                  onClick={() => {
-                    if (planModeToggleDisabled) {
-                      return;
-                    }
-                    onSettingsChange({ planMode: !planModeEnabled });
-                  }}
-                >
-                  <span
-                    className="relative inline-flex size-4 shrink-0 items-center justify-center"
-                    aria-hidden="true"
-                  >
-                    <ListChecks
-                      className={cn(
-                        "size-4 text-current opacity-100 transition-opacity duration-150",
-                        planModeEnabled &&
-                          "group-hover/plan-mode:opacity-0 group-focus-visible/plan-mode:opacity-0"
-                      )}
-                      strokeWidth={1.8}
-                    />
-                    {planModeEnabled ? (
-                      <span className="absolute inset-0 inline-flex items-center justify-center rounded-full bg-[var(--agent-gui-text-secondary)] text-[var(--background-fronted)] opacity-0 transition-opacity duration-150 group-hover/plan-mode:opacity-100 group-focus-visible/plan-mode:opacity-100">
-                        <CloseIcon className="size-3" />
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="min-w-0 truncate" data-agent-plan-mode-label>
-                    {labels.planModeLabel}
-                  </span>
-                </button>
-              ) : null}
-              {composerSettings.supportsPermissionMode ? (
+              {composerSettings.supportsPermissionMode ||
+              composerSettings.supportsPlanMode ? (
                 <AgentPermissionModeDropdown
                   composerSettings={composerSettings}
                   disabled={settingsControlsDisabled}
                   labels={{
-                    permissionLabel: labels.permissionLabel
+                    permissionLabel: labels.permissionLabel,
+                    planModeLabel: labels.planModeLabel
                   }}
                   onSettingsChange={(patch) => onSettingsChange(patch)}
                 />
@@ -2132,6 +2073,7 @@ export function AgentComposer({
                   labels={{
                     modelLabel: labels.modelLabel,
                     modelSelectionLabel: labels.modelSelectionLabel,
+                    planModeLabel: labels.planModeLabel,
                     reasoningLabel: labels.reasoningLabel,
                     reasoningDegreeLabel: labels.reasoningDegreeLabel,
                     reasoningOptionMinimal: labels.reasoningOptionMinimal,

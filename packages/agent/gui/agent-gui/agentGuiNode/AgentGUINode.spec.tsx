@@ -2258,7 +2258,7 @@ describe("AgentGUINode", () => {
     });
   }, 15000);
 
-  it("shows the plan mode toggle when supported even while plan mode is off", () => {
+  it("offers plan mode in the permission dropdown when supported", async () => {
     mockViewModel = createViewModel({
       activeConversationId: "session-1",
       composerSettings: {
@@ -2294,20 +2294,25 @@ describe("AgentGUINode", () => {
     });
     renderAgentGUINode();
 
-    const toggle = document.querySelector(
-      '[data-agent-plan-mode-toggle="true"]'
+    fireEvent.keyDown(
+      screen.getByRole("combobox", {
+        name: "agentHost.agentGui.permissionLabel"
+      }),
+      { key: "Enter" }
     );
-    expect(toggle).not.toBeNull();
-    expect(toggle).toHaveAttribute("data-state", "off");
-
-    fireEvent.click(toggle!);
+    fireEvent.pointerDown(
+      await screen.findByRole("option", {
+        name: "agentHost.agentGui.planModeLabel"
+      }),
+      { button: 0, ctrlKey: false, pointerId: 5, pointerType: "mouse" }
+    );
 
     expect(mockUpdateComposerSettings).toHaveBeenCalledWith({
       planMode: true
     });
   });
 
-  it("hides the plan mode toggle when the provider lacks the capability", () => {
+  it("omits the plan mode option when the provider lacks the capability", async () => {
     mockViewModel = createViewModel({
       activeConversationId: "session-1",
       composerSettings: {
@@ -2338,8 +2343,19 @@ describe("AgentGUINode", () => {
     });
     renderAgentGUINode();
 
+    fireEvent.keyDown(
+      screen.getByRole("combobox", {
+        name: "agentHost.agentGui.permissionLabel"
+      }),
+      { key: "Enter" }
+    );
+    await screen.findByRole("option", {
+      name: "agentHost.agentGui.permissionModeAuto"
+    });
     expect(
-      document.querySelector('[data-agent-plan-mode-toggle="true"]')
+      screen.queryByRole("option", {
+        name: "agentHost.agentGui.planModeLabel"
+      })
     ).toBeNull();
   });
 

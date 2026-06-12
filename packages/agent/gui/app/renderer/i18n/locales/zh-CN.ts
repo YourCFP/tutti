@@ -439,7 +439,7 @@ export const zhCN = {
         professionalLongRunning: "针对专业工作和长时间运行的 Agent 优化"
       },
       permissionLabel: "运行权限",
-      planModeLabel: "Plan",
+      planModeLabel: "计划模式",
       planModeOnLabel: "开启",
       planModeOffLabel: "关闭",
       planUnavailable: "规划模式不可用",

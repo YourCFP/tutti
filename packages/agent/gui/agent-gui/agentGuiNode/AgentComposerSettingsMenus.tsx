@@ -43,6 +43,7 @@ export type AgentComposerSettingsMenuLabels = {
   reasoningOptionHigh: string;
   reasoningOptionXHigh: string;
   permissionLabel: string;
+  planModeLabel: string;
   permissionModeReadOnly?: string;
   permissionModeAuto?: string;
   permissionModeFullAccess?: string;
@@ -128,6 +129,8 @@ export function AgentProjectDropdown({
   );
 }
 
+export const PLAN_MODE_PERMISSION_OPTION_VALUE = "plan";
+
 export function AgentPermissionModeDropdown({
   composerSettings,
   disabled = false,
@@ -136,25 +139,50 @@ export function AgentPermissionModeDropdown({
 }: {
   composerSettings: AgentGUIComposerSettingsVM;
   disabled?: boolean;
-  labels: Pick<AgentComposerSettingsMenuLabels, "permissionLabel">;
-  onSettingsChange: (patch: { permissionModeId?: string | null }) => void;
+  labels: Pick<
+    AgentComposerSettingsMenuLabels,
+    "permissionLabel" | "planModeLabel"
+  >;
+  onSettingsChange: (patch: {
+    permissionModeId?: string | null;
+    planMode?: boolean;
+  }) => void;
 }): React.JSX.Element {
   "use memo";
   const availableOptions = composerSettings.availablePermissionModes ?? [];
-  const selectedValue =
+  const planModeActive =
+    composerSettings.supportsPlanMode &&
+    (composerSettings.effectivePlanMode ??
+      composerSettings.draftSettings.planMode);
+  const selectedPermissionValue =
     composerSettings.selectedPermissionModeValue ??
     composerSettings.draftSettings.permissionModeId;
+  const selectedValue = planModeActive
+    ? PLAN_MODE_PERMISSION_OPTION_VALUE
+    : selectedPermissionValue;
   const permissionOptions = permissionOptionsWithSelectedValue(
     availableOptions,
-    selectedValue
+    selectedPermissionValue
   );
+  // Plan mode rides the permission dropdown (Zed-style): it is a negotiated
+  // capability rather than a backend permission mode, so it is appended here
+  // and mapped onto the planMode setting instead of permissionModeId.
+  const optionsWithPlan = composerSettings.supportsPlanMode
+    ? [
+        ...permissionOptions,
+        {
+          value: PLAN_MODE_PERMISSION_OPTION_VALUE,
+          label: labels.planModeLabel
+        }
+      ]
+    : permissionOptions;
   const selectDisabled =
     disabled ||
     composerSettings.isSettingsLoading ||
     composerSettings.permissionModeUnavailable ||
-    permissionOptions.length === 0;
+    optionsWithPlan.length === 0;
   const selectedOption =
-    permissionOptions.find((option) => option.value === selectedValue) ?? null;
+    optionsWithPlan.find((option) => option.value === selectedValue) ?? null;
   const triggerLabel =
     selectedOption?.label ?? selectedValue?.trim() ?? labels.permissionLabel;
   const triggerTone = selectDisabled
@@ -164,7 +192,15 @@ export function AgentPermissionModeDropdown({
     if (selectDisabled) {
       return;
     }
-    onSettingsChange({ permissionModeId });
+    if (permissionModeId === PLAN_MODE_PERMISSION_OPTION_VALUE) {
+      onSettingsChange({ planMode: true });
+      return;
+    }
+    onSettingsChange(
+      planModeActive
+        ? { permissionModeId, planMode: false }
+        : { permissionModeId }
+    );
   };
   const handleSelectedItemPointerDown = (
     event: React.PointerEvent,
@@ -207,7 +243,7 @@ export function AgentPermissionModeDropdown({
           "w-max min-w-[220px] max-w-[calc(100vw-32px)] data-[side=top]:!translate-y-0"
         )}
       >
-        {permissionOptions.map((option) => (
+        {optionsWithPlan.map((option) => (
           <SelectItem
             key={option.value}
             value={option.value}

@@ -481,7 +481,7 @@ export const en = {
           "Optimized for professional work and long-running agents"
       },
       permissionLabel: "Run permissions",
-      planModeLabel: "Plan",
+      planModeLabel: "Plan Mode",
       planModeOnLabel: "On",
       planModeOffLabel: "Off",
       planUnavailable: "Plan unavailable",
