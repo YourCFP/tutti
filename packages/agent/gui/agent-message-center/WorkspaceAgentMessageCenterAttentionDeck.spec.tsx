@@ -87,18 +87,49 @@ describe("WorkspaceAgentMessageCenterAttentionDeck", () => {
     ).toHaveLength(1);
   });
 
-  it("shows a remaining-count indicator for the cards behind the top", () => {
+  it("renders stacked peek edges instead of behind cards or a text indicator", () => {
     renderDeck([
       promptItem({ agentSessionId: "a" }),
       promptItem({ agentSessionId: "b" }),
       promptItem({ agentSessionId: "c" })
     ]);
-    expect(screen.getByText("2 more waiting below")).toBeTruthy();
+    const deck = screen.getByTestId(
+      "workspace-agent-message-center-attention-deck"
+    );
+    expect(deck).toHaveAttribute("data-deck-peek-count", "2");
+    expect(screen.queryByText(/more waiting below/)).toBeNull();
+    // Cards behind the top are represented by peek edges, not rendered cards.
+    expect(screen.queryByText("b")).toBeNull();
+    expect(screen.queryByText("c")).toBeNull();
   });
 
-  it("omits the remaining indicator when only one card is present", () => {
+  it("shows a single peek edge when one card waits behind", () => {
+    renderDeck([
+      promptItem({ agentSessionId: "a" }),
+      promptItem({ agentSessionId: "b" })
+    ]);
+    expect(
+      screen.getByTestId("workspace-agent-message-center-attention-deck")
+    ).toHaveAttribute("data-deck-peek-count", "1");
+  });
+
+  it("caps the peek edges at two even with more cards behind", () => {
+    renderDeck([
+      promptItem({ agentSessionId: "a" }),
+      promptItem({ agentSessionId: "b" }),
+      promptItem({ agentSessionId: "c" }),
+      promptItem({ agentSessionId: "d" })
+    ]);
+    expect(
+      screen.getByTestId("workspace-agent-message-center-attention-deck")
+    ).toHaveAttribute("data-deck-peek-count", "2");
+  });
+
+  it("shows no peek edge when only one card is present", () => {
     renderDeck([promptItem({ agentSessionId: "solo" })]);
-    expect(screen.queryByText(/more waiting below/)).toBeNull();
+    expect(
+      screen.getByTestId("workspace-agent-message-center-attention-deck")
+    ).toHaveAttribute("data-deck-peek-count", "0");
   });
 
   it("promotes a highlighted non-top item to the top slot", () => {

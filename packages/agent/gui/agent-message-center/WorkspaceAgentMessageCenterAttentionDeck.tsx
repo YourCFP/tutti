@@ -111,8 +111,7 @@ export function WorkspaceAgentMessageCenterAttentionDeck({
     return null;
   }
 
-  const behindItems = ordered.slice(1, 1 + DECK_MAX_PEEK);
-  const remainingCount = ordered.length - 1;
+  const peekCount = Math.min(ordered.length - 1, DECK_MAX_PEEK);
   const topIsSubmitting =
     submittingPromptKey ===
     `${topItem.agentSessionId}:${topItem.pendingPrompt?.requestId}`;
@@ -129,9 +128,13 @@ export function WorkspaceAgentMessageCenterAttentionDeck({
         </div>
       </div>
       <div
-        className="relative min-w-0"
+        className={cn(
+          "relative min-w-0",
+          peekCount > 1 ? "pb-[18px]" : peekCount > 0 && "pb-[10px]"
+        )}
         data-testid="workspace-agent-message-center-attention-deck"
         data-deck-count={ordered.length}
+        data-deck-peek-count={peekCount}
         data-deck-top-item-id={topItem.id}
       >
         {leavingItem ? (
@@ -158,35 +161,14 @@ export function WorkspaceAgentMessageCenterAttentionDeck({
             />
           </div>
         ) : null}
-        {behindItems.map((item, peekIndex) => {
-          const depth = peekIndex + 1;
-          return (
-            <div
-              key={item.agentSessionId}
-              aria-hidden="true"
-              inert
-              className="pointer-events-none absolute inset-x-0 top-0 min-w-0"
-              style={{
-                transform: `translateY(${depth * 10}px) scale(${1 - depth * 0.03})`,
-                opacity: Math.max(0.55 - peekIndex * 0.2, 0.2),
-                zIndex: DECK_MAX_PEEK - peekIndex
-              }}
-            >
-              <WorkspaceAgentMessageCenterCard
-                interactive={false}
-                isSubmitting={false}
-                item={item}
-                onOpenChat={onOpenChat}
-                onSubmitPrompt={() => {}}
-              />
-            </div>
-          );
-        })}
         <div
           key={topItem.id}
           className={cn(
-            "relative min-w-0 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 motion-safe:duration-300 motion-reduce:animate-none",
-            behindItems.length > 0 && "z-10"
+            "relative min-w-0 rounded-lg motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 motion-safe:duration-300 motion-reduce:animate-none",
+            peekCount > 1
+              ? "shadow-[0_7px_0_-4px_var(--background-fronted),0_7px_0_-3px_var(--line-2),0_14px_0_-8px_var(--background-fronted),0_14px_0_-7px_var(--line-2)]"
+              : peekCount > 0 &&
+                  "shadow-[0_7px_0_-4px_var(--background-fronted),0_7px_0_-3px_var(--line-2)]"
           )}
         >
           <WorkspaceAgentMessageCenterCard
@@ -205,13 +187,6 @@ export function WorkspaceAgentMessageCenterAttentionDeck({
           />
         </div>
       </div>
-      {remainingCount > 0 ? (
-        <div className="px-0.5 text-xs leading-4 text-[var(--text-tertiary)]">
-          {t("agentHost.workspaceAgentMessageCenterAttentionDeckRemaining", {
-            count: remainingCount
-          })}
-        </div>
-      ) : null}
     </section>
   );
 }

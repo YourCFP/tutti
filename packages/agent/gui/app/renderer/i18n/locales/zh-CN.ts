@@ -939,8 +939,6 @@ export const zhCN = {
     workspaceAgentMessageCenterExpandStackAria: "展开 {{count}} 条折叠消息",
     workspaceAgentMessageCenterCollapseStackAria: "收起已展开的消息",
     workspaceAgentMessageCenterStackSummaryCount: "{{count}} 条消息",
-    workspaceAgentMessageCenterAttentionDeckRemaining:
-      "下方还有 {{count}} 张待处理",
     workspaceAgentMessageCenterFilteredEmpty: "没有符合筛选条件的消息",
     workspaceAgentMessageCenterEmpty: "暂无 Agent 消息",
     workspaceAgentMessageCenterNoSummary: "暂无 Agent 消息",
