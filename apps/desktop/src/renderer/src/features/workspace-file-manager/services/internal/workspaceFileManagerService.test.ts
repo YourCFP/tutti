@@ -215,8 +215,10 @@ test("workspace file manager service reports file created after successful file 
     path
   ) => ({
     entry: {
+      createdTimeMs: null,
       hasChildren: false,
       kind: "file",
+      lastOpenedMs: null,
       mtimeMs: null,
       name: "notes.txt",
       path,
@@ -347,8 +349,10 @@ test("workspace file manager service includes hidden entries for direct reveal i
       directoryPath: input?.path || "/Users/demo",
       entries: [
         {
+          createdTimeMs: null,
           hasChildren: false,
           kind: "file",
+          lastOpenedMs: null,
           mtimeMs: null,
           name: "image.png",
           path: "/Users/demo/.nextop-dev/agent/runs/generated_images/image.png",

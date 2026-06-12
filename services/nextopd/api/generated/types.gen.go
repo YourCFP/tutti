@@ -2302,12 +2302,14 @@ type WorkspaceFileDirectoryResponse struct {
 
 // WorkspaceFileEntry defines model for WorkspaceFileEntry.
 type WorkspaceFileEntry struct {
-	HasChildren bool                   `json:"hasChildren"`
-	Kind        WorkspaceFileEntryKind `json:"kind"`
-	MtimeMs     *int64                 `json:"mtimeMs"`
-	Name        string                 `json:"name"`
-	Path        string                 `json:"path"`
-	SizeBytes   *int64                 `json:"sizeBytes"`
+	CreatedTimeMs *int64                 `json:"createdTimeMs"`
+	HasChildren   bool                   `json:"hasChildren"`
+	Kind          WorkspaceFileEntryKind `json:"kind"`
+	LastOpenedMs  *int64                 `json:"lastOpenedMs"`
+	MtimeMs       *int64                 `json:"mtimeMs"`
+	Name          string                 `json:"name"`
+	Path          string                 `json:"path"`
+	SizeBytes     *int64                 `json:"sizeBytes"`
 }
 
 // WorkspaceFileEntryKind defines model for WorkspaceFileEntryKind.
@@ -2364,8 +2366,10 @@ type WorkspaceFileTreeDirectory struct {
 
 // WorkspaceFileTreeEntry defines model for WorkspaceFileTreeEntry.
 type WorkspaceFileTreeEntry struct {
+	CreatedTimeMs       *int64                           `json:"createdTimeMs"`
 	HasChildren         bool                             `json:"hasChildren"`
 	Kind                WorkspaceFileEntryKind           `json:"kind"`
+	LastOpenedMs        *int64                           `json:"lastOpenedMs"`
 	MtimeMs             *int64                           `json:"mtimeMs"`
 	Name                string                           `json:"name"`
 	Path                string                           `json:"path"`

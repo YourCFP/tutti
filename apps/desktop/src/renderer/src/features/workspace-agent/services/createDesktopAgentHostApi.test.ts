@@ -2389,8 +2389,10 @@ test("desktop agent host api reuses desktop host file operations", async () => {
         });
         return {
           entry: {
+            createdTimeMs: null,
             hasChildren: false,
             kind: "file",
+            lastOpenedMs: null,
             mtimeMs: null,
             name: request.path.split("/").filter(Boolean).at(-1) ?? "",
             path: request.path,

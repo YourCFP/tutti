@@ -846,6 +846,8 @@ export type WorkspaceFileEntry = {
   hasChildren: boolean;
   sizeBytes: number | null;
   mtimeMs: number | null;
+  createdTimeMs: number | null;
+  lastOpenedMs: number | null;
 };
 
 export type WorkspaceFileEntryResponse = {
@@ -888,6 +890,8 @@ export type WorkspaceFileTreeEntry = {
   hasChildren: boolean;
   sizeBytes: number | null;
   mtimeMs: number | null;
+  createdTimeMs: number | null;
+  lastOpenedMs: number | null;
   prefetchState?: WorkspaceFileTreePrefetchState | null;
   prefetchReason?: WorkspaceFileTreePrefetchReason | null;
   prefetchedDirectory?: WorkspaceFileTreeDirectory | null;

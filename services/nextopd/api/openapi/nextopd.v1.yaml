@@ -4524,6 +4524,8 @@ components:
         - hasChildren
         - sizeBytes
         - mtimeMs
+        - createdTimeMs
+        - lastOpenedMs
       properties:
         path:
           type: string
@@ -4540,6 +4542,16 @@ components:
           minimum: 0
           nullable: true
         mtimeMs:
+          type: integer
+          format: int64
+          minimum: 0
+          nullable: true
+        createdTimeMs:
+          type: integer
+          format: int64
+          minimum: 0
+          nullable: true
+        lastOpenedMs:
           type: integer
           format: int64
           minimum: 0
@@ -4630,6 +4642,8 @@ components:
         - hasChildren
         - sizeBytes
         - mtimeMs
+        - createdTimeMs
+        - lastOpenedMs
       properties:
         path:
           type: string
@@ -4646,6 +4660,16 @@ components:
           minimum: 0
           nullable: true
         mtimeMs:
+          type: integer
+          format: int64
+          minimum: 0
+          nullable: true
+        createdTimeMs:
+          type: integer
+          format: int64
+          minimum: 0
+          nullable: true
+        lastOpenedMs:
           type: integer
           format: int64
           minimum: 0

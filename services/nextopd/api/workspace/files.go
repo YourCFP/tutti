@@ -55,12 +55,14 @@ func GeneratedFileEntriesFromDomain(items []workspacefiles.FileEntry) []nextopge
 
 func GeneratedFileEntryFromDomain(item workspacefiles.FileEntry) nextopgenerated.WorkspaceFileEntry {
 	return nextopgenerated.WorkspaceFileEntry{
-		Path:        item.Path.String(),
-		Name:        item.Name,
-		Kind:        generatedFileEntryKind(item.Kind),
-		HasChildren: item.HasChildren,
-		SizeBytes:   item.SizeBytes,
-		MtimeMs:     item.MtimeMs,
+		Path:          item.Path.String(),
+		Name:          item.Name,
+		Kind:          generatedFileEntryKind(item.Kind),
+		HasChildren:   item.HasChildren,
+		SizeBytes:     item.SizeBytes,
+		MtimeMs:       item.MtimeMs,
+		CreatedTimeMs: item.CreatedTimeMs,
+		LastOpenedMs:  item.LastOpenedMs,
 	}
 }
 
@@ -112,12 +114,14 @@ func generatedFileTreeEntriesFromDomain(
 	result := make([]nextopgenerated.WorkspaceFileTreeEntry, 0, len(entries))
 	for _, entry := range entries {
 		item := nextopgenerated.WorkspaceFileTreeEntry{
-			HasChildren: entry.HasChildren,
-			Kind:        generatedFileEntryKind(entry.Kind),
-			MtimeMs:     entry.MtimeMs,
-			Name:        entry.Name,
-			Path:        entry.Path.String(),
-			SizeBytes:   entry.SizeBytes,
+			CreatedTimeMs: entry.CreatedTimeMs,
+			HasChildren:   entry.HasChildren,
+			Kind:          generatedFileEntryKind(entry.Kind),
+			LastOpenedMs:  entry.LastOpenedMs,
+			MtimeMs:       entry.MtimeMs,
+			Name:          entry.Name,
+			Path:          entry.Path.String(),
+			SizeBytes:     entry.SizeBytes,
 		}
 		if entry.PrefetchState != "" {
 			state := generatedFileTreePrefetchState(entry.PrefetchState)
