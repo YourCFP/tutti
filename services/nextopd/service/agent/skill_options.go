@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/tutti-os/tutti/services/nextopd/biz/agentprovider"
+	agentsidecarservice "github.com/tutti-os/tutti/services/nextopd/service/agentsidecar"
 )
 
 const (
@@ -18,11 +19,15 @@ const (
 	composerSkillSourceNextopInjected = "nextop-injected"
 )
 
-var hiddenNextopProviderSkills = map[string]struct{}{
-	"nextop-cli":    {},
-	"issue-manager": {},
-	"workspace-app": {},
-}
+// hiddenNextopProviderSkills mirrors the nextop-injected provider skills so
+// composer discovery hides them; agentsidecar owns the canonical name list.
+var hiddenNextopProviderSkills = func() map[string]struct{} {
+	hidden := make(map[string]struct{})
+	for _, name := range agentsidecarservice.NextopProviderSkillNames() {
+		hidden[name] = struct{}{}
+	}
+	return hidden
+}()
 
 func discoverComposerSkillOptions(provider string, cwd string, env []string) []ComposerSkillOption {
 	switch agentprovider.Normalize(provider) {

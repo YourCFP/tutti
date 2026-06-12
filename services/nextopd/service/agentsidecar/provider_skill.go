@@ -12,6 +12,12 @@ const nextopSkillName = "nextop-cli"
 const issueManagerSkillName = "issue-manager"
 const workspaceAppSkillName = "workspace-app"
 
+// NextopProviderSkillNames lists the nextop-injected provider skills that
+// composer skill discovery must hide from user-facing lists.
+func NextopProviderSkillNames() []string {
+	return []string{nextopSkillName, issueManagerSkillName, workspaceAppSkillName}
+}
+
 //go:embed skill_templates/*.md policy_templates/*.md
 var providerSkillTemplates embed.FS
 
