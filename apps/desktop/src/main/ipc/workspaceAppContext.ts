@@ -29,7 +29,6 @@ const workspaceAppGuestContexts = new Map<number, WorkspaceAppGuestContext>();
 
 interface WorkspaceAppGuestContext {
   appID: string;
-  appBaseUrl: string | null;
   ownerWindow: BrowserWindow;
   workspaceID: string;
 }
@@ -38,15 +37,10 @@ export function registerWorkspaceAppGuestWebContents(
   ownerWindow: BrowserWindow,
   contents: WebContents,
   logger?: DesktopLogger,
-  partition?: string | null,
-  appBaseUrl?: string | null
+  partition?: string | null
 ): void {
   workspaceAppGuestWebContents.add(contents);
-  const context = readWorkspaceAppGuestContext(
-    ownerWindow,
-    partition,
-    appBaseUrl
-  );
+  const context = readWorkspaceAppGuestContext(ownerWindow, partition);
   if (context) {
     workspaceAppGuestContexts.set(contents.id, context);
   } else {
@@ -55,12 +49,7 @@ export function registerWorkspaceAppGuestWebContents(
       webContentsId: contents.id
     });
   }
-  installWorkspaceAppWindowOpenHandler({
-    appBaseUrl: context?.appBaseUrl ?? appBaseUrl ?? null,
-    contents,
-    logger,
-    ownerWindow
-  });
+  installWorkspaceAppWindowOpenHandler({ contents, logger, ownerWindow });
   contents.on("preload-error", (_event, preloadPath, error) => {
     logger?.warn("workspace app guest preload failed", {
       error: error.message,
@@ -309,8 +298,7 @@ function base64UrlEncode(value: string): string {
 
 function readWorkspaceAppGuestContext(
   ownerWindow: BrowserWindow,
-  partition: string | null | undefined,
-  appBaseUrl: string | null | undefined
+  partition: string | null | undefined
 ): WorkspaceAppGuestContext | null {
   const prefix = "persist:nextop-app:";
   if (!partition?.startsWith(prefix)) {
@@ -323,7 +311,6 @@ function readWorkspaceAppGuestContext(
   }
   return {
     appID: decodeURIComponent(value.slice(separator + 1)),
-    appBaseUrl: appBaseUrl ?? null,
     ownerWindow,
     workspaceID: decodeURIComponent(value.slice(0, separator))
   };

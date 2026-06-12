@@ -63,10 +63,7 @@ export function createWorkspaceWindow(
     }
   });
 
-  const pendingWorkspaceAppGuestAttaches: {
-    partition: string | null | undefined;
-    src: string | null | undefined;
-  }[] = [];
+  const pendingWorkspaceAppGuestPartitions: (string | null | undefined)[] = [];
   installBrowserWebviewSecurity({
     allowedSessionPartitions: {
       additionalAllowedPrefixes: [workspaceAppBrowserPartitionPrefix]
@@ -75,14 +72,13 @@ export function createWorkspaceWindow(
     logger,
     onGuestAttached: (guestContents) => {
       registerBrowserGuestWebContents(workspaceWindow, guestContents, logger);
-      const workspaceAppAttach = pendingWorkspaceAppGuestAttaches.shift();
-      if (workspaceAppAttach) {
+      const workspaceAppPartition = pendingWorkspaceAppGuestPartitions.shift();
+      if (workspaceAppPartition !== undefined) {
         registerWorkspaceAppGuestWebContents(
           workspaceWindow,
           guestContents,
           logger,
-          workspaceAppAttach.partition,
-          workspaceAppAttach.src
+          workspaceAppPartition
         );
       }
     },
@@ -92,10 +88,7 @@ export function createWorkspaceWindow(
         options.workspaceAppPreloadPath &&
         isWorkspaceAppSessionPartition(params.partition)
       ) {
-        pendingWorkspaceAppGuestAttaches.push({
-          partition: params.partition,
-          src: params.src
-        });
+        pendingWorkspaceAppGuestPartitions.push(params.partition);
         logger.info("applying workspace app guest preload", {
           partition: params.partition ?? null,
           preloadPath: options.workspaceAppPreloadPath,

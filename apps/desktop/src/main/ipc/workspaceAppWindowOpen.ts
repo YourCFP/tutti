@@ -7,17 +7,8 @@ import { desktopIpcChannels } from "../../shared/contracts/ipc.ts";
 interface WorkspaceAppWindowOpenContents {
   id: number;
   setWindowOpenHandler?(
-    handler: (details: WorkspaceAppWindowOpenDetails) => {
-      action: "allow" | "deny";
-    }
+    handler: (details: { url: string }) => { action: "allow" | "deny" }
   ): void;
-}
-
-interface WorkspaceAppWindowOpenDetails {
-  referrer?: {
-    url?: string | null;
-  } | null;
-  url: string;
 }
 
 interface WorkspaceAppWindowOpenOwnerWindow {
@@ -34,7 +25,6 @@ interface WorkspaceAppWindowOpenLogger {
 }
 
 interface WorkspaceAppWindowOpenHandlerInput {
-  appBaseUrl?: string | null;
   contents: WorkspaceAppWindowOpenContents;
   logger?: WorkspaceAppWindowOpenLogger;
   ownerWindow: WorkspaceAppWindowOpenOwnerWindow;
@@ -45,7 +35,6 @@ interface WorkspaceAppOpenUrlInput extends WorkspaceAppWindowOpenHandlerInput {
 }
 
 export function installWorkspaceAppWindowOpenHandler({
-  appBaseUrl,
   contents,
   logger,
   ownerWindow
@@ -59,22 +48,7 @@ export function installWorkspaceAppWindowOpenHandler({
     return;
   }
 
-  contents.setWindowOpenHandler?.((details) => {
-    const { url } = details;
-    if (
-      isInternalWorkspaceAppWindowOpenUrl({
-        appBaseUrl,
-        referrerUrl: details.referrer?.url,
-        url
-      })
-    ) {
-      logger?.info?.("workspace app native internal window-open suppressed", {
-        referrerUrl: details.referrer?.url ?? null,
-        url,
-        webContentsId: contents.id
-      });
-      return { action: "deny" };
-    }
+  contents.setWindowOpenHandler?.(({ url }) => {
     dispatchWorkspaceAppOpenUrl({ contents, logger, ownerWindow, url });
     return { action: "deny" };
   });
@@ -122,43 +96,4 @@ export function dispatchWorkspaceAppOpenUrl({
   });
   ownerWindow.webContents.send(desktopIpcChannels.browser.event, payload);
   return true;
-}
-
-function isInternalWorkspaceAppWindowOpenUrl({
-  appBaseUrl,
-  referrerUrl,
-  url
-}: {
-  appBaseUrl?: string | null;
-  referrerUrl?: string | null;
-  url: string;
-}): boolean {
-  if (isRelativeWorkspaceAppWindowOpenUrl(url)) {
-    return true;
-  }
-
-  return isSameOriginUrl(url, appBaseUrl) || isSameOriginUrl(url, referrerUrl);
-}
-
-function isSameOriginUrl(
-  url: string,
-  baseUrl: string | null | undefined
-): boolean {
-  if (!baseUrl) {
-    return false;
-  }
-  try {
-    return new URL(url, baseUrl).origin === new URL(baseUrl).origin;
-  } catch {
-    return false;
-  }
-}
-
-function isRelativeWorkspaceAppWindowOpenUrl(url: string): boolean {
-  const value = url.trim();
-  if (value.length === 0 || value.startsWith("//")) {
-    return false;
-  }
-
-  return !/^[A-Za-z][A-Za-z\d+.-]*:/.test(value);
 }
