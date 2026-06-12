@@ -37,6 +37,7 @@ import {
   TooltipTrigger
 } from "@tutti-os/ui-system";
 import { INotificationService } from "@tutti-os/ui-notifications";
+import type { CompositeNotificationMessage } from "@renderer/lib/compositeNotificationService";
 import { useService } from "@zk-tech/bedrock/di";
 import { MessageCenterOpenedReporter } from "@renderer/features/analytics/reporters/message-center-opened/messageCenterOpenedReporter.ts";
 import { MessageCenterNotificationActionedReporter } from "@renderer/features/analytics/reporters/message-center-notification-actioned/messageCenterNotificationActionedReporter.ts";
@@ -54,6 +55,7 @@ import {
   type WorkspaceAgentDecisionSubmitInput
 } from "../services/workspaceAgentDecisionNotification";
 import { createWorkspaceAgentMessageCenterNotificationTracker } from "../services/workspaceAgentMessageCenterNotification";
+import { buildWorkspaceAgentOutcomeNotification } from "../services/workspaceAgentOutcomeNotification";
 import { resolveWorkspaceAgentMessageCenterTrigger } from "../services/workspaceAgentMessageCenterTrigger";
 import { toggleWorkspaceAgentMessageCenter } from "../services/workspaceAgentMessageCenterToggle";
 import { createWorkspaceAgentGuiSessionLaunchRequest } from "../services/workspaceAgentGuiLaunch";
@@ -220,6 +222,7 @@ function WorkspaceAgentMessageCenterAction({
   } | null>(null);
   const requestedMessageSummarySessionIdsRef = useRef<Set<string>>(new Set());
   const seenWaitingNotificationKeysRef = useRef<Set<string> | null>(null);
+  const seenOutcomeNotificationKeysRef = useRef<Set<string> | null>(null);
   const activeWaitingNotificationToastIdsRef = useRef<Map<string, string>>(
     new Map()
   );
@@ -330,6 +333,7 @@ function WorkspaceAgentMessageCenterAction({
   useEffect(() => {
     requestedMessageSummarySessionIdsRef.current.clear();
     seenWaitingNotificationKeysRef.current = null;
+    seenOutcomeNotificationKeysRef.current = null;
     messageCenterNotificationTrackerRef.current.reset();
     for (const toastId of activeWaitingNotificationToastIdsRef.current.values()) {
       toast.dismiss(toastId);
@@ -347,6 +351,57 @@ function WorkspaceAgentMessageCenterAction({
       notifications.notify(message);
     }
   }, [messageCenterNotificationLabels, model, notifications]);
+
+  useEffect(() => {
+    const outcomeEntries = model.items
+      .filter((item) => item.status === "completed" || item.status === "failed")
+      .map((item) => [`${item.agentSessionId}:${item.status}`, item] as const);
+    const currentKeys = new Set(outcomeEntries.map(([key]) => key));
+    const seenKeys = seenOutcomeNotificationKeysRef.current;
+    if (!seenKeys) {
+      seenOutcomeNotificationKeysRef.current = currentKeys;
+      return;
+    }
+    const nextSeenKeys = new Set(seenKeys);
+    for (const key of currentKeys) {
+      nextSeenKeys.add(key);
+    }
+    seenOutcomeNotificationKeysRef.current = nextSeenKeys;
+    for (const [notificationKey, item] of outcomeEntries) {
+      if (seenKeys.has(notificationKey)) {
+        continue;
+      }
+      const notification = buildWorkspaceAgentOutcomeNotification(item, {
+        completedBody: t(
+          "workspace.agentMessageCenter.outcomeNotificationCompletedBody"
+        ),
+        failedBody: t(
+          "workspace.agentMessageCenter.outcomeNotificationFailedBody"
+        ),
+        fallbackAgentName: t("workspace.agentGui.fallbackAgentLabel")
+      });
+      if (!notification) {
+        continue;
+      }
+      const message: CompositeNotificationMessage = {
+        description: notification.body,
+        level: notification.level,
+        // The message center panel and trigger badge already surface
+        // outcomes in-app; only the OS face should notify, and only while
+        // the window is in the background (composite checks visibility).
+        presentation: "background-only",
+        title: t(
+          notification.level === "success"
+            ? "workspace.agentMessageCenter.outcomeNotificationCompletedTitle"
+            : "workspace.agentMessageCenter.outcomeNotificationFailedTitle",
+          {
+            title: notification.conversationTitle || notification.agentName
+          }
+        )
+      };
+      notifications.notify(message);
+    }
+  }, [model, notifications, t]);
 
   useEffect(() => {
     const waitingEntries = waitingItems.map(

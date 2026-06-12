@@ -34,6 +34,21 @@ export interface BackgroundNotificationPolicy {
   shouldNotifyInBackground(input: NotificationMessage): boolean;
 }
 
+export type CompositeNotificationPresentation =
+  | "background-only"
+  | "default"
+  | "foreground-only";
+
+/**
+ * Desktop-side extension of the shared NotificationMessage: callers can scope
+ * a message to a single face. "background-only" messages never toast (the
+ * in-app surface already covers them); "foreground-only" messages never reach
+ * the OS (a richer scenario-specific message owns the OS face).
+ */
+export interface CompositeNotificationMessage extends NotificationMessage {
+  presentation?: CompositeNotificationPresentation;
+}
+
 export function createDefaultBackgroundNotificationPolicy(): BackgroundNotificationPolicy {
   return {
     shouldNotifyInBackground() {
@@ -73,8 +88,12 @@ export function createCompositeNotificationService(input: {
   visibility: NotificationVisibilityState;
 }): NotificationService {
   const notify = (message: NotificationMessage): void => {
-    input.foreground.show(message);
+    const presentation = compositeNotificationPresentation(message);
+    if (presentation !== "background-only") {
+      input.foreground.show(message);
+    }
     if (
+      presentation !== "foreground-only" &&
       !input.visibility.isForeground() &&
       input.policy.shouldNotifyInBackground(message)
     ) {
@@ -98,6 +117,12 @@ export function createCompositeNotificationService(input: {
       notifyWithLevel(notify, "warning", message);
     }
   };
+}
+
+function compositeNotificationPresentation(
+  message: NotificationMessage
+): CompositeNotificationPresentation {
+  return (message as CompositeNotificationMessage).presentation ?? "default";
 }
 
 function showBackgroundNotification(

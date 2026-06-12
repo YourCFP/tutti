@@ -134,6 +134,12 @@ export const en = {
       promptTitle: "Waiting for input",
       title: "Agent messages",
       idleStatus: "Idle",
+      outcomeNotificationCompletedBody:
+        "The agent finished this run. Click to open the session.",
+      outcomeNotificationCompletedTitle: "{{title}} completed",
+      outcomeNotificationFailedBody:
+        "The agent run failed. Click to open the session.",
+      outcomeNotificationFailedTitle: "{{title}} failed",
       statusNotificationDescription: "{{summary}}",
       statusNotificationFallbackSummary: "Open Agent messages for details.",
       statusNotificationTitle: "Conversation {{title}} {{status}}",

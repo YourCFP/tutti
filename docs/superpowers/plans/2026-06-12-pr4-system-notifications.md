@@ -15,6 +15,7 @@
 ### Task A: 完成/失敗場景的通知 builder + 監聽
 
 **Files:**
+
 - Create: `apps/desktop/src/renderer/src/features/workspace-workbench/services/workspaceAgentOutcomeNotification.ts`
 - Modify: `apps/desktop/src/renderer/src/features/workspace-workbench/ui/WorkspaceChrome.tsx`（在既有 waiting 監聽 effect 旁增加 outcome 監聽 effect,同樣的 seenKeys 去重模式）
 - Modify: i18n 三語（標題/正文模板,鍵位沿用 `workspace.agentMessageCenter.*` 命名空間慣例）
@@ -32,7 +33,11 @@ export interface WorkspaceAgentOutcomeNotification {
 }
 export function buildWorkspaceAgentOutcomeNotification(
   item: WorkspaceAgentMessageCenterItem,
-  labels: { completedBody: string; failedBody: string; fallbackAgentName: string }
+  labels: {
+    completedBody: string;
+    failedBody: string;
+    fallbackAgentName: string;
+  }
 ): WorkspaceAgentOutcomeNotification | null;
 ```
 
@@ -40,11 +45,12 @@ export function buildWorkspaceAgentOutcomeNotification(
 
 **呈現:** 經 `notificationService`（container 注入的 compositeNotificationService——勘察 WorkspaceChrome 可達的服務注入,若 chrome 拿不到,沿 createWorkspaceWindowContainer 找到掛接點傳入）。聚焦態去重由 composite 服務自帶（前台只 toast,後台才 OS）。完成場景前台**不額外彈 toast**（消息中心已有記錄,避免騷擾）——即 NotificationMessage 標記為僅後台級別:勘察 `BackgroundNotificationPolicy` 與 NotificationMessage 的字段,若有 level/policy 控制則用之;若無,僅在 `!visibility.isForeground()` 時調用（在調用側判聚焦,複製 composite 內的 visibility 邏輯或直接用 `document.visibilityState`+`hasFocus`）。
 
-- [ ] **Step 1: 失敗測試（builder）** → **Step 2: 確認失敗** → **Step 3: 實現 builder** → **Step 4: WorkspaceChrome 接線 + i18n** → **Step 5: `cd apps/desktop && pnpm typecheck` + vitest + `pnpm check:i18n`** → **Step 6: Commit** `feat(desktop): system notifications for agent turn outcomes`
+- [x] **Step 1: 失敗測試（builder）** → **Step 2: 確認失敗** → **Step 3: 實現 builder** → **Step 4: WorkspaceChrome 接線 + i18n** → **Step 5: `cd apps/desktop && pnpm typecheck` + vitest + `pnpm check:i18n`** → **Step 6: Commit** `feat(desktop): system notifications for agent turn outcomes`
 
 ### Task B: 待決策場景補 OS 通知面 + 點擊跳轉
 
 **Files:**
+
 - Modify: `apps/desktop/src/renderer/src/features/workspace-workbench/ui/WorkspaceChrome.tsx`（waiting 監聽 effect:現有 in-app toast 之外,未聚焦時補發 OS 通知,文案復用 `buildWorkspaceAgentDecisionNotification` 的 description）
 - Modify: OS 通知點擊跳轉:勘察 `desktopNotificationAccess` 的 onClick 如何從 renderer 傳遞（`hostNotifications.ts` IPC）;點擊後聚焦窗口（main process `BrowserWindow.focus()`——勘察既有 IPC 是否已做）並導航到對應會話(復用消息中心條目點擊的跳轉動作——grep `WorkspaceAgentMessageCenterCard` 的 onClick/onNavigate 去向)。若現有 IPC 通道不傳 payload,擴展 NotificationMessage/show 輸入帶 `onClickNavigate: { agentSessionId }` 並沿 IPC 透傳——保持向後兼容（可選字段）。
 - Test: vitest——waiting 條目在未聚焦態觸發 background show 調用（mock notificationService/visibility）;聚焦態不觸發。

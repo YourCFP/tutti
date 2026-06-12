@@ -1,11 +1,9 @@
-import type {
-  NotificationLevel,
-  NotificationMessage
-} from "@tutti-os/ui-notifications";
+import type { NotificationLevel } from "@tutti-os/ui-notifications";
 import type {
   WorkspaceAgentMessageCenterItem,
   WorkspaceAgentMessageCenterModel
 } from "@tutti-os/agent-gui/agent-message-center";
+import type { CompositeNotificationMessage } from "@renderer/lib/compositeNotificationService";
 
 export type WorkspaceAgentMessageCenterNotificationStatus =
   | "canceled"
@@ -26,7 +24,7 @@ export interface WorkspaceAgentMessageCenterNotificationTracker {
   collect(
     model: WorkspaceAgentMessageCenterModel,
     labels: WorkspaceAgentMessageCenterNotificationLabels
-  ): NotificationMessage[];
+  ): CompositeNotificationMessage[];
   reset(): void;
 }
 
@@ -47,7 +45,7 @@ export function createWorkspaceAgentMessageCenterNotificationTracker(): Workspac
         string,
         MessageCenterNotificationTrackedState
       >();
-      const messages: NotificationMessage[] = [];
+      const messages: CompositeNotificationMessage[] = [];
       for (const item of model.items) {
         const state = messageCenterNotificationTrackedState(item);
         nextStates.set(item.agentSessionId, state);
@@ -76,12 +74,15 @@ function messageCenterNotificationMessage(
   item: WorkspaceAgentMessageCenterItem,
   labels: WorkspaceAgentMessageCenterNotificationLabels,
   status: WorkspaceAgentMessageCenterNotificationStatus
-): NotificationMessage {
+): CompositeNotificationMessage {
   const statusLabel = labels.status[status];
   const summary = messageCenterNotificationSummary(item, labels);
   return {
     description: labels.description({ summary }),
     level: notificationLevelForStatus(status),
+    // The OS face for waiting/failed is owned by the richer decision/outcome
+    // notifications; keep these generic status messages in-app only.
+    presentation: "foreground-only",
     title: labels.title({
       status: statusLabel,
       title: item.title

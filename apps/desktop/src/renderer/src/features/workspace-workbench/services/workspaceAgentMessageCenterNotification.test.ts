@@ -46,6 +46,7 @@ test("message center notification tracker reports failures", () => {
       {
         description: "Summarized progress",
         level: "error",
+        presentation: "foreground-only",
         title: "Conversation Build feature Failed"
       }
     ]
@@ -120,6 +121,7 @@ test("message center notification tracker reports waiting attention as warning",
       {
         description: "Approve command",
         level: "warning",
+        presentation: "foreground-only",
         title: "Conversation Build feature Waiting"
       }
     ]
@@ -174,6 +176,7 @@ test("message center notification tracker reports a new waiting request once", (
       {
         description: "Approve command",
         level: "warning",
+        presentation: "foreground-only",
         title: "Conversation Build feature Waiting"
       }
     ]
