@@ -881,12 +881,15 @@ func appServerTurnStartParams(session Session, threadID string, content []Prompt
 }
 
 // appServerPlanCollaborationMode assembles the turn/start collaborationMode
-// payload from the negotiated Plan preset mask. The schema requires a
-// concrete settings.model, so the session override wins, then the session
-// default model, then the mask's own model; without any model the mode is
-// omitted rather than sending an invalid request.
+// payload. Collaboration mode is sticky thread state on the codex side, so
+// once negotiation succeeded every turn declares its mode explicitly: the
+// Plan preset while plan mode is on, the default mode otherwise (mirrors the
+// codex TUI, which switches modes by submitting with the target mask). The
+// schema requires a concrete settings.model — session override first, then
+// the session default model, then the mask's own model; without any model
+// the field is omitted rather than sending an invalid request.
 func appServerPlanCollaborationMode(settings SessionSettings, planModeMask map[string]any, defaultModel string) map[string]any {
-	if !settings.PlanMode || planModeMask == nil {
+	if planModeMask == nil {
 		return nil
 	}
 	model := strings.TrimSpace(firstNonEmpty(settings.Model, defaultModel, asString(planModeMask["model"])))
@@ -900,13 +903,21 @@ func appServerPlanCollaborationMode(settings SessionSettings, planModeMask map[s
 	}
 	if effort := codexACPReasoningEffortValue(settings.ReasoningEffort); effort != "" {
 		collaborationSettings["reasoning_effort"] = effort
-	} else if presetEffort := strings.TrimSpace(asString(planModeMask["reasoning_effort"])); presetEffort != "" {
-		collaborationSettings["reasoning_effort"] = presetEffort
+	} else if settings.PlanMode {
+		if presetEffort := strings.TrimSpace(asString(planModeMask["reasoning_effort"])); presetEffort != "" {
+			collaborationSettings["reasoning_effort"] = presetEffort
+		} else {
+			collaborationSettings["reasoning_effort"] = nil
+		}
 	} else {
 		collaborationSettings["reasoning_effort"] = nil
 	}
+	mode := "default"
+	if settings.PlanMode {
+		mode = strings.ToLower(strings.TrimSpace(firstNonEmpty(asString(planModeMask["mode"]), "plan")))
+	}
 	return map[string]any{
-		"mode":     strings.ToLower(strings.TrimSpace(firstNonEmpty(asString(planModeMask["mode"]), "plan"))),
+		"mode":     mode,
 		"settings": collaborationSettings,
 	}
 }

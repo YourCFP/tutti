@@ -1453,8 +1453,16 @@ func TestCodexAppServerAdapterSendsCollaborationModeForPlanTurns(t *testing.T) {
 	}
 	turnStarts := appServerRequestParamsList(t, transport.conn, appServerMethodTurnStart)
 	last := turnStarts[len(turnStarts)-1]
-	if _, ok := last["collaborationMode"]; ok {
-		t.Fatalf("turn/start = %#v, want no collaborationMode when plan mode is off", last)
+	// Collaboration mode is sticky thread state on the codex side, so leaving
+	// plan mode must explicitly declare the default mode rather than omit the
+	// field (mirrors the codex TUI's SubmitUserMessageWithMode behavior).
+	exitMode, _ := last["collaborationMode"].(map[string]any)
+	if asString(exitMode["mode"]) != "default" {
+		t.Fatalf("turn/start collaborationMode = %#v, want explicit default mode after plan", last["collaborationMode"])
+	}
+	exitSettings, _ := exitMode["settings"].(map[string]any)
+	if asString(exitSettings["model"]) != "gpt-5.1-codex" {
+		t.Fatalf("default collaborationMode settings = %#v, want default model", exitSettings)
 	}
 
 	session.Settings = &SessionSettings{PlanMode: true, Model: "gpt-5.1-codex-mini", ReasoningEffort: "low"}
