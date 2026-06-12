@@ -223,7 +223,7 @@ export function AgentMessageMarkdown({
           "[&_th]:max-w-[280px] [&_th]:border-r [&_th]:border-b [&_th]:border-[var(--line-2)] [&_th]:px-2 [&_th]:py-1.5 [&_th]:align-top [&_th]:font-semibold [&_th]:text-[var(--text-primary)] [&_th]:[overflow-wrap:anywhere] [&_th]:bg-[color-mix(in_srgb,var(--background-panel)_94%,var(--text-primary))]",
           "[&_td]:max-w-[280px] [&_td]:border-r [&_td]:border-b [&_td]:border-[var(--line-2)] [&_td]:px-2 [&_td]:py-1.5 [&_td]:align-top [&_td]:[overflow-wrap:anywhere]",
           "[&_tr:last-child_th]:border-b-0 [&_tr:last-child_td]:border-b-0 [&_th:last-child]:border-r-0 [&_td:last-child]:border-r-0",
-          "[&_a]:font-semibold [&_a]:text-[var(--accent)] [&_a]:no-underline [&_a:hover]:underline [&_a:focus-visible]:underline",
+          "[&_a]:font-semibold [&_a]:text-[var(--agent-gui-accent)] [&_a]:no-underline [&_a:hover]:underline [&_a:focus-visible]:underline",
           "[&_strong]:font-semibold",
           "[&_code]:inline [&_code]:rounded-[2px] [&_code]:bg-[var(--transparency-block)] [&_code]:px-1 [&_code]:py-[1px] [&_code]:font-[var(--tsh-font-mono)] [&_code]:text-[12px] [&_code]:leading-[1.35] [&_code]:text-[var(--text-primary)] [&_code]:[box-decoration-break:clone] [&_code]:[-webkit-box-decoration-break:clone] [&_code]:[overflow-wrap:anywhere] [&_code]:[word-break:break-word]",
           "[&_pre]:box-border [&_pre]:overflow-auto [&_pre]:rounded-[6px] [&_pre]:bg-[var(--transparency-block)] [&_pre]:px-2.5 [&_pre]:py-2",
@@ -264,7 +264,7 @@ export function AgentMessageMarkdown({
       {shouldCollapse && !isExpanded ? (
         <button
           type="button"
-          className="m-0 border-0 bg-transparent p-0 text-[12px] leading-[1.4] font-semibold text-[var(--accent)] hover:underline focus-visible:underline focus-visible:outline-none"
+          className="m-0 border-0 bg-transparent p-0 text-[12px] leading-[1.4] font-semibold text-[var(--agent-gui-accent)] hover:underline focus-visible:underline focus-visible:outline-none"
           onClick={() => setIsExpanded(true)}
         >
           {resolvedExpandLabel}
