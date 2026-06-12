@@ -576,22 +576,22 @@ git commit -m "feat(agent-gui): gate compact slash command on negotiated capabil
 
 ### Task 6: 全量驗證與收尾
 
-- [ ] **Step 1: Go 全量**
+- [x] **Step 1: Go 全量**
 
 Run: `cd packages/agent/daemon && go test ./... -count=1 && cd ../../../services/nextopd && go test ./... -count=1`
 Expected: 全 PASS（nextopd 的 agentstatus claude auth 測試有既知並行 flake,失敗則單獨重跑確認）
 
-- [ ] **Step 2: lint**
+- [x] **Step 2: lint**
 
 Run: `export PATH="$HOME/go/bin:$PATH" && pnpm lint:go && pnpm lint:ts 2>&1 | tail -5`
 Expected: 0 issues / 無 error
 
-- [ ] **Step 3: TS 受影響包測試**
+- [x] **Step 3: TS 受影響包測試**
 
 Run: `cd packages/agent/activity-core && pnpm test && cd ../gui && pnpm vitest run`
 Expected: 全 PASS
 
-- [ ] **Step 4: Commit（若有殘餘變更）並記錄分支狀態**
+- [x] **Step 4: Commit（若有殘餘變更）並記錄分支狀態**
 
 ```bash
 git status -s && git log --oneline codex-app-server..HEAD
