@@ -38,6 +38,7 @@ export interface WorkspaceAgentMessageCenterCardProps {
   item: WorkspaceAgentMessageCenterItem;
   cardRef?: (node: HTMLElement | null) => void;
   highlighted?: boolean;
+  interactive?: boolean;
   isSubmitting: boolean;
   onLinkAction?: (action: WorkspaceLinkAction) => void;
   onOpenChat: (input: { agentSessionId: string; provider: string }) => void;
@@ -58,6 +59,7 @@ function stopMessageCenterTextPointerPropagation(
 export function WorkspaceAgentMessageCenterCard({
   cardRef,
   highlighted = false,
+  interactive = true,
   item,
   isSubmitting,
   onLinkAction,
@@ -134,7 +136,7 @@ export function WorkspaceAgentMessageCenterCard({
         />
       ) : null}
 
-      {prompt ? (
+      {prompt && interactive ? (
         <div className="min-w-0">
           <AgentInteractivePromptSurface
             embedded

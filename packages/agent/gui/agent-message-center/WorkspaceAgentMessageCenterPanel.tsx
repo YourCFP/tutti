@@ -23,10 +23,13 @@ import {
 } from "../i18n/index";
 import { AgentVerticalScrollArea } from "../shared/AgentVerticalScrollArea";
 import type { WorkspaceLinkAction } from "../actions/workspaceLinkActions";
-import type {
-  WorkspaceAgentMessageCenterItem,
-  WorkspaceAgentMessageCenterModel
+import {
+  isInteractiveMessageCenterItem,
+  selectMessageCenterAttentionDeckItems,
+  type WorkspaceAgentMessageCenterItem,
+  type WorkspaceAgentMessageCenterModel
 } from "./workspaceAgentMessageCenterModel";
+import { WorkspaceAgentMessageCenterAttentionDeck } from "./WorkspaceAgentMessageCenterAttentionDeck";
 import { MessageCenterViewMenu } from "./WorkspaceAgentMessageCenterViewControls";
 import {
   resolveMessageCenterNotificationAction,
@@ -162,9 +165,17 @@ function WorkspaceAgentMessageCenterPanelContent({
       ),
     [model.items, providerFilters, statusFilters]
   );
+  const deckItems = useMemo(
+    () => selectMessageCenterAttentionDeckItems(model.items),
+    [model.items]
+  );
+  const listItems = useMemo(
+    () => visibleItems.filter((item) => !isInteractiveMessageCenterItem(item)),
+    [visibleItems]
+  );
   const itemGroups = useMemo(
-    () => groupMessageCenterItems(visibleItems, groupBy, t),
-    [groupBy, t, visibleItems]
+    () => groupMessageCenterItems(listItems, groupBy, t),
+    [groupBy, t, listItems]
   );
   const highlightedItem = useMemo(
     () =>
@@ -444,10 +455,23 @@ function WorkspaceAgentMessageCenterPanelContent({
             className="min-h-0 flex-1"
             viewportClassName="flex h-full w-full flex-col px-3.5 pt-4 pb-4"
             scrollbarClassName="top-4 bottom-4"
-            syncKey={`${groupBy}:${activeStatusSummary}:${visibleItems.map((item) => item.id).join("|")}`}
+            syncKey={`${groupBy}:${activeStatusSummary}:${[...deckItems, ...visibleItems].map((item) => item.id).join("|")}`}
           >
-            {visibleItems.length > 0 ? (
+            {deckItems.length > 0 || listItems.length > 0 ? (
               <div className="flex w-full min-w-0 flex-col gap-4">
+                {deckItems.length > 0 ? (
+                  <WorkspaceAgentMessageCenterAttentionDeck
+                    items={deckItems}
+                    highlightedItemId={highlightedItemId}
+                    submittingPromptKey={submittingPromptKey}
+                    registerNode={setItemNode}
+                    onLinkAction={onLinkAction}
+                    onOpenChat={onOpenChat}
+                    onSubmitPrompt={(item, input) =>
+                      void submitPrompt(item, input)
+                    }
+                  />
+                ) : null}
                 {itemGroups.map((group) => (
                   <section
                     key={group.id}

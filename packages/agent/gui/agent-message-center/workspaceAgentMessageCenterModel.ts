@@ -168,6 +168,18 @@ export function isWaitingMessageCenterItem(
   return item.pendingPrompt !== null || item.needsAttentionKind !== null;
 }
 
+export function isInteractiveMessageCenterItem(
+  item: WorkspaceAgentMessageCenterItem
+): boolean {
+  return item.pendingPrompt !== null;
+}
+
+export function selectMessageCenterAttentionDeckItems(
+  items: readonly WorkspaceAgentMessageCenterItem[]
+): WorkspaceAgentMessageCenterItem[] {
+  return items.filter(isInteractiveMessageCenterItem);
+}
+
 export function isCompletedMessageCenterItem(
   item: WorkspaceAgentMessageCenterItem
 ): boolean {

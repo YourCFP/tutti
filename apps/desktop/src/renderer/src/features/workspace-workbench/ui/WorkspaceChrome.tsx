@@ -58,7 +58,6 @@ import {
   buildWorkspaceAgentDecisionNotification,
   type WorkspaceAgentDecisionSubmitInput
 } from "../services/workspaceAgentDecisionNotification";
-import { createWorkspaceAgentMessageCenterNotificationTracker } from "../services/workspaceAgentMessageCenterNotification";
 import { buildWorkspaceAgentOutcomeNotification } from "../services/workspaceAgentOutcomeNotification";
 import { resolveWorkspaceAgentMessageCenterTrigger } from "../services/workspaceAgentMessageCenterTrigger";
 import { toggleWorkspaceAgentMessageCenter } from "../services/workspaceAgentMessageCenterToggle";
@@ -214,8 +213,8 @@ function WorkspaceAgentMessageCenterAction({
   const workspaceAgentActivityService = useService(
     IWorkspaceAgentActivityService
   );
-  const notifications = useService(INotificationService);
   const reporterService = useService(IReporterService);
+  const notifications = useService(INotificationService);
   const workbenchHostService = useWorkspaceWorkbenchHostService();
   const [open, setOpen] = useState(false);
   const [highlightedMessageCenterItemId, setHighlightedMessageCenterItemId] =
@@ -229,9 +228,6 @@ function WorkspaceAgentMessageCenterAction({
   const seenOutcomeNotificationKeysRef = useRef<Set<string> | null>(null);
   const activeWaitingNotificationToastIdsRef = useRef<Map<string, string>>(
     new Map()
-  );
-  const messageCenterNotificationTrackerRef = useRef(
-    createWorkspaceAgentMessageCenterNotificationTracker()
   );
   const snapshot = useSyncExternalStore(
     (listener) =>
@@ -284,33 +280,6 @@ function WorkspaceAgentMessageCenterAction({
       }),
     [snapshot, t]
   );
-  const messageCenterNotificationLabels = useMemo(
-    () => ({
-      description({ summary }: { summary: string }) {
-        return t("workspace.agentMessageCenter.statusNotificationDescription", {
-          summary
-        });
-      },
-      fallbackSummary: t(
-        "workspace.agentMessageCenter.statusNotificationFallbackSummary"
-      ),
-      status: {
-        canceled: i18n.t("agentHost.workspaceAgentActivityStatusCanceled"),
-        completed: i18n.t("agentHost.workspaceAgentActivityStatusEnd"),
-        failed: i18n.t("agentHost.workspaceAgentActivityStatusFailed"),
-        idle: i18n.t("agentHost.workspaceAgentActivityStatusIdle"),
-        waiting: i18n.t("agentHost.workspaceAgentActivityStatusWaiting"),
-        working: i18n.t("agentHost.workspaceAgentActivityStatusWorking")
-      },
-      title({ status, title }: { status: string; title: string }) {
-        return t("workspace.agentMessageCenter.statusNotificationTitle", {
-          status,
-          title
-        });
-      }
-    }),
-    [i18n, t]
-  );
   const waitingItems = useMemo(
     () => model.items.filter(isWaitingMessageCenterItem),
     [model.items]
@@ -338,23 +307,12 @@ function WorkspaceAgentMessageCenterAction({
     requestedMessageSummarySessionIdsRef.current.clear();
     seenWaitingNotificationKeysRef.current = null;
     seenOutcomeNotificationKeysRef.current = null;
-    messageCenterNotificationTrackerRef.current.reset();
     for (const toastId of activeWaitingNotificationToastIdsRef.current.values()) {
       toast.dismiss(toastId);
     }
     activeWaitingNotificationToastIdsRef.current.clear();
     setHighlightedMessageCenterItemId(null);
   }, [workspace.id]);
-
-  useEffect(() => {
-    const messages = messageCenterNotificationTrackerRef.current.collect(
-      model,
-      messageCenterNotificationLabels
-    );
-    for (const message of messages) {
-      notifications.notify(message);
-    }
-  }, [messageCenterNotificationLabels, model, notifications]);
 
   useEffect(() => {
     const outcomeEntries = model.items

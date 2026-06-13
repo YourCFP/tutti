@@ -4,7 +4,12 @@ import type {
   AgentActivitySession,
   AgentActivitySnapshot
 } from "@tutti-os/agent-activity-core";
-import { buildWorkspaceAgentMessageCenterModel } from "./workspaceAgentMessageCenterModel";
+import {
+  buildWorkspaceAgentMessageCenterModel,
+  isInteractiveMessageCenterItem,
+  selectMessageCenterAttentionDeckItems,
+  type WorkspaceAgentMessageCenterItem
+} from "./workspaceAgentMessageCenterModel";
 
 describe("buildWorkspaceAgentMessageCenterModel", () => {
   it("counts current-workspace sessions that need user action as waiting", () => {
@@ -499,3 +504,86 @@ function message(
     ...overrides
   };
 }
+
+describe("message center attention deck selection", () => {
+  function item(
+    overrides: Partial<WorkspaceAgentMessageCenterItem> & {
+      agentSessionId: string;
+    }
+  ): WorkspaceAgentMessageCenterItem {
+    return {
+      id: `message-center-${overrides.agentSessionId}`,
+      provider: "codex",
+      title: "t",
+      identity: null,
+      cwd: "/w",
+      status: "waiting",
+      lastAgentMessageSummary: "",
+      lastAgentMessageAtUnixMs: 1,
+      pendingPrompt: null,
+      needsAttentionKind: null,
+      needsAttentionSummary: null,
+      sortTimeUnixMs: 1,
+      ...overrides
+    };
+  }
+  function withPrompt(
+    overrides: Partial<WorkspaceAgentMessageCenterItem> & {
+      agentSessionId: string;
+    }
+  ): WorkspaceAgentMessageCenterItem {
+    return item({
+      pendingPrompt: {
+        kind: "approval",
+        id: `approval:${overrides.agentSessionId}`,
+        turnId: "turn-1",
+        requestId: `request-${overrides.agentSessionId}`,
+        callId: `request-${overrides.agentSessionId}`,
+        title: "Approval",
+        status: "waiting_approval",
+        toolName: "Bash",
+        input: null,
+        options: [],
+        output: null,
+        occurredAtUnixMs: 1
+      },
+      ...overrides
+    });
+  }
+
+  it("treats only items with a pending prompt as interactive", () => {
+    expect(
+      isInteractiveMessageCenterItem(withPrompt({ agentSessionId: "a" }))
+    ).toBe(true);
+    expect(
+      isInteractiveMessageCenterItem(
+        item({ agentSessionId: "b", needsAttentionKind: "permission" })
+      )
+    ).toBe(false);
+    expect(isInteractiveMessageCenterItem(item({ agentSessionId: "c" }))).toBe(
+      false
+    );
+  });
+
+  it("selects deck items preserving input order (newest-first as sorted upstream)", () => {
+    const newest = withPrompt({ agentSessionId: "newest", sortTimeUnixMs: 30 });
+    const older = withPrompt({ agentSessionId: "older", sortTimeUnixMs: 10 });
+    const attentionOnly = item({
+      agentSessionId: "attn",
+      needsAttentionKind: "permission"
+    });
+    const done = item({ agentSessionId: "done", status: "completed" });
+
+    const deck = selectMessageCenterAttentionDeckItems([
+      newest,
+      older,
+      attentionOnly,
+      done
+    ]);
+
+    expect(deck.map((entry) => entry.agentSessionId)).toEqual([
+      "newest",
+      "older"
+    ]);
+  });
+});
