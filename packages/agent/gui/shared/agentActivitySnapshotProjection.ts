@@ -156,6 +156,15 @@ export function agentHostMessageFromCore(
   };
 }
 
+/**
+ * The single boundary where a raw core session status (e.g. "created",
+ * "queued") becomes host/GUI vocabulary. Use this for any core status that
+ * reaches the GUI outside the snapshot projection (cancel / sendInput results).
+ */
+export function projectCoreSessionStatus(status: string): string {
+  return agentHostSessionStatusFromCore(status);
+}
+
 function agentHostSessionStatusFromCore(status: string): string {
   switch (status) {
     case "created":

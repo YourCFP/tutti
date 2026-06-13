@@ -1,6 +1,7 @@
 export {
   buildAgentActivitySnapshotProjection,
   agentHostSnapshotFromAgentActivitySnapshot,
+  projectCoreSessionStatus,
   type AgentActivitySnapshotProjection
 } from "./shared/agentActivitySnapshotProjection";
 export { AgentGUI } from "./AgentGUI";
