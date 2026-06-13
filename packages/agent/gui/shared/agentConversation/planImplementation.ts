@@ -46,6 +46,52 @@ function isPlanItem(item: PlanTimelineItem): boolean {
   return item.payload?.messageKind === "plan";
 }
 
+export type PlanDecisionOp =
+  | { type: "updateSettings"; settings: { planMode: false } }
+  | { type: "sendInput"; text: string }
+  | {
+      type: "submitInteractive";
+      requestId: string;
+      action?: string;
+      optionId?: string;
+      payload?: Record<string, unknown>;
+    };
+
+/**
+ * Single source of truth for what a plan decision DOES at the daemon level.
+ * Both the desktop service (submitPlanDecision) and the in-conversation
+ * controller (implementPlan) execute these ops with their own primitives;
+ * node-local UI side effects are layered on by the controller, not here.
+ */
+export function planDecisionOps(input: {
+  promptKind: string;
+  action?: string;
+  optionId?: string;
+  payload?: Record<string, unknown>;
+  requestId: string;
+}): PlanDecisionOp[] {
+  if (input.promptKind === "plan-implementation") {
+    if (input.action !== PLAN_IMPLEMENTATION_ACTION_IMPLEMENT) {
+      // feedback/skip are node-local (handled in the conversation), never
+      // reach the daemon-level op list.
+      return [];
+    }
+    return [
+      { type: "updateSettings", settings: { planMode: false } },
+      { type: "sendInput", text: PLAN_IMPLEMENTATION_PROMPT }
+    ];
+  }
+  return [
+    {
+      type: "submitInteractive",
+      requestId: input.requestId,
+      ...(input.action ? { action: input.action } : {}),
+      ...(input.optionId ? { optionId: input.optionId } : {}),
+      ...(input.payload ? { payload: input.payload } : {})
+    }
+  ];
+}
+
 /**
  * Returns the turn id of the latest turn that produced a plan item, or null.
  * Driven by the same timeline data that renders the plan card (no race with a
