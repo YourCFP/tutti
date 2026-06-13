@@ -164,7 +164,6 @@ func (a *CodexAppServerAdapter) appServerItemEvents(
 		if !completed {
 			return nil
 		}
-		a.markSessionPlanItem(session.AgentSessionID)
 		// Render the proposed plan as a dedicated card instead of merging it
 		// into the assistant bubble: close any streaming text first, then
 		// emit a standalone message tagged messageKind=plan for the GUI.

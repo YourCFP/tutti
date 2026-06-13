@@ -1,52 +1,51 @@
 import { describe, expect, it } from "vitest";
 import {
   PLAN_IMPLEMENTATION_PROMPT,
-  shouldOfferPlanImplementation
+  latestPlanTurnId
 } from "./planImplementation";
 
-describe("shouldOfferPlanImplementation", () => {
-  const base = {
-    provider: "codex",
-    previousStatus: "working",
-    status: "ready",
-    planModeActive: true,
-    planItemProduced: true
-  };
-
-  it("offers after a codex plan-mode turn completes", () => {
-    expect(shouldOfferPlanImplementation(base)).toBe(true);
+describe("latestPlanTurnId", () => {
+  it("returns the turn id when the latest turn produced a plan item", () => {
+    expect(
+      latestPlanTurnId([
+        { turnId: "turn-1", occurredAtUnixMs: 1, payload: {} },
+        {
+          turnId: "turn-1",
+          occurredAtUnixMs: 2,
+          payload: { messageKind: "plan" }
+        }
+      ])
+    ).toBe("turn-1");
   });
 
-  it("does not offer when the turn produced no plan item", () => {
-    // Mirrors the codex TUI's saw_plan_item_this_turn gate: clarifying
-    // questions or plain replies in plan mode must not trigger the offer.
+  it("returns null when the latest turn has no plan item", () => {
     expect(
-      shouldOfferPlanImplementation({ ...base, planItemProduced: false })
-    ).toBe(false);
+      latestPlanTurnId([
+        {
+          turnId: "turn-1",
+          occurredAtUnixMs: 1,
+          payload: { messageKind: "plan" }
+        },
+        { turnId: "turn-2", occurredAtUnixMs: 2, payload: {} }
+      ])
+    ).toBeNull();
   });
 
-  it("does not offer outside plan mode", () => {
+  it("ignores plan items that are not in the latest turn", () => {
     expect(
-      shouldOfferPlanImplementation({ ...base, planModeActive: false })
-    ).toBe(false);
+      latestPlanTurnId([
+        {
+          turnId: "turn-1",
+          occurredAtUnixMs: 5,
+          payload: { messageKind: "plan" }
+        },
+        { turnId: "turn-2", occurredAtUnixMs: 9, payload: {} }
+      ])
+    ).toBeNull();
   });
 
-  it("does not offer for providers with their own exit-plan flow", () => {
-    expect(
-      shouldOfferPlanImplementation({ ...base, provider: "claude-code" })
-    ).toBe(false);
-  });
-
-  it("only offers on the working-to-ready transition", () => {
-    expect(
-      shouldOfferPlanImplementation({ ...base, previousStatus: "ready" })
-    ).toBe(false);
-    expect(shouldOfferPlanImplementation({ ...base, status: "failed" })).toBe(
-      false
-    );
-    expect(
-      shouldOfferPlanImplementation({ ...base, previousStatus: null })
-    ).toBe(false);
+  it("returns null without any timeline items", () => {
+    expect(latestPlanTurnId([])).toBeNull();
   });
 
   it("submits the same literal message as the codex TUI", () => {

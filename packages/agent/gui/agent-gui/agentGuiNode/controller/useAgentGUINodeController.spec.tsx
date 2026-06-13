@@ -8481,6 +8481,69 @@ describe("useAgentGUINodeController", () => {
     expect(exec).not.toHaveBeenCalled();
   });
 
+  it("offers plan implementation when the latest codex turn produced a plan item", async () => {
+    const planTimelineItem = {
+      id: 1,
+      workspaceId: "room-1",
+      agentSessionId: "session-1",
+      turnId: "turn-plan",
+      eventId: "plan-msg-1",
+      actorType: "agent",
+      actorId: "codex",
+      itemType: "message",
+      role: "assistant",
+      content: "# Plan\n1. inspect",
+      payload: { messageKind: "plan" },
+      occurredAtUnixMs: 10,
+      createdAtUnixMs: 10
+    } as unknown as Parameters<typeof timelineItemToMessage>[0];
+
+    installAgentHostApi({
+      list: vi.fn(async () => snapshotWithSession("session-1")),
+      listSessionTimeline: vi.fn(async () => ({
+        timelineItems: [planTimelineItem]
+      })),
+      subscribeEvents: vi.fn(() => vi.fn()),
+      getComposerOptions: vi.fn(async () => ({
+        provider: "codex",
+        modelConfig: { configurable: true, options: [] },
+        reasoningConfig: { configurable: true, options: [] },
+        runtimeContext: { capabilities: ["planMode"] }
+      })),
+      getState: vi.fn(async () =>
+        agentSessionState("session-1", {
+          provider: "codex",
+          status: "ready",
+          settings: { planMode: true, permissionModeId: "auto" },
+          runtimeContext: { capabilities: ["planMode"] }
+        })
+      )
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData("session-1", "codex"),
+        onDataChange: vi.fn()
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.viewModel.planImplementationPrompt).toBe(true);
+    });
+
+    // Dismiss suppresses the offer for that plan turn.
+    act(() => {
+      result.current.actions.submitPlanFeedback("");
+    });
+    await waitFor(() => {
+      expect(result.current.viewModel.planImplementationPrompt).toBe(false);
+    });
+  });
+
   it("implements a codex plan by leaving plan mode then submitting the literal prompt", async () => {
     const exec = vi.fn(async () => ({ events: [] }));
     const updateSettings = vi.fn(async ({ settings }) => ({ settings }));

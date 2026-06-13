@@ -120,7 +120,7 @@ import { resolveAgentGUIExplicitConversationTitle } from "../model/agentGuiProvi
 import { composerSettingsSupportFromOptions } from "../model/composerSettingsSupport";
 import {
   PLAN_IMPLEMENTATION_PROMPT,
-  shouldOfferPlanImplementation
+  latestPlanTurnId
 } from "../model/planImplementation";
 import {
   INITIAL_USAGE_ALERT_STATE,
@@ -2002,12 +2002,12 @@ export function useAgentGUINodeController({
   const [usageAlertBySessionId, setUsageAlertBySessionId] = useState<
     Record<string, UsageAlertTier>
   >({});
-  const [planImplementationSessionIds, setPlanImplementationSessionIds] =
-    useState<Record<string, true>>({});
-  const previousConversationStatusRef = useRef<{
-    id: string | null;
-    status: string | null;
-  }>({ id: null, status: null });
+  // Maps a session to the plan turn id whose implement-plan offer was
+  // dismissed, so a given plan is offered once while a fresh plan turn
+  // (different turn id) re-arms the offer.
+  const [dismissedPlanTurnIdBySessionId, setDismissedPlanTurnIdBySessionId] =
+    useState<Record<string, string>>({});
+  const planImplementationTurnIdRef = useRef<string | null>(null);
   const usagePercentUsed = usage?.percentUsed ?? null;
   useEffect(() => {
     const agentSessionId = activeConversationId;
@@ -2057,17 +2057,15 @@ export function useAgentGUINodeController({
   }, [activeConversationId]);
   const dismissPlanImplementation = useCallback(() => {
     const agentSessionId = activeConversationIdRef.current;
-    if (!agentSessionId) {
+    const planTurnId = planImplementationTurnIdRef.current;
+    if (!agentSessionId || !planTurnId) {
       return;
     }
-    setPlanImplementationSessionIds((current) => {
-      if (!(agentSessionId in current)) {
-        return current;
-      }
-      const next = { ...current };
-      delete next[agentSessionId];
-      return next;
-    });
+    setDismissedPlanTurnIdBySessionId((current) =>
+      current[agentSessionId] === planTurnId
+        ? current
+        : { ...current, [agentSessionId]: planTurnId }
+    );
   }, []);
   const stableRuntimeSyncStateBySessionIdRef = useRef<
     Record<string, WorkspaceAgentActivitySyncState | undefined>
@@ -6393,52 +6391,24 @@ export function useAgentGUINodeController({
   const draftReasoningEffort = normalizeOptionalText(
     draftSettings.reasoningEffort
   ) as AgentSessionReasoningEffort | null;
-  useEffect(() => {
-    const id = activeConversation?.id ?? null;
-    const status = activeConversation?.status ?? null;
-    const previous = previousConversationStatusRef.current;
-    previousConversationStatusRef.current = { id, status };
-    if (!id || previous.id !== id) {
-      return;
-    }
-    if (status === "working") {
-      // A new turn started: any stale offer for this session is obsolete.
-      setPlanImplementationSessionIds((current) => {
-        if (!(id in current)) {
-          return current;
-        }
-        const next = { ...current };
-        delete next[id];
-        return next;
-      });
-      return;
-    }
-    if (
-      shouldOfferPlanImplementation({
-        provider: dataRef.current.provider,
-        previousStatus: previous.status,
-        status,
-        planModeActive: composerSupport.plan && Boolean(draftSettings.planMode),
-        planItemProduced:
-          activeSessionRuntimeContext?.lastTurnProducedPlan === true
-      })
-    ) {
-      setPlanImplementationSessionIds((current) =>
-        id in current ? current : { ...current, [id]: true }
-      );
-    }
-  }, [
-    activeConversation?.id,
-    activeConversation?.status,
-    activeSessionRuntimeContext?.lastTurnProducedPlan,
-    composerSupport.plan,
-    draftSettings.planMode
-  ]);
-  const planImplementationPrompt =
+  // The offer is derived from the same timeline data that renders the plan
+  // card (the latest turn produced a plan item), gated on codex + plan mode
+  // and a settled (non-working) conversation. No status-edge/runtimeContext
+  // race; keyed by plan turn id so dismiss suppresses only that plan.
+  const planImplementationTurnId =
     activeConversationId !== null &&
-    Boolean(planImplementationSessionIds[activeConversationId]) &&
+    dataRef.current.provider === "codex" &&
     composerSupport.plan &&
-    Boolean(draftSettings.planMode);
+    Boolean(draftSettings.planMode) &&
+    activeConversation?.status !== "working"
+      ? latestPlanTurnId(activeTimelineItems)
+      : null;
+  planImplementationTurnIdRef.current = planImplementationTurnId;
+  const planImplementationPrompt =
+    planImplementationTurnId !== null &&
+    activeConversationId !== null &&
+    dismissedPlanTurnIdBySessionId[activeConversationId] !==
+      planImplementationTurnId;
   const activeRuntimeSession =
     runtimeSessionsBySessionId.get(activeConversationId ?? "") ?? null;
   const activeConversationBusy =

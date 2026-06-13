@@ -1494,7 +1494,7 @@ func TestCodexAppServerAdapterSendsCollaborationModeForPlanTurns(t *testing.T) {
 	}
 }
 
-func TestCodexAppServerAdapterTracksPlanItemPerTurn(t *testing.T) {
+func TestCodexAppServerAdapterEmitsPlanItemAsTaggedMessage(t *testing.T) {
 	t.Parallel()
 
 	adapter, transport, session := startedAppServerAdapter(t)
@@ -1508,10 +1508,6 @@ func TestCodexAppServerAdapterTracksPlanItemPerTurn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Exec: %v", err)
 	}
-	state := adapter.SessionState(session)
-	if state.RuntimeContext["lastTurnProducedPlan"] != true {
-		t.Fatalf("runtimeContext lastTurnProducedPlan = %#v, want true after plan item", state.RuntimeContext["lastTurnProducedPlan"])
-	}
 	planMessages := 0
 	for _, event := range eventsOfType(adapterTurnEvents, activityshared.EventMessageAppended) {
 		if event.Payload.Metadata["messageKind"] == "plan" {
@@ -1523,18 +1519,5 @@ func TestCodexAppServerAdapterTracksPlanItemPerTurn(t *testing.T) {
 	}
 	if planMessages != 1 {
 		t.Fatalf("plan-tagged messages = %d, want exactly 1", planMessages)
-	}
-
-	transport.conn.mu.Lock()
-	transport.conn.emitPlanItem = false
-	transport.conn.mu.Unlock()
-	if _, err := adapter.Exec(context.Background(), session, []PromptContentBlock{{
-		Type: "text", Text: "just chatting",
-	}}, "", "turn-plan-track-2", nil, nil); err != nil {
-		t.Fatalf("Exec: %v", err)
-	}
-	state = adapter.SessionState(session)
-	if state.RuntimeContext["lastTurnProducedPlan"] == true {
-		t.Fatalf("runtimeContext lastTurnProducedPlan = %#v, want cleared after non-plan turn", state.RuntimeContext["lastTurnProducedPlan"])
 	}
 }
