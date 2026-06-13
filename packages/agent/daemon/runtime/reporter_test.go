@@ -384,6 +384,27 @@ func TestReportActivityInputProjectsRuntimeMessagesToMessageUpdates(t *testing.T
 	}
 }
 
+func TestReportActivityInputForwardsMessageKindToPayload(t *testing.T) {
+	t.Parallel()
+
+	session := reportTestSession()
+	planEvent := newTurnActivityEventWithID(session, "plan-event-1", EventMessage, "turn-1", messageStreamStateCompleted, RoleAssistant, "# Plan\n1. inspect", map[string]any{
+		"messageId":   "plan-message-1",
+		"streamState": messageStreamStateCompleted,
+		"messageKind": "plan",
+	})
+	planEvent.OccurredAtUnixMS = 110
+
+	report := reportActivityInput(session, []activityshared.Event{planEvent})
+	if len(report.MessageUpdates) != 1 {
+		t.Fatalf("message updates = %#v, want one plan update", report.MessageUpdates)
+	}
+	plan := report.MessageUpdates[0]
+	if plan.Payload["messageKind"] != "plan" {
+		t.Fatalf("plan message payload = %#v, want messageKind=plan forwarded to the GUI", plan.Payload)
+	}
+}
+
 func TestReportActivityInputProjectsRuntimeCallsToStableMessageUpdates(t *testing.T) {
 	t.Parallel()
 

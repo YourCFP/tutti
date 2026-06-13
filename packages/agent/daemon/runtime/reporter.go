@@ -370,6 +370,11 @@ func textMessageUpdateFromSessionEvent(
 	if contentMode := stringFromPayload(event.Payload.Metadata, "contentMode"); contentMode != "" {
 		update.Payload["contentMode"] = contentMode
 	}
+	// Carry the adapter's message kind tag (e.g. codex plan proposals) so the
+	// GUI can render dedicated treatments instead of a plain assistant bubble.
+	if messageKind := stringFromPayload(event.Payload.Metadata, "messageKind"); messageKind != "" {
+		update.Payload["messageKind"] = messageKind
+	}
 	return update, true
 }
 
