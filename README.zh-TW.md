@@ -2,8 +2,6 @@
 
 <img src="docs/assets/banner.jpg" alt="Tutti —— 人與 Agent 同頻協作的地方" width="720" />
 
-<img src="docs/assets/tutti-logo.png" alt="Tutti logo" width="120" />
-
 # Tutti
 
 **人與 Agent「同步協作」的工作空間。**
