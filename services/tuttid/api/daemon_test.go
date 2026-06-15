@@ -414,6 +414,8 @@ func (s stubPreferencesService) Put(ctx context.Context, input preferencesservic
 			Locale:              input.Locale,
 			SleepPreventionMode: input.SleepPreventionMode,
 			ThemeSource:         input.ThemeSource,
+			UpdateChannel:       input.UpdateChannel,
+			UpdatePolicy:        input.UpdatePolicy,
 		}, nil
 	}
 	return s.putFn(ctx, input)
@@ -1041,6 +1043,8 @@ func TestDaemonAPIGeneratedRoutesGetDesktopPreferences(t *testing.T) {
 					Locale:              "zh-CN",
 					SleepPreventionMode: "whileAgentRunning",
 					ThemeSource:         "dark",
+					UpdateChannel:       "rc",
+					UpdatePolicy:        "auto",
 				}, nil
 			},
 		},
@@ -1071,6 +1075,12 @@ func TestDaemonAPIGeneratedRoutesGetDesktopPreferences(t *testing.T) {
 	if response.Preferences.SleepPreventionMode != tuttigenerated.WhileAgentRunning {
 		t.Fatalf("sleepPreventionMode = %q, want %q", response.Preferences.SleepPreventionMode, tuttigenerated.WhileAgentRunning)
 	}
+	if response.Preferences.UpdateChannel != tuttigenerated.Rc {
+		t.Fatalf("updateChannel = %q, want %q", response.Preferences.UpdateChannel, tuttigenerated.Rc)
+	}
+	if response.Preferences.UpdatePolicy != tuttigenerated.DesktopUpdatePolicyAuto {
+		t.Fatalf("updatePolicy = %q, want %q", response.Preferences.UpdatePolicy, tuttigenerated.DesktopUpdatePolicyAuto)
+	}
 }
 
 func TestDaemonAPIGeneratedRoutesPutDesktopPreferencesValidatesLocale(t *testing.T) {
@@ -1092,6 +1102,8 @@ func TestDaemonAPIGeneratedRoutesPutDesktopPreferencesValidatesLocale(t *testing
 			"locale":               "fr",
 			"sleepPreventionMode":  "never",
 			"themeSource":          "dark",
+			"updateChannel":        "stable",
+			"updatePolicy":         "prompt",
 		},
 	})
 	if recorder.Code != http.StatusBadRequest {

@@ -5,6 +5,7 @@ export const en = {
     defaultWorkspace: "default",
     loading: "Loading",
     neverOpened: "Never opened",
+    ok: "OK",
     selectFolder: "Select folder",
     unknownError: "Unknown error",
     unreachable: "unreachable",
@@ -57,14 +58,14 @@ export const en = {
     workspaceCountNote: "{{count}} recent workspaces are currently available"
   },
   updates: {
-    availableTitle: "Version {{version}} is available",
+    availableTitle: "New version available",
     badge: "update",
     checkingTitle: "Checking for updates",
-    downloadAction: "Download",
-    downloadedTitle: "Version {{version}} is ready to install",
-    downloadingTitle: "Downloading {{version}} {{percent}}",
+    downloadAction: "Download update",
+    downloadedTitle: "Update ready to install",
+    downloadingTitle: "Downloading {{percent}}",
     errorTitle: "Unable to check for updates",
-    restartAction: "Restart",
+    restartAction: "Install update",
     retryAction: "Retry"
   },
   desktop: {
@@ -92,12 +93,15 @@ export const en = {
       title: "Export Logs"
     },
     menu: {
+      checkForUpdates: "Check for Updates...",
       edit: "Edit",
       exportLogsFailed: "Unable to export logs",
       exportLogsTitle: "Export Logs",
       exportServiceLogs: "Export Service Logs...",
       file: "File",
       help: "Help",
+      upToDateDetail: "Tutti {{version}} is currently the latest version.",
+      upToDateMessage: "You're up to date!",
       view: "View",
       window: "Window"
     }
@@ -293,7 +297,10 @@ export const en = {
           whileAgentRunning: "While agents run"
         },
         preventSleepSaveFailed:
-          "We couldn't update the sleep prevention setting right now."
+          "We couldn't update the sleep prevention setting right now.",
+        updateChannelSaveFailed:
+          "We couldn't update the release channel right now.",
+        updatePolicySaveFailed: "We couldn't update the update mode right now."
       },
       nav: {
         agent: "Agent",
