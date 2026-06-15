@@ -306,6 +306,13 @@ export type AppReferenceListTimeRange = {
   toMs?: number;
 };
 
+export type InstallWorkspaceAppRequest = {
+  /**
+   * Restart the app runtime after installing if it is already running.
+   */
+  restartRunning?: boolean;
+};
+
 export type AppReferenceListResponse = {
   workspaceId: string;
   appId: string;
@@ -2554,7 +2561,7 @@ export type StopAllWorkspaceAppsResponse =
   StopAllWorkspaceAppsResponses[keyof StopAllWorkspaceAppsResponses];
 
 export type InstallWorkspaceAppData = {
-  body?: never;
+  body?: InstallWorkspaceAppRequest;
   path: {
     workspaceID: string;
     appID: string;

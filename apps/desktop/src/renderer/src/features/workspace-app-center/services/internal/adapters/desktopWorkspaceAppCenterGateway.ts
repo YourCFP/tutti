@@ -92,8 +92,8 @@ export function createDesktopWorkspaceAppCenterGateway(
   tuttidClient: TuttidClient
 ): WorkspaceAppCenterGateway & DesktopWorkspaceAppCenterLocalFileGateway {
   return {
-    async installWorkspaceApp(workspaceId, appId) {
-      await tuttidClient.installWorkspaceApp(workspaceId, appId);
+    async installWorkspaceApp(workspaceId, appId, input) {
+      await tuttidClient.installWorkspaceApp(workspaceId, appId, input);
       return normalizeWorkspaceAppCenterSnapshot(
         await tuttidClient.listWorkspaceApps(workspaceId)
       );

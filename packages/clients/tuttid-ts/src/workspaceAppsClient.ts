@@ -84,8 +84,9 @@ export function createWorkspaceAppsClient(client: Client): WorkspaceAppsClient {
         "Refresh workspace app catalog request failed."
       );
     },
-    async installWorkspaceApp(workspaceID, appID) {
+    async installWorkspaceApp(workspaceID, appID, request) {
       const response = await installWorkspaceApp({
+        ...(request ? { body: request } : {}),
         client,
         path: { appID, workspaceID }
       });

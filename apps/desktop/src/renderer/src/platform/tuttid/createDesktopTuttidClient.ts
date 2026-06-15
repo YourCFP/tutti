@@ -45,8 +45,12 @@ export function createDesktopTuttidClient(
         request
       );
     },
-    async installWorkspaceApp(workspaceID, appID) {
-      return (await resolveClient()).installWorkspaceApp(workspaceID, appID);
+    async installWorkspaceApp(workspaceID, appID, request) {
+      return (await resolveClient()).installWorkspaceApp(
+        workspaceID,
+        appID,
+        request
+      );
     },
     async exportWorkspaceApp(workspaceID, appID, request) {
       return (await resolveClient()).exportWorkspaceApp(

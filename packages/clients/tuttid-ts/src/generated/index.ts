@@ -446,6 +446,7 @@ export type {
   InstallWorkspaceAppData,
   InstallWorkspaceAppError,
   InstallWorkspaceAppErrors,
+  InstallWorkspaceAppRequest,
   InstallWorkspaceAppResponse,
   InstallWorkspaceAppResponses,
   InvokeCliCommandData,

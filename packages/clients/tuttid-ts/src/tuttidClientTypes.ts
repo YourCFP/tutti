@@ -34,6 +34,7 @@ import type {
   ExportWorkspaceAppResponse,
   FixWorkspaceAppFactoryJobRequest,
   HealthStatusResponse,
+  InstallWorkspaceAppRequest,
   IssueManagerContextRefsResponse,
   IssueManagerIssue,
   IssueManagerIssueDetailResponse,
@@ -274,7 +275,8 @@ export interface TuttidClient {
   ): Promise<WorkspaceAppListResponse>;
   installWorkspaceApp(
     workspaceID: string,
-    appID: string
+    appID: string,
+    request?: InstallWorkspaceAppRequest
   ): Promise<WorkspaceApp>;
   exportWorkspaceApp(
     workspaceID: string,

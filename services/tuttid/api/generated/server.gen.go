@@ -10092,6 +10092,7 @@ func (response ReplaceWorkspaceAppIcon503JSONResponse) VisitReplaceWorkspaceAppI
 type InstallWorkspaceAppRequestObject struct {
 	WorkspaceID WorkspaceID    `json:"workspaceID"`
 	AppID       WorkspaceAppID `json:"appID"`
+	Body        *InstallWorkspaceAppJSONRequestBody
 }
 
 type InstallWorkspaceAppResponseObject interface {
@@ -18591,6 +18592,18 @@ func (sh *strictHandler) InstallWorkspaceApp(w http.ResponseWriter, r *http.Requ
 
 	request.WorkspaceID = workspaceID
 	request.AppID = appID
+
+	var body InstallWorkspaceAppJSONRequestBody
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.InstallWorkspaceApp(ctx, request.(InstallWorkspaceAppRequestObject))

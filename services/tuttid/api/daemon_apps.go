@@ -9,6 +9,7 @@ import (
 	workspaceapi "github.com/tutti-os/tutti/services/tuttid/api/workspace"
 	"github.com/tutti-os/tutti/services/tuttid/apierrors"
 	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
+	workspaceservice "github.com/tutti-os/tutti/services/tuttid/service/workspace"
 )
 
 const (
@@ -101,7 +102,11 @@ func (api DaemonAPI) InstallWorkspaceApp(ctx context.Context, request tuttigener
 		return tuttigenerated.InstallWorkspaceApp400JSONResponse{InvalidRequestErrorJSONResponse: *errResponse}, nil
 	}
 
-	app, err := api.AppCenterService.Install(ctx, workspaceID, appID)
+	options := workspaceservice.InstallOptions{}
+	if request.Body != nil && request.Body.RestartRunning != nil {
+		options.RestartRunning = *request.Body.RestartRunning
+	}
+	app, err := api.AppCenterService.InstallWithOptions(ctx, workspaceID, appID, options)
 	if err != nil {
 		return writeInstallWorkspaceAppError(err), nil
 	}

@@ -162,8 +162,66 @@ func TestDaemonAPIGeneratedRoutesListWorkspaceAppReferencesRejectsInvalidRequest
 	}
 }
 
+func TestDaemonAPIGeneratedRoutesInstallWorkspaceAppPassesRestartOption(t *testing.T) {
+	mux := http.NewServeMux()
+	var gotWorkspaceID string
+	var gotAppID string
+	var gotOptions workspaceservice.InstallOptions
+	installCalls := 0
+	RegisterRoutes(
+		mux,
+		NewRoutes(DaemonAPI{
+			AppCenterService: stubWorkspaceAppCenterService{
+				installWithOptionsFn: func(_ context.Context, workspaceID string, appID string, options workspaceservice.InstallOptions) (workspacebiz.WorkspaceApp, error) {
+					installCalls++
+					gotWorkspaceID = workspaceID
+					gotAppID = appID
+					gotOptions = options
+					return workspacebiz.WorkspaceApp{
+						Package: workspacebiz.AppPackage{
+							AppID:      appID,
+							Version:    "1.0.0",
+							PackageDir: "/tmp/app",
+							Manifest: workspacebiz.AppManifest{
+								AppID:       appID,
+								Version:     "1.0.0",
+								Name:        "App",
+								Description: "",
+							},
+							Source: workspacebiz.AppPackageSourceBuiltin,
+						},
+						Runtime: workspacebiz.AppRuntimeState{Status: workspacebiz.AppRuntimeStatusIdle},
+					}, nil
+				},
+			},
+		}),
+	)
+
+	recorder := performGeneratedRouteRequest(
+		t,
+		mux,
+		http.MethodPost,
+		"/v1/workspaces/workspace-1/apps/docs/install",
+		map[string]any{"restartRunning": true},
+	)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if installCalls != 1 {
+		t.Fatalf("expected one install call, got %d", installCalls)
+	}
+	if gotWorkspaceID != "workspace-1" || gotAppID != "docs" {
+		t.Fatalf("install target = %q/%q, want workspace-1/docs", gotWorkspaceID, gotAppID)
+	}
+	if !gotOptions.RestartRunning {
+		t.Fatal("RestartRunning = false, want true")
+	}
+}
+
 type stubWorkspaceAppCenterService struct {
-	listReferencesFn func(context.Context, string, string, workspacebiz.AppReferenceListInput) (workspacebiz.AppReferenceListResult, error)
+	installWithOptionsFn func(context.Context, string, string, workspaceservice.InstallOptions) (workspacebiz.WorkspaceApp, error)
+	listReferencesFn     func(context.Context, string, string, workspacebiz.AppReferenceListInput) (workspacebiz.AppReferenceListResult, error)
 }
 
 func (stubWorkspaceAppCenterService) Add(context.Context, string, string) (workspacebiz.WorkspaceApp, error) {
@@ -184,6 +242,13 @@ func (stubWorkspaceAppCenterService) ImportPackage(context.Context, string) (wor
 
 func (stubWorkspaceAppCenterService) Install(context.Context, string, string) (workspacebiz.WorkspaceApp, error) {
 	return workspacebiz.WorkspaceApp{}, nil
+}
+
+func (s stubWorkspaceAppCenterService) InstallWithOptions(ctx context.Context, workspaceID string, appID string, options workspaceservice.InstallOptions) (workspacebiz.WorkspaceApp, error) {
+	if s.installWithOptionsFn == nil {
+		return workspacebiz.WorkspaceApp{}, nil
+	}
+	return s.installWithOptionsFn(ctx, workspaceID, appID, options)
 }
 
 func (stubWorkspaceAppCenterService) Launch(context.Context, string, string) (workspacebiz.WorkspaceApp, error) {

@@ -647,6 +647,12 @@ paths:
       tags:
         - app-center
       summary: Install one app in a workspace
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstallWorkspaceAppRequest"
       responses:
         "200":
           description: Workspace app installed
@@ -3207,6 +3213,13 @@ components:
           type: integer
           format: int64
           minimum: 0
+    InstallWorkspaceAppRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        restartRunning:
+          type: boolean
+          description: Restart the app runtime after installing if it is already running.
     AppReferenceListResponse:
       type: object
       additionalProperties: false

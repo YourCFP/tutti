@@ -341,6 +341,13 @@ function AppCardMoreActions({
       key: "modify-app-with-agent",
       label: copy.t("actions.modifyAppWithAgent"),
       onSelect: () => {
+        if (app.factoryEditAction === "open_session") {
+          void actions.openFactoryJobAgentSession?.(
+            app.factoryAgentSessionId ?? "",
+            app.factoryProvider
+          );
+          return;
+        }
         void actions.modifyAppWithAgent?.(
           app.factoryJobId ?? "",
           app.factoryAgentSessionId ?? "",

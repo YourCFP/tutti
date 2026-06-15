@@ -50,6 +50,9 @@ export const appCenterEn = {
     uninstallAppDescriptionRecommended:
       "This uninstalls the app from this workspace and deletes this workspace's app data.",
     uninstallAppTitle: 'Uninstall "{{name}}"?',
+    updateAppTitle: 'Update "{{name}}"?',
+    updateRunningAppDescription:
+      "Updating will restart this app to apply the new version.",
     uninstallAndDeleteAppDescription:
       "This uninstalls the app, deletes its app data, and removes it from your local apps.",
     uninstallAndDeleteAppTitle: 'Uninstall and delete "{{name}}"?'
@@ -340,6 +343,8 @@ export const appCenterZhCN = {
     uninstallAppDescriptionRecommended:
       "这会从当前工作区卸载该应用，并删除此工作区中的应用数据。",
     uninstallAppTitle: "卸载“{{name}}”？",
+    updateAppTitle: "更新“{{name}}”？",
+    updateRunningAppDescription: "更新会重启应用以应用新版本。",
     uninstallAndDeleteAppDescription:
       "这会卸载该应用、删除应用数据，并从本地应用列表移除。",
     uninstallAndDeleteAppTitle: "卸载并删除“{{name}}”？"

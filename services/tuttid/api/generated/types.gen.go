@@ -1782,6 +1782,12 @@ type ImportWorkspaceAppRequest struct {
 	ArchivePath string `json:"archivePath"`
 }
 
+// InstallWorkspaceAppRequest defines model for InstallWorkspaceAppRequest.
+type InstallWorkspaceAppRequest struct {
+	// RestartRunning Restart the app runtime after installing if it is already running.
+	RestartRunning *bool `json:"restartRunning,omitempty"`
+}
+
 // IssueManagerContextRef defines model for IssueManagerContextRef.
 type IssueManagerContextRef struct {
 	union json.RawMessage
@@ -2928,6 +2934,9 @@ type ExportWorkspaceAppJSONRequestBody = ExportWorkspaceAppRequest
 
 // ReplaceWorkspaceAppIconJSONRequestBody defines body for ReplaceWorkspaceAppIcon for application/json ContentType.
 type ReplaceWorkspaceAppIconJSONRequestBody = ReplaceWorkspaceAppIconRequest
+
+// InstallWorkspaceAppJSONRequestBody defines body for InstallWorkspaceApp for application/json ContentType.
+type InstallWorkspaceAppJSONRequestBody = InstallWorkspaceAppRequest
 
 // ListWorkspaceAppReferencesJSONRequestBody defines body for ListWorkspaceAppReferences for application/json ContentType.
 type ListWorkspaceAppReferencesJSONRequestBody = AppReferenceListRequest

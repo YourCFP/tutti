@@ -93,6 +93,10 @@ func (stubAppCenterService) Install(context.Context, string, string) (workspaceb
 	return workspacebiz.WorkspaceApp{}, nil
 }
 
+func (s stubAppCenterService) InstallWithOptions(ctx context.Context, workspaceID string, appID string, _ workspaceservice.InstallOptions) (workspacebiz.WorkspaceApp, error) {
+	return s.Install(ctx, workspaceID, appID)
+}
+
 func (s stubAppCenterService) Launch(ctx context.Context, workspaceID string, appID string) (workspacebiz.WorkspaceApp, error) {
 	if s.launchFn == nil {
 		return workspacebiz.WorkspaceApp{}, nil

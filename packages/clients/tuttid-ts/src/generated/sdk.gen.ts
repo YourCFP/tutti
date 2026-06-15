@@ -784,7 +784,11 @@ export const installWorkspaceApp = <ThrowOnError extends boolean = false>(
   >({
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/workspaces/{workspaceID}/apps/{appID}/install",
-    ...options
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
   });
 
 /**

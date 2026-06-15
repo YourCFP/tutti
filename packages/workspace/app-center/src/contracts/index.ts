@@ -54,6 +54,7 @@ export {
   type AppCenterViewModel,
   type WorkspaceAppActionContext,
   type WorkspaceAppCardViewModel,
+  type WorkspaceAppFactoryEditAction,
   type WorkspaceAppFactoryJobStatus,
   type WorkspaceAppFactoryJobViewModel,
   type WorkspaceAppPrimaryAction,
