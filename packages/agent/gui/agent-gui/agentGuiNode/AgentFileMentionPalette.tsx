@@ -9,6 +9,7 @@ import {
   type MentionPaletteEntry,
   type MentionPaletteState,
   type MentionPaletteTheme,
+  type MentionRowClassNames,
   type MentionRowItem,
   type MentionRowStatusTag,
   type MentionRowStatusTone
@@ -95,6 +96,21 @@ const AGENT_MENTION_PALETTE_THEME: MentionPaletteTheme = {
     loadingSpinner: "agent-mention-loading-spinner"
   },
   groupDividerAttribute: "data-agent-mention-group-divider"
+};
+
+/**
+ * The agent composer's existing structural row class names. Passing these to
+ * {@link renderMentionRow} keeps the rendered DOM byte-identical to the
+ * pre-refactor markup (the agent stylesheet `agentactivity.css` owns these
+ * rules and the agent spec greps them), while the shared component defaults to
+ * package-owned `rich-text-at-mention-*` names for other surfaces.
+ */
+const AGENT_MENTION_ROW_CLASS_NAMES: MentionRowClassNames = {
+  fileIcon: "agent-gui-node__mention-file-icon",
+  fileThumb: "agent-gui-node__mention-file-thumb",
+  kindIcon: "tsh-agent-object-token__kind-icon",
+  avatarImgUserPlaceholder:
+    "workspace-agents-status-panel__avatar-img--user-placeholder"
 };
 
 /**
@@ -241,7 +257,12 @@ export function AgentFileMentionPalette({
       state={shellState}
       highlightedKey={highlightedKey}
       getItemKey={agentMentionItemKey}
-      renderItem={(item) => renderMentionRow(agentMentionItemToRowItem(item))}
+      renderItem={(item) =>
+        renderMentionRow(
+          agentMentionItemToRowItem(item),
+          AGENT_MENTION_ROW_CLASS_NAMES
+        )
+      }
       labels={{
         loading: loadingLabel,
         empty: emptyLabelForShell,

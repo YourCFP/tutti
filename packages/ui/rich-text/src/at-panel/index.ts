@@ -1,6 +1,6 @@
 export { buildMentionPaletteState } from "./buildMentionPaletteState.ts";
 export { MentionPalette } from "./MentionPalette.tsx";
-export { renderMentionRow } from "./MentionRow.tsx";
+export { renderMentionRow, type MentionRowClassNames } from "./MentionRow.tsx";
 export type {
   MentionRowAppFactoryItem,
   MentionRowAppItem,

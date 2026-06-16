@@ -9,22 +9,74 @@ import type {
 import { mentionStatusBadgeClassName } from "./mentionStatusTone.ts";
 
 /**
+ * Structural class-name hooks for the elements a {@link MentionRow} renders that
+ * rely on a stylesheet (file icon/thumb, the app fallback kind-icon, and the
+ * session avatar placeholder modifier). Every key is optional and defaults to a
+ * PACKAGE-OWNED `rich-text-at-mention-*` class whose CSS ships with
+ * `mentionPalette.css`, so any consumer renders styled rows out of the box.
+ *
+ * Surfaces with their own stylesheet (e.g. the agent composer) pass their exact
+ * existing class names here so their rendered DOM stays byte-identical.
+ */
+export interface MentionRowClassNames {
+  /** The masked file kind-icon `<span>`. */
+  fileIcon?: string;
+  /** The image-thumbnail wrapper `<span>` (rendered for image files). */
+  fileThumb?: string;
+  /** The fallback app icon glyph rendered when no `iconUrl` is present. */
+  kindIcon?: string;
+  /**
+   * Modifier class added to the session user avatar `<img>` when the user has no
+   * avatar URL and the placeholder asset is shown.
+   */
+  avatarImgUserPlaceholder?: string;
+}
+
+const DEFAULT_MENTION_ROW_CLASS_NAMES = {
+  fileIcon: "rich-text-at-mention-file-icon",
+  fileThumb: "rich-text-at-mention-file-thumb",
+  kindIcon: "rich-text-at-mention-kind-icon",
+  avatarImgUserPlaceholder: "rich-text-at-mention-avatar-img--user-placeholder"
+} as const satisfies Required<MentionRowClassNames>;
+
+function resolveMentionRowClassNames(
+  classNames?: MentionRowClassNames
+): Required<MentionRowClassNames> {
+  return {
+    fileIcon: classNames?.fileIcon ?? DEFAULT_MENTION_ROW_CLASS_NAMES.fileIcon,
+    fileThumb:
+      classNames?.fileThumb ?? DEFAULT_MENTION_ROW_CLASS_NAMES.fileThumb,
+    kindIcon: classNames?.kindIcon ?? DEFAULT_MENTION_ROW_CLASS_NAMES.kindIcon,
+    avatarImgUserPlaceholder:
+      classNames?.avatarImgUserPlaceholder ??
+      DEFAULT_MENTION_ROW_CLASS_NAMES.avatarImgUserPlaceholder
+  };
+}
+
+/**
  * Render the inner content of a single `@`-mention palette row from a
  * fully-resolved {@link MentionRowItem}. The surrounding option button / active
  * state is provided by the shared `MentionPalette` shell; this renders only the
  * row body. The markup is reproduced verbatim from the agent composer so the
  * DOM/classes stay byte-identical across every mention surface.
+ *
+ * Pass {@link classNames} to override the package-owned structural class hooks
+ * (e.g. so the agent composer keeps emitting its own stylesheet's class names).
  */
-export function renderMentionRow(item: MentionRowItem): React.ReactNode {
+export function renderMentionRow(
+  item: MentionRowItem,
+  classNames?: MentionRowClassNames
+): React.ReactNode {
+  const resolved = resolveMentionRowClassNames(classNames);
   if (item.kind === "file") {
-    return <MentionFileRow item={item} />;
+    return <MentionFileRow item={item} classNames={resolved} />;
   }
 
   if (item.kind === "session") {
     return (
       <span className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
         <span className="flex min-w-0 items-center gap-2 overflow-hidden">
-          <MentionSessionAvatarStack item={item} />
+          <MentionSessionAvatarStack item={item} classNames={resolved} />
           <span className="min-w-0 truncate text-[13px] font-semibold leading-[16px] text-[var(--text-primary)]">
             <MentionSessionTitle item={item} />
           </span>
@@ -39,7 +91,10 @@ export function renderMentionRow(item: MentionRowItem): React.ReactNode {
   if (item.kind === "app") {
     return (
       <span className="flex min-w-0 items-center gap-2 overflow-hidden">
-        <MentionWorkspaceAppIcon iconUrl={item.iconUrl} />
+        <MentionWorkspaceAppIcon
+          iconUrl={item.iconUrl}
+          kindIconClassName={resolved.kindIcon}
+        />
         <span className="flex min-w-0 flex-1 items-baseline gap-1 overflow-hidden">
           <span className="min-w-0 max-w-[40%] shrink-0 truncate text-[13px] font-semibold text-[var(--text-primary)]">
             {item.name}
@@ -84,9 +139,11 @@ export function renderMentionRow(item: MentionRowItem): React.ReactNode {
 }
 
 function MentionFileRow({
-  item
+  item,
+  classNames
 }: {
   item: MentionRowFileItem;
+  classNames: Required<MentionRowClassNames>;
 }): React.JSX.Element {
   return (
     <span
@@ -101,7 +158,7 @@ function MentionFileRow({
         ? { "data-agent-mention-navigation": item.mentionNavigation }
         : {})}
     >
-      <MentionFileIcon item={item} />
+      <MentionFileIcon item={item} classNames={classNames} />
       <span className="flex min-w-0 items-baseline gap-1 overflow-hidden">
         <span className="min-w-0 truncate text-[13px] font-semibold text-[var(--text-primary)]">
           {item.name}
@@ -117,16 +174,18 @@ function MentionFileRow({
 }
 
 function MentionFileIcon({
-  item
+  item,
+  classNames
 }: {
   item: MentionRowFileItem;
+  classNames: Required<MentionRowClassNames>;
 }): React.JSX.Element {
   const thumbnailUrl =
     item.visualKind === "image" ? item.thumbnailUrl?.trim() || "" : "";
   if (thumbnailUrl) {
     return (
       <span
-        className="agent-gui-node__mention-file-thumb"
+        className={classNames.fileThumb}
         data-agent-mention-file-thumb="true"
         aria-hidden="true"
       >
@@ -144,7 +203,7 @@ function MentionFileIcon({
 
   return (
     <span
-      className="agent-gui-node__mention-file-icon"
+      className={classNames.fileIcon}
       data-agent-file-visual-kind={item.visualKind}
       aria-hidden="true"
     />
@@ -152,9 +211,11 @@ function MentionFileIcon({
 }
 
 function MentionWorkspaceAppIcon({
-  iconUrl
+  iconUrl,
+  kindIconClassName
 }: {
   iconUrl?: string | null;
+  kindIconClassName: string;
 }): React.JSX.Element {
   const normalizedIconUrl = iconUrl?.trim() ?? "";
   return (
@@ -174,16 +235,18 @@ function MentionWorkspaceAppIcon({
           draggable={false}
         />
       ) : (
-        <span className="tsh-agent-object-token__kind-icon h-4 w-4" />
+        <span className={cn(kindIconClassName, "h-4 w-4")} />
       )}
     </span>
   );
 }
 
 function MentionSessionAvatarStack({
-  item
+  item,
+  classNames
 }: {
   item: MentionRowSessionItem;
+  classNames: Required<MentionRowClassNames>;
 }): React.JSX.Element {
   const userAvatarUrl = item.userAvatarUrl?.trim() ?? "";
   const placeholderUrl = item.userAvatarPlaceholderUrl;
@@ -202,8 +265,7 @@ function MentionSessionAvatarStack({
           alt=""
           className={cn(
             "h-full w-full object-cover",
-            !userAvatarUrl &&
-              "workspace-agents-status-panel__avatar-img--user-placeholder"
+            !userAvatarUrl && classNames.avatarImgUserPlaceholder
           )}
           decoding="async"
           loading="lazy"
@@ -216,7 +278,7 @@ function MentionSessionAvatarStack({
             event.currentTarget.dataset.fallbackAvatarApplied = "true";
             event.currentTarget.src = placeholderUrl;
             event.currentTarget.classList.add(
-              "workspace-agents-status-panel__avatar-img--user-placeholder"
+              classNames.avatarImgUserPlaceholder
             );
           }}
         />

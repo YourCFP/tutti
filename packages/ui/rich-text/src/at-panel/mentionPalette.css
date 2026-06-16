@@ -158,3 +158,88 @@
 .rich-text-at-mention-palette {
   --agent-mention-file-icon-size: 16px;
 }
+
+/*
+ * Structural styling for the shared MentionRow elements. These mirror the
+ * agent composer's rules (in `agentactivity.css`) under package-owned
+ * `rich-text-at-mention-*` class names so any consumer (e.g. issue-manager)
+ * that does NOT load the agent stylesheet still renders styled rows. The agent
+ * keeps passing its own class names via `renderMentionRow(item, classNames)`.
+ */
+.rich-text-at-mention-file-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--agent-mention-file-icon-size, 16px);
+  height: var(--agent-mention-file-icon-size, 16px);
+  flex: 0 0 var(--agent-mention-file-icon-size, 16px);
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: var(--bg-block, var(--block));
+  vertical-align: middle;
+}
+
+.rich-text-at-mention-file-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/*
+ * NOTE: the masked file kind-icon glyph and the fallback app glyph need raw SVG
+ * mask assets. Those cannot live in this package (the `check-ui-boundaries`
+ * gate restricts raw .svg assets to `packages/ui/system/src/icons/`), so only
+ * the structural box (size/layout) is owned here. The agent composer supplies
+ * its own masked glyph rules via `agentactivity.css` + its own class names. The
+ * issue-manager file glyph + app fallback glyph are completed in Phases 3-4.
+ */
+.rich-text-at-mention-file-icon {
+  width: var(--agent-mention-file-icon-size, 16px);
+  height: var(--agent-mention-file-icon-size, 16px);
+  flex: 0 0 var(--agent-mention-file-icon-size, 16px);
+  background-color: var(--folder);
+  border-radius: 4px;
+}
+
+/* Fallback app glyph box (shown when a workspace-app mention has no icon URL). */
+.rich-text-at-mention-kind-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  background-color: currentColor;
+  border-radius: 22.5%;
+}
+
+/* Session user-avatar placeholder background (no avatar URL). */
+.rich-text-at-mention-avatar-img--user-placeholder {
+  background-color: var(--muted);
+}
+
+/*
+ * Workspace-app icon container. Data-attribute based (matches the agent's
+ * global rule) so the rounded app icon renders for any consumer of the shared
+ * row, including surfaces that do not load `agentactivity.css`.
+ */
+[data-workspace-app-icon="true"] {
+  display: inline-grid;
+  min-width: 0;
+  min-height: 0;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 22.5%;
+  background: var(--workspace-app-icon-bg, transparent);
+}
+
+[data-workspace-app-icon="true"] > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+[data-workspace-app-icon="true"] > .rich-text-at-mention-kind-icon {
+  display: block;
+}
