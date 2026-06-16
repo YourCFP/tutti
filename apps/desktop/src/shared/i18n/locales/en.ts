@@ -266,11 +266,17 @@ export const en = {
         defaultAgentProviderSaveFailed:
           "We couldn't update the default provider right now.",
         browserUseConnectionModeDescription:
-          "Reusing Chrome requires remote debugging to be enabled in Chrome at chrome://inspect/#remote-debugging. Changes apply to the next browser session.",
+          "Choose which browser the agent controls when it runs web tasks — the Chrome on your computer, or a separate browser Tutti launches for it.",
         browserUseConnectionModeLabel: "Browser connection",
         browserUseConnectionModeOptions: {
-          autoConnect: "Reuse current Chrome",
+          autoConnect: "Reuse my Chrome",
           isolated: "Separate browser"
+        },
+        browserUseConnectionModeOptionHints: {
+          autoConnect:
+            "The agent drives the Chrome you already use on this computer. First enable remote debugging in Chrome at chrome://inspect/#remote-debugging. Changes apply the next time a browser session starts.",
+          isolated:
+            "Tutti launches a separate browser for the agent, leaving the Chrome you use day to day untouched. Changes apply the next time a browser session starts."
         },
         browserUseConnectionModeSaveFailed:
           "We couldn't update the browser connection setting right now.",

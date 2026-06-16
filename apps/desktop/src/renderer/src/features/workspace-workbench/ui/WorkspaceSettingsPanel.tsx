@@ -18,6 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
   Switch,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   UploadIcon
 } from "@tutti-os/ui-system";
 import { useAnalyticsDebugPreferenceService } from "@renderer/features/analytics-debug";
@@ -1560,15 +1563,28 @@ function WorkspaceGeneralSettingsSection({
               style={{ zIndex: "var(--z-panel-popover)" }}
             >
               {desktopBrowserUseConnectionModes.map((mode) => (
-                <SelectItem key={mode} value={mode}>
-                  {mode === "autoConnect"
-                    ? t(
-                        "workspace.settings.general.browserUseConnectionModeOptions.autoConnect"
-                      )
-                    : t(
-                        "workspace.settings.general.browserUseConnectionModeOptions.isolated"
-                      )}
-                </SelectItem>
+                <Tooltip key={mode}>
+                  <TooltipTrigger asChild>
+                    <SelectItem value={mode}>
+                      {mode === "autoConnect"
+                        ? t(
+                            "workspace.settings.general.browserUseConnectionModeOptions.autoConnect"
+                          )
+                        : t(
+                            "workspace.settings.general.browserUseConnectionModeOptions.isolated"
+                          )}
+                    </SelectItem>
+                  </TooltipTrigger>
+                  <TooltipContent side="left" className="max-w-[260px]">
+                    {mode === "autoConnect"
+                      ? t(
+                          "workspace.settings.general.browserUseConnectionModeOptionHints.autoConnect"
+                        )
+                      : t(
+                          "workspace.settings.general.browserUseConnectionModeOptionHints.isolated"
+                        )}
+                  </TooltipContent>
+                </Tooltip>
               ))}
             </SelectContent>
           </Select>
