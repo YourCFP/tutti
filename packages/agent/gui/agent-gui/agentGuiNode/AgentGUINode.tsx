@@ -903,7 +903,16 @@ export const AgentGUINode = memo(function AgentGUINode({
       slashPaletteCommandsGroup: t(
         "agentHost.agentGui.slashPaletteCommandsGroup"
       ),
+      slashPaletteCapabilitiesGroup: t(
+        "agentHost.agentGui.slashPaletteCapabilitiesGroup"
+      ),
       slashPaletteSkillsGroup: t("agentHost.agentGui.slashPaletteSkillsGroup"),
+      browserUseCapabilityLabel: t(
+        "agentHost.agentGui.browserUseCapabilityLabel"
+      ),
+      browserUseCapabilityDescription: t(
+        "agentHost.agentGui.browserUseCapabilityDescription"
+      ),
       fileMentionPalette: t("agentHost.agentGui.fileMentionPalette"),
       fileMentionLoading: t("agentHost.agentGui.fileMentionLoading"),
       fileMentionEmpty: t("agentHost.agentGui.fileMentionEmpty"),

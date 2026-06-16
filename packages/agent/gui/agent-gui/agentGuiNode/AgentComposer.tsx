@@ -34,8 +34,7 @@ import {
   Select,
   SelectContent,
   SelectItem,
-  SelectTrigger,
-  WebIcon
+  SelectTrigger
 } from "@tutti-os/ui-system";
 import { X } from "lucide-react";
 import type { WorkspaceFileReference } from "@tutti-os/workspace-file-reference/contracts";
@@ -60,6 +59,8 @@ import {
   resolveSlashCommandsForProvider,
   resolveSlashCommandSelectionEffect,
   resolveSlashCommandSubmitEffect,
+  type AgentSlashCommand,
+  type AgentSlashCommandCapability,
   type SlashCommandSelectionEffect
 } from "./model/agentSlashCommandProviderPolicy";
 import {
@@ -179,7 +180,8 @@ export interface AgentComposerProps {
     planModeOnLabel: string;
     planModeOffLabel: string;
     planUnavailable: string;
-    browserUseLabel?: string;
+    browserUseCapabilityLabel: string;
+    browserUseCapabilityDescription: string;
     queuedLabel: string;
     sendQueuedPromptNext: string;
     editQueuedPrompt: string;
@@ -190,6 +192,7 @@ export interface AgentComposerProps {
     slashCommandPalette: string;
     skillPickerPalette: string;
     slashPaletteCommandsGroup: string;
+    slashPaletteCapabilitiesGroup: string;
     slashPaletteSkillsGroup: string;
     slashStatusTitle: string;
     slashStatusSession: string;
@@ -646,9 +649,16 @@ export function AgentComposer({
         provider,
         commands: availableCommands,
         hasCompactableContext,
-        compactSupported
+        compactSupported,
+        browserSupported: Boolean(composerSettings.supportsBrowser)
       }),
-    [availableCommands, compactSupported, hasCompactableContext, provider]
+    [
+      availableCommands,
+      compactSupported,
+      composerSettings.supportsBrowser,
+      hasCompactableContext,
+      provider
+    ]
   );
   const filteredCommands = useMemo(
     () =>
@@ -670,13 +680,24 @@ export function AgentComposer({
   );
   const slashPaletteEntries = useMemo<AgentSlashPaletteEntry[]>(() => {
     const commandEntries: AgentSlashPaletteEntry[] = filteredCommands.map(
-      (command) => ({
-        type: "command",
-        key: `command:${command.name}`,
-        label: labelForSlashCommand(command),
-        ...(command.description ? { description: command.description } : {}),
-        command
-      })
+      (command) => {
+        if (isSlashCommandCapability(command)) {
+          return {
+            type: "capability",
+            key: `capability:${command.capability}`,
+            label: labels.browserUseCapabilityLabel,
+            description: labels.browserUseCapabilityDescription,
+            capability: command
+          };
+        }
+        return {
+          type: "command",
+          key: `command:${command.name}`,
+          label: labelForSlashCommand(command),
+          ...(command.description ? { description: command.description } : {}),
+          command
+        };
+      }
     );
     const skillEntries: AgentSlashPaletteEntry[] = filteredSkills.map(
       (skill) => {
@@ -693,7 +714,13 @@ export function AgentComposer({
       }
     );
     return [...commandEntries, ...skillEntries];
-  }, [filteredCommands, filteredSkills, skillQueryMatch?.prefix]);
+  }, [
+    filteredCommands,
+    filteredSkills,
+    labels.browserUseCapabilityDescription,
+    labels.browserUseCapabilityLabel,
+    skillQueryMatch?.prefix
+  ]);
   const showFileMentionPalette =
     !disabled && isPaletteOpen && fileMentionSuggestion !== null;
   const showSlashPalette =
@@ -796,6 +823,9 @@ export function AgentComposer({
     setIsSlashStatusPanelOpen(false);
   }, []);
 
+  const settingsControlsDisabled =
+    isSendingTurn || isSubmittingPrompt || showStopButton;
+
   const executeSlashCommandEffect = useCallback(
     (effect: SlashCommandSelectionEffect): void => {
       if (effect.kind === "submitPrompt") {
@@ -819,6 +849,16 @@ export function AgentComposer({
         });
         return;
       }
+      if (effect.kind === "enableBrowserUse") {
+        clearSlashCommandDraft();
+        if (
+          !settingsControlsDisabled &&
+          composerSettings.sessionSettings === null
+        ) {
+          onSettingsChange({ browserUse: true });
+        }
+        return;
+      }
       const nextDraft = effect.draft;
       draftPromptRef.current = nextDraft;
       setPaletteDraftPrompt(nextDraft);
@@ -828,9 +868,11 @@ export function AgentComposer({
     [
       clearSlashCommandDraft,
       composerSettings.draftSettings.planMode,
+      composerSettings.sessionSettings,
       onDraftChange,
       onSettingsChange,
-      onSubmit
+      onSubmit,
+      settingsControlsDisabled
     ]
   );
 
@@ -839,6 +881,18 @@ export function AgentComposer({
       const selectionEffect = resolveSlashCommandSelectionEffect({
         provider,
         command,
+        currentDraft: draftPromptRef.current
+      });
+      executeSlashCommandEffect(selectionEffect);
+    },
+    [executeSlashCommandEffect, provider]
+  );
+
+  const selectCapability = useCallback(
+    (capability: AgentSlashCommandCapability): void => {
+      const selectionEffect = resolveSlashCommandSelectionEffect({
+        provider,
+        command: capability,
         currentDraft: draftPromptRef.current
       });
       executeSlashCommandEffect(selectionEffect);
@@ -949,6 +1003,8 @@ export function AgentComposer({
         const activeEntry = slashPaletteEntries[activeHighlight];
         if (activeEntry?.type === "command") {
           selectCommand(activeEntry.command);
+        } else if (activeEntry?.type === "capability") {
+          selectCapability(activeEntry.capability);
         } else if (activeEntry?.type === "skill") {
           selectSkill(activeEntry.skill);
         }
@@ -958,6 +1014,7 @@ export function AgentComposer({
     },
     [
       activeHighlight,
+      selectCapability,
       selectCommand,
       selectSkill,
       showSlashPalette,
@@ -1757,8 +1814,6 @@ export function AgentComposer({
         ? "loading"
         : "send";
   const sendButtonBusy = isSendingTurn && !isQueueMode;
-  const settingsControlsDisabled =
-    isSendingTurn || isSubmittingPrompt || showStopButton;
   const activePromptRequestId = activePrompt?.requestId ?? null;
   const [dismissedPromptRequestId, setDismissedPromptRequestId] = useState<
     string | null
@@ -2086,9 +2141,13 @@ export function AgentComposer({
                           : labels.slashCommandPalette
                       }
                       commandsGroupLabel={labels.slashPaletteCommandsGroup}
+                      capabilitiesGroupLabel={
+                        labels.slashPaletteCapabilitiesGroup
+                      }
                       skillsGroupLabel={labels.slashPaletteSkillsGroup}
                       onHighlightChange={setHighlightedIndex}
                       onSelect={selectCommand}
+                      onSelectCapability={selectCapability}
                       onSelectSkill={selectSkill}
                     />
                   </div>,
@@ -2163,34 +2222,6 @@ export function AgentComposer({
                   }}
                   onSettingsChange={(patch) => onSettingsChange(patch)}
                 />
-              ) : null}
-              {composerSettings.supportsBrowser ? (
-                <button
-                  type="button"
-                  className={styles.composerToggle}
-                  title={labels.browserUseLabel ?? "Browser use"}
-                  aria-pressed={
-                    composerSettings.draftSettings.browserUse ?? true
-                  }
-                  aria-label={labels.browserUseLabel ?? "Browser use"}
-                  // Browser use is fixed once a session starts (the MCP is
-                  // injected at session start), so the toggle only edits a new
-                  // conversation's draft; for a live session it is a read-only
-                  // indicator.
-                  disabled={
-                    settingsControlsDisabled ||
-                    composerSettings.sessionSettings !== null
-                  }
-                  onClick={() =>
-                    onSettingsChange({
-                      browserUse: !(
-                        composerSettings.draftSettings.browserUse ?? true
-                      )
-                    })
-                  }
-                >
-                  <WebIcon aria-hidden className="size-3.5" />
-                </button>
               ) : null}
               {composerSettings.supportsModel ||
               composerSettings.supportsReasoningEffort ? (
@@ -2312,6 +2343,12 @@ export function AgentComposer({
       </div>
     </form>
   );
+}
+
+function isSlashCommandCapability(
+  command: AgentSlashCommand
+): command is AgentSlashCommandCapability {
+  return "kind" in command && command.kind === "capability";
 }
 
 function textPromptContent(prompt: string): AgentPromptContentBlock[] {

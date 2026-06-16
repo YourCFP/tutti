@@ -9,6 +9,7 @@ describe("AgentSlashCommandPalette", () => {
       <AgentSlashCommandPalette
         label="Slash commands"
         commandsGroupLabel="Commands"
+        capabilitiesGroupLabel="Capabilities"
         skillsGroupLabel="Skills"
         highlightedIndex={0}
         entries={[
@@ -26,6 +27,7 @@ describe("AgentSlashCommandPalette", () => {
         ]}
         onHighlightChange={vi.fn()}
         onSelect={vi.fn()}
+        onSelectCapability={vi.fn()}
         onSelectSkill={vi.fn()}
       />
     );
@@ -62,5 +64,46 @@ describe("AgentSlashCommandPalette", () => {
       "text-[var(--text-secondary)]"
     );
     expect(screen.queryByText("[issue description]")).toBeNull();
+  });
+
+  it("renders a capability section and dispatches capability selection", () => {
+    const onSelectCapability = vi.fn();
+
+    render(
+      <AgentSlashCommandPalette
+        label="Slash commands"
+        commandsGroupLabel="Commands"
+        capabilitiesGroupLabel="Capabilities"
+        skillsGroupLabel="Skills"
+        highlightedIndex={0}
+        entries={[
+          {
+            type: "capability",
+            key: "capability:browserUse",
+            label: "Browser",
+            description: "Let the agent use a browser.",
+            capability: {
+              kind: "capability",
+              capability: "browserUse",
+              name: "browser",
+              aliases: ["浏览器"]
+            }
+          }
+        ]}
+        onHighlightChange={vi.fn()}
+        onSelect={vi.fn()}
+        onSelectCapability={onSelectCapability}
+        onSelectSkill={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Capabilities")).toBeInTheDocument();
+    screen.getByRole("option", { name: /Browser/i }).click();
+    expect(onSelectCapability).toHaveBeenCalledWith({
+      kind: "capability",
+      capability: "browserUse",
+      name: "browser",
+      aliases: ["浏览器"]
+    });
   });
 });

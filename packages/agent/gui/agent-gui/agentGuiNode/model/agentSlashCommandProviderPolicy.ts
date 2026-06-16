@@ -8,6 +8,17 @@ import {
 
 export type AgentSlashCommandProvider = "codex" | "claude-code" | string;
 
+export interface AgentSlashCommandCapability {
+  aliases?: readonly string[];
+  capability: "browserUse";
+  kind: "capability";
+  name: string;
+}
+
+export type AgentSlashCommand =
+  | AgentSessionCommand
+  | AgentSlashCommandCapability;
+
 export type SlashCommandSelectionEffect =
   | {
       kind: "fillDraft";
@@ -24,18 +35,21 @@ export type SlashCommandSelectionEffect =
       kind: "togglePlanMode";
     }
   | {
+      kind: "enableBrowserUse";
+    }
+  | {
       kind: "blockCommand";
     };
 
 interface ResolveSlashCommandSelectionEffectInput {
   provider: AgentSlashCommandProvider;
-  command: AgentSessionCommand;
+  command: AgentSlashCommand;
   currentDraft: string;
 }
 
 interface ResolveSlashCommandSubmitEffectInput {
   provider: AgentSlashCommandProvider;
-  commands: readonly AgentSessionCommand[];
+  commands: readonly AgentSlashCommand[];
   draft: string;
 }
 
@@ -55,12 +69,19 @@ const CLAUDE_CODE_FALLBACK_COMMANDS: readonly AgentSessionCommand[] = [
   { name: "compact" },
   { name: "status" }
 ];
+const BROWSER_USE_CAPABILITY_COMMAND: AgentSlashCommandCapability = {
+  kind: "capability",
+  capability: "browserUse",
+  name: "browser",
+  aliases: ["浏览器"]
+};
 
 export function resolveSlashCommandsForProvider({
   provider,
   commands,
   hasCompactableContext = true,
-  compactSupported
+  compactSupported,
+  browserSupported = false
 }: {
   provider: AgentSlashCommandProvider;
   commands: readonly AgentSessionCommand[];
@@ -71,8 +92,9 @@ export function resolveSlashCommandsForProvider({
    * keeps the legacy `hasCompactableContext` behavior.
    */
   compactSupported?: boolean | null;
-}): AgentSessionCommand[] {
-  return mergeSlashCommands(
+  browserSupported?: boolean;
+}): AgentSlashCommand[] {
+  const commandEntries = mergeSlashCommands(
     filterUnavailableSlashCommands(commands, {
       compactSupported,
       hasCompactableContext,
@@ -84,6 +106,10 @@ export function resolveSlashCommandsForProvider({
       provider
     })
   );
+  if (!browserSupported) {
+    return commandEntries;
+  }
+  return [...commandEntries, BROWSER_USE_CAPABILITY_COMMAND];
 }
 
 export function resolveSlashCommandSelectionEffect({
@@ -91,6 +117,9 @@ export function resolveSlashCommandSelectionEffect({
   command,
   currentDraft
 }: ResolveSlashCommandSelectionEffectInput): SlashCommandSelectionEffect {
+  if (isBrowserUseCapability(command)) {
+    return { kind: "enableBrowserUse" };
+  }
   const commandName = normalizedCommandName(command);
   if (isBlockedSlashCommand(provider, commandName)) {
     return { kind: "blockCommand" };
@@ -128,13 +157,14 @@ export function resolveSlashCommandSubmitEffect({
   if (isBlockedSlashCommand(provider, invocation.commandName)) {
     return { kind: "blockCommand" };
   }
-  const command = commands.find(
-    (candidate) =>
-      candidate.name.trim().toLowerCase() ===
-      invocation.commandName.toLowerCase()
+  const command = commands.find((candidate) =>
+    slashCommandMatchesInvocation(candidate, invocation.commandName)
   );
   if (!command) {
     return null;
+  }
+  if (isBrowserUseCapability(command)) {
+    return { kind: "enableBrowserUse" };
   }
   const commandName = normalizedCommandName(command);
   if (isLocalStatusCommand(provider, commandName)) {
@@ -207,8 +237,32 @@ function isProviderNativeImmediateCommand(
   );
 }
 
-function normalizedCommandName(command: AgentSessionCommand): string {
+function normalizedCommandName(command: { name: string }): string {
   return command.name.trim().toLowerCase();
+}
+
+function isBrowserUseCapability(
+  command: AgentSlashCommand
+): command is AgentSlashCommandCapability {
+  return (
+    "kind" in command &&
+    command.kind === "capability" &&
+    command.capability === "browserUse"
+  );
+}
+
+function slashCommandMatchesInvocation(
+  command: AgentSlashCommand,
+  commandName: string
+): boolean {
+  const normalizedInvocation = commandName.trim().toLowerCase();
+  if (normalizedCommandName(command) === normalizedInvocation) {
+    return true;
+  }
+  const aliases = "aliases" in command ? (command.aliases ?? []) : [];
+  return aliases.some(
+    (alias) => alias.trim().toLowerCase() === normalizedInvocation
+  );
 }
 
 function filterUnavailableSlashCommands(

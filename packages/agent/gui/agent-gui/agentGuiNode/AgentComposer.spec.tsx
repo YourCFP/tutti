@@ -175,7 +175,52 @@ vi.mock("./AgentComposerSettingsMenus", () => ({
 }));
 
 vi.mock("./AgentSlashCommandPalette", () => ({
-  AgentSlashCommandPalette: () => null
+  AgentSlashCommandPalette: ({
+    capabilitiesGroupLabel,
+    commandsGroupLabel,
+    entries,
+    onSelect,
+    onSelectCapability,
+    onSelectSkill,
+    skillsGroupLabel
+  }: {
+    capabilitiesGroupLabel?: string;
+    commandsGroupLabel: string;
+    entries: any[];
+    onSelect: (command: any) => void;
+    onSelectCapability?: (capability: any) => void;
+    onSelectSkill: (skill: any) => void;
+    skillsGroupLabel: string;
+  }) => (
+    <div data-testid="mock-slash-palette">
+      {entries.some((entry) => entry.type === "command") ? (
+        <div>{commandsGroupLabel}</div>
+      ) : null}
+      {entries.some((entry) => entry.type === "capability") ? (
+        <div>{capabilitiesGroupLabel}</div>
+      ) : null}
+      {entries.some((entry) => entry.type === "skill") ? (
+        <div>{skillsGroupLabel}</div>
+      ) : null}
+      {entries.map((entry) => (
+        <button
+          key={entry.key}
+          type="button"
+          onClick={() => {
+            if (entry.type === "command") {
+              onSelect(entry.command);
+            } else if (entry.type === "capability") {
+              onSelectCapability?.(entry.capability);
+            } else {
+              onSelectSkill(entry.skill);
+            }
+          }}
+        >
+          {entry.label}
+        </button>
+      ))}
+    </div>
+  )
 }));
 
 vi.mock("./AgentInteractivePromptSurface", () => ({
@@ -351,7 +396,7 @@ describe("AgentComposer", () => {
     expect(dropdown).toHaveAttribute("data-plan-mode-label", "Plan");
   });
 
-  it("renders a browser-use toggle when supported and toggles it off", () => {
+  it("does not render the browser-use footer toggle when supported", () => {
     const onSettingsChange = vi.fn();
     render(
       <AgentComposer
@@ -387,64 +432,33 @@ describe("AgentComposer", () => {
       />
     );
 
-    // Defaults on (aria-pressed=true); clicking sends an explicit opt-out.
-    const toggle = screen.getByRole("button", { name: "Browser use" });
-    expect(toggle).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(toggle);
-    expect(onSettingsChange).toHaveBeenCalledWith({ browserUse: false });
+    expect(
+      screen.queryByRole("button", { name: "Browser use" })
+    ).not.toBeInTheDocument();
+    expect(onSettingsChange).not.toHaveBeenCalled();
   });
 
-  it("hides the browser-use toggle when unsupported", () => {
-    render(
-      <AgentComposer
-        workspaceId="workspace-1"
-        currentUserId="user-1"
-        provider="codex"
-        draftPrompt=""
-        availableCommands={[] satisfies readonly AgentHostAgentSessionCommand[]}
-        disabled={false}
-        submitDisabled={false}
-        placeholder="placeholder"
-        composerSettings={createComposerSettings()}
-        queuedPrompts={[]}
-        drainingQueuedPromptId={null}
-        canQueueWhileBusy={false}
-        showStopButton={false}
-        activePrompt={null}
-        isInterrupting={false}
-        isSendingTurn={false}
-        isSubmittingPrompt={false}
-        labels={createLabels()}
-        workspaceUserProjectI18n={workspaceUserProjectI18n}
-        onDraftChange={vi.fn()}
-        onSettingsChange={vi.fn()}
-        onSubmit={vi.fn()}
-        onSendQueuedPromptNext={vi.fn()}
-        onRemoveQueuedPrompt={vi.fn()}
-        onEditQueuedPrompt={vi.fn()}
-        onInterruptCurrentTurn={vi.fn()}
-        onSubmitInteractivePrompt={vi.fn()}
-      />
-    );
-
-    expect(screen.queryByRole("button", { name: "Browser use" })).toBeNull();
-  });
-
-  it("shows the browser-use toggle as a read-only indicator for an active session", () => {
+  it("exposes browser-use through the slash capability group", async () => {
     const onSettingsChange = vi.fn();
     render(
       <AgentComposer
         workspaceId="workspace-1"
         currentUserId="user-1"
         provider="codex"
-        draftPrompt=""
+        draftPrompt="/浏览"
         availableCommands={[] satisfies readonly AgentHostAgentSessionCommand[]}
         disabled={false}
         submitDisabled={false}
         placeholder="placeholder"
         composerSettings={createComposerSettings({
-          supportsBrowser: true,
-          sessionSettings: { permissionModeId: "auto" }
+          draftSettings: {
+            model: null,
+            reasoningEffort: null,
+            planMode: false,
+            browserUse: false,
+            permissionModeId: "preset"
+          },
+          supportsBrowser: true
         })}
         queuedPrompts={[]}
         drainingQueuedPromptId={null}
@@ -467,12 +481,56 @@ describe("AgentComposer", () => {
       />
     );
 
-    // Browser use is fixed at session start, so on a live session the toggle is
-    // a disabled indicator rather than an editable control.
-    const toggle = screen.getByRole("button", { name: "Browser use" });
-    expect(toggle).toBeDisabled();
-    fireEvent.click(toggle);
-    expect(onSettingsChange).not.toHaveBeenCalled();
+    const palette = await screen.findByTestId("mock-slash-palette");
+    expect(palette).toHaveTextContent("能力");
+    const browserCapability = within(palette).getByRole("button", {
+      name: "浏览器"
+    });
+
+    fireEvent.click(browserCapability);
+
+    expect(onSettingsChange).toHaveBeenCalledWith({ browserUse: true });
+  });
+
+  it("matches the browser-use slash capability by its English alias", async () => {
+    render(
+      <AgentComposer
+        workspaceId="workspace-1"
+        currentUserId="user-1"
+        provider="codex"
+        draftPrompt="/browser"
+        availableCommands={[] satisfies readonly AgentHostAgentSessionCommand[]}
+        disabled={false}
+        submitDisabled={false}
+        placeholder="placeholder"
+        composerSettings={createComposerSettings({
+          supportsBrowser: true
+        })}
+        queuedPrompts={[]}
+        drainingQueuedPromptId={null}
+        canQueueWhileBusy={false}
+        showStopButton={false}
+        activePrompt={null}
+        isInterrupting={false}
+        isSendingTurn={false}
+        isSubmittingPrompt={false}
+        labels={createLabels()}
+        workspaceUserProjectI18n={workspaceUserProjectI18n}
+        onDraftChange={vi.fn()}
+        onSettingsChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onSendQueuedPromptNext={vi.fn()}
+        onRemoveQueuedPrompt={vi.fn()}
+        onEditQueuedPrompt={vi.fn()}
+        onInterruptCurrentTurn={vi.fn()}
+        onSubmitInteractivePrompt={vi.fn()}
+      />
+    );
+
+    const palette = await screen.findByTestId("mock-slash-palette");
+    expect(
+      within(palette).getByRole("button", { name: "浏览器" })
+    ).toBeTruthy();
   });
 
   it("renders the permission dropdown while plan mode is enabled", () => {
@@ -1877,6 +1935,8 @@ function createLabels(): Parameters<typeof AgentComposer>[0]["labels"] {
     planModeOnLabel: "开启",
     planModeOffLabel: "关闭",
     planUnavailable: "计划不可用",
+    browserUseCapabilityLabel: "浏览器",
+    browserUseCapabilityDescription: "让 Agent 使用浏览器。",
     queuedLabel: "排队",
     sendQueuedPromptNext: "下一条发送",
     editQueuedPrompt: "编辑",
@@ -1887,6 +1947,7 @@ function createLabels(): Parameters<typeof AgentComposer>[0]["labels"] {
     slashCommandPalette: "斜杠命令",
     skillPickerPalette: "技能",
     slashPaletteCommandsGroup: "命令",
+    slashPaletteCapabilitiesGroup: "能力",
     slashPaletteSkillsGroup: "技能",
     slashStatusTitle: "Status",
     slashStatusSession: "Session",

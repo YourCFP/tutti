@@ -6,6 +6,55 @@ import {
 } from "./agentSlashCommandProviderPolicy";
 
 describe("agentSlashCommandProviderPolicy", () => {
+  it("adds browser-use as a composer capability when browser use is supported", () => {
+    const commands = resolveSlashCommandsForProvider({
+      provider: "codex",
+      commands: [],
+      browserSupported: true
+    });
+
+    expect(
+      commands.find(
+        (command) => "kind" in command && command.kind === "capability"
+      )
+    ).toEqual({
+      kind: "capability",
+      capability: "browserUse",
+      name: "browser",
+      aliases: ["浏览器"]
+    });
+  });
+
+  it("enables browser use from Chinese and English slash capability names", () => {
+    const commands = resolveSlashCommandsForProvider({
+      provider: "codex",
+      commands: [],
+      browserSupported: true
+    });
+
+    expect(
+      resolveSlashCommandSelectionEffect({
+        provider: "codex",
+        command: commands.find((command) => command.name === "browser")!,
+        currentDraft: "/浏览"
+      })
+    ).toEqual({ kind: "enableBrowserUse" });
+    expect(
+      resolveSlashCommandSubmitEffect({
+        provider: "codex",
+        commands,
+        draft: "/浏览器"
+      })
+    ).toEqual({ kind: "enableBrowserUse" });
+    expect(
+      resolveSlashCommandSubmitEffect({
+        provider: "codex",
+        commands,
+        draft: "/browser"
+      })
+    ).toEqual({ kind: "enableBrowserUse" });
+  });
+
   it("adds Codex compact and status fallback commands after provider commands", () => {
     expect(
       resolveSlashCommandsForProvider({

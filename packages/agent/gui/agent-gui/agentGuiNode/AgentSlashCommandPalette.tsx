@@ -3,6 +3,7 @@ import type { AgentSessionCommand } from "../../shared/agentSessionTypes";
 import { cn } from "../../app/renderer/lib/utils";
 import { menuItemClassName } from "@tutti-os/ui-system";
 import type { AgentGUIProviderSkillOption } from "./model/agentGuiNodeTypes";
+import type { AgentSlashCommandCapability } from "./model/agentSlashCommandProviderPolicy";
 
 export type AgentSlashPaletteEntry =
   | {
@@ -11,6 +12,13 @@ export type AgentSlashPaletteEntry =
       label: string;
       description?: string;
       command: AgentSessionCommand;
+    }
+  | {
+      type: "capability";
+      key: string;
+      label: string;
+      description?: string;
+      capability: AgentSlashCommandCapability;
     }
   | {
       type: "skill";
@@ -25,9 +33,11 @@ interface AgentSlashCommandPaletteProps {
   highlightedIndex: number;
   label: string;
   commandsGroupLabel: string;
+  capabilitiesGroupLabel: string;
   skillsGroupLabel: string;
   onHighlightChange: (index: number) => void;
   onSelect: (command: AgentSessionCommand) => void;
+  onSelectCapability: (capability: AgentSlashCommandCapability) => void;
   onSelectSkill: (skill: AgentGUIProviderSkillOption) => void;
 }
 
@@ -51,9 +61,11 @@ export function AgentSlashCommandPalette({
   highlightedIndex,
   label,
   commandsGroupLabel,
+  capabilitiesGroupLabel,
   skillsGroupLabel,
   onHighlightChange,
   onSelect,
+  onSelectCapability,
   onSelectSkill
 }: AgentSlashCommandPaletteProps): React.JSX.Element | null {
   "use memo";
@@ -66,27 +78,36 @@ export function AgentSlashCommandPalette({
   if (entries.length === 0) {
     return null;
   }
-  // Headers render only when both sections are present; they are plain
-  // separators outside the option list, so keyboard navigation indices are
-  // untouched.
-  const showGroupHeaders =
-    entries.some((entry) => entry.type === "command") &&
-    entries.some((entry) => entry.type === "skill");
-  const firstSkillIndex = entries.findIndex((entry) => entry.type === "skill");
+  // Headers render only when multiple sections are present, except
+  // capabilities always keep their category label for discoverability. They are
+  // plain separators outside the option list, so keyboard navigation indices
+  // are untouched.
+  const entryTypes = new Set(entries.map((entry) => entry.type));
+  const showGroupHeaders = entryTypes.size > 1 || entryTypes.has("capability");
+  const firstEntryIndexByType = new Map<
+    AgentSlashPaletteEntry["type"],
+    number
+  >();
+  entries.forEach((entry, index) => {
+    if (!firstEntryIndexByType.has(entry.type)) {
+      firstEntryIndexByType.set(entry.type, index);
+    }
+  });
   return (
     <div className={paletteStyles.palette} role="listbox" aria-label={label}>
       {entries.map((entry, index) => {
         const isHighlighted = index === highlightedIndex;
-        const groupHeader = !showGroupHeaders ? null : index === 0 &&
-          entry.type === "command" ? (
-          <div aria-hidden="true" className={paletteStyles.groupHeader}>
-            {commandsGroupLabel}
-          </div>
-        ) : index === firstSkillIndex ? (
-          <div aria-hidden="true" className={paletteStyles.groupHeader}>
-            {skillsGroupLabel}
-          </div>
-        ) : null;
+        const groupHeader =
+          showGroupHeaders &&
+          firstEntryIndexByType.get(entry.type) === index ? (
+            <div aria-hidden="true" className={paletteStyles.groupHeader}>
+              {entry.type === "command"
+                ? commandsGroupLabel
+                : entry.type === "capability"
+                  ? capabilitiesGroupLabel
+                  : skillsGroupLabel}
+            </div>
+          ) : null;
         return (
           <Fragment key={entry.key}>
             {groupHeader}
@@ -102,11 +123,17 @@ export function AgentSlashCommandPalette({
               data-highlighted={isHighlighted ? "" : undefined}
               onMouseEnter={() => onHighlightChange(index)}
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() =>
-                entry.type === "command"
-                  ? onSelect(entry.command)
-                  : onSelectSkill(entry.skill)
-              }
+              onClick={() => {
+                if (entry.type === "command") {
+                  onSelect(entry.command);
+                  return;
+                }
+                if (entry.type === "capability") {
+                  onSelectCapability(entry.capability);
+                  return;
+                }
+                onSelectSkill(entry.skill);
+              }}
             >
               <span className={paletteStyles.copy}>
                 <span className={paletteStyles.name}>{entry.label}</span>

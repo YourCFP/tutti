@@ -272,7 +272,10 @@ export interface AgentGUIViewLabels {
   slashCommandPalette: string;
   skillPickerPalette: string;
   slashPaletteCommandsGroup: string;
+  slashPaletteCapabilitiesGroup: string;
   slashPaletteSkillsGroup: string;
+  browserUseCapabilityLabel: string;
+  browserUseCapabilityDescription: string;
   slashStatusTitle: string;
   slashStatusSession: string;
   slashStatusBaseUrl: string;
@@ -1410,7 +1413,10 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       slashCommandPalette: labels.slashCommandPalette,
       skillPickerPalette: labels.skillPickerPalette,
       slashPaletteCommandsGroup: labels.slashPaletteCommandsGroup,
+      slashPaletteCapabilitiesGroup: labels.slashPaletteCapabilitiesGroup,
       slashPaletteSkillsGroup: labels.slashPaletteSkillsGroup,
+      browserUseCapabilityLabel: labels.browserUseCapabilityLabel,
+      browserUseCapabilityDescription: labels.browserUseCapabilityDescription,
       slashStatusTitle: labels.slashStatusTitle,
       slashStatusSession: labels.slashStatusSession,
       slashStatusBaseUrl: labels.slashStatusBaseUrl,
@@ -1474,6 +1480,9 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       labels.send,
       labels.sendQueuedPromptNext,
       labels.slashCommandPalette,
+      labels.browserUseCapabilityDescription,
+      labels.browserUseCapabilityLabel,
+      labels.slashPaletteCapabilitiesGroup,
       labels.slashPaletteCommandsGroup,
       labels.slashPaletteSkillsGroup,
       labels.slashStatusClose,
