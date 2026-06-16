@@ -10,6 +10,7 @@ import {
   DEFAULT_RICH_TEXT_AT_PANEL_PAGE_SIZE,
   MentionPalette,
   buildMentionPaletteState,
+  flattenMentionPaletteEntries,
   type MentionPaletteGroup
 } from "@tutti-os/ui-rich-text/at-panel";
 import {
@@ -278,16 +279,29 @@ function IssueManagerMentionPanel({
   );
 
   // entryKey (`${group.id}:${matchKey}`) → match, so we can map between the
-  // shell's highlightedKey and the editor's activeMatch.
+  // shell's highlightedKey and the editor's activeMatch. The entry key strings
+  // are produced by the shared `flattenMentionPaletteEntries` util (matching how
+  // the agent adapter derives them) rather than re-built inline here.
   const matchByEntryKey = useMemo(() => {
     const map = new Map<string, RichTextAtQueryMatch>();
-    for (const group of state.groups) {
-      for (const item of group.items) {
-        map.set(`${group.id}:${issueManagerMentionMatchKey(item)}`, item);
+    for (const entry of flattenMentionPaletteEntries(state, (item) =>
+      issueManagerMentionMatchKey(item)
+    )) {
+      if (
+        entry.type !== "item" ||
+        entry.groupId === undefined ||
+        entry.itemIndex === undefined
+      ) {
+        continue;
+      }
+      const item = state.groups.find((group) => group.id === entry.groupId)
+        ?.items[entry.itemIndex];
+      if (item) {
+        map.set(entry.key, item);
       }
     }
     return map;
-  }, [state.groups]);
+  }, [state]);
 
   const entryKeyByMatchKey = useMemo(() => {
     const map = new Map<string, string>();

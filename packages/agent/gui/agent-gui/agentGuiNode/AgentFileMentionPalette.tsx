@@ -74,7 +74,9 @@ const AGENT_MENTION_PALETTE_THEME: MentionPaletteTheme = {
     footer: "agent-gui-node__mention-palette-footer",
     tabs: "agent-gui-node__mention-palette-tabs",
     scrollRegion: "agent-gui-node__mention-palette-scroll-region",
-    scrollbar: "agent-gui-node__mention-palette-scrollbar",
+    scrollbar:
+      "workspace-agents-status-panel__scrollbar agent-gui-node__mention-palette-scrollbar",
+    scrollbarThumb: "workspace-agents-status-panel__scrollbar-thumb",
     hint: "agent-gui-node__mention-palette-hint",
     hintItem: "agent-gui-node__mention-palette-hint-item",
     hintButton: "agent-gui-node__mention-palette-hint-button",

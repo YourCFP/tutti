@@ -53,6 +53,7 @@ export interface MentionPaletteTheme {
     tabs?: string;
     scrollRegion?: string;
     scrollbar?: string;
+    scrollbarThumb?: string;
     hint?: string;
     hintItem?: string;
     hintButton?: string;

@@ -32,7 +32,5 @@ export type {
   RichTextAtFilterTab,
   RichTextAtGroupId,
   RichTextAtProviderGroup,
-  RichTextAtSearchGroup,
-  RichTextAtSearchInput,
-  RichTextAtSearchState
+  RichTextAtSearchGroup
 } from "./types.ts";
