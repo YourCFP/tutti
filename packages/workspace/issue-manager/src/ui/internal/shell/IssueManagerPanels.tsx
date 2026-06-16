@@ -282,6 +282,7 @@ export function IssueManagerIssuePane({
               />
               <IssueManagerSubtaskSection
                 copy={copy}
+                diagnostics={controller.diagnostics}
                 onCreate={controller.createTaskDraft}
                 onSelectTask={controller.selectTask}
                 selectedTaskId={selectedTask?.taskId ?? null}
