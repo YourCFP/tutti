@@ -9,6 +9,7 @@ func tuttiCLIPolicy(input PrepareInput) string {
 		"policy_templates/tutti-runtime.md",
 		map[string]string{
 			"{{COMMAND_GUIDE}}":    commandGuide(input),
+			"{{CLI_COMMAND}}":      normalizeCLICommandName(input.CLICommand),
 			"{{AGENT_SESSION_ID}}": strings.TrimSpace(input.AgentSessionID),
 			"{{PROVIDER}}":         strings.TrimSpace(input.Provider),
 		},
