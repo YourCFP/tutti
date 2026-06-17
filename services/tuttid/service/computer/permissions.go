@@ -1,0 +1,29 @@
+package computer
+
+import (
+	"errors"
+	"os/exec"
+	"runtime"
+)
+
+// ErrNotInstalled is returned when cua-driver is not found on PATH or at the
+// configured entry path.
+var ErrNotInstalled = errors.New(
+	"cua-driver is not installed; install it from https://github.com/trycua/cua or set TUTTI_COMPUTER_MCP_ENTRY_PATH")
+
+// validateComputerReady checks that cua-driver is reachable before starting a
+// session. Actual macOS permission errors (Screen Recording, Accessibility) are
+// reported by cua-driver itself at MCP initialize time.
+func validateComputerReady() error {
+	if runtime.GOOS != "darwin" {
+		return errors.New("computer use requires macOS")
+	}
+	command := resolveComputerMCPCommand(nil)
+	if len(command) == 0 {
+		return ErrNotInstalled
+	}
+	if _, err := exec.LookPath(command[0]); err != nil {
+		return ErrNotInstalled
+	}
+	return nil
+}
