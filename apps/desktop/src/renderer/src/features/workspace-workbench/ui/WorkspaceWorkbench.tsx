@@ -49,20 +49,25 @@ import {
 import { workspaceLaunchpadDockActionId } from "../services/workspaceLaunchpadModel.ts";
 import { workspaceBrowserNodeID } from "../services/workspaceWorkbenchNodeIds.ts";
 import { WorkspaceChrome } from "./WorkspaceChrome";
+import { WorkspaceAppExternalBridge } from "./WorkspaceAppExternalBridge";
 import { WorkspaceLaunchpadOverlay } from "./WorkspaceLaunchpadOverlay.tsx";
 import { useWorkspaceWorkbenchShellRuntime } from "./useWorkspaceWorkbenchShellRuntime";
 import { resolveWorkspaceWorkbenchLayoutConstraints } from "./workspaceWorkbenchLayoutConstraints.ts";
+import type { DesktopWorkspaceAppExternalHostApi } from "@preload/types";
+import type { TuttiExternalFileOpenInput } from "@tutti-os/workspace-external-core/contracts";
 
 interface WorkspaceWorkbenchProps {
   enableWindowCloseGuard: boolean;
   headerSlot?: React.ReactNode;
   routeView: string;
+  workspaceAppExternalApi?: DesktopWorkspaceAppExternalHostApi;
   workspaceID: string | null;
 }
 export function WorkspaceWorkbench({
   enableWindowCloseGuard,
   headerSlot,
   routeView,
+  workspaceAppExternalApi,
   workspaceID
 }: WorkspaceWorkbenchProps) {
   const { service, state } = useWorkspaceCatalogService();
@@ -100,6 +105,7 @@ export function WorkspaceWorkbench({
         platform: state.platform,
         workspace: state.workspace
       }}
+      workspaceAppExternalApi={workspaceAppExternalApi}
     />
   );
 }
@@ -107,7 +113,8 @@ export function WorkspaceWorkbench({
 function ReadyWorkspaceWorkbench({
   enableWindowCloseGuard,
   headerSlot,
-  state
+  state,
+  workspaceAppExternalApi
 }: {
   enableWindowCloseGuard: boolean;
   headerSlot?: React.ReactNode;
@@ -115,6 +122,7 @@ function ReadyWorkspaceWorkbench({
     platform: NodeJS.Platform;
     workspace: WorkspaceSummary;
   };
+  workspaceAppExternalApi?: DesktopWorkspaceAppExternalHostApi;
 }) {
   const runtime = useWorkspaceWorkbenchShellRuntime({
     enableWindowCloseGuard,
@@ -137,6 +145,21 @@ function ReadyWorkspaceWorkbench({
   const closeLaunchpad = useCallback(() => {
     setLaunchpadOpen(false);
   }, []);
+  const openWorkspaceAppExternalFile = useCallback(
+    async (input: TuttiExternalFileOpenInput) => {
+      if (!workbenchHost) {
+        throw new Error("Workspace host is unavailable.");
+      }
+      const opened = await openWorkspaceFilesNode(workbenchHost, {
+        path: input.path,
+        workspaceId: state.workspace.id
+      });
+      if (!opened) {
+        throw new Error("Workspace files could not be opened.");
+      }
+    },
+    [state.workspace.id, workbenchHost]
+  );
   const onDockEntryAction = useCallback(
     (
       request: Parameters<NonNullable<typeof hostInput.onDockEntryAction>>[0]
@@ -325,6 +348,11 @@ function ReadyWorkspaceWorkbench({
         shortcutsEnabled={runtime.shortcutsEnabled}
         wallpaper={runtime.wallpaper}
         workspaceId={hostInput.workspaceId}
+      />
+      <WorkspaceAppExternalBridge
+        api={workspaceAppExternalApi}
+        openFile={openWorkspaceAppExternalFile}
+        workspaceId={state.workspace.id}
       />
       <WorkspaceLaunchpadOverlay
         dockIconStyle={runtime.dockIconStyle}
