@@ -490,7 +490,7 @@ func validateAppManifestReferencesJSON(raw map[string]json.RawMessage) error {
 		return errors.New("app manifest references must be an object when provided")
 	}
 	for key := range references {
-		if key != "listEndpoint" {
+		if key != "listEndpoint" && key != "searchEndpoint" {
 			return fmt.Errorf("app manifest references.%s is unsupported", key)
 		}
 	}
