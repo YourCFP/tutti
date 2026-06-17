@@ -40,8 +40,10 @@ import {
   createWorkspaceWorkbenchShellRuntimeController,
   type WorkspaceWorkbenchShellRuntimeController
 } from "../services/workspaceWorkbenchShellRuntimeController";
+import type { WorkspaceWorkbenchCapabilitySettingsTarget } from "../services/workspaceWorkbenchHostService.interface";
 import type { WorkspaceMissionControlTrigger } from "../services/workspaceMissionControlController.ts";
 import { renderWorkspaceFilesNodeBody } from "./WorkspaceFilesNodeBody";
+import { useWorkspaceSettingsService } from "./useWorkspaceSettingsService";
 import { useWorkspaceWorkbenchHostService } from "./useWorkspaceWorkbenchHostService";
 
 export interface WorkspaceWorkbenchShellRuntime {
@@ -100,6 +102,7 @@ export function useWorkspaceWorkbenchShellRuntime({
   const { service: appCenterService, state: appCenterState } =
     useWorkspaceAppCenterService();
   const { state: desktopPreferencesState } = useDesktopPreferencesService();
+  const { service: workspaceSettingsService } = useWorkspaceSettingsService();
   const workspaceFileManagerService = useWorkspaceFileManagerService();
   const workbenchHostService = useWorkspaceWorkbenchHostService();
   const reporterService = useService(IReporterService);
@@ -111,6 +114,18 @@ export function useWorkspaceWorkbenchShellRuntime({
   const workbenchDesktopI18n = useMemo(
     () => createWorkspaceWorkbenchDesktopI18nRuntime(appI18n),
     [appI18n]
+  );
+  const handleCapabilitySettingsRequest = useCallback(
+    (target: WorkspaceWorkbenchCapabilitySettingsTarget) => {
+      workspaceSettingsService.openPanel(
+        { id: state.workspace.id },
+        {
+          anchor: target === "computerUse" ? "computer-use" : "browser-use",
+          section: "general"
+        }
+      );
+    },
+    [state.workspace.id, workspaceSettingsService]
   );
   const shellRuntimeControllerRef =
     useRef<WorkspaceWorkbenchShellRuntimeController | null>(null);
@@ -126,6 +141,7 @@ export function useWorkspaceWorkbenchShellRuntime({
           defaultAgentProvider: desktopPreferencesState.defaultAgentProvider,
           dockIconStyle: desktopPreferencesState.dockIconStyle,
           i18n: workbenchDesktopI18n,
+          onCapabilitySettingsRequest: handleCapabilitySettingsRequest,
           renderFilesNodeBody: renderWorkspaceFilesNodeBody,
           requestWindowClose: (request) =>
             workbenchHostService.requestWindowClose(request),
@@ -200,6 +216,7 @@ export function useWorkspaceWorkbenchShellRuntime({
       defaultAgentProvider: desktopPreferencesState.defaultAgentProvider,
       dockIconStyle: desktopPreferencesState.dockIconStyle,
       i18n: workbenchDesktopI18n,
+      onCapabilitySettingsRequest: handleCapabilitySettingsRequest,
       renderFilesNodeBody: renderWorkspaceFilesNodeBody,
       requestWindowClose: (request) =>
         workbenchHostService.requestWindowClose(request),
@@ -212,6 +229,7 @@ export function useWorkspaceWorkbenchShellRuntime({
     desktopPreferencesState.defaultAgentProvider,
     desktopPreferencesState.dockIconStyle,
     desktopPreferencesState.theme.appearance,
+    handleCapabilitySettingsRequest,
     shellRuntimeController,
     state.workspace.id,
     workbenchDesktopI18n,

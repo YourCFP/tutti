@@ -42,6 +42,15 @@ test("workspace settings general panel owns browser-use connection mode", () => 
   assert.match(source, /changeBrowserUseConnectionMode/);
 });
 
+test("workspace settings computer-use permission hints are tooltips", () => {
+  assert.match(source, /resolveComputerUseGrantTooltip/);
+  assert.match(source, /<TooltipTrigger asChild>/);
+  assert.match(
+    source,
+    /workspace\.settings\.general\.computerUsePermissionMissingTooltip/
+  );
+});
+
 test("workspace settings general panel does not expose update preferences", () => {
   assert.doesNotMatch(source, /WorkspaceUpdateSettingsSection/);
   assert.doesNotMatch(source, /workspace\.settings\.general\.updateTitle/);

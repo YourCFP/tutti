@@ -14,6 +14,9 @@ export function createComputerUseDesktopApi(): DesktopComputerUseApi {
     install(): Promise<DesktopComputerUseActionResult> {
       return invokeDesktopApi(desktopIpcChannels.computerUse.install);
     },
+    uninstall(): Promise<DesktopComputerUseActionResult> {
+      return invokeDesktopApi(desktopIpcChannels.computerUse.uninstall);
+    },
     grantPermissions(): Promise<DesktopComputerUseActionResult> {
       return invokeDesktopApi(desktopIpcChannels.computerUse.grantPermissions);
     }

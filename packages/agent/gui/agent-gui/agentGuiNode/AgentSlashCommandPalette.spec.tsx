@@ -109,4 +109,48 @@ describe("AgentSlashCommandPalette", () => {
       aliases: ["浏览器"]
     });
   });
+
+  it("renders inline settings on capability entries and dispatches settings selection", () => {
+    const onSelectCapabilitySettings = vi.fn();
+
+    render(
+      <AgentSlashCommandPalette
+        label="Slash commands"
+        commandsGroupLabel="Commands"
+        capabilitiesGroupLabel="Capabilities"
+        skillsGroupLabel="Skills"
+        highlightedIndex={0}
+        entries={[
+          {
+            type: "capability",
+            key: "capability:computerUse",
+            label: "Computer",
+            description: "Install or grant access.",
+            settingsAriaLabel: "Computer use setup",
+            settingsLabel: "Settings",
+            capability: {
+              kind: "capability",
+              capability: "computerUse",
+              name: "computer",
+              aliases: ["电脑"]
+            }
+          }
+        ]}
+        onHighlightChange={vi.fn()}
+        onSelect={vi.fn()}
+        onSelectCapability={vi.fn()}
+        onSelectCapabilitySettings={onSelectCapabilitySettings}
+        onSelectSkill={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Capabilities")).toBeInTheDocument();
+    screen.getByRole("button", { name: "Computer use setup" }).click();
+    expect(onSelectCapabilitySettings).toHaveBeenCalledWith({
+      kind: "capability",
+      capability: "computerUse",
+      name: "computer",
+      aliases: ["电脑"]
+    });
+  });
 });

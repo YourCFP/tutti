@@ -741,8 +741,22 @@ export const zhCN = {
       slashPaletteSkillsGroup: "技能",
       browserUseCapabilityLabel: "浏览器",
       browserUseCapabilityDescription: "让 Agent 使用浏览器。",
+      browserUseCapabilityDescriptionAutoConnect:
+        "当前配置：复用已登录的 Chrome。",
+      browserUseCapabilityDescriptionIsolated: "当前配置：使用独立浏览器。",
+      browserUseCapabilitySettingsLabel: "浏览器设置",
+      browserUseCapabilitySettingsDescription: "配置 Agent 使用的浏览器。",
+      capabilityInlineSettingsLabel: "设置",
       computerUseCapabilityLabel: "电脑控制",
       computerUseCapabilityDescription: "让 Agent 控制 macOS 桌面。",
+      computerUseCapabilitySetupRequiredDescription:
+        "未安装。按 Enter 打开设置。",
+      computerUseCapabilityAuthorizationRequiredDescription:
+        "需要授权。按 Enter 打开设置。",
+      computerUseCapabilityAuthorizationUnknownDescription:
+        "无法确认授权状态。按 Enter 打开设置。",
+      computerUseCapabilitySettingsLabel: "电脑控制设置",
+      computerUseCapabilitySettingsDescription: "安装、移除或授权电脑控制。",
       fileMentionPalette: "工作区文件",
       fileMentionLoading: "正在搜索工作区...",
       fileMentionEmpty: "根据你输入的内容搜索工作区文件",

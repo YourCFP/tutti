@@ -61,6 +61,8 @@ import {
 import type { AgentRichTextAtProvider } from "./agentRichTextAtProvider";
 import type { AgentMessageMarkdownWorkspaceAppIcon } from "../../shared/AgentMessageMarkdown";
 import type {
+  AgentComposerCapabilityMenuState,
+  AgentComposerCapabilitySettingsTarget,
   AgentComposerGitBranchLoader,
   AgentComposerSlashStatusLimit
 } from "./AgentComposer";
@@ -113,6 +115,10 @@ export interface AgentGUINodeProps {
   height: number;
   desktopSize: DesktopSize;
   onLinkAction?: (action: WorkspaceLinkAction) => void;
+  capabilityMenuState?: AgentComposerCapabilityMenuState;
+  onCapabilitySettingsRequest?: (
+    capability: AgentComposerCapabilitySettingsTarget
+  ) => void;
   onAgentProviderLogin?: (provider: AgentProvider) => void;
   onWorkspaceFileReferencesAdded?: (input: {
     provider: AgentProvider;
@@ -414,6 +420,7 @@ function areAgentGUINodePropsEqual(
     previous.desktopSize.width === next.desktopSize.width &&
     previous.desktopSize.height === next.desktopSize.height &&
     previous.onLinkAction === next.onLinkAction &&
+    previous.onCapabilitySettingsRequest === next.onCapabilitySettingsRequest &&
     previous.onAgentProviderLogin === next.onAgentProviderLogin &&
     previous.onClose === next.onClose &&
     previous.onResize === next.onResize &&
@@ -458,6 +465,8 @@ export const AgentGUINode = memo(function AgentGUINode({
   height,
   desktopSize,
   onLinkAction,
+  capabilityMenuState,
+  onCapabilitySettingsRequest,
   onAgentProviderLogin,
   onWorkspaceFileReferencesAdded,
   onClose,
@@ -961,11 +970,41 @@ export const AgentGUINode = memo(function AgentGUINode({
       browserUseCapabilityDescription: t(
         "agentHost.agentGui.browserUseCapabilityDescription"
       ),
+      browserUseCapabilityDescriptionAutoConnect: t(
+        "agentHost.agentGui.browserUseCapabilityDescriptionAutoConnect"
+      ),
+      browserUseCapabilityDescriptionIsolated: t(
+        "agentHost.agentGui.browserUseCapabilityDescriptionIsolated"
+      ),
+      browserUseCapabilitySettingsLabel: t(
+        "agentHost.agentGui.browserUseCapabilitySettingsLabel"
+      ),
+      browserUseCapabilitySettingsDescription: t(
+        "agentHost.agentGui.browserUseCapabilitySettingsDescription"
+      ),
+      capabilityInlineSettingsLabel: t(
+        "agentHost.agentGui.capabilityInlineSettingsLabel"
+      ),
       computerUseCapabilityLabel: t(
         "agentHost.agentGui.computerUseCapabilityLabel"
       ),
       computerUseCapabilityDescription: t(
         "agentHost.agentGui.computerUseCapabilityDescription"
+      ),
+      computerUseCapabilitySetupRequiredDescription: t(
+        "agentHost.agentGui.computerUseCapabilitySetupRequiredDescription"
+      ),
+      computerUseCapabilityAuthorizationRequiredDescription: t(
+        "agentHost.agentGui.computerUseCapabilityAuthorizationRequiredDescription"
+      ),
+      computerUseCapabilityAuthorizationUnknownDescription: t(
+        "agentHost.agentGui.computerUseCapabilityAuthorizationUnknownDescription"
+      ),
+      computerUseCapabilitySettingsLabel: t(
+        "agentHost.agentGui.computerUseCapabilitySettingsLabel"
+      ),
+      computerUseCapabilitySettingsDescription: t(
+        "agentHost.agentGui.computerUseCapabilitySettingsDescription"
       ),
       fileMentionPalette: t("agentHost.agentGui.fileMentionPalette"),
       fileMentionLoading: t("agentHost.agentGui.fileMentionLoading"),
@@ -1176,6 +1215,8 @@ export const AgentGUINode = memo(function AgentGUINode({
             previewMode={previewMode}
             showProjectSelector={showProjectSelector}
             onLinkAction={handleLinkAction}
+            capabilityMenuState={capabilityMenuState}
+            onCapabilitySettingsRequest={onCapabilitySettingsRequest}
             onAgentProviderLogin={
               onAgentProviderLogin ? handleAgentProviderLogin : undefined
             }

@@ -21,6 +21,7 @@ import { createWorkspaceWindowCloseRequestController } from "./internal/workspac
 import type {
   IWorkspaceWorkbenchHostService,
   WorkspaceWorkbenchBodyRendererContext,
+  WorkspaceWorkbenchCapabilitySettingsTarget,
   WorkspaceWorkbenchHostInput
 } from "./workspaceWorkbenchHostService.interface";
 import type { WorkbenchSurfaceWallpaperFit } from "@tutti-os/workbench-surface";
@@ -115,6 +116,9 @@ export interface WorkspaceWorkbenchShellHostInput {
   defaultAgentProvider?: string | null;
   dockIconStyle: DesktopDockIconStyle;
   i18n: WorkspaceWorkbenchDesktopI18nRuntime;
+  onCapabilitySettingsRequest?: (
+    target: WorkspaceWorkbenchCapabilitySettingsTarget
+  ) => void;
   renderFilesNodeBody: (
     context: WorkspaceWorkbenchBodyRendererContext
   ) => ReactNode;
@@ -264,6 +268,7 @@ function createHostInput(input: {
     defaultAgentProvider: input.input.defaultAgentProvider,
     dockIconStyle: input.input.dockIconStyle,
     i18n: input.input.i18n,
+    onCapabilitySettingsRequest: input.input.onCapabilitySettingsRequest,
     renderFilesNodeBody: input.input.renderFilesNodeBody,
     themeAppearance: input.input.themeAppearance,
     workspaceId: input.input.workspaceId

@@ -52,6 +52,7 @@ export function registerWorkspaceWorkbenchServices(
     new SyncDescriptor(WorkspaceWorkbenchHostService, [
       {
         browserApi: input.browserApi,
+        computerUseApi: input.computerUseApi,
         dockPreviewCacheApi: input.dockPreviewCacheApi,
         eventStreamClient: input.eventStreamClient,
         hostFilesApi: input.hostFilesApi,

@@ -17,6 +17,7 @@ import type {
 import type { DesktopThemeSource } from "@shared/theme";
 import type {
   WorkspaceSettingsReadableStoreState,
+  WorkspaceSettingsGeneralFocusAnchor,
   WorkspaceSettingsSectionID,
   WorkspaceManagedModelProviderDraft,
   WorkspaceManagedModelProviderID
@@ -29,6 +30,7 @@ export interface WorkspaceSettingsWorkspaceInput {
 }
 
 export interface WorkspaceSettingsOpenOptions {
+  anchor?: WorkspaceSettingsGeneralFocusAnchor;
   pane?: string;
   provider?: string;
   section?: WorkspaceSettingsSectionID;
@@ -40,6 +42,7 @@ export interface IWorkspaceSettingsService {
 
   checkComputerUseStatus(): Promise<DesktopComputerUseStatus>;
   installComputerUse(): Promise<DesktopComputerUseActionResult>;
+  uninstallComputerUse(): Promise<DesktopComputerUseActionResult>;
   grantComputerUsePermissions(): Promise<DesktopComputerUseActionResult>;
   closePanel(): void;
   openPanel(

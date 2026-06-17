@@ -1436,8 +1436,25 @@ function createLabels(): AgentGUIViewLabels {
     slashPaletteSkillsGroup: "slashPaletteSkillsGroup",
     browserUseCapabilityLabel: "browserUseCapabilityLabel",
     browserUseCapabilityDescription: "browserUseCapabilityDescription",
+    browserUseCapabilityDescriptionAutoConnect:
+      "browserUseCapabilityDescriptionAutoConnect",
+    browserUseCapabilityDescriptionIsolated:
+      "browserUseCapabilityDescriptionIsolated",
+    browserUseCapabilitySettingsLabel: "browserUseCapabilitySettingsLabel",
+    browserUseCapabilitySettingsDescription:
+      "browserUseCapabilitySettingsDescription",
+    capabilityInlineSettingsLabel: "capabilityInlineSettingsLabel",
     computerUseCapabilityLabel: "computerUseCapabilityLabel",
     computerUseCapabilityDescription: "computerUseCapabilityDescription",
+    computerUseCapabilitySetupRequiredDescription:
+      "computerUseCapabilitySetupRequiredDescription",
+    computerUseCapabilityAuthorizationRequiredDescription:
+      "computerUseCapabilityAuthorizationRequiredDescription",
+    computerUseCapabilityAuthorizationUnknownDescription:
+      "computerUseCapabilityAuthorizationUnknownDescription",
+    computerUseCapabilitySettingsLabel: "computerUseCapabilitySettingsLabel",
+    computerUseCapabilitySettingsDescription:
+      "computerUseCapabilitySettingsDescription",
     slashStatusTitle: "slashStatusTitle",
     slashStatusSession: "slashStatusSession",
     slashStatusBaseUrl: "slashStatusBaseUrl",

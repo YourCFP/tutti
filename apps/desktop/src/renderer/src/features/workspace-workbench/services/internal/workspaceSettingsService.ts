@@ -93,6 +93,11 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     } else if (options?.section) {
       this.store.activeSection = options.section;
     }
+    if (options?.anchor) {
+      this.store.activeSection = "general";
+      this.store.generalFocusAnchor = options.anchor;
+      this.store.generalFocusRequestID += 1;
+    }
     if (managedModelsRequested && isManagedModelProviderID(options.provider)) {
       this.store.managedModels.focusedProvider = options.provider;
       this.store.managedModels.focusRequestID += 1;
@@ -121,6 +126,10 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     return this.dependencies.client.installComputerUse();
   }
 
+  uninstallComputerUse() {
+    return this.dependencies.client.uninstallComputerUse();
+  }
+
   grantComputerUsePermissions() {
     return this.dependencies.client.grantComputerUsePermissions();
   }
@@ -129,6 +138,8 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     if (workspace.id !== this.store.workspaceID) {
       this.store.workspaceID = workspace.id;
       this.store.activeSection = "general";
+      this.store.generalFocusAnchor = null;
+      this.store.generalFocusRequestID = 0;
       this.store.managedModels.providers = [];
       this.store.managedModels.draft = null;
       this.store.managedModels.feedback = {};

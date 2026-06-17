@@ -804,9 +804,26 @@ export const en = {
       slashPaletteSkillsGroup: "Skills",
       browserUseCapabilityLabel: "Browser",
       browserUseCapabilityDescription: "Let the agent use a browser.",
+      browserUseCapabilityDescriptionAutoConnect:
+        "Current mode: reuse your signed-in Chrome.",
+      browserUseCapabilityDescriptionIsolated:
+        "Current mode: use an isolated browser.",
+      browserUseCapabilitySettingsLabel: "Browser settings",
+      browserUseCapabilitySettingsDescription:
+        "Configure the browser the agent can use.",
+      capabilityInlineSettingsLabel: "Settings",
       computerUseCapabilityLabel: "Computer",
       computerUseCapabilityDescription:
         "Let the agent control the macOS desktop.",
+      computerUseCapabilitySetupRequiredDescription:
+        "Not installed. Press Enter to open setup.",
+      computerUseCapabilityAuthorizationRequiredDescription:
+        "Authorization required. Press Enter to open setup.",
+      computerUseCapabilityAuthorizationUnknownDescription:
+        "Authorization status unknown. Press Enter to open setup.",
+      computerUseCapabilitySettingsLabel: "Computer use setup",
+      computerUseCapabilitySettingsDescription:
+        "Install, remove, or grant computer access.",
       fileMentionPalette: "Files",
       fileMentionLoading: "Searching...",
       fileMentionEmpty: "Search workspace files based on your input",

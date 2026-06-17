@@ -34,7 +34,8 @@ import type {
 import { useDesktopPreferencesService } from "@renderer/features/desktop-preferences/ui/useDesktopPreferencesService";
 import { Toast } from "@renderer/lib/toast";
 import type { DesktopAgentComposerDefaults } from "@shared/preferences";
-import type { DesktopRuntimeApi } from "@preload/types";
+import type { DesktopComputerUseApi, DesktopRuntimeApi } from "@preload/types";
+import type { DesktopComputerUseStatus } from "@shared/contracts/ipc";
 import {
   areDesktopAgentGUINodeStatesEqual,
   areDesktopAgentGUIWorkbenchStatesEqual,
@@ -83,8 +84,10 @@ interface DesktopAgentGUIWorkbenchBodyProps {
   appCenterService: IWorkspaceAppCenterService;
   agentProviderStatusService?: IAgentProviderStatusService;
   context: WorkbenchHostNodeBodyContext;
+  computerUseApi?: Pick<DesktopComputerUseApi, "checkStatus">;
   dockPreviewCache: WorkbenchDockPreviewCache;
   onLinkAction?: (action: WorkspaceLinkAction) => void;
+  onCapabilitySettingsRequest?: AgentGUIProps["onCapabilitySettingsRequest"];
   onStateChange: (state: DesktopAgentGUIWorkbenchState) => void;
   previewMode?: boolean;
   richTextAtProviders: NonNullable<AgentGUIProps["richTextAtProviders"]>;
@@ -106,6 +109,23 @@ const EMPTY_AGENT_PROVIDER_STATUS_SNAPSHOT: AgentProviderStatusSnapshot = {
   pendingActions: [],
   statuses: []
 };
+
+function resolveComputerUseAuthorizationState(
+  status: DesktopComputerUseStatus | null
+): "authorized" | "needs-authorization" | "unknown" | null {
+  if (!status?.installed) {
+    return null;
+  }
+  const permissions = status.permissions;
+  if (!permissions || permissions.source !== "driver-daemon") {
+    return "unknown";
+  }
+  return permissions.accessibility === true &&
+    permissions.screenRecording === true &&
+    permissions.screenRecordingCapturable === true
+    ? "authorized"
+    : "needs-authorization";
+}
 const DESKTOP_AGENT_GUI_AGENT_SETTINGS = {
   avoidGroupingEdits: false
 } satisfies NonNullable<AgentGUIProps["agentSettings"]>;
@@ -213,8 +233,10 @@ export function DesktopAgentGUIWorkbenchBody({
   appCenterService,
   agentProviderStatusService,
   context,
+  computerUseApi,
   dockPreviewCache,
   onLinkAction,
+  onCapabilitySettingsRequest,
   onStateChange,
   previewMode = false,
   richTextAtProviders,
@@ -228,6 +250,8 @@ export function DesktopAgentGUIWorkbenchBody({
   const { i18n, locale } = useTranslation();
   const { service: desktopPreferencesService, state: desktopPreferencesState } =
     useDesktopPreferencesService();
+  const [computerUseStatus, setComputerUseStatus] =
+    useState<DesktopComputerUseStatus | null>(null);
   const appCenterState = useSnapshot(appCenterService.store);
   const workspaceAppIcons = useMemo(
     () =>
@@ -275,6 +299,35 @@ export function DesktopAgentGUIWorkbenchBody({
     previewMode ? undefined : agentProviderStatusService
   );
   const provider = desktopAgentGUIProviderFromInstanceId(context.instanceId);
+  useEffect(() => {
+    if (previewMode || !computerUseApi) {
+      setComputerUseStatus(null);
+      return;
+    }
+
+    let canceled = false;
+    const refreshComputerUseStatus = () => {
+      void computerUseApi
+        .checkStatus()
+        .then((status) => {
+          if (!canceled) {
+            setComputerUseStatus(status);
+          }
+        })
+        .catch(() => {
+          if (!canceled) {
+            setComputerUseStatus(null);
+          }
+        });
+    };
+
+    refreshComputerUseStatus();
+    const interval = window.setInterval(refreshComputerUseStatus, 15_000);
+    return () => {
+      canceled = true;
+      window.clearInterval(interval);
+    };
+  }, [computerUseApi, previewMode]);
   const handleAgentProviderLogin = useCallback(
     (
       loginProvider: Parameters<
@@ -675,6 +728,16 @@ export function DesktopAgentGUIWorkbenchBody({
       i18n={i18n}
       locale={locale}
       agentSettings={DESKTOP_AGENT_GUI_AGENT_SETTINGS}
+      capabilityMenuState={{
+        browserUse: {
+          connectionMode: desktopPreferencesState.browserUseConnectionMode
+        },
+        computerUse: {
+          authorization:
+            resolveComputerUseAuthorizationState(computerUseStatus),
+          installed: computerUseStatus?.installed ?? null
+        }
+      }}
       currentUserId="local"
       desktopSize={desktopSize}
       embedded
@@ -694,6 +757,9 @@ export function DesktopAgentGUIWorkbenchBody({
         !previewMode && agentProviderStatusService
           ? handleAgentProviderLogin
           : undefined
+      }
+      onCapabilitySettingsRequest={
+        previewMode ? undefined : onCapabilitySettingsRequest
       }
       onClose={DESKTOP_AGENT_GUI_NOOP}
       onLinkAction={onLinkAction}

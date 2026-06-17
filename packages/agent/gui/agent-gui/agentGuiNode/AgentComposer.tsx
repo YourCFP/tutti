@@ -200,8 +200,18 @@ export interface AgentComposerProps {
     planUnavailable: string;
     browserUseCapabilityLabel: string;
     browserUseCapabilityDescription: string;
+    browserUseCapabilityDescriptionAutoConnect: string;
+    browserUseCapabilityDescriptionIsolated: string;
+    browserUseCapabilitySettingsLabel: string;
+    browserUseCapabilitySettingsDescription: string;
+    capabilityInlineSettingsLabel: string;
     computerUseCapabilityLabel: string;
     computerUseCapabilityDescription: string;
+    computerUseCapabilitySetupRequiredDescription: string;
+    computerUseCapabilityAuthorizationRequiredDescription: string;
+    computerUseCapabilityAuthorizationUnknownDescription: string;
+    computerUseCapabilitySettingsLabel: string;
+    computerUseCapabilitySettingsDescription: string;
     queuedLabel: string;
     sendQueuedPromptNext: string;
     editQueuedPrompt: string;
@@ -288,6 +298,10 @@ export interface AgentComposerProps {
     computerUse?: boolean;
     permissionModeId?: string | null;
   }) => void;
+  capabilityMenuState?: AgentComposerCapabilityMenuState;
+  onCapabilitySettingsRequest?: (
+    capability: AgentComposerCapabilitySettingsTarget
+  ) => void;
   onSubmit: (content: AgentPromptContentBlock[]) => void;
   onSendQueuedPromptNext: (queuedPromptId: string) => void;
   onRemoveQueuedPrompt: (queuedPromptId: string) => void;
@@ -307,6 +321,24 @@ export interface AgentComposerProps {
   onRequestGitBranches?: AgentComposerGitBranchLoader | null;
   richTextAtProviders?: readonly AgentRichTextAtProvider[];
 }
+
+export type AgentComposerCapabilitySettingsTarget =
+  AgentSlashCommandCapability["capability"];
+
+export interface AgentComposerCapabilityMenuState {
+  browserUse?: {
+    connectionMode?: "autoConnect" | "isolated" | null;
+  };
+  computerUse?: {
+    authorization?: AgentComposerComputerUseAuthorizationState | null;
+    installed?: boolean | null;
+  };
+}
+
+export type AgentComposerComputerUseAuthorizationState =
+  | "authorized"
+  | "needs-authorization"
+  | "unknown";
 
 export interface AgentComposerGitBranches {
   branches: readonly string[];
@@ -939,6 +971,7 @@ export function AgentComposer({
   onDraftContentChange,
   onProjectPathChange = () => {},
   onSettingsChange,
+  capabilityMenuState,
   onSubmit,
   onSendQueuedPromptNext,
   onRemoveQueuedPrompt,
@@ -946,6 +979,7 @@ export function AgentComposer({
   onInterruptCurrentTurn,
   onPromptImagesUnsupported,
   onSubmitInteractivePrompt,
+  onCapabilitySettingsRequest,
   onLinkAction,
   onRequestWorkspaceReferences = null,
   onRequestGitBranches = null,
@@ -1077,36 +1111,65 @@ export function AgentComposer({
     labels.computerUseCapabilityLabel
   ]);
   const slashPaletteEntries = useMemo<AgentSlashPaletteEntry[]>(() => {
-    const commandEntries: AgentSlashPaletteEntry[] = filteredCommands.map(
-      (command) => {
+    const commandEntries: AgentSlashPaletteEntry[] =
+      filteredCommands.flatMap<AgentSlashPaletteEntry>((command) => {
         if (isSlashCommandCapability(command)) {
-          const [capLabel, capDescription] =
+          const browserConnectionMode =
+            capabilityMenuState?.browserUse?.connectionMode ?? null;
+          const computerUseInstalled =
+            capabilityMenuState?.computerUse?.installed ?? null;
+          const computerUseAuthorization =
+            capabilityMenuState?.computerUse?.authorization ?? null;
+          const capLabel =
             command.capability === "computerUse"
-              ? [
-                  labels.computerUseCapabilityLabel,
-                  labels.computerUseCapabilityDescription
-                ]
-              : [
-                  labels.browserUseCapabilityLabel,
-                  labels.browserUseCapabilityDescription
-                ];
-          return {
+              ? labels.computerUseCapabilityLabel
+              : labels.browserUseCapabilityLabel;
+          const capDescription =
+            command.capability === "computerUse"
+              ? computerUseInstalled === false
+                ? labels.computerUseCapabilitySetupRequiredDescription
+                : computerUseAuthorization === "needs-authorization"
+                  ? labels.computerUseCapabilityAuthorizationRequiredDescription
+                  : computerUseAuthorization === "unknown"
+                    ? labels.computerUseCapabilityAuthorizationUnknownDescription
+                    : labels.computerUseCapabilityDescription
+              : browserConnectionMode === "autoConnect"
+                ? labels.browserUseCapabilityDescriptionAutoConnect
+                : browserConnectionMode === "isolated"
+                  ? labels.browserUseCapabilityDescriptionIsolated
+                  : labels.browserUseCapabilityDescription;
+          const capSettingsLabel =
+            command.capability === "computerUse"
+              ? labels.computerUseCapabilitySettingsLabel
+              : labels.browserUseCapabilitySettingsLabel;
+          const capabilityEntry: AgentSlashPaletteEntry = {
             type: "capability",
             key: `capability:${command.capability}`,
             label: capLabel,
             description: capDescription,
+            settingsAriaLabel: capSettingsLabel,
+            settingsLabel: labels.capabilityInlineSettingsLabel,
+            selectAction:
+              command.capability === "computerUse" &&
+              (computerUseInstalled === false ||
+                (computerUseInstalled === true &&
+                  (computerUseAuthorization === "needs-authorization" ||
+                    computerUseAuthorization === "unknown")))
+                ? "settings"
+                : "capability",
             capability: command
           };
+          return [capabilityEntry];
         }
-        return {
+        const commandEntry: AgentSlashPaletteEntry = {
           type: "command",
           key: `command:${command.name}`,
           label: labelForSlashCommand(command),
           ...(command.description ? { description: command.description } : {}),
           command
         };
-      }
-    );
+        return [commandEntry];
+      });
     const skillEntries: AgentSlashPaletteEntry[] = filteredSkills.map(
       (skill) => {
         const trigger = skillTriggerForPrefix(skill, skillQueryMatch?.prefix);
@@ -1123,12 +1186,23 @@ export function AgentComposer({
     );
     return [...commandEntries, ...skillEntries];
   }, [
+    capabilityMenuState?.browserUse?.connectionMode,
+    capabilityMenuState?.computerUse?.authorization,
+    capabilityMenuState?.computerUse?.installed,
     filteredCommands,
     filteredSkills,
     labels.browserUseCapabilityDescription,
+    labels.browserUseCapabilityDescriptionAutoConnect,
+    labels.browserUseCapabilityDescriptionIsolated,
     labels.browserUseCapabilityLabel,
+    labels.capabilityInlineSettingsLabel,
+    labels.browserUseCapabilitySettingsLabel,
     labels.computerUseCapabilityDescription,
+    labels.computerUseCapabilityAuthorizationRequiredDescription,
+    labels.computerUseCapabilityAuthorizationUnknownDescription,
+    labels.computerUseCapabilitySetupRequiredDescription,
     labels.computerUseCapabilityLabel,
+    labels.computerUseCapabilitySettingsLabel,
     skillQueryMatch?.prefix
   ]);
   const showFileMentionPalette =
@@ -1378,6 +1452,14 @@ export function AgentComposer({
     [executeSlashCommandEffect, provider]
   );
 
+  const selectCapabilitySettings = useCallback(
+    (capability: AgentSlashCommandCapability): void => {
+      onCapabilitySettingsRequest?.(capability.capability);
+      setIsPaletteOpen(false);
+    },
+    [onCapabilitySettingsRequest]
+  );
+
   const selectSkill = useCallback(
     (skill: AgentGUIProviderSkillOption): void => {
       const trigger = skillTriggerForPrefix(skill, skillQueryMatch?.prefix);
@@ -1494,7 +1576,11 @@ export function AgentComposer({
         if (activeEntry?.type === "command") {
           selectCommand(activeEntry.command);
         } else if (activeEntry?.type === "capability") {
-          selectCapability(activeEntry.capability);
+          if (activeEntry.selectAction === "settings") {
+            selectCapabilitySettings(activeEntry.capability);
+          } else {
+            selectCapability(activeEntry.capability);
+          }
         } else if (activeEntry?.type === "skill") {
           selectSkill(activeEntry.skill);
         }
@@ -2631,6 +2717,7 @@ export function AgentComposer({
                       onHighlightChange={setHighlightedIndex}
                       onSelect={selectCommand}
                       onSelectCapability={selectCapability}
+                      onSelectCapabilitySettings={selectCapabilitySettings}
                       onSelectSkill={selectSkill}
                     />
                   </div>,

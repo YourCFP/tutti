@@ -52,10 +52,13 @@ export function createWebDesktopApi(): DesktopApi {
 function createWebComputerUseApi(): DesktopComputerUseApi {
   return {
     checkStatus() {
-      return Promise.resolve({ installed: false });
+      return Promise.resolve({ installed: false, permissions: null });
     },
     install() {
       return Promise.reject(electronDebugRequired("computerUse.install"));
+    },
+    uninstall() {
+      return Promise.reject(electronDebugRequired("computerUse.uninstall"));
     },
     grantPermissions() {
       return Promise.reject(

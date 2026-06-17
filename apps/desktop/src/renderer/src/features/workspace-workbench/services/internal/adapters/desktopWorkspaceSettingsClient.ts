@@ -47,6 +47,7 @@ export interface ListManagedModelProviderModelsInput {
 export interface DesktopWorkspaceSettingsClient {
   checkComputerUseStatus(): Promise<DesktopComputerUseStatus>;
   installComputerUse(): Promise<DesktopComputerUseActionResult>;
+  uninstallComputerUse(): Promise<DesktopComputerUseActionResult>;
   grantComputerUsePermissions(): Promise<DesktopComputerUseActionResult>;
   clearLogs(): Promise<ClearDeveloperLogsResult>;
   deleteManagedModelProvider(
@@ -87,6 +88,9 @@ export function createDesktopWorkspaceSettingsClient(input: {
     },
     installComputerUse() {
       return input.computerUseApi.install();
+    },
+    uninstallComputerUse() {
+      return input.computerUseApi.uninstall();
     },
     grantComputerUsePermissions() {
       return input.computerUseApi.grantPermissions();

@@ -203,6 +203,7 @@ export interface DesktopWallpaperApi {
 export interface DesktopComputerUseApi {
   checkStatus(): Promise<DesktopComputerUseStatus>;
   install(): Promise<DesktopComputerUseActionResult>;
+  uninstall(): Promise<DesktopComputerUseActionResult>;
   grantPermissions(): Promise<DesktopComputerUseActionResult>;
 }
 

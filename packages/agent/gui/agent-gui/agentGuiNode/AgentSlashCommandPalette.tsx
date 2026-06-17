@@ -17,6 +17,9 @@ export type AgentSlashPaletteEntry =
       key: string;
       label: string;
       description?: string;
+      settingsAriaLabel?: string;
+      settingsLabel?: string;
+      selectAction?: "capability" | "settings";
       capability: AgentSlashCommandCapability;
     }
   | {
@@ -37,6 +40,9 @@ interface AgentSlashCommandPaletteProps {
   onHighlightChange: (index: number) => void;
   onSelect: (command: AgentSessionCommand) => void;
   onSelectCapability: (capability: AgentSlashCommandCapability) => void;
+  onSelectCapabilitySettings?: (
+    capability: AgentSlashCommandCapability
+  ) => void;
   onSelectSkill: (skill: AgentGUIProviderSkillOption) => void;
 }
 
@@ -44,13 +50,15 @@ const paletteStyles = {
   palette:
     "nodrag agent-gui-node__mention-palette flex h-full min-h-0 flex-col gap-1 overflow-y-auto px-1 pb-1 pt-2 [-webkit-app-region:no-drag]",
   option:
-    "nodrag relative flex min-h-9 w-full min-w-0 cursor-pointer select-none items-center gap-1.5 overflow-hidden rounded-[6px] border-0 bg-transparent px-2.5 py-2 text-left text-[13px] text-[var(--text-primary)] outline-hidden transition-colors duration-200 [-webkit-app-region:no-drag] focus-visible:outline-none active:bg-[var(--transparency-active)] data-[highlighted]:bg-[var(--transparency-block)] data-[highlighted]:text-[var(--text-primary)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:min-w-0 *:[span]:last:flex-1 *:[span]:last:items-center *:[span]:last:gap-2",
+    "nodrag relative flex min-h-9 w-full min-w-0 cursor-pointer select-none items-center gap-1.5 overflow-hidden rounded-[6px] border-0 bg-transparent px-2.5 py-2 text-left text-[13px] text-[var(--text-primary)] outline-hidden transition-colors duration-200 [-webkit-app-region:no-drag] focus-visible:outline-none active:bg-[var(--transparency-active)] data-[highlighted]:bg-[var(--transparency-block)] data-[highlighted]:text-[var(--text-primary)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   copy: "flex min-w-0 flex-1 items-baseline gap-1 overflow-hidden leading-[16px]",
   name: "min-w-0 max-w-[48%] shrink-0 truncate text-[11px] font-semibold text-[var(--text-primary)]",
   descriptionText:
     "min-w-0 flex-1 truncate text-[11px] font-normal text-[var(--text-secondary)]",
   groupHeader:
-    "select-none px-2.5 pb-0.5 pt-1.5 text-[11px] font-normal text-[var(--text-secondary)]"
+    "select-none px-2.5 pb-0.5 pt-1.5 text-[11px] font-normal text-[var(--text-secondary)]",
+  settingsButton:
+    "nodrag ml-1 shrink-0 rounded-[5px] border-0 bg-[var(--transparency-hover)] px-2 py-1 text-[11px] font-semibold leading-[14px] text-[var(--text-secondary)] outline-none transition-colors duration-150 hover:bg-[var(--transparency-active)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--agent-gui-focus-ring,var(--border-focus))]"
 };
 
 export function AgentSlashCommandPalette({
@@ -63,10 +71,11 @@ export function AgentSlashCommandPalette({
   onHighlightChange,
   onSelect,
   onSelectCapability,
+  onSelectCapabilitySettings,
   onSelectSkill
 }: AgentSlashCommandPaletteProps): React.JSX.Element | null {
   "use memo";
-  const highlightedOptionRef = useRef<HTMLButtonElement | null>(null);
+  const highlightedOptionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     highlightedOptionRef.current?.scrollIntoView({ block: "nearest" });
@@ -79,28 +88,26 @@ export function AgentSlashCommandPalette({
   // capabilities always keep their category label for discoverability. They are
   // plain separators outside the option list, so keyboard navigation indices
   // are untouched.
-  const entryTypes = new Set(entries.map((entry) => entry.type));
+  const entryTypes = new Set(entries.map((entry) => entryGroupType(entry)));
   const showGroupHeaders = entryTypes.size > 1 || entryTypes.has("capability");
-  const firstEntryIndexByType = new Map<
-    AgentSlashPaletteEntry["type"],
-    number
-  >();
+  const firstEntryIndexByType = new Map<AgentSlashPaletteEntryGroup, number>();
   entries.forEach((entry, index) => {
-    if (!firstEntryIndexByType.has(entry.type)) {
-      firstEntryIndexByType.set(entry.type, index);
+    const groupType = entryGroupType(entry);
+    if (!firstEntryIndexByType.has(groupType)) {
+      firstEntryIndexByType.set(groupType, index);
     }
   });
   return (
     <div className={paletteStyles.palette} role="listbox" aria-label={label}>
       {entries.map((entry, index) => {
         const isHighlighted = index === highlightedIndex;
+        const groupType = entryGroupType(entry);
         const groupHeader =
-          showGroupHeaders &&
-          firstEntryIndexByType.get(entry.type) === index ? (
+          showGroupHeaders && firstEntryIndexByType.get(groupType) === index ? (
             <div aria-hidden="true" className={paletteStyles.groupHeader}>
-              {entry.type === "command"
+              {groupType === "command"
                 ? commandsGroupLabel
-                : entry.type === "capability"
+                : groupType === "capability"
                   ? capabilitiesGroupLabel
                   : skillsGroupLabel}
             </div>
@@ -108,9 +115,8 @@ export function AgentSlashCommandPalette({
         return (
           <Fragment key={entry.key}>
             {groupHeader}
-            <button
+            <div
               ref={isHighlighted ? highlightedOptionRef : null}
-              type="button"
               className={cn(
                 paletteStyles.option,
                 isHighlighted && "bg-[var(--transparency-block)]"
@@ -126,6 +132,10 @@ export function AgentSlashCommandPalette({
                   return;
                 }
                 if (entry.type === "capability") {
+                  if (entry.selectAction === "settings") {
+                    onSelectCapabilitySettings?.(entry.capability);
+                    return;
+                  }
                   onSelectCapability(entry.capability);
                   return;
                 }
@@ -140,10 +150,38 @@ export function AgentSlashCommandPalette({
                   </span>
                 ) : null}
               </span>
-            </button>
+              {entry.type === "capability" &&
+              entry.settingsLabel &&
+              onSelectCapabilitySettings ? (
+                <button
+                  aria-label={entry.settingsAriaLabel ?? entry.settingsLabel}
+                  className={paletteStyles.settingsButton}
+                  title={entry.settingsAriaLabel ?? entry.settingsLabel}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelectCapabilitySettings(entry.capability);
+                  }}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                >
+                  {entry.settingsLabel}
+                </button>
+              ) : null}
+            </div>
           </Fragment>
         );
       })}
     </div>
   );
+}
+
+type AgentSlashPaletteEntryGroup = "command" | "capability" | "skill";
+
+function entryGroupType(
+  entry: AgentSlashPaletteEntry
+): AgentSlashPaletteEntryGroup {
+  return entry.type;
 }

@@ -11,6 +11,7 @@ import type {
 } from "@tutti-os/workbench-surface";
 import type {
   DesktopBrowserApi,
+  DesktopComputerUseApi,
   DesktopHostFilesApi,
   DesktopPlatformApi,
   DesktopRuntimeApi
@@ -26,7 +27,10 @@ import type { IWorkspaceFileManagerService } from "@renderer/features/workspace-
 import type { IWorkspaceUserProjectService } from "@renderer/features/workspace-user-project";
 import type { IReporterService } from "@renderer/features/analytics";
 import type { WorkspaceWorkbenchDesktopI18nRuntime } from "@shared/i18n";
-import type { WorkspaceWorkbenchBodyRendererContext } from "../workspaceWorkbenchHostService.interface";
+import type {
+  WorkspaceWorkbenchBodyRendererContext,
+  WorkspaceWorkbenchCapabilitySettingsTarget
+} from "../workspaceWorkbenchHostService.interface";
 import type { WorkspaceBrowserService } from "./workspaceBrowserService.ts";
 
 export interface DesktopWorkbenchContributionContext {
@@ -34,6 +38,7 @@ export interface DesktopWorkbenchContributionContext {
   appCenterService: IWorkspaceAppCenterService;
   browserApi?: DesktopBrowserApi;
   browserService: WorkspaceBrowserService;
+  computerUseApi: DesktopComputerUseApi;
   confirmCloseGuard: (
     request: WorkbenchHostCloseDialogRequest
   ) => Promise<boolean> | boolean;
@@ -50,6 +55,9 @@ export interface DesktopWorkbenchContributionContext {
   };
   hostFilesApi: DesktopHostFilesApi;
   i18n: WorkspaceWorkbenchDesktopI18nRuntime;
+  onCapabilitySettingsRequest?: (
+    target: WorkspaceWorkbenchCapabilitySettingsTarget
+  ) => void;
   agentProviderStatusService: AgentProviderStatusService;
   workspaceFileManagerService: IWorkspaceFileManagerService;
   workspaceUserProjectService: IWorkspaceUserProjectService;

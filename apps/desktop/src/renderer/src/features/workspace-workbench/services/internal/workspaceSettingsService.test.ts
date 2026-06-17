@@ -32,6 +32,8 @@ test("WorkspaceSettingsService resets panel-local state when switching workspace
   service.syncWorkspace({ id: "workspace-2" });
 
   assert.equal(service.store.activeSection, "general");
+  assert.equal(service.store.generalFocusAnchor, null);
+  assert.equal(service.store.generalFocusRequestID, 0);
   assert.equal(service.store.workspaceID, "workspace-2");
 });
 
@@ -110,6 +112,36 @@ test("WorkspaceSettingsService opens the managed models pane with a focused prov
 
   assert.equal(service.store.managedModels.focusedProvider, "anthropic");
   assert.equal(service.store.managedModels.focusRequestID, 2);
+});
+
+test("WorkspaceSettingsService opens general settings with a focused anchor", () => {
+  const service = new WorkspaceSettingsService({
+    client: createWorkspaceSettingsClient({})
+  });
+
+  service.openPanel(
+    { id: "workspace-1" },
+    {
+      anchor: "browser-use",
+      section: "appearance"
+    }
+  );
+
+  assert.equal(service.store.activeSection, "general");
+  assert.equal(service.store.generalFocusAnchor, "browser-use");
+  assert.equal(service.store.generalFocusRequestID, 1);
+
+  service.selectSection("appearance");
+  service.openPanel(
+    { id: "workspace-1" },
+    {
+      anchor: "computer-use"
+    }
+  );
+
+  assert.equal(service.store.activeSection, "general");
+  assert.equal(service.store.generalFocusAnchor, "computer-use");
+  assert.equal(service.store.generalFocusRequestID, 2);
 });
 
 test("WorkspaceSettingsService tolerates provider configs with null models", async () => {
@@ -855,8 +887,12 @@ function createWorkspaceSettingsClient(
   overrides: Partial<DesktopWorkspaceSettingsClient>
 ): DesktopWorkspaceSettingsClient {
   return {
-    checkComputerUseStatus: async () => ({ installed: false }),
+    checkComputerUseStatus: async () => ({
+      installed: false,
+      permissions: null
+    }),
     installComputerUse: async () => ({ success: false, output: "" }),
+    uninstallComputerUse: async () => ({ success: false, output: "" }),
     grantComputerUsePermissions: async () => ({ success: false, output: "" }),
     clearLogs: async () => ({
       clearedFiles: 0,
