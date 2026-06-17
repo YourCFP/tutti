@@ -89,6 +89,7 @@ export const zhCN = {
       exportServiceLogs: "导出服务日志...",
       file: "文件",
       help: "帮助",
+      openPerfMonitor: "打开 Perf Monitor DevTools",
       upToDateDetail: "Tutti {{version}} 是当前的最新版本。",
       upToDateMessage: "您使用的就是最新版本！",
       view: "显示",

@@ -78,6 +78,9 @@ importers:
       "@tutti-os/infra":
         specifier: 0.1.0
         version: 0.1.0(react@19.2.6)
+      "@tutti-os/rrt-plugin-vite":
+        specifier: 0.0.6
+        version: 0.0.6(vite@6.4.2(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.3)(yaml@2.9.0))
       "@tutti-os/ui-i18n-runtime":
         specifier: workspace:*
         version: link:../../packages/ui/i18n-runtime
@@ -3960,6 +3963,50 @@ packages:
         optional: true
       react:
         optional: true
+
+  "@tutti-os/rrt-app@0.0.6":
+    resolution:
+      {
+        integrity: sha512-QwTtyqGE+8UYDWTme2G6KttNZGOdpncj12XbdtE6N8XsCWidZ4Kkv9NyJUTE/ic24eQNeB8ZSz9zE1MtzyFXmQ==
+      }
+
+  "@tutti-os/rrt-bridge@0.0.6":
+    resolution:
+      {
+        integrity: sha512-koQFyMAMp9HVLpTljxDw33XjHQwlu77pOylqJn4t+N7XZr5NBz8La6rWPW9VI0hKP6sjOaIGo/XBRrxw8k3pvw==
+      }
+
+  "@tutti-os/rrt-client@0.0.6":
+    resolution:
+      {
+        integrity: sha512-ihIUm/Irg8rqc8X+e3O33Roed4Ey9tj7GPj8MzqbaoMj3jxsB23vaSNU1MQajuBqzz3uR7QddsyLfJG3hA9wSA==
+      }
+
+  "@tutti-os/rrt-core@0.0.6":
+    resolution:
+      {
+        integrity: sha512-d7x1/BMkAM5vhL+SXToufqr9jPfdbLdCvXi5Q258CR0wupdKse+YPbYkl3ZI0yJ3BAx8uRo2AiUXNPgIU1mYcQ==
+      }
+
+  "@tutti-os/rrt-plugin-shared@0.0.6":
+    resolution:
+      {
+        integrity: sha512-p1jeBhlUX9w+UJrdWm3I+dgCZyX6eTJpfWspya7xr+tiDHZ5J2uvZ5BQSh7uaz2E6z4se5nL+PBSXTwAa1bWvA==
+      }
+
+  "@tutti-os/rrt-plugin-vite@0.0.6":
+    resolution:
+      {
+        integrity: sha512-jylC1nutqJl/raOUuB9y4y0P8HBygTjqC9Vx6qEXGnxBps+4Hubz7CNESLoUo1AX5N1BViOUljr+neLn9+od9Q==
+      }
+    peerDependencies:
+      vite: ">=5.0.0"
+
+  "@tutti-os/rrt-shared@0.0.6":
+    resolution:
+      {
+        integrity: sha512-QsZtbOGw3ph72ohVZXfUpuc0qOUYRBFtotLdcf4V9k8qW9wKLL5b5jEpY0Tf3rZACC+VZCi5nUgD3rtYbLu3Fg==
+      }
 
   "@types/aria-query@5.0.4":
     resolution:
@@ -11003,6 +11050,39 @@ snapshots:
     optionalDependencies:
       react: 19.2.6
 
+  "@tutti-os/rrt-app@0.0.6":
+    dependencies:
+      "@tutti-os/rrt-bridge": 0.0.6
+      "@tutti-os/rrt-shared": 0.0.6
+
+  "@tutti-os/rrt-bridge@0.0.6":
+    dependencies:
+      "@tutti-os/rrt-shared": 0.0.6
+
+  "@tutti-os/rrt-client@0.0.6":
+    dependencies:
+      "@tutti-os/rrt-app": 0.0.6
+      "@tutti-os/rrt-shared": 0.0.6
+
+  "@tutti-os/rrt-core@0.0.6":
+    dependencies:
+      "@tutti-os/rrt-bridge": 0.0.6
+      "@tutti-os/rrt-shared": 0.0.6
+
+  "@tutti-os/rrt-plugin-shared@0.0.6":
+    dependencies:
+      "@tutti-os/rrt-shared": 0.0.6
+
+  "@tutti-os/rrt-plugin-vite@0.0.6(vite@6.4.2(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.3)(yaml@2.9.0))":
+    dependencies:
+      "@tutti-os/rrt-client": 0.0.6
+      "@tutti-os/rrt-core": 0.0.6
+      "@tutti-os/rrt-plugin-shared": 0.0.6
+      "@tutti-os/rrt-shared": 0.0.6
+      vite: 6.4.2(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.3)(yaml@2.9.0)
+
+  "@tutti-os/rrt-shared@0.0.6": {}
+
   "@types/aria-query@5.0.4": {}
 
   "@types/babel__core@7.20.5":
@@ -11232,11 +11312,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  "@welldone-software/why-did-you-render@10.0.1(react@19.2.6)":
-    dependencies:
-      lodash: 4.18.1
-      react: 19.2.6
-
   "@vitest/expect@4.1.7":
     dependencies:
       "@standard-schema/spec": 1.1.0
@@ -11277,6 +11352,11 @@ snapshots:
       "@vitest/pretty-format": 4.1.7
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
+
+  "@welldone-software/why-did-you-render@10.0.1(react@19.2.6)":
+    dependencies:
+      lodash: 4.18.1
+      react: 19.2.6
 
   "@xmldom/xmldom@0.8.13": {}
 

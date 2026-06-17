@@ -1,4 +1,8 @@
-import type { MenuItemConstructorOptions, MessageBoxOptions } from "electron";
+import type {
+  BaseWindow,
+  MenuItemConstructorOptions,
+  MessageBoxOptions
+} from "electron";
 import type { AppUpdateState } from "../shared/contracts/ipc.ts";
 import { createTranslator, type DesktopLocale } from "../shared/i18n/index.ts";
 import type { DesktopLogger } from "./logging.ts";
@@ -9,6 +13,7 @@ export interface ApplicationMenuOptions {
   exportDeveloperLogs?: () => unknown;
   getLocale?: () => DesktopLocale;
   logger?: DesktopLogger;
+  openPerfMonitorDevTools?: (ownerWindow?: BaseWindow | null) => unknown;
   platform?: NodeJS.Platform;
   showMessageBox?: (options: MessageBoxOptions) => Promise<unknown>;
 }
@@ -96,6 +101,7 @@ export function createApplicationMenuTemplate({
   exportDeveloperLogs,
   getLocale = () => "en",
   logger,
+  openPerfMonitorDevTools,
   platform = process.platform,
   showMessageBox
 }: ApplicationMenuOptions = {}): MenuItemConstructorOptions[] {
@@ -161,6 +167,16 @@ export function createApplicationMenuTemplate({
         ...(allowDeveloperTools
           ? ([
               { role: "toggleDevTools" },
+              ...(openPerfMonitorDevTools
+                ? ([
+                    {
+                      label: translator.t("desktop.menu.openPerfMonitor"),
+                      click: (_item, browserWindow) => {
+                        void openPerfMonitorDevTools(browserWindow);
+                      }
+                    }
+                  ] satisfies MenuItemConstructorOptions[])
+                : []),
               { type: "separator" }
             ] satisfies MenuItemConstructorOptions[])
           : []),

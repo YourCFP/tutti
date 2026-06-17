@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { PerfMonitorVitePlugin } from "@tutti-os/rrt-plugin-vite";
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import type { PluginOption } from "vite";
 
@@ -68,6 +69,14 @@ const devServer = {
     host: "127.0.0.1"
   }
 };
+
+function envFlagEnabled(value: string | undefined): boolean {
+  return /^(1|true|yes|on)$/iu.test(value?.trim() ?? "");
+}
+
+const perfMonitorEnabled = envFlagEnabled(
+  process.env.TUTTI_ENABLE_PERF_MONITOR
+);
 
 const webkitBackdropFilterPattern =
   /^([ \t]*)-webkit-backdrop-filter:\s*([^;]+);(?!\n[ \t]*backdrop-filter:)/gm;
@@ -176,7 +185,17 @@ export default defineConfig({
         }
       }),
       tailwindcss(),
-      preserveUnprefixedBackdropFilterPlugin()
+      preserveUnprefixedBackdropFilterPlugin(),
+      ...(perfMonitorEnabled
+        ? [
+            PerfMonitorVitePlugin({
+              separate: true,
+              diffMode: "lite",
+              updateTrace: true,
+              commitTrace: true
+            })
+          ]
+        : [])
     ],
     resolve: {
       alias: aliases

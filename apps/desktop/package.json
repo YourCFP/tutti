@@ -114,6 +114,7 @@
     "@vitejs/plugin-react": "^4.5.2",
     "@welldone-software/why-did-you-render": "10.0.1",
     "@tutti-os/infra": "0.1.0",
+    "@tutti-os/rrt-plugin-vite": "0.0.6",
     "babel-plugin-react-compiler": "^1.0.0",
     "dmg-builder": "^26.8.1",
     "electron": "^35.7.5",

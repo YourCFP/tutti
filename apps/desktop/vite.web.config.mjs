@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { PerfMonitorVitePlugin } from "@tutti-os/rrt-plugin-vite";
 import { defineConfig } from "vite";
 
 const rendererRoot = resolve("src/renderer");
@@ -40,6 +41,14 @@ const devServer = {
   }
 };
 
+function envFlagEnabled(value) {
+  return /^(1|true|yes|on)$/iu.test(value?.trim() ?? "");
+}
+
+const perfMonitorEnabled = envFlagEnabled(
+  process.env.TUTTI_ENABLE_PERF_MONITOR
+);
+
 export default defineConfig({
   root: rendererRoot,
   server: devServer,
@@ -57,7 +66,17 @@ export default defineConfig({
         ]
       }
     }),
-    tailwindcss()
+    tailwindcss(),
+    ...(perfMonitorEnabled
+      ? [
+          PerfMonitorVitePlugin({
+            separate: true,
+            diffMode: "lite",
+            updateTrace: true,
+            commitTrace: true
+          })
+        ]
+      : [])
   ],
   resolve: {
     alias: aliases

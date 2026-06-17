@@ -87,6 +87,12 @@ Use the owner documents linked below for detailed behavior. This file exists to 
 | `TUTTI_ACP_TOOL_DEBUG`       | This document                                   | Enables verbose migrated ACP tool-call normalization diagnostics.                       |
 | `TUTTI_WORKSPACE_ID`         | This document                                   | Supplies a workspace id to migrated agent context readers when no input id is provided. |
 
+## Desktop Renderer Diagnostics
+
+| Variable                    | Owner document | Purpose                                                                                       |
+| --------------------------- | -------------- | --------------------------------------------------------------------------------------------- |
+| `TUTTI_ENABLE_PERF_MONITOR` | This document  | Enables the development-only ReactRenderTracker injection in the desktop renderer dev server. |
+
 ## Browser MCP
 
 | Variable                       | Owner document                          | Purpose                                                                                                            |

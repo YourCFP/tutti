@@ -112,3 +112,50 @@ test("application menu localizes check for updates", () => {
   assert.ok(Array.isArray(appMenu.submenu));
   assert.ok(appMenu.submenu.some((item) => item.label === "检查更新..."));
 });
+
+test("application menu exposes Perf Monitor DevTools when configured", () => {
+  const ownerWindow = {};
+  let receivedOwnerWindow: unknown;
+  const menu = createApplicationMenuTemplate({
+    allowDeveloperTools: true,
+    openPerfMonitorDevTools(browserWindow) {
+      receivedOwnerWindow = browserWindow;
+    },
+    platform: "darwin"
+  });
+
+  const viewMenu = menu.find((item) => item.label === "View");
+  assert.ok(viewMenu);
+  assert.ok(Array.isArray(viewMenu.submenu));
+  const perfMonitorItem = viewMenu.submenu.find(
+    (item) => item.label === "Open Perf Monitor DevTools"
+  );
+  assert.ok(perfMonitorItem);
+
+  perfMonitorItem.click?.(
+    {} as Parameters<NonNullable<typeof perfMonitorItem.click>>[0],
+    ownerWindow as Parameters<NonNullable<typeof perfMonitorItem.click>>[1],
+    undefined as unknown as Parameters<
+      NonNullable<typeof perfMonitorItem.click>
+    >[2]
+  );
+
+  assert.equal(receivedOwnerWindow, ownerWindow);
+});
+
+test("application menu hides Perf Monitor DevTools without a handler", () => {
+  const menu = createApplicationMenuTemplate({
+    allowDeveloperTools: true,
+    platform: "darwin"
+  });
+
+  const viewMenu = menu.find((item) => item.label === "View");
+  assert.ok(viewMenu);
+  assert.ok(Array.isArray(viewMenu.submenu));
+  assert.equal(
+    viewMenu.submenu.some(
+      (item) => item.label === "Open Perf Monitor DevTools"
+    ),
+    false
+  );
+});

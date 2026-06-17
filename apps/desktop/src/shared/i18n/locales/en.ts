@@ -90,6 +90,7 @@ export const en = {
       exportServiceLogs: "Export Service Logs...",
       file: "File",
       help: "Help",
+      openPerfMonitor: "Open Perf Monitor DevTools",
       upToDateDetail: "Tutti {{version}} is currently the latest version.",
       upToDateMessage: "You're up to date!",
       view: "View",
