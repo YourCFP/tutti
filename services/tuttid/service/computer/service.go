@@ -52,7 +52,7 @@ func (s *Service) CallTool(ctx context.Context, workspaceID, cwd, tool string, a
 		s.Shutdown(workspaceID)
 		return ToolResult{}, err
 	}
-	result, err := session.callTool(ctx, tool, args)
+	result, err := session.adaptToolCall(ctx, tool, args)
 	if err != nil && session.client != nil && session.client.isClosed() {
 		s.Shutdown(workspaceID)
 	}

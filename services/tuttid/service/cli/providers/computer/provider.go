@@ -64,16 +64,3 @@ func (p Provider) call(ctx context.Context, request cliservice.InvokeRequest, to
 	}
 	return cliservice.CommandOutput{Kind: cliservice.OutputModePlain, Text: result.Text}, nil
 }
-
-// callWithResult resolves the workspace and invokes the tool, returning the
-// full ToolResult for commands that need image data (e.g. screenshot).
-func (p Provider) callWithResult(ctx context.Context, request cliservice.InvokeRequest, tool string, args map[string]any) (computersvc.ToolResult, error) {
-	if p.computer == nil {
-		return computersvc.ToolResult{}, errComputerUnavailable
-	}
-	workspaceID, err := p.workspaceID(ctx, request)
-	if err != nil {
-		return computersvc.ToolResult{}, err
-	}
-	return p.computer.CallTool(ctx, workspaceID, "", tool, args)
-}

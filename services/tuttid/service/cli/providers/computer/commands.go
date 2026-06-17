@@ -2,9 +2,6 @@ package computer
 
 import (
 	"context"
-	"encoding/base64"
-	"fmt"
-	"os"
 
 	cliservice "github.com/tutti-os/tutti/services/tuttid/service/cli"
 )
@@ -23,34 +20,7 @@ func (p Provider) newScreenshotCommand() cliservice.Command {
 			Output:      textOutput(),
 		},
 		Handler: func(ctx context.Context, request cliservice.InvokeRequest) (cliservice.CommandOutput, error) {
-			file, err := os.CreateTemp("", "tutti-computer-*.png")
-			if err != nil {
-				return cliservice.CommandOutput{}, err
-			}
-			path := file.Name()
-			_ = file.Close()
-			keepFile := false
-			defer func() {
-				if !keepFile {
-					os.Remove(path)
-				}
-			}()
-			result, err := p.callWithResult(ctx, request, "screenshot", map[string]any{})
-			if err != nil {
-				return cliservice.CommandOutput{}, err
-			}
-			if len(result.Images) == 0 {
-				return cliservice.CommandOutput{}, fmt.Errorf("cua-driver returned no screenshot image")
-			}
-			data, err := base64.StdEncoding.DecodeString(result.Images[0].Data)
-			if err != nil {
-				return cliservice.CommandOutput{}, fmt.Errorf("decode screenshot: %w", err)
-			}
-			if err := os.WriteFile(path, data, 0o644); err != nil {
-				return cliservice.CommandOutput{}, fmt.Errorf("write screenshot: %w", err)
-			}
-			keepFile = true
-			return cliservice.CommandOutput{Kind: cliservice.OutputModePlain, Text: fmt.Sprintf("Screenshot saved to %s", path)}, nil
+			return p.call(ctx, request, "screenshot", map[string]any{})
 		},
 	}
 }
