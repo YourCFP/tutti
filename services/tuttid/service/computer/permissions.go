@@ -1,6 +1,7 @@
 package computer
 
 import (
+	"context"
 	"errors"
 	"os/exec"
 	"runtime"
@@ -18,7 +19,7 @@ func validateComputerReady() error {
 	if runtime.GOOS != "darwin" {
 		return errors.New("computer use requires macOS")
 	}
-	command := resolveComputerMCPCommand(nil)
+	command := resolveComputerMCPCommand(context.TODO())
 	if len(command) == 0 {
 		return ErrNotInstalled
 	}

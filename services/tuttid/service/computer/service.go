@@ -67,14 +67,10 @@ func (s *Service) getOrCreate(workspaceID string) *computerSession {
 	}
 	session := &computerSession{
 		transport: s.transport,
-		command:   s.resolveCommand,
+		command:   resolveComputerMCPCommand,
 	}
 	s.sessions[workspaceID] = session
 	return session
-}
-
-func (s *Service) resolveCommand(ctx context.Context) []string {
-	return resolveComputerMCPCommand(ctx)
 }
 
 func (s *Service) resetIdle(workspaceID string, session *computerSession) {
