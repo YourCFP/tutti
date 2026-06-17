@@ -132,7 +132,8 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 			provider,
 			value(input.ReasoningEffort),
 		),
-		BrowserUse: input.BrowserUse,
+		BrowserUse:  input.BrowserUse,
+		ComputerUse: input.ComputerUse,
 		Speed: normalizeSpeedForProvider(
 			provider,
 			value(input.Speed),
@@ -207,6 +208,7 @@ func (s *Service) prepareRuntime(ctx context.Context, workspaceID string, cwd st
 		PermissionModeID: value(input.PermissionModeID),
 		PlanMode:         clampComposerPlanModeForProvider(provider, valueBool(input.PlanMode)),
 		BrowserUse:       clampComposerBrowserUseForProvider(provider, input.BrowserUse),
+		ComputerUse:      clampComposerComputerUseForProvider(provider, input.ComputerUse),
 		Model:            clampComposerModelForProvider(provider, value(input.Model)),
 		ReasoningEffort: normalizeReasoningEffortForProvider(
 			provider,

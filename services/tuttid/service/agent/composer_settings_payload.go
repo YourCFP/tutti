@@ -26,6 +26,9 @@ func composerSettingsToPayload(settings ComposerSettings) map[string]any {
 	if settings.BrowserUse != nil {
 		payload["browserUse"] = *settings.BrowserUse
 	}
+	if settings.ComputerUse != nil {
+		payload["computerUse"] = *settings.ComputerUse
+	}
 	if speed := strings.TrimSpace(settings.Speed); speed != "" {
 		payload["speed"] = speed
 	}
@@ -42,6 +45,7 @@ func composerSettingsFromPayload(payload map[string]any) ComposerSettings {
 		PlanMode:         payloadBool(payload, "planMode"),
 		ReasoningEffort:  payloadString(payload, "reasoningEffort"),
 		BrowserUse:       payloadBoolPointer(payload, "browserUse"),
+		ComputerUse:      payloadBoolPointer(payload, "computerUse"),
 		Speed:            payloadString(payload, "speed"),
 	}
 }
@@ -52,7 +56,8 @@ func composerSettingsIsEmpty(settings ComposerSettings) bool {
 		strings.TrimSpace(settings.ReasoningEffort) == "" &&
 		strings.TrimSpace(settings.Speed) == "" &&
 		!settings.PlanMode &&
-		settings.BrowserUse == nil
+		settings.BrowserUse == nil &&
+		settings.ComputerUse == nil
 }
 
 func payloadBoolPointer(payload map[string]any, key string) *bool {
@@ -88,6 +93,10 @@ func createSessionInputFromPersisted(session PersistedSession) CreateSessionInpu
 	if settings.BrowserUse != nil {
 		value := *settings.BrowserUse
 		input.BrowserUse = &value
+	}
+	if settings.ComputerUse != nil {
+		value := *settings.ComputerUse
+		input.ComputerUse = &value
 	}
 	if reasoningEffort := strings.TrimSpace(settings.ReasoningEffort); reasoningEffort != "" {
 		normalizedReasoningEffort := normalizeReasoningEffortForProvider(

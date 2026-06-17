@@ -53,7 +53,10 @@ type ComposerSettings struct {
 	PlanMode         bool
 	// BrowserUse is tri-state: nil means "use the default" (on), so the
 	// composer can distinguish an explicit opt-out from an unset value.
-	BrowserUse      *bool
+	BrowserUse *bool
+	// ComputerUse is tri-state: nil means "use the default" (on), so the
+	// composer can distinguish an explicit opt-out from an unset value.
+	ComputerUse     *bool
 	ReasoningEffort string
 	Speed           string
 }
@@ -159,6 +162,12 @@ func composerProviderCapabilities(provider string) []string {
 	if agentsidecarservice.BrowserUseDefaultEnabled() {
 		capabilities = append(capabilities, "browserUse")
 	}
+	// Computer use is delivered as a default MCP server to every provider, so the
+	// composer advertises it up front when enabled. Live sessions re-report it
+	// from session env (runtime adapters), which takes precedence in the GUI.
+	if agentsidecarservice.ComputerUseDefaultEnabled() {
+		capabilities = append(capabilities, "computerUse")
+	}
 	return capabilities
 }
 
@@ -189,6 +198,10 @@ func resolveComposerEffectiveSettings(
 	if requested.BrowserUse != nil {
 		value := *requested.BrowserUse
 		effective.BrowserUse = &value
+	}
+	if requested.ComputerUse != nil {
+		value := *requested.ComputerUse
+		effective.ComputerUse = &value
 	}
 	if requested.Speed != "" {
 		effective.Speed = requested.Speed
@@ -342,6 +355,21 @@ func clampComposerBrowserUseForProvider(provider string, browserUse *bool) bool 
 // the daemon clamps browser use for providers that never advertise it.
 func composerProviderSupportsBrowserUse(provider string) bool {
 	return composerProviderSupportsCapability(provider, "browserUse")
+}
+
+// clampComposerComputerUseForProvider resolves the tri-state computer-use toggle
+// into a concrete bool, clamped for the provider.
+func clampComposerComputerUseForProvider(provider string, computerUse *bool) bool {
+	if !composerProviderSupportsComputerUse(agentprovider.Normalize(provider)) {
+		return false
+	}
+	return computerUse == nil || *computerUse
+}
+
+// composerProviderSupportsComputerUse mirrors the static capability defaults so
+// the service layer can gate computer use for providers that cannot use it.
+func composerProviderSupportsComputerUse(provider string) bool {
+	return composerProviderSupportsCapability(provider, "computerUse")
 }
 
 func composerProviderSupportsCapability(provider string, capability string) bool {
