@@ -162,6 +162,7 @@ func defaultRuntimeEnv(input PrepareInput, stateDir string) []string {
 	// Browser use is delivered as a default MCP server to every agent provider,
 	// so it is advertised here in the shared runtime env rather than per-provider.
 	env = append(env, browserUseEnv(input.BrowserUse)...)
+	env = append(env, computerUseEnv(input.ComputerUse)...)
 	return env
 }
 

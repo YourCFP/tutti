@@ -12,6 +12,7 @@ const tuttiSkillName = "tutti-cli"
 const issueManagerSkillName = "issue-manager"
 const workspaceAppSkillName = "workspace-app"
 const browserUseSkillName = "browser-use"
+const computerUseSkillName = "computer-use"
 
 //go:embed skill_templates/*.md policy_templates/*.md
 var providerSkillTemplates embed.FS
@@ -58,6 +59,13 @@ func browserUseSkill(_ PrepareInput) string {
 	)
 }
 
+func computerUseSkill(_ PrepareInput) string {
+	return renderProviderSkillTemplate(
+		"skill_templates/computer-use.md",
+		map[string]string{},
+	)
+}
+
 func renderProviderSkillTemplate(path string, replacements map[string]string) string {
 	content, err := providerSkillTemplates.ReadFile(path)
 	if err != nil {
@@ -95,6 +103,14 @@ func providerSkills(input PrepareInput) []providerSkillSpec {
 		skills = append(skills, providerSkillSpec{
 			baseName: browserUseSkillName,
 			files:    map[string]string{"SKILL.md": browserUseSkill(input)},
+		})
+	}
+	// Computer use is a daemon-owned `tutti computer` CLI; inject its skill only
+	// when enabled for this session (capability gate).
+	if input.ComputerUse && ComputerUseDefaultEnabled() {
+		skills = append(skills, providerSkillSpec{
+			baseName: computerUseSkillName,
+			files:    map[string]string{"SKILL.md": computerUseSkill(input)},
 		})
 	}
 	for _, extra := range input.ExtraSkills {

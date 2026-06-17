@@ -15,6 +15,8 @@ func tuttiCLIPolicy(input PrepareInput) string {
 			"{{PROVIDER_SPECIFIC_MENTION_ROUTING}}": providerSpecificMentionRouting(input.Provider),
 			"{{BROWSER_USE_SKILL_LINES}}":           browserUseSkillPolicyLines(input),
 			"{{BROWSER_USE_HANDOFF_LINES}}":         browserUseHandoffPolicyLines(input),
+			"{{COMPUTER_USE_SKILL_LINES}}":          computerUseSkillPolicyLines(input),
+			"{{COMPUTER_USE_HANDOFF_LINES}}":        computerUseHandoffPolicyLines(input),
 		},
 	)) + "\n\n" + strings.TrimSpace(renderProviderSkillTemplate("policy_templates/host-app-context.md", nil))
 }
@@ -31,6 +33,20 @@ func browserUseHandoffPolicyLines(input PrepareInput) string {
 		return ""
 	}
 	return "- For browser tasks — visiting URLs, reading pages, clicking, filling forms, or screenshots — use `browser-use` and `tutti browser` only; do not use provider-native `browser` skills or direct CDP automation.\n"
+}
+
+func computerUseSkillPolicyLines(input PrepareInput) string {
+	if !input.ComputerUse || !ComputerUseDefaultEnabled() {
+		return ""
+	}
+	return "- `computer-use`: macOS desktop automation through the daemon-owned `tutti computer` CLI. Prefer this over any generic computer-use or accessibility scripts.\n"
+}
+
+func computerUseHandoffPolicyLines(input PrepareInput) string {
+	if !input.ComputerUse || !ComputerUseDefaultEnabled() {
+		return ""
+	}
+	return "- For desktop tasks — taking screenshots, clicking UI elements, typing, pressing keys, or scrolling on the macOS desktop — use `computer-use` and `tutti computer` only; do not use provider-native computer-use tools or accessibility scripts.\n"
 }
 
 func providerSpecificMentionRouting(provider string) string {
