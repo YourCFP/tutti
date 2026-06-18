@@ -3,6 +3,7 @@ import {
   addWorkspaceIssueTaskContextRefs,
   cancelWorkspaceAgentSession,
   checkUserProjectPath,
+  clearWorkspaceAgentSessions,
   completeWorkspaceIssueRun,
   completeWorkspaceIssueTaskRun,
   createWorkspaceAgentSession,
@@ -337,6 +338,16 @@ export function createTuttidClient(
       return unwrapData(
         response,
         "Delete workspace agent session request failed."
+      );
+    },
+    async clearWorkspaceAgentSessions(workspaceID) {
+      const response = await clearWorkspaceAgentSessions({
+        client,
+        path: { workspaceID }
+      });
+      return unwrapData(
+        response,
+        "Clear workspace agent sessions request failed."
       );
     },
     ...createAgentProvidersClient(client),

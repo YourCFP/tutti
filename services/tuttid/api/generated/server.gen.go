@@ -82,6 +82,9 @@ type ServerInterface interface {
 	// Update one workspace
 	// (PATCH /v1/workspaces/{workspaceID})
 	UpdateWorkspace(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID)
+	// Hard-delete all agent sessions for one workspace
+	// (DELETE /v1/workspaces/{workspaceID}/agent-sessions)
+	ClearWorkspaceAgentSessions(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID)
 	// List agent sessions for one workspace
 	// (GET /v1/workspaces/{workspaceID}/agent-sessions)
 	ListWorkspaceAgentSessions(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID, params ListWorkspaceAgentSessionsParams)
@@ -911,6 +914,38 @@ func (siw *ServerInterfaceWrapper) UpdateWorkspace(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateWorkspace(w, r, workspaceID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ClearWorkspaceAgentSessions operation middleware
+func (siw *ServerInterfaceWrapper) ClearWorkspaceAgentSessions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspaceID" -------------
+	var workspaceID WorkspaceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspaceID", r.PathValue("workspaceID"), &workspaceID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspaceID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClearWorkspaceAgentSessions(w, r, workspaceID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5111,6 +5146,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/workspaces/{workspaceID}", wrapper.DeleteWorkspace)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceID}", wrapper.GetWorkspace)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/workspaces/{workspaceID}", wrapper.UpdateWorkspace)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions", wrapper.ClearWorkspaceAgentSessions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions", wrapper.ListWorkspaceAgentSessions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions", wrapper.CreateWorkspaceAgentSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspaceID}/agent-sessions/external-imports/import", wrapper.ImportWorkspaceExternalAgentSessions)
@@ -7170,6 +7206,122 @@ type UpdateWorkspace503JSONResponse struct {
 }
 
 func (response UpdateWorkspace503JSONResponse) VisitUpdateWorkspaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClearWorkspaceAgentSessionsRequestObject struct {
+	WorkspaceID WorkspaceID `json:"workspaceID"`
+}
+
+type ClearWorkspaceAgentSessionsResponseObject interface {
+	VisitClearWorkspaceAgentSessionsResponse(w http.ResponseWriter) error
+}
+
+type ClearWorkspaceAgentSessions200JSONResponse ClearWorkspaceAgentSessionsResponse
+
+func (response ClearWorkspaceAgentSessions200JSONResponse) VisitClearWorkspaceAgentSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClearWorkspaceAgentSessions400JSONResponse struct {
+	InvalidRequestErrorJSONResponse
+}
+
+func (response ClearWorkspaceAgentSessions400JSONResponse) VisitClearWorkspaceAgentSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClearWorkspaceAgentSessions401JSONResponse struct{ UnauthorizedErrorJSONResponse }
+
+func (response ClearWorkspaceAgentSessions401JSONResponse) VisitClearWorkspaceAgentSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClearWorkspaceAgentSessions404JSONResponse struct {
+	WorkspaceNotFoundErrorJSONResponse
+}
+
+func (response ClearWorkspaceAgentSessions404JSONResponse) VisitClearWorkspaceAgentSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClearWorkspaceAgentSessions405JSONResponse struct {
+	MethodNotAllowedErrorJSONResponse
+}
+
+func (response ClearWorkspaceAgentSessions405JSONResponse) VisitClearWorkspaceAgentSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClearWorkspaceAgentSessions502JSONResponse struct {
+	WorkspaceOperationErrorJSONResponse
+}
+
+func (response ClearWorkspaceAgentSessions502JSONResponse) VisitClearWorkspaceAgentSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClearWorkspaceAgentSessions503JSONResponse struct {
+	ServiceUnavailableErrorJSONResponse
+}
+
+func (response ClearWorkspaceAgentSessions503JSONResponse) VisitClearWorkspaceAgentSessionsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -18166,6 +18318,9 @@ type StrictServerInterface interface {
 	// Update one workspace
 	// (PATCH /v1/workspaces/{workspaceID})
 	UpdateWorkspace(ctx context.Context, request UpdateWorkspaceRequestObject) (UpdateWorkspaceResponseObject, error)
+	// Hard-delete all agent sessions for one workspace
+	// (DELETE /v1/workspaces/{workspaceID}/agent-sessions)
+	ClearWorkspaceAgentSessions(ctx context.Context, request ClearWorkspaceAgentSessionsRequestObject) (ClearWorkspaceAgentSessionsResponseObject, error)
 	// List agent sessions for one workspace
 	// (GET /v1/workspaces/{workspaceID}/agent-sessions)
 	ListWorkspaceAgentSessions(ctx context.Context, request ListWorkspaceAgentSessionsRequestObject) (ListWorkspaceAgentSessionsResponseObject, error)
@@ -19073,6 +19228,32 @@ func (sh *strictHandler) UpdateWorkspace(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateWorkspaceResponseObject); ok {
 		if err := validResponse.VisitUpdateWorkspaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ClearWorkspaceAgentSessions operation middleware
+func (sh *strictHandler) ClearWorkspaceAgentSessions(w http.ResponseWriter, r *http.Request, workspaceID WorkspaceID) {
+	var request ClearWorkspaceAgentSessionsRequestObject
+
+	request.WorkspaceID = workspaceID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ClearWorkspaceAgentSessions(ctx, request.(ClearWorkspaceAgentSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ClearWorkspaceAgentSessions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ClearWorkspaceAgentSessionsResponseObject); ok {
+		if err := validResponse.VisitClearWorkspaceAgentSessionsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

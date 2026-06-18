@@ -344,6 +344,17 @@ export function WorkspaceSettingsPanel({
                 onAnalyticsDebugEnabledChange={(enabled) => {
                   analyticsDebugPreferenceService.setEnabled(enabled);
                 }}
+                onClearConversationHistory={() => {
+                  if (
+                    window.confirm(
+                      t(
+                        "workspace.settings.developer.clearConversationHistoryConfirm"
+                      )
+                    )
+                  ) {
+                    void settingsService.clearConversationHistory();
+                  }
+                }}
                 onClearLogs={() => {
                   void settingsService.clearDeveloperLogs();
                 }}
@@ -1295,6 +1306,7 @@ function WorkspaceDeveloperSettingsSection({
   developerLogs,
   developerPanelVisible,
   onAnalyticsDebugEnabledChange,
+  onClearConversationHistory,
   onClearLogs,
   onDeveloperPanelVisibleChange,
   onExportLogs
@@ -1304,6 +1316,7 @@ function WorkspaceDeveloperSettingsSection({
   developerLogs: WorkspaceSettingsDeveloperLogsSnapshotState;
   developerPanelVisible: boolean;
   onAnalyticsDebugEnabledChange: (enabled: boolean) => void;
+  onClearConversationHistory: () => void;
   onClearLogs: () => void;
   onDeveloperPanelVisibleChange: (visible: boolean) => void;
   onExportLogs: () => void;
@@ -1379,6 +1392,17 @@ function WorkspaceDeveloperSettingsSection({
             {developerLogs.clearing
               ? t("workspace.settings.developer.clearingLogs")
               : t("workspace.settings.developer.clearLogs")}
+          </Button>
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={onClearConversationHistory}
+            disabled={developerLogs.clearingConversationHistory}
+          >
+            <DeleteIcon className="size-3.5" />
+            {developerLogs.clearingConversationHistory
+              ? t("workspace.settings.developer.clearingConversationHistory")
+              : t("workspace.settings.developer.clearConversationHistory")}
           </Button>
         </div>
       </SettingsRow>
