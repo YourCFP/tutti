@@ -409,7 +409,7 @@ export const zhCN = {
         },
         "claude-code": {
           default: {
-            label: "默认",
+            label: "默认权限",
             description: "默认较保守；需要执行修改或高风险操作时会先询问你。"
           },
           acceptEdits: {
