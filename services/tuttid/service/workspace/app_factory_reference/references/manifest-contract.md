@@ -179,7 +179,7 @@ Request:
 - `limit` is clamped by Tutti to `1..50`.
 - `cursor` is optional and opaque to Tutti.
 - v1 only sends `kinds: ["file"]`.
-- `filters` is an optional array of **global file-type category ids** (`image`, `document`, `spreadsheet`, `code`, `media`, `archive`, `other`). When present, return only file references whose name/type falls into one of the listed categories (OR semantics). Map each id to its file extensions; `other` = files with no recognized extension. Ignore unknown ids. Filtering and search are a single capability — `query` and `filters` combine, and either alone is a valid query.
+- `filters` is an optional array of **global file-type category ids** (`image`, `video`, `document`, `webpage`, `other`). When present, return only file references whose name/type falls into one of the listed categories (OR semantics). Map each id to its file extensions: `image` = png/jpg/jpeg/gif/webp/svg/bmp/ico/heic; `video` = mp4/mov/avi/mkv/webm; `document` = pdf/doc/docx/txt/md/markdown/rtf/odt/pages/key/ppt/pptx **plus spreadsheets** xls/xlsx/csv/tsv/numbers; `webpage` = html/htm/mhtml/url/webloc; `other` = anything else (audio, code, archives, no-extension files). Ignore unknown ids. Filtering and search are a single capability — `query` and `filters` combine, and either alone is a valid query.
 - `timeRange` is optional with the same inclusive `mtimeMs` semantics as the list protocol.
 
 Response:

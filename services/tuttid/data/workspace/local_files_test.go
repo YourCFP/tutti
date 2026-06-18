@@ -710,22 +710,22 @@ func TestLocalFilesAdapterSearchTypeFilterExcludesDirectoriesButKeepsMatchingFil
 	t.Parallel()
 
 	rootDir := t.TempDir()
-	// 一个文件名/路径含 "22" 的目录:无筛选时按名命中,但开启「spreadsheet」筛选后不应作为结果。
-	spreadsheetInFolder := filepath.Join(rootDir, "reports22", "q3.csv")
-	if err := os.MkdirAll(filepath.Dir(spreadsheetInFolder), 0o755); err != nil {
+	// 一个文件名/路径含 "22" 的目录:无筛选时按名命中,但开启「document」筛选后不应作为结果。
+	docInFolder := filepath.Join(rootDir, "reports22", "q3.csv")
+	if err := os.MkdirAll(filepath.Dir(docInFolder), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(spreadsheetInFolder, []byte("a,b\n"), 0o644); err != nil {
+	if err := os.WriteFile(docInFolder, []byte("a,b\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// 含 "22" 的表格文件:类型与关键词都命中,应保留。
-	spreadsheetMatch := filepath.Join(rootDir, "data22.csv")
-	if err := os.WriteFile(spreadsheetMatch, []byte("a,b\n"), 0o644); err != nil {
+	// 含 "22" 的文档文件(csv 归入 document):类型与关键词都命中,应保留。
+	docMatch := filepath.Join(rootDir, "data22.csv")
+	if err := os.WriteFile(docMatch, []byte("a,b\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// 含 "22" 但非表格的文件:关键词命中、类型不命中,应被筛选掉。
-	textMatch := filepath.Join(rootDir, "notes22.txt")
-	if err := os.WriteFile(textMatch, []byte("hi"), 0o644); err != nil {
+	// 含 "22" 但非文档的文件(图片):关键词命中、类型不命中,应被筛选掉。
+	imageMatch := filepath.Join(rootDir, "shot22.png")
+	if err := os.WriteFile(imageMatch, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -733,7 +733,7 @@ func TestLocalFilesAdapterSearchTypeFilterExcludesDirectoriesButKeepsMatchingFil
 	result, err := adapter.Search(context.Background(), localFilesRoot(rootDir), workspacefiles.SearchInput{
 		Query:   "22",
 		Limit:   20,
-		Filters: []string{"spreadsheet"},
+		Filters: []string{"document"},
 	})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
@@ -746,15 +746,15 @@ func TestLocalFilesAdapterSearchTypeFilterExcludesDirectoriesButKeepsMatchingFil
 			t.Fatalf("entry = %#v, directories must be excluded when a type filter is active", entry)
 		}
 	}
-	// 交集:关键词 "22" ∩ 类型 spreadsheet,且包含被筛掉目录下的表格文件。
+	// 交集:关键词 "22" ∩ 类型 document,且包含被筛掉目录下的文档文件。
 	wantPaths := []string{"/workspace/data22.csv", "/workspace/reports22/q3.csv"}
 	for _, want := range wantPaths {
 		if !gotPaths[want] {
 			t.Fatalf("entries = %#v, want to include %s", result.Entries, want)
 		}
 	}
-	if gotPaths["/workspace/notes22.txt"] {
-		t.Fatalf("entries = %#v, must exclude non-spreadsheet notes22.txt", result.Entries)
+	if gotPaths["/workspace/shot22.png"] {
+		t.Fatalf("entries = %#v, must exclude non-document shot22.png", result.Entries)
 	}
 	if len(result.Entries) != len(wantPaths) {
 		t.Fatalf("entries = %#v, want exactly %d results", result.Entries, len(wantPaths))

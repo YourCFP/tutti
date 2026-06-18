@@ -2069,7 +2069,7 @@ type IssueManagerReferenceSearchHit struct {
 
 // IssueManagerReferenceSearchRequest defines model for IssueManagerReferenceSearchRequest.
 type IssueManagerReferenceSearchRequest struct {
-	// Filters 已选「文件类型筛选分类」id(全局统一口径:image/document/spreadsheet/ code/media/archive/other)。筛选与搜索是同一能力:query 可空、filters 非空时即按类型查。空/缺省 = 不按类型过滤。
+	// Filters 已选「文件类型筛选分类」id(全局统一口径:image/video/document/ webpage/other)。筛选与搜索是同一能力:query 可空、filters 非空时即按类型查。空/缺省 = 不按类型过滤。
 	Filters *[]string `json:"filters,omitempty"`
 
 	// IssueId Optional. Limit the search to output files produced by this issue.
@@ -3112,7 +3112,7 @@ type SearchWorkspaceFilesParams struct {
 	Limit        *WorkspaceFileSearchLimit  `form:"limit,omitempty" json:"limit,omitempty"`
 	IncludeKinds *WorkspaceFileSearchKinds  `form:"includeKinds,omitempty" json:"includeKinds,omitempty"`
 
-	// Filters 已选「文件类型筛选分类」id(全局统一口径:image/document/spreadsheet/ code/media/archive/other)。筛选与搜索是同一能力:query 可空、filters 非空时即按类型 list-all。空/缺省 = 不按类型过滤。
+	// Filters 已选「文件类型筛选分类」id(全局统一口径:image/video/document/ webpage/other)。筛选与搜索是同一能力:query 可空、filters 非空时即按类型 list-all。空/缺省 = 不按类型过滤。
 	Filters       *WorkspaceFileSearchFilters `form:"filters,omitempty" json:"filters,omitempty"`
 	IncludeHidden *WorkspaceFileIncludeHidden `form:"includeHidden,omitempty" json:"includeHidden,omitempty"`
 }

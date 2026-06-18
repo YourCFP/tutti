@@ -2,18 +2,22 @@
  * 全局统一「文件类型筛选分类」—— 筛选与搜索在底层是同一能力:search() 接收的
  * filters 即此处的分类 id 数组,各源 daemon 按扩展名/媒体类型真正过滤。
  *
- * 这是分类口径的「单一 TS 来源」。Go 侧有一份逐字镜像:
- *   packages/workspace/referencefilter/categories.go
- * 两处扩展名清单必须保持一致 —— 改一处务必改另一处。
+ * 这是分类口径的「单一 TS 来源」。其余各处均为逐字镜像,改一处务必同步全部:
+ *   - Go 宿主侧:services/tuttid/data/workspace/reference_filter_categories.go
+ *   - group-chat 应用:apps/server/src/domains/reference-filter-categories.ts
+ *   - vibe-design 应用:server/src/routes/references-routes.ts
+ *   - ai-media-canvas 应用:apps/server/src/http/references.ts
+ *   - app_factory 技能契约:app_factory_reference/references/manifest-contract.md
+ *
+ * 分类口径:image(图片)/ video(视频)/ document(文档,含表格)/ webpage(网页)/ other(其他)。
+ * 音频、代码、压缩包等未单列扩展名,统一归入 "other" 兜底。
  */
 
 export type ReferenceFilterCategoryId =
   | "image"
+  | "video"
   | "document"
-  | "spreadsheet"
-  | "code"
-  | "media"
-  | "archive"
+  | "webpage"
   | "other";
 
 export interface ReferenceFilterCategory {
@@ -45,6 +49,11 @@ export const REFERENCE_FILTER_CATEGORIES: readonly ReferenceFilterCategory[] = [
     ]
   },
   {
+    id: "video",
+    labelKey: "referencePicker.fileTypeVideo",
+    extensions: ["mp4", "mov", "avi", "mkv", "webm"]
+  },
+  {
     id: "document",
     labelKey: "referencePicker.fileTypeDocument",
     extensions: [
@@ -59,67 +68,18 @@ export const REFERENCE_FILTER_CATEGORIES: readonly ReferenceFilterCategory[] = [
       "pages",
       "key",
       "ppt",
-      "pptx"
+      "pptx",
+      "xls",
+      "xlsx",
+      "csv",
+      "tsv",
+      "numbers"
     ]
   },
   {
-    id: "spreadsheet",
-    labelKey: "referencePicker.fileTypeSpreadsheet",
-    extensions: ["xls", "xlsx", "csv", "tsv", "numbers"]
-  },
-  {
-    id: "code",
-    labelKey: "referencePicker.fileTypeCode",
-    extensions: [
-      "js",
-      "jsx",
-      "ts",
-      "tsx",
-      "py",
-      "go",
-      "java",
-      "c",
-      "h",
-      "cpp",
-      "cc",
-      "rs",
-      "rb",
-      "php",
-      "swift",
-      "kt",
-      "sh",
-      "json",
-      "yaml",
-      "yml",
-      "toml",
-      "xml",
-      "html",
-      "css",
-      "scss",
-      "sql"
-    ]
-  },
-  {
-    id: "media",
-    labelKey: "referencePicker.fileTypeMedia",
-    extensions: [
-      "mp3",
-      "wav",
-      "flac",
-      "aac",
-      "ogg",
-      "m4a",
-      "mp4",
-      "mov",
-      "avi",
-      "mkv",
-      "webm"
-    ]
-  },
-  {
-    id: "archive",
-    labelKey: "referencePicker.fileTypeArchive",
-    extensions: ["zip", "tar", "gz", "tgz", "rar", "7z", "bz2"]
+    id: "webpage",
+    labelKey: "referencePicker.fileTypeWebpage",
+    extensions: ["html", "htm", "mhtml", "url", "webloc"]
   },
   { id: "other", labelKey: "referencePicker.fileTypeOther", extensions: [] }
 ];

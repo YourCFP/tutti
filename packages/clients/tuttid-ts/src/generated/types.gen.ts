@@ -1400,7 +1400,7 @@ export type IssueManagerReferenceSearchRequest = {
   query: string;
   limit?: number;
   /**
-   * 已选「文件类型筛选分类」id(全局统一口径:image/document/spreadsheet/ code/media/archive/other)。筛选与搜索是同一能力:query 可空、filters 非空时即按类型查。空/缺省 = 不按类型过滤。
+   * 已选「文件类型筛选分类」id(全局统一口径:image/video/document/ webpage/other)。筛选与搜索是同一能力:query 可空、filters 非空时即按类型查。空/缺省 = 不按类型过滤。
    */
   filters?: Array<string>;
   /**
@@ -1664,7 +1664,7 @@ export type WorkspaceFileRecentLimit = number;
 export type WorkspaceFileSearchKinds = Array<WorkspaceFileFilterKind>;
 
 /**
- * 已选「文件类型筛选分类」id(全局统一口径:image/document/spreadsheet/ code/media/archive/other)。筛选与搜索是同一能力:query 可空、filters 非空时即按类型 list-all。空/缺省 = 不按类型过滤。
+ * 已选「文件类型筛选分类」id(全局统一口径:image/video/document/ webpage/other)。筛选与搜索是同一能力:query 可空、filters 非空时即按类型 list-all。空/缺省 = 不按类型过滤。
  */
 export type WorkspaceFileSearchFilters = Array<string>;
 
@@ -5204,7 +5204,7 @@ export type SearchWorkspaceFilesData = {
     limit?: number;
     includeKinds?: Array<WorkspaceFileFilterKind>;
     /**
-     * 已选「文件类型筛选分类」id(全局统一口径:image/document/spreadsheet/ code/media/archive/other)。筛选与搜索是同一能力:query 可空、filters 非空时即按类型 list-all。空/缺省 = 不按类型过滤。
+     * 已选「文件类型筛选分类」id(全局统一口径:image/video/document/ webpage/other)。筛选与搜索是同一能力:query 可空、filters 非空时即按类型 list-all。空/缺省 = 不按类型过滤。
      */
     filters?: Array<string>;
     includeHidden?: boolean;

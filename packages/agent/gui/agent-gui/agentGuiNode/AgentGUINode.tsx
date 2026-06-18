@@ -85,22 +85,18 @@ const workspaceFileReferenceLocaleKeyByPickerKey: Record<string, string> = {
     "agentHost.agentGui.referencePicker.emptySearch",
   "referencePicker.fileTypeAll":
     "agentHost.agentGui.referencePicker.fileTypeAll",
-  "referencePicker.fileTypeArchive":
-    "agentHost.agentGui.referencePicker.fileTypeArchive",
-  "referencePicker.fileTypeCode":
-    "agentHost.agentGui.referencePicker.fileTypeCode",
   "referencePicker.fileTypeDocument":
     "agentHost.agentGui.referencePicker.fileTypeDocument",
   "referencePicker.fileTypeImage":
     "agentHost.agentGui.referencePicker.fileTypeImage",
-  "referencePicker.fileTypeMedia":
-    "agentHost.agentGui.referencePicker.fileTypeMedia",
   "referencePicker.fileTypeOther":
     "agentHost.agentGui.referencePicker.fileTypeOther",
   "referencePicker.fileTypeSeparator":
     "agentHost.agentGui.referencePicker.fileTypeSeparator",
-  "referencePicker.fileTypeSpreadsheet":
-    "agentHost.agentGui.referencePicker.fileTypeSpreadsheet",
+  "referencePicker.fileTypeVideo":
+    "agentHost.agentGui.referencePicker.fileTypeVideo",
+  "referencePicker.fileTypeWebpage":
+    "agentHost.agentGui.referencePicker.fileTypeWebpage",
   "referencePicker.loadMore": "agentHost.agentGui.referencePicker.loadMore",
   "referencePicker.loadMoreGroups":
     "agentHost.agentGui.referencePicker.loadMoreGroups",

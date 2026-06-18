@@ -1249,8 +1249,8 @@ components:
         filters:
           type: array
           description: >-
-            已选「文件类型筛选分类」id(全局统一口径:image/document/spreadsheet/
-            code/media/archive/other)。筛选与搜索是同一能力:query 可空、filters
+            已选「文件类型筛选分类」id(全局统一口径:image/video/document/
+            webpage/other)。筛选与搜索是同一能力:query 可空、filters
             非空时即按类型查。空/缺省 = 不按类型过滤。
           items:
             type: string

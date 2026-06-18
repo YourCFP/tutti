@@ -9,10 +9,12 @@ func TestCategoryOfFileName(t *testing.T) {
 	cases := map[string]string{
 		"photo.PNG":      "image",
 		"report.pdf":     "document",
-		"data.csv":       "spreadsheet",
-		"main.go":        "code",
-		"clip.mp4":       "media",
-		"bundle.tar.gz":  "archive",
+		"data.csv":       "document", // 表格并入文档
+		"main.go":        "other",    // 代码归入兜底
+		"clip.mp4":       "video",
+		"song.mp3":       "other", // 音频归入兜底
+		"page.html":      "webpage",
+		"bundle.tar.gz":  "other", // 压缩包归入兜底
 		"README":         "other", // 无扩展名
 		"archive.":       "other", // 末尾点
 		".gitignore":     "other", // 仅前导点(dotIndex==0)
@@ -51,12 +53,12 @@ func TestReferenceFilterDisplayNameClause(t *testing.T) {
 	}
 
 	// 单分类:每个扩展名一个 LIKE,OR 连接,参数为 %.ext。
-	clause, args := referenceFilterDisplayNameClause("o.name", []string{"spreadsheet"})
+	clause, args := referenceFilterDisplayNameClause("o.name", []string{"video"})
 	if !strings.HasPrefix(clause, "(") || !strings.Contains(clause, "LOWER(o.name) LIKE ?") {
 		t.Errorf("unexpected clause: %q", clause)
 	}
-	if len(args) != 5 { // xls/xlsx/csv/tsv/numbers
-		t.Errorf("spreadsheet expected 5 args, got %d (%v)", len(args), args)
+	if len(args) != 5 { // mp4/mov/avi/mkv/webm
+		t.Errorf("video expected 5 args, got %d (%v)", len(args), args)
 	}
 	for _, a := range args {
 		s, ok := a.(string)

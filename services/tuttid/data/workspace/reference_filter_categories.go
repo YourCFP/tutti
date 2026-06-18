@@ -12,20 +12,15 @@ import (
 //   packages/workspace/file-reference/src/core/referenceFilterCategories.ts
 // 两处扩展名清单必须保持一致 —— 改一处务必改另一处。
 //
-// 分类 id:image / document / spreadsheet / code / media / archive / other。
+// 分类 id:image / video / document / webpage / other。
+// document 含表格扩展名;音频 / 代码 / 压缩包等不单列,统一归入 "other"。
 // "other" = 无扩展名或未被任何分类收录的扩展名(兜底),没有自己的扩展名清单。
 
 var referenceFilterCategoryExtensions = map[string][]string{
-	"image":       {"png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "heic"},
-	"document":    {"pdf", "doc", "docx", "txt", "md", "markdown", "rtf", "odt", "pages", "key", "ppt", "pptx"},
-	"spreadsheet": {"xls", "xlsx", "csv", "tsv", "numbers"},
-	"code": {
-		"js", "jsx", "ts", "tsx", "py", "go", "java", "c", "h", "cpp", "cc",
-		"rs", "rb", "php", "swift", "kt", "sh", "json", "yaml", "yml", "toml",
-		"xml", "html", "css", "scss", "sql",
-	},
-	"media":   {"mp3", "wav", "flac", "aac", "ogg", "m4a", "mp4", "mov", "avi", "mkv", "webm"},
-	"archive": {"zip", "tar", "gz", "tgz", "rar", "7z", "bz2"},
+	"image":    {"png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "heic"},
+	"video":    {"mp4", "mov", "avi", "mkv", "webm"},
+	"document": {"pdf", "doc", "docx", "txt", "md", "markdown", "rtf", "odt", "pages", "key", "ppt", "pptx", "xls", "xlsx", "csv", "tsv", "numbers"},
+	"webpage":  {"html", "htm", "mhtml", "url", "webloc"},
 }
 
 // extension → categoryId 的反查表。
