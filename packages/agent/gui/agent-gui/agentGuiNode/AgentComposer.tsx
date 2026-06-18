@@ -889,7 +889,11 @@ export function AgentComposer({
         if (effect.enableBrowserUse && !settingsControlsDisabled) {
           onSettingsChange({ browserUse: true });
         }
-        onSubmit(textPromptContent(effect.prompt));
+        if (effect.displayPrompt) {
+          onSubmit(textPromptContent(effect.prompt), effect.displayPrompt);
+        } else {
+          onSubmit(textPromptContent(effect.prompt));
+        }
         return;
       }
       if (effect.kind === "showStatus") {
@@ -1071,14 +1075,16 @@ export function AgentComposer({
     const agentPrompt =
       editorHandleRef.current?.getAgentExpandedText() ?? nextPrompt;
     const hasBundleExpansion = agentPrompt !== nextPrompt;
-    onSubmit(
-      agentComposerDraftToPromptContent({
-        draft: { ...nextDraftContent, prompt: agentPrompt },
-        provider,
-        skills: availableSkills
-      }),
-      hasBundleExpansion ? nextPrompt : undefined
-    );
+    const submitContent = agentComposerDraftToPromptContent({
+      draft: { ...nextDraftContent, prompt: agentPrompt },
+      provider,
+      skills: availableSkills
+    });
+    if (hasBundleExpansion) {
+      onSubmit(submitContent, nextPrompt);
+    } else {
+      onSubmit(submitContent);
+    }
     if (draftImages.length > 0 && !canQueueWhileBusy) {
       setSubmittedImagePreview(draftImages);
       submittedImagePreviewObservedBusyRef.current = false;

@@ -689,12 +689,15 @@ describe("AgentComposer", () => {
     fireEvent.submit(container.querySelector("form")!);
 
     expect(onSettingsChange).toHaveBeenCalledWith({ browserUse: true });
-    expect(onSubmit).toHaveBeenCalledWith([
-      {
-        type: "text",
-        text: expect.stringMatching(/browser-use[\s\S]*inspect this page/)
-      }
-    ]);
+    expect(onSubmit).toHaveBeenCalledWith(
+      [
+        {
+          type: "text",
+          text: expect.stringMatching(/browser-use[\s\S]*inspect this page/)
+        }
+      ],
+      "/browser inspect this page"
+    );
   });
 
   it("matches the browser-use slash capability by its English alias", async () => {
