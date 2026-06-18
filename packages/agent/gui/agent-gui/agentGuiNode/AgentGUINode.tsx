@@ -720,15 +720,23 @@ export const AgentGUINode = memo(function AgentGUINode({
       inheritedUnavailable: t("agentHost.agentGui.inheritedUnavailable"),
       reasoningLabel: t("agentHost.agentGui.reasoningLabel"),
       reasoningDegreeLabel: t("agentHost.agentGui.reasoningDegreeLabel"),
+      reasoningOptionDefault: t("agentHost.agentGui.reasoningOptionDefault"),
       reasoningOptionMinimal: t("agentHost.agentGui.reasoningOptionMinimal"),
       reasoningOptionLow: t("agentHost.agentGui.reasoningOptionLow"),
       reasoningOptionMedium: t("agentHost.agentGui.reasoningOptionMedium"),
       reasoningOptionHigh: t("agentHost.agentGui.reasoningOptionHigh"),
       reasoningOptionXHigh: t("agentHost.agentGui.reasoningOptionXHigh"),
+      reasoningOptionMax: t("agentHost.agentGui.reasoningOptionMax"),
       speedLabel: t("agentHost.agentGui.speedLabel"),
       speedSelectionLabel: t("agentHost.agentGui.speedSelectionLabel"),
       speedOptionStandard: t("agentHost.agentGui.speedOptionStandard"),
+      speedOptionStandardDescription: t(
+        "agentHost.agentGui.speedOptionStandardDescription"
+      ),
       speedOptionFast: t("agentHost.agentGui.speedOptionFast"),
+      speedOptionFastDescription: t(
+        "agentHost.agentGui.speedOptionFastDescription"
+      ),
       permissionLabel: t("agentHost.agentGui.permissionLabel"),
       permissionModeReadOnly: t("agentHost.agentGui.permissionModeReadOnly"),
       permissionModeAuto: t("agentHost.agentGui.permissionModeAuto"),

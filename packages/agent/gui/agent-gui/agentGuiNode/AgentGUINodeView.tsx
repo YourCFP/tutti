@@ -209,15 +209,19 @@ export interface AgentGUIViewLabels {
   inheritedUnavailable: string;
   reasoningLabel: string;
   reasoningDegreeLabel: string;
+  reasoningOptionDefault: string;
   reasoningOptionMinimal: string;
   reasoningOptionLow: string;
   reasoningOptionMedium: string;
   reasoningOptionHigh: string;
   reasoningOptionXHigh: string;
+  reasoningOptionMax: string;
   speedLabel: string;
   speedSelectionLabel: string;
   speedOptionStandard: string;
+  speedOptionStandardDescription: string;
   speedOptionFast: string;
+  speedOptionFastDescription: string;
   permissionLabel: string;
   permissionModeReadOnly: string;
   permissionModeAuto: string;
@@ -1671,15 +1675,19 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       loadingConversation: labels.loadingConversation,
       reasoningLabel: labels.reasoningLabel,
       reasoningDegreeLabel: labels.reasoningDegreeLabel,
+      reasoningOptionDefault: labels.reasoningOptionDefault,
       reasoningOptionMinimal: labels.reasoningOptionMinimal,
       reasoningOptionLow: labels.reasoningOptionLow,
       reasoningOptionMedium: labels.reasoningOptionMedium,
       reasoningOptionHigh: labels.reasoningOptionHigh,
       reasoningOptionXHigh: labels.reasoningOptionXHigh,
+      reasoningOptionMax: labels.reasoningOptionMax,
       speedLabel: labels.speedLabel,
       speedSelectionLabel: labels.speedSelectionLabel,
       speedOptionStandard: labels.speedOptionStandard,
+      speedOptionStandardDescription: labels.speedOptionStandardDescription,
       speedOptionFast: labels.speedOptionFast,
+      speedOptionFastDescription: labels.speedOptionFastDescription,
       permissionLabel: labels.permissionLabel,
       permissionModeReadOnly: labels.permissionModeReadOnly,
       permissionModeAuto: labels.permissionModeAuto,
@@ -1783,15 +1791,19 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       labels.removeMention,
       labels.reasoningDegreeLabel,
       labels.reasoningLabel,
+      labels.reasoningOptionDefault,
       labels.reasoningOptionHigh,
       labels.reasoningOptionLow,
+      labels.reasoningOptionMax,
       labels.reasoningOptionMedium,
       labels.reasoningOptionMinimal,
       labels.reasoningOptionXHigh,
       labels.speedLabel,
       labels.speedSelectionLabel,
       labels.speedOptionStandard,
+      labels.speedOptionStandardDescription,
       labels.speedOptionFast,
+      labels.speedOptionFastDescription,
       labels.send,
       labels.sendQueuedPromptNext,
       labels.slashCommandPalette,

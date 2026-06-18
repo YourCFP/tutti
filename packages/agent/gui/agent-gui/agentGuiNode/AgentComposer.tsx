@@ -181,15 +181,19 @@ export interface AgentComposerProps {
     loadingConversation: string;
     reasoningLabel: string;
     reasoningDegreeLabel: string;
+    reasoningOptionDefault: string;
     reasoningOptionMinimal: string;
     reasoningOptionLow: string;
     reasoningOptionMedium: string;
     reasoningOptionHigh: string;
     reasoningOptionXHigh: string;
+    reasoningOptionMax: string;
     speedLabel: string;
     speedSelectionLabel: string;
     speedOptionStandard: string;
+    speedOptionStandardDescription: string;
     speedOptionFast: string;
+    speedOptionFastDescription: string;
     permissionLabel: string;
     permissionModeReadOnly: string;
     permissionModeAuto: string;
@@ -2305,15 +2309,21 @@ export function AgentComposer({
                     planModeLabel: labels.planModeLabel,
                     reasoningLabel: labels.reasoningLabel,
                     reasoningDegreeLabel: labels.reasoningDegreeLabel,
+                    reasoningOptionDefault: labels.reasoningOptionDefault,
                     reasoningOptionMinimal: labels.reasoningOptionMinimal,
                     reasoningOptionLow: labels.reasoningOptionLow,
                     reasoningOptionMedium: labels.reasoningOptionMedium,
                     reasoningOptionHigh: labels.reasoningOptionHigh,
                     reasoningOptionXHigh: labels.reasoningOptionXHigh,
+                    reasoningOptionMax: labels.reasoningOptionMax,
                     speedLabel: labels.speedLabel,
                     speedSelectionLabel: labels.speedSelectionLabel,
                     speedOptionStandard: labels.speedOptionStandard,
+                    speedOptionStandardDescription:
+                      labels.speedOptionStandardDescription,
                     speedOptionFast: labels.speedOptionFast,
+                    speedOptionFastDescription:
+                      labels.speedOptionFastDescription,
                     permissionLabel: labels.permissionLabel,
                     modelDescriptions: labels.modelDescriptions,
                     defaultModel: labels.defaultModel,
