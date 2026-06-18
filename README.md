@@ -101,7 +101,7 @@ Whatever your role, Tutti helps you find the lowest-friction way to combine the 
 - Use all apps inside Tutti with your existing agent subscriptions.
 - Describe a goal, let agents break it into subtasks, then assign each task to the right agent.
 
-**In Tutti · Cloud** (Runs locally. Outputs live in the cloud.)
+**In Tutti · Cloud** (Agents run locally. Outputs live in the cloud.)
 
 Everything in the local version, plus:
 
