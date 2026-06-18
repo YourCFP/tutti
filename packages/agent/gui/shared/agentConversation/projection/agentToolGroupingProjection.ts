@@ -190,56 +190,11 @@ export function computeAgentToolGroups(
     finalizeGroup();
   }
 
-  debugLogToolGrouping(sequence, {
-    allowTrailingFinalization,
-    splitFromIndex,
-    groups
-  });
-
   return {
     groups,
     groupedIndices,
     suppressedIndices
   };
-}
-
-/**
- * Opt-in diagnostic for the Codex tool-rendering flicker. Off by default so the
- * hot streaming projection path stays allocation-free; enable it from the
- * renderer devtools console with
- * `globalThis.__TUTTI_DEBUG_TOOL_GROUPING = true` and reproduce the burst to see,
- * per projection pass, the tool statuses, the active trailing-run boundary, and
- * the groups produced. A stable boundary / row count across passes confirms the
- * jump is gone.
- */
-function debugLogToolGrouping(
-  sequence: readonly AgentTurnSequenceItemVM[],
-  info: {
-    allowTrailingFinalization: boolean;
-    splitFromIndex: number;
-    groups: ReadonlyMap<number, AgentComputedToolGroupVM>;
-  }
-): void {
-  const flag = (globalThis as { __TUTTI_DEBUG_TOOL_GROUPING?: unknown })
-    .__TUTTI_DEBUG_TOOL_GROUPING;
-  if (flag !== true || typeof console === "undefined") {
-    return;
-  }
-  const tools = sequence
-    .map((item, index) =>
-      item?.kind === "tool-call"
-        ? `${index}:${item.call.id}:${item.call.statusKind ?? "?"}`
-        : null
-    )
-    .filter((entry): entry is string => entry !== null);
-  // eslint-disable-next-line no-console
-  console.debug("[tool-grouping]", {
-    sequenceLength: sequence.length,
-    tools,
-    allowTrailingFinalization: info.allowTrailingFinalization,
-    splitFromIndex: info.splitFromIndex,
-    groupStartIndices: [...info.groups.keys()]
-  });
 }
 
 export function projectAgentToolGroupRowFromGroup(
