@@ -1492,6 +1492,8 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     : isAgentProviderReady
       ? null
       : labels.installRequiredPlaceholder;
+  const showProviderSetupNotice =
+    !isAgentProviderReady && !isCollaboratorConversation;
   const submitDisabled =
     isCollaboratorConversation ||
     !isAgentProviderReady ||
@@ -2114,6 +2116,23 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
         usage={viewModel.usage}
         usageLimits={slashStatusLimits}
       />
+      {showProviderSetupNotice ? (
+        <div
+          className={styles.providerSetupNotice}
+          data-testid="agent-gui-provider-setup-notice"
+          role="status"
+        >
+          <Info
+            aria-hidden="true"
+            className={styles.providerSetupNoticeIcon}
+            size={15}
+            strokeWidth={2}
+          />
+          <span className={styles.providerSetupNoticeText}>
+            {labels.installRequiredPlaceholder}
+          </span>
+        </div>
+      ) : null}
       <ScrollArea
         scrollbarMode="native"
         className="min-h-0 flex-1 [&_[data-orientation=vertical][data-slot=scroll-area-scrollbar]]:opacity-100"

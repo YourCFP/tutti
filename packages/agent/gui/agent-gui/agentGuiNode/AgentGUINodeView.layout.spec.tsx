@@ -919,6 +919,22 @@ describe("AgentGUINodeView usage chip", () => {
   });
 });
 
+describe("AgentGUINodeView provider setup notice", () => {
+  it("renders a visible setup notice when the provider is not ready", () => {
+    renderAgentGUINodeView({ isAgentProviderReady: false });
+
+    const notice = screen.getByTestId("agent-gui-provider-setup-notice");
+    expect(notice).toHaveTextContent("installRequiredPlaceholder");
+    expect(notice).toHaveAttribute("role", "status");
+  });
+
+  it("hides the setup notice when the provider is ready", () => {
+    renderAgentGUINodeView({ isAgentProviderReady: true });
+
+    expect(screen.queryByTestId("agent-gui-provider-setup-notice")).toBeNull();
+  });
+});
+
 describe("AgentGUINodeView usage alert banner", () => {
   afterEach(() => {
     conversationFlowMock.calls = [];
@@ -1034,6 +1050,7 @@ describe("AgentGUINodeView usage alert banner", () => {
 interface RenderAgentGUINodeViewOptions {
   conversationRailCollapsed?: boolean;
   conversationRailWidthPx?: number;
+  isAgentProviderReady?: boolean;
   onConversationRailWidthChanged?: (widthPx: number) => void;
   viewModel?: AgentGUINodeViewModel;
   actions?: AgentGUINodeViewProps["actions"];
@@ -1045,6 +1062,7 @@ interface RenderAgentGUINodeViewOptions {
 function buildAgentGUINodeViewElement({
   conversationRailCollapsed = false,
   conversationRailWidthPx = 240,
+  isAgentProviderReady = true,
   onConversationRailWidthChanged = vi.fn(),
   viewModel = createViewModel(),
   actions = createActions(),
@@ -1055,7 +1073,7 @@ function buildAgentGUINodeViewElement({
   return (
     <AgentGUINodeView
       viewModel={viewModel}
-      isAgentProviderReady={true}
+      isAgentProviderReady={isAgentProviderReady}
       slashStatusLimits={slashStatusLimits}
       actions={actions}
       workspaceUserProjectI18n={workspaceUserProjectI18n}

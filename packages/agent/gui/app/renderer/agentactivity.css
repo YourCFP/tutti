@@ -5319,6 +5319,40 @@ button.agent-gui-node__conversation-section-toggle:hover
   color: inherit;
 }
 
+.agent-gui-node__provider-setup-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  margin: 0 var(--agent-gui-detail-padding-x) 8px;
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--agent-gui-warning, var(--state-warning)) 26%,
+      transparent
+    );
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--agent-gui-warning, var(--state-warning));
+  background: color-mix(
+    in srgb,
+    var(--agent-gui-warning, var(--state-warning)) 9%,
+    transparent
+  );
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.agent-gui-node__provider-setup-notice-icon {
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
+.agent-gui-node__provider-setup-notice-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .agent-gui-node__layout [data-slot="status-dot"],
 [data-testid="workspace-agent-message-center"] [data-slot="status-dot"] {
   --agent-gui-status-dot-color: var(

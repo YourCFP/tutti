@@ -2355,6 +2355,9 @@ describe("AgentGUINode", () => {
       screen.queryByTestId("agent-gui-composer-disabled-reason")
     ).toBeNull();
     expect(
+      screen.getByTestId("agent-gui-provider-setup-notice")
+    ).toHaveTextContent("agentHost.agentGui.installRequiredPlaceholder");
+    expect(
       screen.getByRole("button", { name: "agentHost.agentGui.send" })
     ).toBeDisabled();
     const sendButton = screen.getByRole("button", {
@@ -2364,7 +2367,7 @@ describe("AgentGUINode", () => {
     expect(screen.queryByTestId("agent-gui-composer-send-spinner")).toBeNull();
   });
 
-  it("keeps the disabled composer reason on the input placeholder only", () => {
+  it("shows a provider setup notice while keeping the disabled composer reason on the input placeholder", () => {
     mockViewModel = createViewModel({
       data: {
         provider: "claude-code",
@@ -2396,8 +2399,8 @@ describe("AgentGUINode", () => {
       screen.queryByTestId("agent-gui-composer-disabled-reason")
     ).toBeNull();
     expect(
-      screen.queryByText("agentHost.agentGui.installRequiredPlaceholder")
-    ).not.toBeInTheDocument();
+      screen.getByTestId("agent-gui-provider-setup-notice")
+    ).toHaveTextContent("agentHost.agentGui.installRequiredPlaceholder");
   });
 
   it("renders composer setting controls with permission mode UI", async () => {
