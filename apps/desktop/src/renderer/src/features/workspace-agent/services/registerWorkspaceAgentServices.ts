@@ -1,4 +1,4 @@
-import { SyncDescriptor, type ServiceRegistry } from "@tutti-os/infra/di";
+import type { ServiceRegistry } from "@tutti-os/infra/di";
 import type {
   TuttidClient,
   TuttidEventStreamClient
@@ -6,6 +6,7 @@ import type {
 import type { DesktopHostFilesApi, DesktopRuntimeApi } from "@preload/types";
 import type { IReporterService } from "../../analytics/services/reporterService.interface.ts";
 import type { IWorkspaceUserProjectService } from "../../workspace-user-project/index.ts";
+import type { NotificationService } from "@tutti-os/ui-notifications";
 import { IAgentProviderStatusService } from "./agentProviderStatusService.interface";
 import type { AgentProviderTerminalCommandRunner } from "./agentProviderStatusService.interface";
 import { DesktopAgentProviderStatusService } from "./internal/desktopAgentProviderStatusService";
@@ -22,15 +23,20 @@ export interface WorkspaceAgentServiceRegistrationInput {
   >;
   tuttidClient: TuttidClient;
   reporterService?: Pick<IReporterService, "trackEvents">;
+  notifications?: NotificationService;
   runtimeApi: Pick<DesktopRuntimeApi, "logTerminalDiagnostic">;
   terminalCommandRunner: AgentProviderTerminalCommandRunner;
   workspaceUserProjectService?: IWorkspaceUserProjectService;
 }
 
+export interface WorkspaceAgentServiceRegistrationResult {
+  agentProviderStatusService: IAgentProviderStatusService;
+}
+
 export function registerWorkspaceAgentServices(
   registry: ServiceRegistry,
   input: WorkspaceAgentServiceRegistrationInput
-): void {
+): WorkspaceAgentServiceRegistrationResult {
   const workspaceAgentActivityService = new WorkspaceAgentActivityService(
     input
   );
@@ -47,14 +53,17 @@ export function registerWorkspaceAgentServices(
     })
   );
 
-  registry.register(
-    IAgentProviderStatusService,
-    new SyncDescriptor(DesktopAgentProviderStatusService, [
-      {
-        tuttidClient: input.tuttidClient,
-        reporterService: input.reporterService,
-        terminalCommandRunner: input.terminalCommandRunner
-      }
-    ])
+  const agentProviderStatusService = new DesktopAgentProviderStatusService(
+    {
+      tuttidClient: input.tuttidClient,
+      reporterService: input.reporterService,
+      terminalCommandRunner: input.terminalCommandRunner
+    },
+    input.notifications
   );
+  registry.registerInstance(
+    IAgentProviderStatusService,
+    agentProviderStatusService
+  );
+  return { agentProviderStatusService };
 }

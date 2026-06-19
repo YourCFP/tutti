@@ -182,6 +182,12 @@ export interface IssueManagerNodeHeaderProps extends HTMLAttributes<HTMLElement>
   workspaceId: string;
 }
 
+const issueManagerWorkbenchDragHandleAttribute = "data-workbench-drag-handle";
+
+type IssueManagerNodeHeaderDragHandleAttributes = {
+  [issueManagerWorkbenchDragHandleAttribute]?: "true";
+};
+
 export function IssueManagerNodeHeader({
   activeTopicId = null,
   className,
@@ -195,6 +201,18 @@ export function IssueManagerNodeHeader({
   workspaceId,
   ...headerProps
 }: IssueManagerNodeHeaderProps): JSX.Element {
+  const {
+    [issueManagerWorkbenchDragHandleAttribute]: dragHandleData,
+    onDoubleClick,
+    onPointerDown,
+    ...restHeaderProps
+  } = headerProps as typeof headerProps &
+    IssueManagerNodeHeaderDragHandleAttributes;
+  const dragHandleProps = {
+    "data-workbench-drag-handle": dragHandleData,
+    onDoubleClick,
+    onPointerDown
+  };
   const { effectiveCollapsed, toggleLabel, toggleSidebar } =
     useIssueManagerNodeHeaderView({
       copy,
@@ -212,13 +230,21 @@ export function IssueManagerNodeHeader({
 
   return (
     <header
-      {...headerProps}
+      {...restHeaderProps}
       className={cn(
         "relative flex h-full min-h-0 items-center justify-between gap-3 bg-[var(--background-panel)] px-2 pl-3",
         className
       )}
     >
-      <div className="z-10 flex min-w-0 items-center gap-2">
+      <div
+        {...dragHandleProps}
+        aria-hidden="true"
+        className="absolute inset-0 cursor-grab active:cursor-grabbing"
+      />
+      <div
+        {...dragHandleProps}
+        className="z-10 flex min-w-0 cursor-grab items-center gap-2 active:cursor-grabbing"
+      >
         <span className="min-w-0 truncate text-[13px] font-semibold leading-5 text-[var(--text-primary)]">
           {title?.trim() || copy.t("title")}
         </span>

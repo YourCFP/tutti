@@ -23,10 +23,32 @@ type SessionMessagesPage struct {
 	HasMore        bool
 }
 
+type GeneratedFile struct {
+	Path  string
+	Label string
+}
+
+type GeneratedFileList struct {
+	WorkspaceID string
+	Files       []GeneratedFile
+}
+
+type ListGeneratedFilesInput struct {
+	Query      string
+	SessionCwd string
+	Limit      int
+}
+
 type MessageReader interface {
 	ListSessionMessages(
 		input agentactivitybiz.ListSessionMessagesInput,
 	) (SessionMessagesPage, bool)
+}
+
+type GeneratedFileReader interface {
+	ListWorkspaceGeneratedFiles(
+		input agentactivitybiz.ListWorkspaceGeneratedFilesInput,
+	) (GeneratedFileList, bool)
 }
 
 func (s *Service) ListMessages(
@@ -81,6 +103,46 @@ func (s *Service) ListMessages(
 		return SessionMessagesPage{}, ErrSessionNotFound
 	}
 	return emptySessionMessagesPage(agentSessionID, input), nil
+}
+
+func (s *Service) ListGeneratedFiles(
+	ctx context.Context,
+	workspaceID string,
+	input ListGeneratedFilesInput,
+) (GeneratedFileList, error) {
+	_ = ctx
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" || input.Limit < 0 {
+		return GeneratedFileList{}, ErrInvalidArgument
+	}
+	if input.Limit == 0 {
+		input.Limit = 30
+	}
+	if input.Limit > 100 {
+		input.Limit = 100
+	}
+	reader, ok := s.MessageReader.(GeneratedFileReader)
+	if !ok || reader == nil {
+		return GeneratedFileList{
+			WorkspaceID: workspaceID,
+			Files:       []GeneratedFile{},
+		}, nil
+	}
+	files, ok := reader.ListWorkspaceGeneratedFiles(agentactivitybiz.ListWorkspaceGeneratedFilesInput{
+		WorkspaceID: workspaceID,
+		Query:       strings.TrimSpace(input.Query),
+		SessionCwd:  strings.TrimSpace(input.SessionCwd),
+		Limit:       input.Limit,
+	})
+	if !ok {
+		return GeneratedFileList{
+			WorkspaceID: workspaceID,
+			Files:       []GeneratedFile{},
+		}, nil
+	}
+	files.WorkspaceID = workspaceID
+	files.Files = cloneGeneratedFiles(files.Files)
+	return files, nil
 }
 
 func (s *Service) sessionExists(workspaceID string, agentSessionID string) bool {

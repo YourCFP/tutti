@@ -894,6 +894,16 @@ export type WorkspaceAgentSessionMessagesResponse = {
   hasMore: boolean;
 };
 
+export type WorkspaceAgentGeneratedFileEntry = {
+  path: string;
+  label: string;
+};
+
+export type WorkspaceAgentGeneratedFileListResponse = {
+  workspaceId: string;
+  entries: Array<WorkspaceAgentGeneratedFileEntry>;
+};
+
 export type WorkspaceAgentSessionListResponse = {
   workspaceId: string;
   sessions: Array<WorkspaceAgentSession>;
@@ -969,6 +979,11 @@ export type ExternalAgentImportResultResponse = {
 
 export type DeleteWorkspaceAgentSessionResponse = {
   removed: boolean;
+};
+
+export type ClearWorkspaceAgentSessionsResponse = {
+  removedMessages: number;
+  removedSessions: number;
 };
 
 export type UpdateWorkspaceAgentSessionPinRequest = {
@@ -3709,6 +3724,55 @@ export type PublishWorkspaceAppFactoryJobResponses = {
 export type PublishWorkspaceAppFactoryJobResponse2 =
   PublishWorkspaceAppFactoryJobResponses[keyof PublishWorkspaceAppFactoryJobResponses];
 
+export type ClearWorkspaceAgentSessionsData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agent-sessions";
+};
+
+export type ClearWorkspaceAgentSessionsErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type ClearWorkspaceAgentSessionsError =
+  ClearWorkspaceAgentSessionsErrors[keyof ClearWorkspaceAgentSessionsErrors];
+
+export type ClearWorkspaceAgentSessionsResponses = {
+  /**
+   * Workspace agent sessions cleared
+   */
+  200: ClearWorkspaceAgentSessionsResponse;
+};
+
+export type ClearWorkspaceAgentSessionsResponse2 =
+  ClearWorkspaceAgentSessionsResponses[keyof ClearWorkspaceAgentSessionsResponses];
+
 export type ListWorkspaceAgentSessionsData = {
   body?: never;
   path: {
@@ -4189,6 +4253,59 @@ export type GetWorkspaceAgentSessionResponses = {
 
 export type GetWorkspaceAgentSessionResponse =
   GetWorkspaceAgentSessionResponses[keyof GetWorkspaceAgentSessionResponses];
+
+export type ListWorkspaceAgentGeneratedFilesData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+  };
+  query?: {
+    query?: string;
+    sessionCwd?: string;
+    limit?: number;
+  };
+  url: "/v1/workspaces/{workspaceID}/agent-generated-files";
+};
+
+export type ListWorkspaceAgentGeneratedFilesErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type ListWorkspaceAgentGeneratedFilesError =
+  ListWorkspaceAgentGeneratedFilesErrors[keyof ListWorkspaceAgentGeneratedFilesErrors];
+
+export type ListWorkspaceAgentGeneratedFilesResponses = {
+  /**
+   * Workspace agent generated files
+   */
+  200: WorkspaceAgentGeneratedFileListResponse;
+};
+
+export type ListWorkspaceAgentGeneratedFilesResponse =
+  ListWorkspaceAgentGeneratedFilesResponses[keyof ListWorkspaceAgentGeneratedFilesResponses];
 
 export type ListWorkspaceAgentSessionMessagesData = {
   body?: never;

@@ -146,6 +146,22 @@ export class WorkspaceAgentActivityService implements IWorkspaceAgentActivitySer
     });
   }
 
+  async listAgentGeneratedFiles(
+    input: Parameters<
+      IWorkspaceAgentActivityService["listAgentGeneratedFiles"]
+    >[0]
+  ): ReturnType<IWorkspaceAgentActivityService["listAgentGeneratedFiles"]> {
+    const workspaceId = normalizeWorkspaceId(input.workspaceId);
+    return this.dependencies.tuttidClient.listWorkspaceAgentGeneratedFiles(
+      workspaceId,
+      {
+        limit: input.limit,
+        query: input.query?.trim() || undefined,
+        sessionCwd: input.sessionCwd?.trim() || undefined
+      }
+    );
+  }
+
   async scanExternalSessionImports(
     workspaceId: string,
     request?: Parameters<

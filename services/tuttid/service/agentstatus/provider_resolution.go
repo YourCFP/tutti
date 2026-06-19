@@ -85,6 +85,12 @@ func (s Service) resolveExternalRegistryNPMSpec(
 ) ProviderSpec {
 	registry := s.externalAgentRegistry()
 	prefixDir := registry.PackagePrefix(agent.ID)
+	if err := os.MkdirAll(prefixDir, 0o755); err != nil {
+		spec.AdapterCommand = nil
+		spec.AdapterEnv = nil
+		spec.AdapterUnavailableReasonCode = "external_agent_registry_package_dir_unavailable"
+		return spec
+	}
 	packageName, packageVersion := splitNPMPackageSpec(distribution.Package)
 	packageDir := npmPackageInstallDir(prefixDir, packageName)
 	spec.AdapterPackage = AdapterPackageRequirement{
@@ -112,14 +118,19 @@ func (s Service) resolveExternalRegistryNPMSpec(
 		spec.AdapterUnavailableReasonCode = ReasonManagedRuntimeUnavailable
 		return spec
 	}
-	command := []string{
-		appRuntime.NPM,
-		"--prefix",
-		prefixDir,
-		"exec",
-		"--yes",
-		"--",
-		boundedNPMPackageSpec(distribution.Package),
+	var command []string
+	if binPath := s.installedNPMBinPath(prefixDir, packageDir, packageName); binPath != "" {
+		command = []string{binPath}
+	} else {
+		command = []string{
+			appRuntime.NPM,
+			"--prefix",
+			prefixDir,
+			"exec",
+			"--yes",
+			"--",
+			boundedNPMPackageSpec(distribution.Package),
+		}
 	}
 	command = append(command, distribution.Args...)
 	spec.AdapterCommand = command
@@ -214,6 +225,72 @@ func installedNPMPackageVersion(packageDir string, packageName string) string {
 		return ""
 	}
 	return strings.TrimSpace(manifest.Version)
+}
+
+func (s Service) installedNPMBinPath(prefixDir string, packageDir string, packageName string) string {
+	binName := installedNPMPackageBinName(packageDir, packageName)
+	if binName == "" {
+		return ""
+	}
+	candidates := []string{filepath.Join(prefixDir, "node_modules", ".bin", binName)}
+	if runtime.GOOS == "windows" {
+		candidates = append([]string{candidates[0] + ".cmd"}, candidates...)
+	}
+	for _, candidate := range candidates {
+		if s.executableFile(candidate) {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func installedNPMPackageBinName(packageDir string, packageName string) string {
+	if strings.TrimSpace(packageDir) == "" || strings.TrimSpace(packageName) == "" {
+		return ""
+	}
+	content, err := os.ReadFile(filepath.Join(packageDir, "package.json"))
+	if err != nil {
+		return ""
+	}
+	var manifest struct {
+		Name string          `json:"name"`
+		Bin  json.RawMessage `json:"bin"`
+	}
+	if err := json.Unmarshal(content, &manifest); err != nil {
+		return ""
+	}
+	if strings.TrimSpace(manifest.Name) != strings.TrimSpace(packageName) || len(manifest.Bin) == 0 {
+		return ""
+	}
+	defaultName := defaultNPMBinName(packageName)
+	var binString string
+	if err := json.Unmarshal(manifest.Bin, &binString); err == nil && strings.TrimSpace(binString) != "" {
+		return defaultName
+	}
+	var binMap map[string]string
+	if err := json.Unmarshal(manifest.Bin, &binMap); err != nil || len(binMap) == 0 {
+		return ""
+	}
+	if _, ok := binMap[defaultName]; ok {
+		return defaultName
+	}
+	if len(binMap) == 1 {
+		for name := range binMap {
+			return strings.TrimSpace(name)
+		}
+	}
+	return ""
+}
+
+func defaultNPMBinName(packageName string) string {
+	packageName = strings.TrimSpace(packageName)
+	if strings.HasPrefix(packageName, "@") {
+		_, name, ok := strings.Cut(packageName, "/")
+		if ok {
+			return strings.TrimSpace(name)
+		}
+	}
+	return packageName
 }
 
 func npmPackageInstallDir(prefixDir string, packageName string) string {

@@ -727,63 +727,48 @@ export class AgentMentionSearchController {
           this.rawGroups.collab_sessions.length;
         this.totalCounts.issues = 0;
       } else {
-        const [
-          appItems,
-          fileItems,
-          agentGeneratedFileItems,
-          issueItems,
-          sessionItems
-        ] = await Promise.all([
-          this.queryProviderMentionItemsById({
-            providerId: WORKSPACE_APP_PROVIDER_ID,
-            workspaceId: input.workspaceId,
-            currentUserId: input.currentUserId,
-            query: "",
-            limit: DEFAULT_MENTION_GROUP_PAGE_SIZE,
-            diagnostics: providerDiagnostics
-          }),
-          this.queryProviderMentionItemsById({
-            providerId: FILE_PROVIDER_ID,
-            workspaceId: input.workspaceId,
-            currentUserId: input.currentUserId,
-            query: "",
-            limit: this.fileLimit,
-            diagnostics: providerDiagnostics
-          }),
-          this.queryProviderMentionItemsById({
-            providerId: AGENT_GENERATED_FILE_PROVIDER_ID,
-            workspaceId: input.workspaceId,
-            currentUserId: input.currentUserId,
-            query: "",
-            limit: this.fileLimit,
-            diagnostics: providerDiagnostics
-          }),
-          this.queryProviderMentionItemsById({
-            providerId: WORKSPACE_ISSUE_PROVIDER_ID,
-            workspaceId: input.workspaceId,
-            currentUserId: input.currentUserId,
-            query: "",
-            limit: this.currentIssueSearchLimit,
-            diagnostics: providerDiagnostics
-          }),
-          this.queryProviderMentionItemsById({
-            providerId: AGENT_SESSION_PROVIDER_ID,
-            workspaceId: input.workspaceId,
-            currentUserId: input.currentUserId,
-            query: "",
-            limit: DEFAULT_SESSION_LIMIT,
-            diagnostics: providerDiagnostics
-          })
-        ]);
+        const [appItems, fileItems, issueItems, sessionItems] =
+          await Promise.all([
+            this.queryProviderMentionItemsById({
+              providerId: WORKSPACE_APP_PROVIDER_ID,
+              workspaceId: input.workspaceId,
+              currentUserId: input.currentUserId,
+              query: "",
+              limit: DEFAULT_MENTION_GROUP_PAGE_SIZE,
+              diagnostics: providerDiagnostics
+            }),
+            this.queryProviderMentionItemsById({
+              providerId: FILE_PROVIDER_ID,
+              workspaceId: input.workspaceId,
+              currentUserId: input.currentUserId,
+              query: "",
+              limit: this.fileLimit,
+              diagnostics: providerDiagnostics
+            }),
+            this.queryProviderMentionItemsById({
+              providerId: WORKSPACE_ISSUE_PROVIDER_ID,
+              workspaceId: input.workspaceId,
+              currentUserId: input.currentUserId,
+              query: "",
+              limit: this.currentIssueSearchLimit,
+              diagnostics: providerDiagnostics
+            }),
+            this.queryProviderMentionItemsById({
+              providerId: AGENT_SESSION_PROVIDER_ID,
+              workspaceId: input.workspaceId,
+              currentUserId: input.currentUserId,
+              query: "",
+              limit: DEFAULT_SESSION_LIMIT,
+              diagnostics: providerDiagnostics
+            })
+          ]);
         if (!this.canApply(input.requestId, input.workspaceId, "")) {
           return;
         }
         this.rawGroups = {
           apps: appItems.filter((item) => item.kind === "workspace-app"),
           opened_files: fileItems.filter((item) => item.kind === "file"),
-          agent_generated_files: agentGeneratedFileItems.filter(
-            (item) => item.kind === "file"
-          ),
+          agent_generated_files: [],
           my_sessions: sessionItems.filter(
             (item) => item.kind === "session" && item.scope === "my_sessions"
           ),

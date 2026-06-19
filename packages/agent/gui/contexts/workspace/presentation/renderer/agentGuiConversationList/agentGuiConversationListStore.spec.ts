@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentActivitySnapshot } from "@tutti-os/agent-activity-core";
 import type { AgentActivityRuntime } from "../../../../../agentActivityRuntime";
 import {
   resetAgentActivityRuntimeForTests,
   setAgentActivityRuntimeForTests
 } from "../../../../../agentActivityRuntime";
+import { setAgentHostApiForTests } from "../../../../../agentActivityHost";
 import type { WorkspaceAgentActivitySnapshot } from "../../../../../shared/workspaceAgentActivityTypes";
 import {
   ensureAgentGUIConversationListQuery,
@@ -342,6 +343,54 @@ describe("agentGuiConversationListStore", () => {
     expect(
       getAgentGUIConversationListQuerySnapshot(query)?.conversations[0]?.project
     ).toBeNull();
+  });
+
+  it("logs diagnostics when conversation updates churn in a short window", () => {
+    const logRuntimeDiagnostics = vi.fn();
+    setAgentHostApiForTests({
+      clipboard: {},
+      debug: { logRuntimeDiagnostics },
+      filesystem: {},
+      workspace: {}
+    } as any);
+    const query: AgentGUIConversationListQuery = {
+      workspaceId: "workspace-1",
+      userId: "user-1",
+      provider: "codex",
+      sessionOrigin: "WORKSPACE_AGENT_SESSION_ORIGIN_RUNTIME"
+    };
+    ensureAgentGUIConversationListQuery(query);
+
+    for (let index = 0; index < 8; index += 1) {
+      updateAgentGUIConversationListConversations(
+        query,
+        () => [
+          conversation("session-1", {
+            updatedAtUnixMs: index + 1
+          })
+        ],
+        "external-update"
+      );
+    }
+
+    expect(logRuntimeDiagnostics).toHaveBeenCalledTimes(1);
+    expect(logRuntimeDiagnostics).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "agent-gui.conversation-list.update-storm",
+        level: "info",
+        source: "renderer-workspace-surface",
+        details: expect.objectContaining({
+          changedFields: expect.stringContaining("updatedAtUnixMs"),
+          nextCount: 1,
+          previousCount: 1,
+          provider: "codex",
+          reason: "external-update",
+          sessionOrigin: "WORKSPACE_AGENT_SESSION_ORIGIN_RUNTIME",
+          updateCount: 8,
+          workspaceId: "workspace-1"
+        })
+      })
+    );
   });
 });
 

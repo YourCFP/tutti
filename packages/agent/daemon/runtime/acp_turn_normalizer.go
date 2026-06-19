@@ -84,10 +84,10 @@ func (n *acpTurnNormalizer) ApplyAssistantFinalText(finalText string) {
 	}
 	if n.assistantMessageID == "" || n.assistantSegmentCompleted {
 		n.assistantMessageID = newID()
-		n.assistantContent.Reset()
 		n.assistantSegmentCompleted = false
 	}
-	n.mergeAssistantText(finalText)
+	n.assistantContent.Reset()
+	_, _ = n.assistantContent.WriteString(finalText)
 }
 
 func (n *acpTurnNormalizer) mergeAssistantText(next string) {

@@ -34,6 +34,7 @@ import type {
   TuttiExternalLogInput,
   TuttiExternalPermissionRequestInput,
   TuttiExternalPermissionRequestResult,
+  TuttiExternalReferenceOpenInput,
   TuttiExternalRendererRequest,
   TuttiExternalSettingsOpenInput,
   TuttiExternalWorkspaceOpenFeatureInput
@@ -60,6 +61,7 @@ export const desktopIpcChannels = {
     filesSelect: "workspace-app-files:select",
     logsWrite: "workspace-app-logs:write",
     permissionsRequest: "workspace-app-permissions:request",
+    referencesOpen: "workspace-app-references:open",
     rendererRequest: "workspace-app-external:renderer-request",
     rendererResponse: "workspace-app-external:renderer-response",
     settingsOpen: "workspace-app-settings:open",
@@ -552,6 +554,8 @@ export interface DesktopInvokePayloadByChannel {
   [desktopIpcChannels.appExternal.filesSelect]: TuttiExternalFileSelectInput;
   [desktopIpcChannels.appExternal
     .permissionsRequest]: TuttiExternalPermissionRequestInput;
+  [desktopIpcChannels.appExternal
+    .referencesOpen]: TuttiExternalReferenceOpenInput;
   [desktopIpcChannels.appExternal.settingsOpen]: TuttiExternalSettingsOpenInput;
   [desktopIpcChannels.appExternal
     .workspaceFeatureOpen]: DesktopWorkspaceOpenFeatureRequest;
@@ -647,6 +651,7 @@ export interface DesktopInvokeResultByChannel {
   [desktopIpcChannels.appExternal.filesSelect]: TuttiExternalFileSelectResult;
   [desktopIpcChannels.appExternal
     .permissionsRequest]: TuttiExternalPermissionRequestResult;
+  [desktopIpcChannels.appExternal.referencesOpen]: void;
   [desktopIpcChannels.appExternal.settingsOpen]: void;
   [desktopIpcChannels.appExternal.workspaceFeatureOpen]: void;
   [desktopIpcChannels.browser.activate]: void;

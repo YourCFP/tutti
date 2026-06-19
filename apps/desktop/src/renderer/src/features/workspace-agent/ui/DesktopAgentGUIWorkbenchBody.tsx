@@ -130,6 +130,24 @@ type DesktopAgentProbeState = NonNullable<
   AgentGUIProps["workspaceAgentProbes"]
 >;
 
+function desktopComputerUseStatusesEqual(
+  left: DesktopComputerUseStatus | null,
+  right: DesktopComputerUseStatus | null
+): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      left.installed === right.installed &&
+      left.permissions?.accessibility === right.permissions?.accessibility &&
+      left.permissions?.screenRecording ===
+        right.permissions?.screenRecording &&
+      left.permissions?.screenRecordingCapturable ===
+        right.permissions?.screenRecordingCapturable &&
+      left.permissions?.source === right.permissions?.source)
+  );
+}
+
 export function DesktopAgentGUIWorkbenchBody({
   agentActivityRuntime,
   agentHostApi,
@@ -235,12 +253,18 @@ export function DesktopAgentGUIWorkbenchBody({
         .checkStatus()
         .then((status) => {
           if (!canceled) {
-            setComputerUseStatus(status);
+            setComputerUseStatus((current) =>
+              desktopComputerUseStatusesEqual(current, status)
+                ? current
+                : status
+            );
           }
         })
         .catch(() => {
           if (!canceled) {
-            setComputerUseStatus(null);
+            setComputerUseStatus((current) =>
+              desktopComputerUseStatusesEqual(current, null) ? current : null
+            );
           }
         });
     };
@@ -740,6 +764,18 @@ export function DesktopAgentGUIWorkbenchBody({
     context.activation?.type === desktopAgentGUIPrefillPromptActivationType
       ? context.activation.sequence
       : (prefillPromptRequest?.sequence ?? null);
+  const capabilityMenuState = useMemo<AgentGUIProps["capabilityMenuState"]>(
+    () => ({
+      browserUse: {
+        connectionMode: desktopPreferencesState.browserUseConnectionMode
+      },
+      computerUse: {
+        authorization: resolveComputerUseAuthorizationState(computerUseStatus),
+        installed: computerUseStatus?.installed ?? null
+      }
+    }),
+    [computerUseStatus, desktopPreferencesState.browserUseConnectionMode]
+  );
 
   return (
     <AgentGUI
@@ -748,16 +784,7 @@ export function DesktopAgentGUIWorkbenchBody({
       i18n={i18n}
       locale={locale}
       agentSettings={DESKTOP_AGENT_GUI_AGENT_SETTINGS}
-      capabilityMenuState={{
-        browserUse: {
-          connectionMode: desktopPreferencesState.browserUseConnectionMode
-        },
-        computerUse: {
-          authorization:
-            resolveComputerUseAuthorizationState(computerUseStatus),
-          installed: computerUseStatus?.installed ?? null
-        }
-      }}
+      capabilityMenuState={capabilityMenuState}
       currentUserId="local"
       desktopSize={desktopSize}
       embedded

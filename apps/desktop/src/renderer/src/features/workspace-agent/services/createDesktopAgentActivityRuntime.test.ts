@@ -72,6 +72,9 @@ function createWorkspaceAgentActivityService(): IWorkspaceAgentActivityService {
     listSessionMessages: async () => {
       throw new Error("not implemented");
     },
+    listAgentGeneratedFiles: async () => {
+      throw new Error("not implemented");
+    },
     scanExternalSessionImports: async () => {
       throw new Error("not implemented");
     },

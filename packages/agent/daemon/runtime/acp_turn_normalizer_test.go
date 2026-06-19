@@ -40,9 +40,9 @@ func TestAppendAssistantChunkIgnoresDuplicateSnapshotChunk(t *testing.T) {
 
 	session := testSession()
 	normalizer := newACPTurnNormalizer()
-	fullText := "你好！有什么可以帮你的吗？"
+	fullText := "Hello! How can I help you?"
 
-	for _, chunk := range []string{"你好", "！有什么", "可以帮你的吗？"} {
+	for _, chunk := range []string{"Hello", "! How can", " I help you?"} {
 		events := normalizer.AppendAssistantChunk(session, "turn-1", chunk)
 		if len(events) != 1 {
 			t.Fatalf("AppendAssistantChunk(%q) events = %d, want 1", chunk, len(events))
@@ -67,6 +67,33 @@ func TestAppendAssistantChunkIgnoresDuplicateSnapshotChunk(t *testing.T) {
 			t.Fatalf("completed content = %q, want %q", got, fullText)
 		}
 	}
+}
+
+func TestApplyAssistantFinalTextReplacesEditedSnapshot(t *testing.T) {
+	t.Parallel()
+
+	session := testSession()
+	normalizer := newACPTurnNormalizer()
+	streamed := "I was just saying hello. You can send the task over, such as changing code, investigating an issue, running a command, or organizing docs."
+	finalText := "I was just saying hello. You can send me the task, such as changing code, investigating an issue, running a command, or organizing docs."
+
+	events := normalizer.AppendAssistantChunk(session, "turn-1", streamed)
+	if len(events) != 1 {
+		t.Fatalf("stream events = %d, want 1", len(events))
+	}
+
+	normalizer.ApplyAssistantFinalText(finalText)
+	completed := normalizer.FinishCompleted(session, "turn-1")
+	for _, event := range completed {
+		if event.Type != activityshared.EventMessageAppended {
+			continue
+		}
+		if got := event.Payload.Content; got != finalText {
+			t.Fatalf("completed content = %q, want final snapshot only", got)
+		}
+		return
+	}
+	t.Fatal("completed assistant message not emitted")
 }
 
 func TestAppendAssistantChunkReplacesCumulativeSnapshotChunk(t *testing.T) {

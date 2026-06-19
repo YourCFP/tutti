@@ -3,6 +3,7 @@ import {
   addWorkspaceIssueTaskContextRefs,
   cancelWorkspaceAgentSession,
   checkUserProjectPath,
+  clearWorkspaceAgentSessions,
   completeWorkspaceIssueRun,
   completeWorkspaceIssueTaskRun,
   createWorkspaceAgentSession,
@@ -37,6 +38,7 @@ import {
   getWorkspaceWorkbench,
   importWorkspaceExternalAgentSessions,
   listCliCapabilities,
+  listWorkspaceAgentGeneratedFiles,
   listUserProjects,
   listWorkspaceAgentSessionMessages,
   listWorkspaceIssues,
@@ -339,6 +341,16 @@ export function createTuttidClient(
         "Delete workspace agent session request failed."
       );
     },
+    async clearWorkspaceAgentSessions(workspaceID) {
+      const response = await clearWorkspaceAgentSessions({
+        client,
+        path: { workspaceID }
+      });
+      return unwrapData(
+        response,
+        "Clear workspace agent sessions request failed."
+      );
+    },
     ...createAgentProvidersClient(client),
     async moveWorkspaceFileEntry(workspaceID, request) {
       const response = await moveWorkspaceFileEntry({
@@ -517,6 +529,17 @@ export function createTuttidClient(
         query: request
       });
       return unwrapData(response, "Workspace agent sessions request failed.");
+    },
+    async listWorkspaceAgentGeneratedFiles(workspaceID, request) {
+      const response = await listWorkspaceAgentGeneratedFiles({
+        client,
+        path: { workspaceID },
+        query: request
+      });
+      return unwrapData(
+        response,
+        "Workspace agent generated files request failed."
+      );
     },
     async scanWorkspaceExternalAgentSessionImports(workspaceID, request) {
       const response = await scanWorkspaceExternalAgentSessionImports({

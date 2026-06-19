@@ -1,6 +1,7 @@
 import {
   tuttiExternalManagedAiModelProviderIds,
   tuttiExternalAtProviderIds,
+  tuttiExternalWorkspaceAgentProviders,
   type TuttiExternalAtProviderId,
   type TuttiExternalAtQueryInput,
   type TuttiExternalFileOpenInput,
@@ -9,14 +10,17 @@ import {
   type TuttiExternalLogLevel,
   type TuttiExternalManagedAiModelProviderId,
   type TuttiExternalPermissionRequestInput,
+  type TuttiExternalReferenceOpenInput,
   type TuttiExternalSettingsOpenInput,
+  type TuttiExternalWorkspaceAgentProvider,
   type TuttiExternalWorkspaceFeature,
   type TuttiExternalWorkspaceOpenFeatureInput
 } from "../contracts/index.ts";
 
 export {
   tuttiExternalAtProviderIds,
-  tuttiExternalManagedAiModelProviderIds
+  tuttiExternalManagedAiModelProviderIds,
+  tuttiExternalWorkspaceAgentProviders
 } from "../contracts/index.ts";
 
 export const tuttiExternalAtMaxResultsLimit = 50;
@@ -194,12 +198,31 @@ export function normalizeTuttiExternalWorkspaceOpenFeatureInput(
   if (!isTuttiExternalWorkspaceFeature(feature)) {
     throw new Error("workspace.openFeature feature is unsupported.");
   }
+  const draftPrompt =
+    typeof input.draftPrompt === "string" ? input.draftPrompt.trim() : "";
   return {
     feature,
+    ...(draftPrompt ? { draftPrompt } : {}),
+    ...(input.autoSubmit === true ? { autoSubmit: true } : {}),
     ...(typeof input.provider === "string" && input.provider.trim() !== ""
-      ? { provider: input.provider.trim() }
+      ? {
+          provider: normalizeTuttiExternalWorkspaceAgentProvider(input.provider)
+        }
       : {})
   };
+}
+
+export function normalizeTuttiExternalReferenceOpenInput(
+  input: unknown
+): TuttiExternalReferenceOpenInput {
+  if (!isRecord(input)) {
+    throw new Error("references.open input must be an object.");
+  }
+  const href = normalizeRequiredString(input.href, "references.open href");
+  if (!href.toLowerCase().startsWith("mention://")) {
+    throw new Error("references.open href must be a mention URL.");
+  }
+  return { href };
 }
 
 export function isTuttiExternalAtProviderId(
@@ -231,6 +254,27 @@ export function isTuttiExternalWorkspaceFeature(
       value as TuttiExternalWorkspaceFeature
     )
   );
+}
+
+export function isTuttiExternalWorkspaceAgentProvider(
+  value: unknown
+): value is TuttiExternalWorkspaceAgentProvider {
+  return (
+    typeof value === "string" &&
+    tuttiExternalWorkspaceAgentProviders.includes(
+      value as TuttiExternalWorkspaceAgentProvider
+    )
+  );
+}
+
+function normalizeTuttiExternalWorkspaceAgentProvider(
+  value: unknown
+): TuttiExternalWorkspaceAgentProvider {
+  const provider = typeof value === "string" ? value.trim() : value;
+  if (!isTuttiExternalWorkspaceAgentProvider(provider)) {
+    throw new Error("workspace.openFeature provider is unsupported.");
+  }
+  return provider;
 }
 
 function normalizeTuttiExternalLogLevel(value: unknown): TuttiExternalLogLevel {

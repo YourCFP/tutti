@@ -1535,6 +1535,12 @@ type CheckUserProjectPathRequest struct {
 	Path string `json:"path"`
 }
 
+// ClearWorkspaceAgentSessionsResponse defines model for ClearWorkspaceAgentSessionsResponse.
+type ClearWorkspaceAgentSessionsResponse struct {
+	RemovedMessages int `json:"removedMessages"`
+	RemovedSessions int `json:"removedSessions"`
+}
+
 // CliCapabilitiesResponse defines model for CliCapabilitiesResponse.
 type CliCapabilitiesResponse struct {
 	Commands []CliCapability `json:"commands"`
@@ -2501,6 +2507,18 @@ type WorkbenchSnapshotSpace struct {
 	NodeIds []string        `json:"nodeIds"`
 }
 
+// WorkspaceAgentGeneratedFileEntry defines model for WorkspaceAgentGeneratedFileEntry.
+type WorkspaceAgentGeneratedFileEntry struct {
+	Label string `json:"label"`
+	Path  string `json:"path"`
+}
+
+// WorkspaceAgentGeneratedFileListResponse defines model for WorkspaceAgentGeneratedFileListResponse.
+type WorkspaceAgentGeneratedFileListResponse struct {
+	Entries     []WorkspaceAgentGeneratedFileEntry `json:"entries"`
+	WorkspaceId string                             `json:"workspaceId"`
+}
+
 // WorkspaceAgentProvider defines model for WorkspaceAgentProvider.
 type WorkspaceAgentProvider string
 
@@ -3083,6 +3101,13 @@ type GetAgentProviderStatusesParams struct {
 type ListCliCapabilitiesParams struct {
 	// WorkspaceID Optional workspace context. When omitted, the daemon uses the startup workspace.
 	WorkspaceID *string `form:"workspaceID,omitempty" json:"workspaceID,omitempty"`
+}
+
+// ListWorkspaceAgentGeneratedFilesParams defines parameters for ListWorkspaceAgentGeneratedFiles.
+type ListWorkspaceAgentGeneratedFilesParams struct {
+	Query      *string `form:"query,omitempty" json:"query,omitempty"`
+	SessionCwd *string `form:"sessionCwd,omitempty" json:"sessionCwd,omitempty"`
+	Limit      *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListWorkspaceAgentSessionsParams defines parameters for ListWorkspaceAgentSessions.

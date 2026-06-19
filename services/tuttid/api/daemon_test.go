@@ -64,11 +64,13 @@ type stubAppCenterService struct {
 }
 
 type stubAgentSessionService struct {
+	clearFn                  func(context.Context, string) (agentservice.ClearSessionsResult, error)
 	composerOptionsFn        func(context.Context, agentservice.ComposerOptionsInput) (agentservice.ComposerOptions, error)
 	createFn                 func(context.Context, string, agentservice.CreateSessionInput) (agentservice.Session, error)
 	deleteFn                 func(context.Context, string, string) (bool, error)
 	importExternalFn         func(context.Context, string, agentservice.ExternalImportInput) (agentservice.ExternalImportResult, error)
 	listFn                   func(context.Context, string, agentservice.ListSessionsInput) ([]agentservice.Session, error)
+	listGeneratedFilesFn     func(context.Context, string, agentservice.ListGeneratedFilesInput) (agentservice.GeneratedFileList, error)
 	listMessagesFn           func(context.Context, string, string, agentservice.ListMessagesInput) (agentservice.SessionMessagesPage, error)
 	readAttachmentFn         func(context.Context, string, string, string) (agentservice.PromptAttachment, error)
 	scanExternalFn           func(context.Context, agentservice.ExternalImportScanInput) (agentservice.ExternalImportScanResult, error)
@@ -172,6 +174,13 @@ func (s stubAgentSessionService) ListFiltered(ctx context.Context, workspaceID s
 	return s.listFn(ctx, workspaceID, input)
 }
 
+func (s stubAgentSessionService) Clear(ctx context.Context, workspaceID string) (agentservice.ClearSessionsResult, error) {
+	if s.clearFn == nil {
+		return agentservice.ClearSessionsResult{}, nil
+	}
+	return s.clearFn(ctx, workspaceID)
+}
+
 func (s stubAgentSessionService) GetComposerOptions(ctx context.Context, input agentservice.ComposerOptionsInput) (agentservice.ComposerOptions, error) {
 	if s.composerOptionsFn == nil {
 		return agentservice.ComposerOptions{
@@ -187,6 +196,13 @@ func (s stubAgentSessionService) ListMessages(ctx context.Context, workspaceID s
 		return agentservice.SessionMessagesPage{}, nil
 	}
 	return s.listMessagesFn(ctx, workspaceID, agentSessionID, input)
+}
+
+func (s stubAgentSessionService) ListGeneratedFiles(ctx context.Context, workspaceID string, input agentservice.ListGeneratedFilesInput) (agentservice.GeneratedFileList, error) {
+	if s.listGeneratedFilesFn == nil {
+		return agentservice.GeneratedFileList{WorkspaceID: workspaceID, Files: []agentservice.GeneratedFile{}}, nil
+	}
+	return s.listGeneratedFilesFn(ctx, workspaceID, input)
 }
 
 func (s stubAgentSessionService) ScanExternalImports(ctx context.Context, input agentservice.ExternalImportScanInput) (agentservice.ExternalImportScanResult, error) {
@@ -569,7 +585,31 @@ func TestDaemonAPIGeneratedRoutesListAgentSessionsForwardsQuery(t *testing.T) {
 func TestDaemonAPIGeneratedRoutesListAgentSessionsRejectsLimitAboveContractMaximum(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, NewRoutes(DaemonAPI{
-		AgentSessionService: stubAgentSessionService{},
+		AgentSessionService: stubAgentSessionService{
+			listGeneratedFilesFn: func(_ context.Context, workspaceID string, input agentservice.ListGeneratedFilesInput) (agentservice.GeneratedFileList, error) {
+				if workspaceID != "ws-1" {
+					t.Fatalf("workspaceID = %q, want ws-1", workspaceID)
+				}
+				if input.Query != "report" {
+					t.Fatalf("query = %q, want report", input.Query)
+				}
+				if input.SessionCwd != "/workspace" {
+					t.Fatalf("sessionCwd = %q, want /workspace", input.SessionCwd)
+				}
+				if input.Limit != 25 {
+					t.Fatalf("limit = %d, want 25", input.Limit)
+				}
+				return agentservice.GeneratedFileList{
+					WorkspaceID: workspaceID,
+					Files: []agentservice.GeneratedFile{
+						{
+							Label: "report.md",
+							Path:  "/workspace/report.md",
+						},
+					},
+				}, nil
+			},
+		},
 	}))
 
 	recorder := performGeneratedRouteRequest(
@@ -1075,6 +1115,37 @@ func TestDaemonAPIGeneratedRoutesDeleteAgentSession(t *testing.T) {
 	}
 }
 
+func TestDaemonAPIGeneratedRoutesClearAgentSessions(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, NewRoutes(DaemonAPI{
+		AgentSessionService: stubAgentSessionService{
+			clearFn: func(_ context.Context, workspaceID string) (agentservice.ClearSessionsResult, error) {
+				if workspaceID != "ws-1" {
+					t.Fatalf("workspaceID = %q, want ws-1", workspaceID)
+				}
+				return agentservice.ClearSessionsResult{RemovedMessages: 5, RemovedSessions: 2}, nil
+			},
+		},
+	}))
+
+	recorder := performGeneratedRouteRequest(
+		t,
+		mux,
+		http.MethodDelete,
+		"/v1/workspaces/ws-1/agent-sessions",
+		nil,
+	)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	var response tuttigenerated.ClearWorkspaceAgentSessionsResponse
+	decodeGeneratedRouteResponse(t, recorder, &response)
+	if response.RemovedSessions != 2 || response.RemovedMessages != 5 {
+		t.Fatalf("response = %#v, want 2 sessions and 5 messages", response)
+	}
+}
+
 func TestDaemonAPIGeneratedRoutesListAgentSessionMessages(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, NewRoutes(DaemonAPI{
@@ -1144,6 +1215,61 @@ func TestDaemonAPIGeneratedRoutesListAgentSessionMessages(t *testing.T) {
 	}
 	if response.Messages[0].MessageId != "msg-1" {
 		t.Fatalf("messageId = %q, want msg-1", response.Messages[0].MessageId)
+	}
+}
+
+func TestDaemonAPIGeneratedRoutesListAgentGeneratedFiles(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, NewRoutes(DaemonAPI{
+		AgentSessionService: stubAgentSessionService{
+			listGeneratedFilesFn: func(_ context.Context, workspaceID string, input agentservice.ListGeneratedFilesInput) (agentservice.GeneratedFileList, error) {
+				if workspaceID != "ws-1" {
+					t.Fatalf("workspaceID = %q, want ws-1", workspaceID)
+				}
+				if input.Query != "report" {
+					t.Fatalf("query = %q, want report", input.Query)
+				}
+				if input.SessionCwd != "/workspace" {
+					t.Fatalf("sessionCwd = %q, want /workspace", input.SessionCwd)
+				}
+				if input.Limit != 25 {
+					t.Fatalf("limit = %d, want 25", input.Limit)
+				}
+				return agentservice.GeneratedFileList{
+					WorkspaceID: workspaceID,
+					Files: []agentservice.GeneratedFile{
+						{
+							Label: "report.md",
+							Path:  "/workspace/report.md",
+						},
+					},
+				}, nil
+			},
+		},
+	}))
+
+	recorder := performGeneratedRouteRequest(
+		t,
+		mux,
+		http.MethodGet,
+		"/v1/workspaces/ws-1/agent-generated-files?query=report&sessionCwd=/workspace&limit=25",
+		nil,
+	)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	var response tuttigenerated.WorkspaceAgentGeneratedFileListResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if response.WorkspaceId != "ws-1" {
+		t.Fatalf("workspaceId = %q, want ws-1", response.WorkspaceId)
+	}
+	if len(response.Entries) != 1 {
+		t.Fatalf("len(entries) = %d, want 1", len(response.Entries))
+	}
+	if response.Entries[0].Path != "/workspace/report.md" {
+		t.Fatalf("entry path = %q, want /workspace/report.md", response.Entries[0].Path)
 	}
 }
 

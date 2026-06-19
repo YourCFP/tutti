@@ -20,6 +20,7 @@ import {
   normalizeTuttiExternalFileSelectInput,
   normalizeTuttiExternalLogInput,
   normalizeTuttiExternalPermissionRequestInput,
+  normalizeTuttiExternalReferenceOpenInput,
   normalizeTuttiExternalSettingsOpenInput,
   normalizeTuttiExternalWorkspaceOpenFeatureInput
 } from "@tutti-os/workspace-external-core/core";
@@ -186,6 +187,20 @@ export function registerWorkspaceAppContextIpc(
         appId: context.appID,
         input,
         operation: "settings.open",
+        requestId: randomUUID(),
+        workspaceId: context.workspaceID
+      });
+    }
+  );
+  registerDesktopIpcHandler(
+    desktopIpcChannels.appExternal.referencesOpen,
+    async (event, payload) => {
+      const context = requireWorkspaceAppGuestContext(event.sender);
+      const input = normalizeTuttiExternalReferenceOpenInput(payload);
+      return requestWorkspaceAppExternalRenderer<void>(context, {
+        appId: context.appID,
+        input,
+        operation: "references.open",
         requestId: randomUUID(),
         workspaceId: context.workspaceID
       });

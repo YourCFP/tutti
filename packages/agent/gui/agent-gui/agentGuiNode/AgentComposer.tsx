@@ -115,6 +115,7 @@ import {
 import { AGENT_MENTION_FILTER_TAB_ORDER } from "./agentMentionSearchHelpers";
 import {
   exitAgentFileMentionSuggestion,
+  parseMentionItemFromHref,
   type AgentContextMentionItem,
   type AgentFileMentionSuggestionState
 } from "./agentRichText/agentFileMentionExtension";
@@ -191,15 +192,19 @@ export interface AgentComposerProps {
     loadingConversation: string;
     reasoningLabel: string;
     reasoningDegreeLabel: string;
+    reasoningOptionDefault: string;
     reasoningOptionMinimal: string;
     reasoningOptionLow: string;
     reasoningOptionMedium: string;
     reasoningOptionHigh: string;
     reasoningOptionXHigh: string;
+    reasoningOptionMax: string;
     speedLabel: string;
     speedSelectionLabel: string;
     speedOptionStandard: string;
+    speedOptionStandardDescription: string;
     speedOptionFast: string;
+    speedOptionFastDescription: string;
     permissionLabel: string;
     permissionModeReadOnly: string;
     permissionModeAuto: string;
@@ -1059,7 +1064,11 @@ export function AgentComposer({
         if (effect.enableBrowserUse && !settingsControlsDisabled) {
           onSettingsChange({ browserUse: true });
         }
-        onSubmit(textPromptContent(effect.prompt));
+        if (effect.displayPrompt) {
+          onSubmit(textPromptContent(effect.prompt), effect.displayPrompt);
+        } else {
+          onSubmit(textPromptContent(effect.prompt));
+        }
         return;
       }
       if (effect.kind === "showStatus") {
@@ -1235,20 +1244,14 @@ export function AgentComposer({
       return;
     }
     setIsPaletteOpen(false);
-    // bundle 节点:发给 agent 的内容展开成逐条 file mention(agent 模式),
-    // 而 displayPrompt 用 display 串(单条 chip 链接)供对话流回显。
-    // 无 bundle 时两者相同 → 不传 displayPrompt,保持既有回显行为。
-    const agentPrompt =
-      editorHandleRef.current?.getAgentExpandedText() ?? nextPrompt;
-    const hasBundleExpansion = agentPrompt !== nextPrompt;
-    onSubmit(
-      agentComposerDraftToPromptContent({
-        draft: { ...nextDraftContent, prompt: agentPrompt },
-        provider,
-        skills: availableSkills
-      }),
-      hasBundleExpansion ? nextPrompt : undefined
-    );
+    // 引用(workspace-reference)mention 不再展开成文件路径:发给 agent 的内容与
+    // 对话流回显一致,单条 mention 链接,由 skill+CLL 按需解析。无需 displayPrompt 旁路。
+    const submitContent = agentComposerDraftToPromptContent({
+      draft: nextDraftContent,
+      provider,
+      skills: availableSkills
+    });
+    onSubmit(submitContent);
     if (draftImages.length > 0 && !canQueueWhileBusy) {
       setSubmittedImagePreview(draftImages);
       submittedImagePreviewObservedBusyRef.current = false;
@@ -1593,8 +1596,19 @@ export function AgentComposer({
     [currentUserId, selectedProjectPath, workspaceId]
   );
 
+  // 项目/任务引用(workspace-reference)mention:点击直接打开引用 picker 并定位到该
+  // 应用项目 / 议题分组,而非导航到实体。其余 mention 仍走 workspace link action。
+  // 经 ref 转发到稍后定义的 handleOpenReferencesForEntity(沿用本文件 onLinkClickRef 同款模式)。
+  const openReferencesForEntityRef = useRef<
+    ((entity: AgentContextMentionItem) => void) | null
+  >(null);
   const handleLinkClick = useCallback(
     (href: string): void => {
+      const item = parseMentionItemFromHref({ name: "", href });
+      if (item?.kind === "workspace-reference") {
+        openReferencesForEntityRef.current?.(item);
+        return;
+      }
       const action = resolveWorkspaceLinkAction({
         href,
         workspaceRoot: workspacePath,
@@ -1744,6 +1758,8 @@ export function AgentComposer({
       onRequestWorkspaceReferences
     ]
   );
+  // 让 handleLinkClick(定义在前)能转发到此处:点击 workspace-reference chip 即定位打开 picker。
+  openReferencesForEntityRef.current = handleOpenReferencesForEntity;
 
   const syncMentionPaletteFrame = useCallback((): void => {
     const anchor = inputShellRef.current;
@@ -2493,15 +2509,21 @@ export function AgentComposer({
                     planModeLabel: labels.planModeLabel,
                     reasoningLabel: labels.reasoningLabel,
                     reasoningDegreeLabel: labels.reasoningDegreeLabel,
+                    reasoningOptionDefault: labels.reasoningOptionDefault,
                     reasoningOptionMinimal: labels.reasoningOptionMinimal,
                     reasoningOptionLow: labels.reasoningOptionLow,
                     reasoningOptionMedium: labels.reasoningOptionMedium,
                     reasoningOptionHigh: labels.reasoningOptionHigh,
                     reasoningOptionXHigh: labels.reasoningOptionXHigh,
+                    reasoningOptionMax: labels.reasoningOptionMax,
                     speedLabel: labels.speedLabel,
                     speedSelectionLabel: labels.speedSelectionLabel,
                     speedOptionStandard: labels.speedOptionStandard,
+                    speedOptionStandardDescription:
+                      labels.speedOptionStandardDescription,
                     speedOptionFast: labels.speedOptionFast,
+                    speedOptionFastDescription:
+                      labels.speedOptionFastDescription,
                     permissionLabel: labels.permissionLabel,
                     modelDescriptions: labels.modelDescriptions,
                     defaultModel: labels.defaultModel,

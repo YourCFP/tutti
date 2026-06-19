@@ -230,6 +230,9 @@ export function createDesktopTuttidClient(
         agentSessionID
       );
     },
+    async clearWorkspaceAgentSessions(workspaceID) {
+      return (await resolveClient()).clearWorkspaceAgentSessions(workspaceID);
+    },
     async moveWorkspaceFileEntry(workspaceID, request) {
       return (await resolveClient()).moveWorkspaceFileEntry(
         workspaceID,
@@ -338,6 +341,12 @@ export function createDesktopTuttidClient(
       return (await resolveClient()).listWorkspaceAgentSessionMessages(
         workspaceID,
         agentSessionID,
+        request
+      );
+    },
+    async listWorkspaceAgentGeneratedFiles(workspaceID, request) {
+      return (await resolveClient()).listWorkspaceAgentGeneratedFiles(
+        workspaceID,
         request
       );
     },

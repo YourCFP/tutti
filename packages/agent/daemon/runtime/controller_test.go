@@ -105,6 +105,43 @@ func TestControllerStartFailureCreatesFailedSessionAndVisibleErrorReport(t *test
 	}
 }
 
+func TestControllerExecResumesExistingSessionWhenAdapterLiveSessionMissing(t *testing.T) {
+	t.Parallel()
+
+	adapter := newReconnectableAdapter()
+	controller := NewController([]Adapter{adapter}, nil)
+
+	started, err := controller.Start(context.Background(), StartInput{
+		RoomID:         "room-1",
+		AgentSessionID: "agent-session-1",
+		Provider:       ProviderClaudeCode,
+		CWD:            "/workspace",
+		Title:          "Claude Code",
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if started.Session.ProviderSessionID != "provider-session-1" {
+		t.Fatalf("provider session id = %q, want provider-session-1", started.Session.ProviderSessionID)
+	}
+
+	adapter.dropLiveSession("agent-session-1")
+	result, err := controller.Exec(context.Background(), ExecInput{
+		RoomID:         "room-1",
+		AgentSessionID: "agent-session-1",
+		Content:        textPrompt("hello"),
+	})
+	if err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	if !result.Accepted {
+		t.Fatalf("Exec result = %#v, want accepted", result)
+	}
+	if adapter.resumeCalls != 1 {
+		t.Fatalf("resume calls = %d, want 1", adapter.resumeCalls)
+	}
+}
+
 func TestControllerHiddenSessionPublishesLiveEventsAndReportsActivity(t *testing.T) {
 	t.Parallel()
 
@@ -1256,6 +1293,56 @@ func (failingStartAdapter) Exec(context.Context, Session, []PromptContentBlock, 
 
 func (failingStartAdapter) Cancel(context.Context, Session, string) ([]activityshared.Event, error) {
 	return nil, nil
+}
+
+type reconnectableAdapter struct {
+	live        map[string]bool
+	resumeCalls int
+}
+
+func newReconnectableAdapter() *reconnectableAdapter {
+	return &reconnectableAdapter{live: make(map[string]bool)}
+}
+
+func (*reconnectableAdapter) Provider() string { return ProviderClaudeCode }
+
+func (a *reconnectableAdapter) Start(_ context.Context, session Session) ([]activityshared.Event, error) {
+	session.ProviderSessionID = "provider-session-1"
+	a.live[session.AgentSessionID] = true
+	return []activityshared.Event{
+		newSessionActivityEvent(session, EventSessionStarted, SessionStatusReady, nil),
+	}, nil
+}
+
+func (a *reconnectableAdapter) Resume(_ context.Context, session Session) error {
+	a.resumeCalls++
+	a.live[session.AgentSessionID] = true
+	return nil
+}
+
+func (*reconnectableAdapter) Close(context.Context, Session) error {
+	return nil
+}
+
+func (a *reconnectableAdapter) Exec(_ context.Context, session Session, _ []PromptContentBlock, _ string, turnID string, _ EventSink, _ CommandSnapshotSink) ([]activityshared.Event, error) {
+	if !a.live[session.AgentSessionID] {
+		return nil, ErrSessionDisconnected
+	}
+	return []activityshared.Event{
+		newTurnActivityEvent(session, EventTurnCompleted, turnID, SessionStatusReady, "", "", nil),
+	}, nil
+}
+
+func (*reconnectableAdapter) Cancel(context.Context, Session, string) ([]activityshared.Event, error) {
+	return nil, nil
+}
+
+func (a *reconnectableAdapter) HasLiveSession(session Session) bool {
+	return a.live[session.AgentSessionID]
+}
+
+func (a *reconnectableAdapter) dropLiveSession(agentSessionID string) {
+	a.live[agentSessionID] = false
 }
 
 type statefulInteractiveAdapter struct {

@@ -6,11 +6,13 @@ import {
   normalizeTuttiExternalFileSelectInput,
   normalizeTuttiExternalLogInput,
   normalizeTuttiExternalPermissionRequestInput,
+  normalizeTuttiExternalReferenceOpenInput,
   normalizeTuttiExternalSettingsOpenInput,
   normalizeTuttiExternalWorkspaceOpenFeatureInput,
   tuttiExternalAtDefaultMaxResults,
   tuttiExternalAtMaxResultsLimit,
   tuttiExternalAtProviderIds,
+  tuttiExternalWorkspaceAgentProviders,
   tuttiExternalManagedAiModelProviderIds
 } from "./index.ts";
 
@@ -200,6 +202,44 @@ test("rejects invalid workspace feature open input", () => {
         feature: "not-supported"
       }),
     /feature is unsupported/
+  );
+  assert.throws(
+    () =>
+      normalizeTuttiExternalWorkspaceOpenFeatureInput({
+        feature: "agent-chat",
+        provider: "unknown-agent"
+      }),
+    /provider is unsupported/
+  );
+});
+
+test("keeps the workspace agent provider set explicit", () => {
+  assert.deepEqual(tuttiExternalWorkspaceAgentProviders, [
+    "claude-code",
+    "codex",
+    "nexight",
+    "hermes",
+    "gemini",
+    "openclaw"
+  ]);
+});
+
+test("normalizes reference open input", () => {
+  assert.deepEqual(
+    normalizeTuttiExternalReferenceOpenInput({
+      href: "mention://workspace-app/app-1?workspaceId=workspace-1"
+    }),
+    {
+      href: "mention://workspace-app/app-1?workspaceId=workspace-1"
+    }
+  );
+});
+
+test("rejects invalid reference open input", () => {
+  assert.throws(
+    () =>
+      normalizeTuttiExternalReferenceOpenInput({ href: "https://example.com" }),
+    /mention URL/
   );
 });
 

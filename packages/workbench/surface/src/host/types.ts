@@ -188,6 +188,8 @@ export interface WorkbenchHostDockEntryAction {
   pendingLabel?: string;
 }
 
+export type WorkbenchHostDockEntryDiagnostics = Record<string, unknown>;
+
 export interface WorkbenchHostDockPopupItemInput {
   externalNodeState?: unknown;
   externalWorkspaceState?: unknown;
@@ -241,6 +243,7 @@ export interface WorkbenchHostDockEntry {
   iconSize?: "default" | "large";
   id: string;
   label: string;
+  diagnostics?: WorkbenchHostDockEntryDiagnostics;
   instanceMode?: WorkbenchHostNodeInstanceStrategy["mode"];
   launchBehavior?: WorkbenchHostDockEntryLaunchBehavior;
   launchPayload?: unknown;
@@ -263,6 +266,7 @@ export type WorkbenchHostDockEntryDynamicState = Partial<
     WorkbenchHostDockEntry,
     | "attentionToken"
     | "badge"
+    | "diagnostics"
     | "hoverActions"
     | "launchBehavior"
     | "order"

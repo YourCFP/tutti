@@ -622,6 +622,11 @@ func (*standardACPAdapter) CanResume(session Session) bool {
 	return strings.TrimSpace(session.ProviderSessionID) != ""
 }
 
+func (a *standardACPAdapter) HasLiveSession(session Session) bool {
+	acpSession := a.getSession(session.AgentSessionID)
+	return acpSession != nil && acpSession.client != nil
+}
+
 func (a *standardACPAdapter) Close(_ context.Context, session Session) error {
 	if a == nil || a.transport == nil {
 		return nil

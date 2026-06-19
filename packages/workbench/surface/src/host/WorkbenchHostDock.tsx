@@ -1133,23 +1133,16 @@ export function WorkbenchHostDock({
                     }
                     aria-label={i18n.t("launch", { title: entry.label })}
                     aria-disabled={
-                      clickResolution.kind === "blocked" &&
-                      !resolvedEntry.hasMatchingNodes
+                      clickResolution.kind === "blocked" ? true : undefined
                     }
                     className="desktop-dock__btn"
                     data-interactive={
-                      clickResolution.kind === "blocked" &&
-                      !resolvedEntry.hasMatchingNodes
-                        ? "false"
-                        : "true"
+                      clickResolution.kind === "blocked" ? "false" : "true"
                     }
                     title={entry.label}
                     type="button"
                     onPointerDown={() => {
-                      if (
-                        clickResolution.kind === "blocked" &&
-                        !resolvedEntry.hasMatchingNodes
-                      ) {
+                      if (clickResolution.kind === "blocked") {
                         return;
                       }
                       beginDockIconInteraction(anchorKey);
@@ -1158,8 +1151,19 @@ export function WorkbenchHostDock({
                       logWorkbenchDockDebug("dock.click", debugDiagnostics, {
                         anchorKey,
                         clickResolution,
+                        dockDiagnostics: entry.diagnostics ?? null,
                         dockNodeState: resolvedEntry.dockNodeState,
                         entryId: entry.id,
+                        entryLaunchBehavior: entry.launchBehavior ?? "enabled",
+                        entryOrder: entry.order ?? null,
+                        entryState: entry.state ?? { kind: "enabled" },
+                        entryVisibility: entry.visibility ?? "always",
+                        hoverActions:
+                          entry.hoverActions?.map((action) => ({
+                            disabled: action.disabled === true,
+                            id: action.id,
+                            pending: Boolean(action.pendingLabel)
+                          })) ?? [],
                         instanceMode: instanceMode ?? null,
                         matchedNodeCount: resolvedEntry.matchedNodes.length,
                         matchedNodeIds: resolvedEntry.matchedNodes.map(

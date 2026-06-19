@@ -5,7 +5,7 @@ import type { AgentGUINodeViewModel } from "./model/agentGuiNodeTypes";
 import type { AgentGUIViewLabels } from "./AgentGUINodeView";
 import styles from "./AgentGUINode.styles";
 
-interface ConversationSection {
+export interface ConversationSection {
   id: string;
   kind: "pinned" | "project" | "conversations";
   label: string;

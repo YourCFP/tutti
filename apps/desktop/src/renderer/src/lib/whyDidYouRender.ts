@@ -12,7 +12,7 @@ if (whyDidYouRenderEnableSource !== null) {
     await import("@welldone-software/why-did-you-render");
   registerWhyDidYouRender(React, {
     collapseGroups: true,
-    include: [/AgentGUI/u, /DesktopAgentGUI/u, /Workbench/u],
+    include: [/.*/u],
     logOwnerReasons: true,
     trackAllPureComponents: true,
     trackHooks: true

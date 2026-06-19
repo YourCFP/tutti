@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { TuttidClient } from "@tutti-os/client-tuttid-ts";
+import type {
+  AgentProviderStatus,
+  TuttidClient,
+  WorkspaceAgentProvider
+} from "@tutti-os/client-tuttid-ts";
 import {
   tuttiAgentAssetUrls,
   tuttiFileAssetUrls,
@@ -596,13 +600,27 @@ test("desktop rich text @ service assembles provider agent mention apps from cap
   });
 
   assert.equal(items.length, 2);
-  const claudeItem = items[0];
-  const codexItem = items[1];
+  const codexItem = items[0];
+  const claudeItem = items[1];
   const claudeIconUrl = iconUrlFromProviderItem(claudeItem);
   const codexIconUrl = iconUrlFromProviderItem(codexItem);
   assert.equal(claudeIconUrl, tuttiAgentAssetUrls.claudeCode);
   assert.equal(codexIconUrl, tuttiAgentAssetUrls.codex);
   assert.deepEqual(items, [
+    {
+      appId: "agent-codex",
+      commandCount: 1,
+      commandDescriptions: [
+        "Start a Codex agent session in the current workspace."
+      ],
+      commandPaths: ["codex start"],
+      description: "Start a Codex agent session in the current workspace.",
+      commandSummaries: ["Start a Codex agent session"],
+      displayName: "Codex",
+      iconUrl: tuttiAgentAssetUrls.codex,
+      scopes: ["codex"],
+      workspaceId: "workspace-1"
+    },
     {
       appId: "agent-claude-code",
       commandCount: 1,
@@ -616,20 +634,6 @@ test("desktop rich text @ service assembles provider agent mention apps from cap
       displayName: "Claude Code",
       iconUrl: tuttiAgentAssetUrls.claudeCode,
       scopes: ["claude"],
-      workspaceId: "workspace-1"
-    },
-    {
-      appId: "agent-codex",
-      commandCount: 1,
-      commandDescriptions: [
-        "Start a Codex agent session in the current workspace."
-      ],
-      commandPaths: ["codex start"],
-      description: "Start a Codex agent session in the current workspace.",
-      commandSummaries: ["Start a Codex agent session"],
-      displayName: "Codex",
-      iconUrl: tuttiAgentAssetUrls.codex,
-      scopes: ["codex"],
       workspaceId: "workspace-1"
     }
   ]);
@@ -648,6 +652,78 @@ test("desktop rich text @ service assembles provider agent mention apps from cap
       }
     }
   });
+});
+
+test("desktop rich text @ service hides provider agent app mentions until the agent is ready", async () => {
+  const service = new DesktopRichTextAtService({
+    tuttidClient: {
+      async listCliCapabilities() {
+        return {
+          commands: [
+            {
+              id: "agent-context.codex.start",
+              description:
+                "Start a Codex agent session in the current workspace.",
+              path: ["codex", "start"],
+              summary: "Start a Codex agent session",
+              output: { defaultMode: "table", json: true, table: null },
+              source: {
+                appId: "agent-codex",
+                appName: "Codex",
+                cliDescription:
+                  "Start a Codex agent session in the current workspace.",
+                kind: "app"
+              }
+            },
+            {
+              id: "agent-context.claude.start",
+              description:
+                "Start a Claude Code agent session in the current workspace.",
+              path: ["claude", "start"],
+              summary: "Start a Claude Code agent session",
+              output: { defaultMode: "table", json: true, table: null },
+              source: {
+                appId: "agent-claude-code",
+                appName: "Claude Code",
+                cliDescription:
+                  "Start a Claude Code agent session in the current workspace.",
+                kind: "app"
+              }
+            }
+          ]
+        };
+      }
+    } as unknown as TuttidClient,
+    agentProviderStatuses: () => [
+      createAgentProviderStatus({
+        availability: "ready",
+        provider: "codex"
+      }),
+      createAgentProviderStatus({
+        availability: "not_installed",
+        provider: "claude-code"
+      })
+    ]
+  });
+
+  const [provider] = service.getProviders({
+    capabilities: ["workspace-app"],
+    surface: "agent-composer",
+    target: "agent-gui",
+    workspaceId: "workspace-1"
+  });
+  assert.ok(provider);
+  const items = await provider.query({
+    context: {},
+    keyword: "agent",
+    maxResults: 5,
+    trigger: "@"
+  });
+
+  assert.deepEqual(
+    items.map((item) => provider.getItemKey(item)),
+    ["agent-codex"]
+  );
 });
 
 test("desktop rich text @ service uses task icon fallback for issue manager app mentions", async () => {
@@ -730,6 +806,29 @@ function iconUrlFromProviderItem(item: unknown): string {
   }
   const iconUrl = (item as { readonly iconUrl?: unknown }).iconUrl;
   return typeof iconUrl === "string" ? iconUrl : "";
+}
+
+function createAgentProviderStatus(input: {
+  availability: AgentProviderStatus["availability"]["status"];
+  provider: WorkspaceAgentProvider;
+}): AgentProviderStatus {
+  return {
+    actions: [],
+    adapter: {
+      command: [],
+      installed: input.availability === "ready"
+    },
+    auth: {
+      status: "unknown"
+    },
+    availability: {
+      status: input.availability
+    },
+    cli: {
+      installed: input.availability === "ready"
+    },
+    provider: input.provider
+  };
 }
 
 test("desktop rich text @ service falls back to app description for workspace app mentions", async () => {

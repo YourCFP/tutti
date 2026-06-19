@@ -23,7 +23,7 @@ interface AgentGeneratedFileMentionItem {
 export function createDesktopAgentGeneratedFileMentionProvider(input: {
   agentActivityRuntime: Pick<
     AgentActivityRuntime,
-    "getSnapshot" | "listSessionMessages"
+    "getSnapshot" | "listAgentGeneratedFiles" | "listSessionMessages"
   >;
   workspaceId: string;
 }): AgentContextMentionProvider<AgentGeneratedFileMentionItem> {
@@ -39,6 +39,30 @@ export function createDesktopAgentGeneratedFileMentionProvider(input: {
         "workspaceId",
         input.workspaceId
       );
+      const sessionCwd = metadataString(
+        searchInput.context.metadata,
+        "sessionCwd",
+        ""
+      );
+      const keyword = searchInput.keyword.trim();
+      if (input.agentActivityRuntime.listAgentGeneratedFiles) {
+        const result = await input.agentActivityRuntime.listAgentGeneratedFiles(
+          {
+            limit: searchInput.maxResults,
+            query: keyword,
+            sessionCwd: sessionCwd || undefined,
+            signal: searchInput.abortSignal,
+            workspaceId
+          }
+        );
+        if (searchInput.abortSignal?.aborted) {
+          return [];
+        }
+        return result.entries.map((file) => ({
+          displayName: file.label,
+          path: file.path
+        }));
+      }
       const snapshot = input.agentActivityRuntime.getSnapshot(workspaceId);
       await hydrateRecentSessionMessages({
         abortSignal: searchInput.abortSignal,
@@ -51,18 +75,13 @@ export function createDesktopAgentGeneratedFileMentionProvider(input: {
       }
       const refreshedSnapshot =
         input.agentActivityRuntime.getSnapshot(workspaceId);
-      const sessionCwd = metadataString(
-        searchInput.context.metadata,
-        "sessionCwd",
-        ""
-      );
       const files = collectWorkspaceAgentGeneratedFiles(refreshedSnapshot, {
         ...(sessionCwd ? { sessionCwd } : {})
       });
-      const keyword = searchInput.keyword.trim().toLowerCase();
-      const filtered = keyword
+      const normalizedKeyword = keyword.toLowerCase();
+      const filtered = normalizedKeyword
         ? files.filter((file) =>
-            matchesAgentGeneratedFileKeyword(file, keyword)
+            matchesAgentGeneratedFileKeyword(file, normalizedKeyword)
           )
         : files;
       const limited =

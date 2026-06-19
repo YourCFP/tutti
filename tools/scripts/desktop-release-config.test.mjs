@@ -193,6 +193,12 @@ test("desktop release workflow can mirror release assets to S3 and upsert direct
     workflow,
     /apps\/desktop\/scripts\/upsert-release-download-links\.mjs/
   );
+  assert.match(workflow, /Build desktop release latest metadata/);
+  assert.match(workflow, /apps\/desktop\/scripts\/build-release-latest\.mjs/);
+  assert.match(
+    workflow,
+    /aws s3 cp release-latest\.json "\$\{s3_root\}\/latest\.json"/
+  );
 });
 
 test("desktop release workflow publishes only macOS release assets for now", async () => {

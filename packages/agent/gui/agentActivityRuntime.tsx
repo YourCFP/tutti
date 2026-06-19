@@ -38,6 +38,24 @@ export interface AgentActivityRuntimeListSessionMessagesInput {
   workspaceId: string;
 }
 
+export interface AgentActivityRuntimeListGeneratedFilesInput {
+  limit?: number;
+  query?: string;
+  sessionCwd?: string;
+  signal?: AbortSignal;
+  workspaceId: string;
+}
+
+export interface AgentActivityRuntimeGeneratedFile {
+  label: string;
+  path: string;
+}
+
+export interface AgentActivityRuntimeGeneratedFileList {
+  entries: AgentActivityRuntimeGeneratedFile[];
+  workspaceId: string;
+}
+
 export interface AgentActivityRuntimeEnsureSessionSynchronizedInput {
   afterVersion?: number;
   agentSessionId: string;
@@ -165,6 +183,9 @@ export interface AgentActivityRuntime {
   listSessionMessages(
     input: AgentActivityRuntimeListSessionMessagesInput
   ): Promise<AgentActivityMessagePage>;
+  listAgentGeneratedFiles?(
+    input: AgentActivityRuntimeListGeneratedFilesInput
+  ): Promise<AgentActivityRuntimeGeneratedFileList>;
   load(
     workspaceId: string,
     signal?: AbortSignal

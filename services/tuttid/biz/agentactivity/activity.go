@@ -3,13 +3,21 @@ package agentactivity
 import "context"
 
 type Repository interface {
+	ClearSessions(context.Context, string) (ClearSessionsResult, error)
 	DeleteSession(context.Context, string, string) (bool, error)
 	GetSession(context.Context, string, string) (Session, bool, error)
 	ListSessions(context.Context, string) ([]Session, bool, error)
+	ListWorkspaceGeneratedFiles(context.Context, ListWorkspaceGeneratedFilesInput) (GeneratedFileList, bool, error)
 	ListSessionMessages(context.Context, ListSessionMessagesInput) (MessagePage, bool, error)
 	ReportSessionMessages(context.Context, SessionMessageReport) (MessageReportResult, error)
 	ReportSessionState(context.Context, SessionStateReport) (StateReportResult, error)
 	UpdateSessionPinned(context.Context, string, string, bool) (Session, bool, error)
+}
+
+type ClearSessionsResult struct {
+	RemovedMessages   int
+	RemovedSessions   int
+	RemovedSessionIDs []string
 }
 
 type MessageOrder string
@@ -26,6 +34,23 @@ type ListSessionMessagesInput struct {
 	BeforeVersion  uint64
 	Limit          int
 	Order          MessageOrder
+}
+
+type ListWorkspaceGeneratedFilesInput struct {
+	WorkspaceID string
+	Query       string
+	SessionCwd  string
+	Limit       int
+}
+
+type GeneratedFile struct {
+	Path  string
+	Label string
+}
+
+type GeneratedFileList struct {
+	WorkspaceID string
+	Files       []GeneratedFile
 }
 
 type Session struct {

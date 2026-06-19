@@ -626,19 +626,31 @@ describe("AgentGUINodeView layout persistence", () => {
     expect(conversationFlowMock.calls).toHaveLength(initialRenderCount);
   });
 
-  it("hides the ready detail status indicator and label", () => {
+  it("hides the detail conversation status indicator and label", () => {
     renderAgentGUINodeView({
       viewModel: {
         ...createViewModel(),
-        activeConversation: createConversationSummary("session-1"),
+        activeConversation: {
+          ...createConversationSummary("session-1"),
+          status: "working"
+        },
         activeConversationId: "session-1",
-        conversations: [createConversationSummary("session-1")]
+        conversations: [
+          {
+            ...createConversationSummary("session-1"),
+            status: "working"
+          }
+        ]
       }
     });
 
     expect(screen.queryByText("statusReady")).not.toBeInTheDocument();
+    expect(screen.queryByText("statusWorking")).not.toBeInTheDocument();
     expect(statusDotMock.calls).not.toContainEqual(
       expect.objectContaining({ ariaLabel: "statusReady" })
+    );
+    expect(statusDotMock.calls).not.toContainEqual(
+      expect.objectContaining({ ariaLabel: "statusWorking" })
     );
   });
 
@@ -677,7 +689,7 @@ describe("AgentGUINodeView layout persistence", () => {
       }
     });
 
-    expect(screen.getByText("statusWorking")).toBeInTheDocument();
+    expect(screen.queryByText("statusWorking")).not.toBeInTheDocument();
     expect(composerMock.calls.at(-1)).toMatchObject({
       isSendingTurn: true,
       showStopButton: true
@@ -697,7 +709,7 @@ describe("AgentGUINodeView layout persistence", () => {
       }
     });
 
-    expect(screen.getByText("statusWorking")).toBeInTheDocument();
+    expect(screen.queryByText("statusWorking")).not.toBeInTheDocument();
     expect(composerMock.calls.at(-1)).toMatchObject({
       isSendingTurn: true,
       showStopButton: false
@@ -786,7 +798,10 @@ describe("AgentGUINodeView usage", () => {
     statusDotMock.calls = [];
   });
 
-  function renderWithUsage(usage: AgentGUINodeViewModel["usage"]) {
+  function renderWithUsage(
+    usage: AgentGUINodeViewModel["usage"],
+    slashStatusLimits: AgentGUINodeViewProps["slashStatusLimits"] = []
+  ) {
     const activeConversation = createConversationSummary("session-1");
     return renderAgentGUINodeView({
       viewModel: {
@@ -796,7 +811,8 @@ describe("AgentGUINodeView usage", () => {
         activeConversationId: activeConversation.id,
         conversationDetail: createConversationDetail(),
         usage
-      }
+      },
+      slashStatusLimits
     });
   }
 
@@ -903,6 +919,22 @@ describe("AgentGUINodeView detail header actions", () => {
         ariaLabel: "workingLabel"
       })
     );
+  });
+});
+
+describe("AgentGUINodeView provider setup notice", () => {
+  it("renders a visible setup notice when the provider is not ready", () => {
+    renderAgentGUINodeView({ isAgentProviderReady: false });
+
+    const notice = screen.getByTestId("agent-gui-provider-setup-notice");
+    expect(notice).toHaveTextContent("installRequiredPlaceholder");
+    expect(notice).toHaveAttribute("role", "status");
+  });
+
+  it("hides the setup notice when the provider is ready", () => {
+    renderAgentGUINodeView({ isAgentProviderReady: true });
+
+    expect(screen.queryByTestId("agent-gui-provider-setup-notice")).toBeNull();
   });
 });
 
@@ -1021,26 +1053,31 @@ describe("AgentGUINodeView usage alert banner", () => {
 interface RenderAgentGUINodeViewOptions {
   conversationRailCollapsed?: boolean;
   conversationRailWidthPx?: number;
+  isAgentProviderReady?: boolean;
   onConversationRailWidthChanged?: (widthPx: number) => void;
   viewModel?: AgentGUINodeViewModel;
   actions?: AgentGUINodeViewProps["actions"];
   labels?: AgentGUIViewLabels;
+  slashStatusLimits?: AgentGUINodeViewProps["slashStatusLimits"];
   showProjectSelector?: boolean;
 }
 
 function buildAgentGUINodeViewElement({
   conversationRailCollapsed = false,
   conversationRailWidthPx = 240,
+  isAgentProviderReady = true,
   onConversationRailWidthChanged = vi.fn(),
   viewModel = createViewModel(),
   actions = createActions(),
   labels = createLabels(),
+  slashStatusLimits = [],
   showProjectSelector = true
 }: RenderAgentGUINodeViewOptions = {}) {
   return (
     <AgentGUINodeView
       viewModel={viewModel}
-      isAgentProviderReady={true}
+      isAgentProviderReady={isAgentProviderReady}
+      slashStatusLimits={slashStatusLimits}
       actions={actions}
       workspaceUserProjectI18n={workspaceUserProjectI18n}
       conversationRailCollapsed={conversationRailCollapsed}
@@ -1244,15 +1281,19 @@ function createLabels(): AgentGUIViewLabels {
     inheritedUnavailable: "inheritedUnavailable",
     reasoningLabel: "reasoning",
     reasoningDegreeLabel: "reasoningDegreeLabel",
+    reasoningOptionDefault: "reasoningOptionDefault",
     reasoningOptionMinimal: "reasoningOptionMinimal",
     reasoningOptionLow: "reasoningOptionLow",
     reasoningOptionMedium: "reasoningOptionMedium",
     reasoningOptionHigh: "reasoningOptionHigh",
     reasoningOptionXHigh: "reasoningOptionXHigh",
+    reasoningOptionMax: "reasoningOptionMax",
     speedLabel: "Speed",
     speedSelectionLabel: "Speed",
     speedOptionStandard: "Standard",
+    speedOptionStandardDescription: "Standard speed",
     speedOptionFast: "Fast",
+    speedOptionFastDescription: "Fast speed",
     permissionLabel: "permissionLabel",
     permissionModeReadOnly: "permissionModeReadOnly",
     permissionModeAuto: "permissionModeAuto",
@@ -1429,12 +1470,6 @@ function createLabels(): AgentGUIViewLabels {
     referenceWorkspaceFiles: "referenceWorkspaceFiles",
     syncPending: "syncPending",
     syncSynced: "syncSynced",
-    syncFailed: "syncFailed",
-    statusWorking: "statusWorking",
-    statusWaiting: "statusWaiting",
-    statusReady: "statusReady",
-    statusCompleted: "statusCompleted",
-    statusFailed: "statusFailed",
-    statusCanceled: "statusCanceled"
+    syncFailed: "syncFailed"
   };
 }

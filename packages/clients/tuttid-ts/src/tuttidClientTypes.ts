@@ -10,6 +10,7 @@ import type {
   AppReferenceSearchResponse,
   AgentProviderStatusListResponse,
   CancelWorkspaceAgentSessionResponse,
+  ClearWorkspaceAgentSessionsResponse,
   CliCapabilitiesResponse,
   AgentSessionComposerSettings,
   GetAgentProviderComposerOptionsRequest,
@@ -81,6 +82,7 @@ import type {
   WorkspaceAgentSession,
   WorkspaceAgentProvider,
   WorkspaceAgentSessionAttachmentResponse,
+  WorkspaceAgentGeneratedFileListResponse,
   WorkspaceAgentSessionGitBranchesResponse,
   WorkspaceAgentSessionMessagesResponse,
   WorkspaceAgentSessionListResponse,
@@ -211,6 +213,9 @@ export interface TuttidClient {
     workspaceID: string,
     agentSessionID: string
   ): Promise<DeleteWorkspaceAgentSessionResponse>;
+  clearWorkspaceAgentSessions(
+    workspaceID: string
+  ): Promise<ClearWorkspaceAgentSessionsResponse>;
   moveWorkspaceFileEntry(
     workspaceID: string,
     request: MoveWorkspaceFileEntryRequest
@@ -409,6 +414,14 @@ export interface TuttidClient {
       visibleOnly?: boolean;
     }
   ): Promise<WorkspaceAgentSessionListResponse>;
+  listWorkspaceAgentGeneratedFiles(
+    workspaceID: string,
+    request?: {
+      limit?: number;
+      query?: string;
+      sessionCwd?: string;
+    }
+  ): Promise<WorkspaceAgentGeneratedFileListResponse>;
   scanWorkspaceExternalAgentSessionImports(
     workspaceID: string,
     request?: ExternalAgentImportScanRequest

@@ -1733,6 +1733,9 @@ describe("AgentMentionSearchController", () => {
   });
 
   it("loads grouped browse overview for the all tab without a query", async () => {
+    const queryAgentGeneratedFiles = vi.fn().mockResolvedValue({
+      entries: []
+    });
     const queryIssues = vi.fn().mockResolvedValue({
       issues: [
         {
@@ -1788,6 +1791,7 @@ describe("AgentMentionSearchController", () => {
       ]
     });
     const controller = new AgentMentionSearchController({
+      queryAgentGeneratedFiles,
       queryFiles: vi.fn().mockResolvedValue({
         workspaceId: "room-1",
         root: "/workspace",
@@ -1885,6 +1889,7 @@ describe("AgentMentionSearchController", () => {
       pageSize: 25,
       searchQuery: ""
     });
+    expect(queryAgentGeneratedFiles).not.toHaveBeenCalled();
     expect(
       (
         states.at(-1) as {

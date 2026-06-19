@@ -44,7 +44,7 @@ interface AgentProviderStatusPollScheduler {
 
 type AgentProviderStatusPollTimer = number | { unref?: () => void };
 
-const defaultRequestTimeoutMs = 8_000;
+const defaultRequestTimeoutMs = 15_000;
 const defaultLoginStatusPollDurationMs = 3 * 60 * 1000;
 const defaultLoginStatusPollIntervalMs = 5_000;
 

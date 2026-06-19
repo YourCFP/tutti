@@ -3374,7 +3374,8 @@ aside.workspace-agents-status-panel
 
 .tsh-agent-object-token {
   min-width: 0;
-  max-width: 100%;
+  /* 超出最大展示宽度时截断为省略号(标签 __main 已有 ellipsis);hover 经原生 title 看完整文本。 */
+  max-width: min(100%, var(--agent-mention-max-width, 16rem));
   text-decoration: none;
 }
 
@@ -3580,6 +3581,38 @@ aside.workspace-agents-status-panel
 
 [data-agent-mention-kind="workspace-app"].tsh-agent-object-token--entity {
   color: var(--tutti-purple);
+}
+
+[data-agent-mention-kind="skill"].tsh-agent-object-token--entity,
+[data-agent-mention-kind="capability"].tsh-agent-object-token--entity {
+  top: -1px;
+  gap: 0;
+  padding: 0 4px 0 0;
+  background: transparent;
+  color: var(--tutti-purple);
+}
+
+[data-agent-mention-kind="skill"].tsh-agent-object-token--entity
+  .tsh-agent-object-token__main,
+[data-agent-mention-kind="capability"].tsh-agent-object-token--entity
+  .tsh-agent-object-token__main {
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--tutti-purple-bg);
+}
+
+[data-agent-mention-kind="skill"].tsh-agent-object-token--entity.ProseMirror-selectednode
+  .tsh-agent-object-token__main,
+[data-agent-mention-kind="capability"].tsh-agent-object-token--entity.ProseMirror-selectednode
+  .tsh-agent-object-token__main {
+  background: color-mix(in srgb, var(--tutti-purple) 20%, transparent);
+}
+
+[data-agent-mention-kind="skill"].tsh-agent-object-token--entity
+  .tsh-agent-object-token__kind,
+[data-agent-mention-kind="capability"].tsh-agent-object-token--entity
+  .tsh-agent-object-token__kind {
+  display: none;
 }
 
 [data-agent-mention-kind="workspace-app"]
@@ -5179,7 +5212,7 @@ button.agent-gui-node__conversation-section-toggle:hover
   box-sizing: border-box;
   height: 64px;
   min-height: 64px;
-  padding: 0 32px;
+  padding: 0 var(--agent-gui-detail-padding-x);
 }
 
 .agent-gui-node__detail-header-title-group {
@@ -5235,14 +5268,6 @@ button.agent-gui-node__conversation-section-toggle:hover
   outline: none;
 }
 
-.agent-gui-node__detail-header-status {
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 18px;
-  text-transform: capitalize;
-}
-
 .agent-gui-node__usage-alert-banner {
   display: flex;
   align-items: center;
@@ -5293,6 +5318,40 @@ button.agent-gui-node__conversation-section-toggle:hover
 .agent-gui-node__usage-alert-dismiss:focus-visible {
   background: color-mix(in srgb, currentColor 12%, transparent);
   color: inherit;
+}
+
+.agent-gui-node__provider-setup-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  margin: 0 var(--agent-gui-detail-padding-x) 8px;
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--agent-gui-warning, var(--state-warning)) 26%,
+      transparent
+    );
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--agent-gui-warning, var(--state-warning));
+  background: color-mix(
+    in srgb,
+    var(--agent-gui-warning, var(--state-warning)) 9%,
+    transparent
+  );
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.agent-gui-node__provider-setup-notice-icon {
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
+.agent-gui-node__provider-setup-notice-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .agent-gui-node__layout [data-slot="status-dot"],

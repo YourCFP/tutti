@@ -1,4 +1,4 @@
-import type { JSX } from "react";
+import { memo, type JSX } from "react";
 import type { I18nRuntime } from "@tutti-os/ui-i18n-runtime";
 import { TooltipProvider } from "@tutti-os/ui-system";
 import type { AgentActivityRuntime } from "./agentActivityRuntime";
@@ -18,7 +18,7 @@ export interface AgentGUIProps extends AgentGUINodeProps {
   locale?: AgentGuiI18nLocale;
 }
 
-export function AgentGUI({
+export const AgentGUI = memo(function AgentGUI({
   agentActivityRuntime,
   agentHostApi,
   i18n,
@@ -37,4 +37,4 @@ export function AgentGUI({
       </AgentGuiI18nProvider>
     </TooltipProvider>
   );
-}
+});

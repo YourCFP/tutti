@@ -448,10 +448,16 @@ func applySessionEvents(session Session, events []activityshared.Event) Session 
 	return session
 }
 
-func (c *Controller) Exec(_ context.Context, input ExecInput) (ExecResult, error) {
+func (c *Controller) Exec(ctx context.Context, input ExecInput) (ExecResult, error) {
 	session, adapter, err := c.sessionAndAdapter(input.RoomID, input.AgentSessionID)
 	if err != nil {
 		return ExecResult{}, err
+	}
+	if err := c.ensureLiveAdapterSession(ctx, session, adapter); err != nil {
+		return ExecResult{}, err
+	}
+	if refreshed, ok := c.get(session.RoomID, session.AgentSessionID); ok {
+		session = refreshed
 	}
 	content := normalizeRuntimePromptContent(input.Content)
 	if len(content) == 0 {
@@ -478,6 +484,26 @@ func (c *Controller) Exec(_ context.Context, input ExecInput) (ExecResult, error
 		Accepted:       true,
 		SessionStatus:  session.Status,
 	}, nil
+}
+
+func (c *Controller) ensureLiveAdapterSession(ctx context.Context, session Session, adapter Adapter) error {
+	probe, ok := adapter.(LiveSessionProbeAdapter)
+	if !ok || probe.HasLiveSession(session) {
+		return nil
+	}
+	if strings.TrimSpace(session.ProviderSessionID) == "" {
+		return ErrSessionDisconnected
+	}
+	if err := adapter.Resume(ctx, session); err != nil {
+		return err
+	}
+	session.Status = SessionStatusReady
+	session.UpdatedAtUnixMS = unixMS(now())
+	c.store(session)
+	if !c.publishPendingCommandSnapshot(session) {
+		c.publishAdapterCommandSnapshot(session, adapter)
+	}
+	return nil
 }
 
 func (c *Controller) ValidatePromptContent(_ context.Context, input ExecInput) error {

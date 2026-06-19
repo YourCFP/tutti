@@ -106,6 +106,8 @@ export function createDesktopAgentActivityRuntime(
       workspaceAgentActivityService.getSnapshot(workspaceId),
     listSessionMessages: (input) =>
       workspaceAgentActivityService.listSessionMessages(input),
+    listAgentGeneratedFiles: (input) =>
+      workspaceAgentActivityService.listAgentGeneratedFiles(input),
     load: (workspaceId, signal) =>
       workspaceAgentActivityService.load(workspaceId, signal),
     ensureSessionSynchronized: (input) =>

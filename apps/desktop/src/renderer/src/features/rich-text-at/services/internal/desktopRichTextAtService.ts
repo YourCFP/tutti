@@ -1,4 +1,8 @@
-import type { TuttidClient } from "@tutti-os/client-tuttid-ts";
+import type {
+  AgentProviderStatus,
+  TuttidClient,
+  WorkspaceAgentProvider
+} from "@tutti-os/client-tuttid-ts";
 import {
   AGENT_CONTEXT_MENTION_PROVIDER_IDS,
   type AgentContextMentionProvider
@@ -28,6 +32,7 @@ import type {
 } from "../richTextAtService.interface";
 import type { WorkspaceAppCenterApp } from "@tutti-os/workspace-app-center";
 import { createDesktopWorkspaceAppMentionProvider } from "../../providers/desktopWorkspaceAppMentionProvider.ts";
+import { compareDesktopWorkspaceAppMentionItems } from "../../providers/desktopWorkspaceAppMentionOrdering.ts";
 import {
   createDesktopAgentSessionMentionProvider,
   type DesktopAgentSessionStatusView
@@ -58,6 +63,8 @@ export interface DesktopRichTextAtServiceDependencies {
   resolveSessionStatusView?: (
     status: string
   ) => DesktopAgentSessionStatusView | null;
+  /** Live getter for agent availability, used to hide unbound agent apps. */
+  agentProviderStatuses?: () => readonly AgentProviderStatus[] | undefined;
 }
 
 interface WorkspaceFileAtItem {
@@ -142,7 +149,10 @@ export class DesktopRichTextAtService implements IDesktopRichTextAtService {
       createWorkspaceFileAtContributor(dependencies.tuttidClient),
       createWorkspaceIssueAtContributor(dependencies.tuttidClient),
       createAgentSessionAtContributor(dependencies.tuttidClient),
-      createWorkspaceAppAtContributor(dependencies.tuttidClient)
+      createWorkspaceAppAtContributor({
+        tuttidClient: dependencies.tuttidClient,
+        agentProviderStatuses: dependencies.agentProviderStatuses
+      })
     ];
   }
 
@@ -215,9 +225,10 @@ export class DesktopRichTextAtService implements IDesktopRichTextAtService {
   }
 }
 
-function createWorkspaceAppAtContributor(
-  tuttidClient: TuttidClient
-): DesktopRichTextAtContributor {
+function createWorkspaceAppAtContributor(contributorInput: {
+  tuttidClient: TuttidClient;
+  agentProviderStatuses?: () => readonly AgentProviderStatus[] | undefined;
+}): DesktopRichTextAtContributor {
   return {
     capability: "workspace-app",
     getProviders(input) {
@@ -229,13 +240,15 @@ function createWorkspaceAppAtContributor(
             if (searchInput.abortSignal?.aborted) {
               return [];
             }
-            const response = await tuttidClient.listCliCapabilities(
-              input.workspaceId
-            );
+            const response =
+              await contributorInput.tuttidClient.listCliCapabilities(
+                input.workspaceId
+              );
             if (searchInput.abortSignal?.aborted) {
               return [];
             }
             return workspaceAppAtItemsFromCapabilities({
+              agentProviderStatuses: contributorInput.agentProviderStatuses?.(),
               commands: response.commands,
               keyword: searchInput.keyword,
               maxResults: searchInput.maxResults,
@@ -267,8 +280,12 @@ function createWorkspaceAppAtContributor(
             }
             return resolveMentionSafely(async () => {
               const response =
-                await tuttidClient.listCliCapabilities(workspaceId);
+                await contributorInput.tuttidClient.listCliCapabilities(
+                  workspaceId
+                );
               const item = workspaceAppAtItemsFromCapabilities({
+                agentProviderStatuses:
+                  contributorInput.agentProviderStatuses?.(),
                 commands: response.commands,
                 keyword: "",
                 workspaceId
@@ -293,6 +310,7 @@ function createWorkspaceAppAtContributor(
 }
 
 function workspaceAppAtItemsFromCapabilities(input: {
+  agentProviderStatuses?: readonly AgentProviderStatus[];
   commands: Awaited<
     ReturnType<TuttidClient["listCliCapabilities"]>
   >["commands"];
@@ -307,6 +325,14 @@ function workspaceAppAtItemsFromCapabilities(input: {
     }
     const appId = command.source.appId?.trim() ?? "";
     if (!appId) {
+      continue;
+    }
+    if (
+      !shouldIncludeWorkspaceAppCapability({
+        agentProviderStatuses: input.agentProviderStatuses,
+        appId
+      })
+    ) {
       continue;
     }
     const sourceIconUrl = command.source.iconUrl?.trim() || null;
@@ -360,8 +386,29 @@ function workspaceAppAtItemsFromCapabilities(input: {
   const keyword = input.keyword.trim().toLowerCase();
   const apps = [...appsById.values()]
     .filter((app) => workspaceAppMatchesKeyword(app, keyword))
-    .sort((left, right) => left.displayName.localeCompare(right.displayName));
+    .sort(compareDesktopWorkspaceAppMentionItems);
   return apps;
+}
+
+const WORKSPACE_AGENT_APP_PROVIDER_BY_ID: Readonly<
+  Record<string, WorkspaceAgentProvider>
+> = {
+  "agent-claude-code": "claude-code",
+  "agent-codex": "codex"
+};
+
+function shouldIncludeWorkspaceAppCapability(input: {
+  agentProviderStatuses?: readonly AgentProviderStatus[];
+  appId: string;
+}): boolean {
+  const provider = WORKSPACE_AGENT_APP_PROVIDER_BY_ID[input.appId.trim()];
+  if (!provider || input.agentProviderStatuses === undefined) {
+    return true;
+  }
+  return input.agentProviderStatuses.some(
+    (status) =>
+      status.provider === provider && status.availability.status === "ready"
+  );
 }
 
 function workspaceAppIconUrl(

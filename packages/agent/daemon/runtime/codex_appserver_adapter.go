@@ -415,6 +415,11 @@ func (*CodexAppServerAdapter) CanResume(session Session) bool {
 	return strings.TrimSpace(session.ProviderSessionID) != ""
 }
 
+func (a *CodexAppServerAdapter) HasLiveSession(session Session) bool {
+	appSession := a.getSession(session.AgentSessionID)
+	return appSession != nil && appSession.client != nil
+}
+
 func (a *CodexAppServerAdapter) Close(_ context.Context, session Session) error {
 	if a == nil {
 		return nil

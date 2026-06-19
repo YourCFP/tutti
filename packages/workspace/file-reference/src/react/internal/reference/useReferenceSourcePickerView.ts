@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSnapshot } from "valtio";
 import type {
+  ReferenceHandle,
   ReferenceLocateTarget,
   ReferenceNode,
   ReferenceScope,
@@ -42,7 +43,9 @@ export type ReferenceNodePreviewState =
   | { node: ReferenceNode; status: "directory" }
   | { node: ReferenceNode; status: "loading" }
   | { content: string; node: ReferenceNode; status: "text" }
+  | { content: string; node: ReferenceNode; status: "html" }
   | { node: ReferenceNode; objectUrl: string; status: "image" }
+  | { node: ReferenceNode; objectUrl: string; status: "video" }
   | {
       maxSizeBytes?: number;
       node: ReferenceNode;
@@ -58,7 +61,13 @@ export interface ReferenceBundleSelection {
   nodeId: string;
   displayName: string;
   iconUrl?: string | null;
-  files: WorkspaceFileReference[];
+  /**
+   * 可被 agent 解析的领域句柄(见 ReferenceHandle)。发给 agent 的
+   * `mention://workspace-reference/...` 由它构造;源未解码出句柄时为 null。
+   */
+  handle: ReferenceHandle | null;
+  /** 该 bundle 下文件数(展示用,取节点 childCount;不再展开文件)。 */
+  fileCount: number;
 }
 
 export interface ReferenceGroupedSelection {
@@ -193,6 +202,9 @@ export function useReferenceSourcePickerView({
           [group.ref.sourceId]: [group]
         }));
         controller.ensureChildren(group);
+        for (const node of path.slice(1)) {
+          controller.expandNode(node);
+        }
         const deepest = path[path.length - 1];
         setFocusedNode(path.length > 1 && deepest ? deepest : null);
       })
@@ -493,7 +505,9 @@ export function useReferenceSourcePickerView({
             nodeId: bundle.root.ref.nodeId,
             displayName: bundle.root.displayName,
             iconUrl: bundle.root.iconUrl ?? null,
-            files: bundle.files.map(selectedReferenceToWorkspaceFileReference)
+            handle: bundle.handle,
+            // 展示用文件数:取节点 childCount(不再展开文件);缺省回退 0。
+            fileCount: bundle.root.childCount ?? 0
           }))
         });
       } else {
@@ -563,6 +577,7 @@ export function useReferenceSourcePickerView({
             mtimeMs: node.mtimeMs ?? null,
             sizeBytes: node.sizeBytes ?? null
           },
+          renderHtml: true,
           target: {
             fileKind: preview.kind,
             name: node.displayName,
@@ -582,8 +597,20 @@ export function useReferenceSourcePickerView({
           setPreviewState({ node, objectUrl, status: "image" });
           return;
         }
+        if (loaded.status === "video") {
+          const objectUrl = URL.createObjectURL(
+            new Blob([loaded.bytes], { type: loaded.contentType })
+          );
+          previewObjectUrlRef.current = objectUrl;
+          setPreviewState({ node, objectUrl, status: "video" });
+          return;
+        }
         if (loaded.status === "text") {
           setPreviewState({ content: loaded.content, node, status: "text" });
+          return;
+        }
+        if (loaded.status === "html") {
+          setPreviewState({ content: loaded.content, node, status: "html" });
           return;
         }
         setPreviewState({

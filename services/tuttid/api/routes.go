@@ -407,6 +407,8 @@ func RegisterRoutes(mux *http.ServeMux, routes Routes) {
 		switch r.Method {
 		case http.MethodGet:
 			wrapper.ListWorkspaceAgentSessions(w, r)
+		case http.MethodDelete:
+			wrapper.ClearWorkspaceAgentSessions(w, r)
 		case http.MethodPost:
 			wrapper.CreateWorkspaceAgentSession(w, r)
 		default:
@@ -447,6 +449,14 @@ func RegisterRoutes(mux *http.ServeMux, routes Routes) {
 			return
 		}
 		wrapper.ListWorkspaceAgentSessionMessages(w, r)
+	})
+
+	mux.HandleFunc("/v1/workspaces/{workspaceID}/agent-generated-files", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			tuttitypes.WriteMethodNotAllowed(w)
+			return
+		}
+		wrapper.ListWorkspaceAgentGeneratedFiles(w, r)
 	})
 
 	mux.HandleFunc("/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/attachments/{attachmentID}", func(w http.ResponseWriter, r *http.Request) {

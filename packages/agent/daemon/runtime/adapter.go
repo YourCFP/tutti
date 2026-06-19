@@ -51,6 +51,10 @@ type ResumeProbeAdapter interface {
 	CanResume(Session) bool
 }
 
+type LiveSessionProbeAdapter interface {
+	HasLiveSession(Session) bool
+}
+
 type StateAdapter interface {
 	SessionState(Session) SessionStateSnapshot
 }

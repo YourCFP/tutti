@@ -23,7 +23,8 @@ import type {
   ExternalAgentImportResultResponse,
   ExternalAgentImportScanRequest,
   ExternalAgentImportScanResponse,
-  ImportExternalAgentSessionsRequest
+  ImportExternalAgentSessionsRequest,
+  WorkspaceAgentGeneratedFileListResponse
 } from "@tutti-os/client-tuttid-ts";
 
 export interface WorkspaceAgentActivityListMessagesInput {
@@ -32,6 +33,14 @@ export interface WorkspaceAgentActivityListMessagesInput {
   agentSessionId: string;
   limit?: number;
   order?: AgentActivityMessageOrder;
+  signal?: AbortSignal;
+  workspaceId: string;
+}
+
+export interface WorkspaceAgentActivityListGeneratedFilesInput {
+  limit?: number;
+  query?: string;
+  sessionCwd?: string;
   signal?: AbortSignal;
   workspaceId: string;
 }
@@ -90,6 +99,9 @@ export interface IWorkspaceAgentActivityService {
   listSessionMessages(
     input: WorkspaceAgentActivityListMessagesInput
   ): Promise<AgentActivityMessagePage>;
+  listAgentGeneratedFiles(
+    input: WorkspaceAgentActivityListGeneratedFilesInput
+  ): Promise<WorkspaceAgentGeneratedFileListResponse>;
   scanExternalSessionImports(
     workspaceId: string,
     request?: ExternalAgentImportScanRequest

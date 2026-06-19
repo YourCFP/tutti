@@ -1,5 +1,8 @@
 import type { ServiceRegistry } from "@tutti-os/infra/di";
-import type { TuttidClient } from "@tutti-os/client-tuttid-ts";
+import type {
+  AgentProviderStatus,
+  TuttidClient
+} from "@tutti-os/client-tuttid-ts";
 import type { WorkspaceAppCenterApp } from "@tutti-os/workspace-app-center";
 import { DesktopRichTextAtService } from "./internal/desktopRichTextAtService";
 import { IDesktopRichTextAtService } from "./richTextAtService.interface";
@@ -14,6 +17,7 @@ export interface RichTextAtServiceRegistrationInput {
   resolveSessionStatusView?: (
     status: string
   ) => DesktopAgentSessionStatusView | null;
+  agentProviderStatuses?: () => readonly AgentProviderStatus[] | undefined;
 }
 
 export function registerRichTextAtServices(
@@ -26,7 +30,8 @@ export function registerRichTextAtServices(
     getLocale: input.getLocale,
     resolveAgentIconUrl: input.resolveAgentIconUrl,
     userAvatarPlaceholderUrl: input.userAvatarPlaceholderUrl,
-    resolveSessionStatusView: input.resolveSessionStatusView
+    resolveSessionStatusView: input.resolveSessionStatusView,
+    agentProviderStatuses: input.agentProviderStatuses
   });
   registry.registerInstance(IDesktopRichTextAtService, service);
   return service;

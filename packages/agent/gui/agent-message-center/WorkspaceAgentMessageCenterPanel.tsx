@@ -98,6 +98,9 @@ export const WorkspaceAgentMessageCenterPanel = memo(
     onSubmitPrompt
   }: WorkspaceAgentMessageCenterPanelProps): JSX.Element | null {
     "use memo";
+    if (!open) {
+      return null;
+    }
     return (
       <AgentGuiI18nProvider runtime={i18n} locale={locale}>
         <WorkspaceAgentMessageCenterPanelContent

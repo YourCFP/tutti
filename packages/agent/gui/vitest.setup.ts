@@ -11,6 +11,7 @@ import type {
   AgentHostInputApi,
   AgentHostRuntimeApi
 } from "./host/agentHostApi";
+import { installReactRenderLoopConsoleTrap } from "./test/reactRenderLoopConsoleTrap";
 
 class TestResizeObserver implements ResizeObserver {
   observe(): void {}
@@ -72,6 +73,8 @@ if (typeof Range !== "undefined") {
     toJSON: () => ({})
   });
 }
+
+let restoreReactRenderLoopConsoleTrap: (() => void) | null = null;
 
 vi.mock("react-medium-image-zoom", () => ({
   default: function TestZoom({
@@ -141,14 +144,23 @@ vi.mock("react-medium-image-zoom", () => ({
 }));
 
 beforeEach(() => {
+  restoreReactRenderLoopConsoleTrap?.();
+  restoreReactRenderLoopConsoleTrap = installReactRenderLoopConsoleTrap({
+    console
+  });
   resetAgentHostApiForTests();
   installTestLocalStorage();
   installTestAgentHostApi();
 });
 
 afterEach(() => {
-  cleanup();
-  resetAgentHostApiForTests();
+  try {
+    cleanup();
+    resetAgentHostApiForTests();
+  } finally {
+    restoreReactRenderLoopConsoleTrap?.();
+    restoreReactRenderLoopConsoleTrap = null;
+  }
 });
 
 function installTestLocalStorage(): void {

@@ -3,13 +3,19 @@ import type {
   MenuItemConstructorOptions,
   MessageBoxOptions
 } from "electron";
-import type { AppUpdateState } from "../shared/contracts/ipc.ts";
+import type {
+  AppUpdateState,
+  ClearDeveloperLogsResult
+} from "../shared/contracts/ipc.ts";
 import { createTranslator, type DesktopLocale } from "../shared/i18n/index.ts";
 import type { DesktopLogger } from "./logging.ts";
 
 export interface ApplicationMenuOptions {
   allowDeveloperTools?: boolean;
   checkForUpdates?: () => unknown;
+  clearDeveloperLogs?: () =>
+    | ClearDeveloperLogsResult
+    | Promise<ClearDeveloperLogsResult>;
   exportDeveloperLogs?: () => unknown;
   getLocale?: () => DesktopLocale;
   logger?: DesktopLogger;
@@ -45,6 +51,47 @@ async function runExportDeveloperLogsFromMenu(
       type: "error",
       title: translator.t("desktop.menu.exportLogsTitle"),
       message: translator.t("desktop.menu.exportLogsFailed"),
+      detail
+    });
+  }
+}
+
+async function runClearDeveloperLogsFromMenu(
+  options: ApplicationMenuOptions
+): Promise<void> {
+  if (!options.clearDeveloperLogs) {
+    return;
+  }
+
+  try {
+    const result = await options.clearDeveloperLogs();
+    const translator = createTranslator(options.getLocale?.() ?? "en");
+    const showMessageBox =
+      options.showMessageBox ??
+      (async (messageBoxOptions: MessageBoxOptions) => {
+        const { dialog } = await import("electron");
+        await dialog.showMessageBox(messageBoxOptions);
+      });
+
+    await showMessageBox({
+      buttons: [translator.t("common.ok")],
+      detail: translator.t("desktop.menu.clearLogsCompletedDetail", {
+        count: String(result.clearedFiles)
+      }),
+      message: translator.t("desktop.menu.clearLogsCompletedMessage"),
+      title: translator.t("desktop.menu.clearLogsTitle"),
+      type: "info"
+    });
+    options.logger?.info("menu clear logs completed");
+  } catch (error) {
+    const detail = formatErrorDetail(error);
+    const translator = createTranslator(options.getLocale?.() ?? "en");
+    options.logger?.error("menu clear logs failed", { detail });
+    const { dialog } = await import("electron");
+    await dialog.showMessageBox({
+      type: "error",
+      title: translator.t("desktop.menu.clearLogsTitle"),
+      message: translator.t("desktop.menu.clearLogsFailed"),
       detail
     });
   }
@@ -98,6 +145,7 @@ function isUpToDateUpdateState(value: unknown): value is AppUpdateState {
 export function createApplicationMenuTemplate({
   allowDeveloperTools = process.env.NODE_ENV === "development",
   checkForUpdates,
+  clearDeveloperLogs,
   exportDeveloperLogs,
   getLocale = () => "en",
   logger,
@@ -120,7 +168,6 @@ export function createApplicationMenuTemplate({
             void runCheckForUpdatesFromMenu({
               allowDeveloperTools,
               checkForUpdates,
-              exportDeveloperLogs,
               getLocale,
               logger,
               platform,
@@ -209,7 +256,6 @@ export function createApplicationMenuTemplate({
                   void runCheckForUpdatesFromMenu({
                     allowDeveloperTools,
                     checkForUpdates,
-                    exportDeveloperLogs,
                     getLocale,
                     logger,
                     platform,
@@ -229,6 +275,19 @@ export function createApplicationMenuTemplate({
               getLocale,
               logger,
               platform
+            });
+          }
+        },
+        {
+          label: translator.t("desktop.menu.clearServiceLogs"),
+          click: () => {
+            void runClearDeveloperLogsFromMenu({
+              allowDeveloperTools,
+              clearDeveloperLogs,
+              getLocale,
+              logger,
+              platform,
+              showMessageBox
             });
           }
         }

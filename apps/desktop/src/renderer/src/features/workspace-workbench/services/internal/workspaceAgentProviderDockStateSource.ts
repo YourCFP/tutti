@@ -85,6 +85,15 @@ export function createWorkspaceAgentProviderDockStateSource(input: {
       });
       return {
         ...state,
+        diagnostics: createAgentProviderDockDiagnostics({
+          isLoading: snapshot.isLoading,
+          pendingActionIds: snapshot.pendingActions
+            .filter((action) => action.provider === provider)
+            .map((action) => action.actionId),
+          provider,
+          snapshotError: snapshot.error,
+          status
+        }),
         visibility: shouldShowAgentProviderInDock(provider, status)
           ? "always"
           : "never"
@@ -107,6 +116,33 @@ export function createWorkspaceAgentProviderDockStateSource(input: {
         unsubscribeAgentActivity?.();
       };
     }
+  };
+}
+
+function createAgentProviderDockDiagnostics(input: {
+  isLoading: boolean;
+  pendingActionIds: readonly string[];
+  provider: WorkspaceAgentGuiProvider;
+  snapshotError: string | null;
+  status: AgentProviderStatus | null;
+}): Record<string, unknown> {
+  return {
+    actions:
+      input.status?.actions.map((action) => ({
+        id: action.id,
+        kind: action.kind
+      })) ?? [],
+    adapterInstalled: input.status?.adapter.installed ?? null,
+    authStatus: input.status?.auth.status ?? null,
+    availabilityStatus: input.status?.availability.status ?? null,
+    cliInstalled: input.status?.cli.installed ?? null,
+    isDefaultDockProvider: isWorkspaceAgentGuiDefaultDockProvider(
+      input.provider
+    ),
+    isLoading: input.isLoading,
+    pendingActionIds: input.pendingActionIds,
+    provider: input.provider,
+    snapshotError: input.snapshotError
   };
 }
 

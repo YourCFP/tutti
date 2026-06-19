@@ -178,6 +178,9 @@ function createTransportClient(
     async deleteWorkspaceAgentSession() {
       throw new Error("not used");
     },
+    async clearWorkspaceAgentSessions() {
+      throw new Error("not used");
+    },
     async deleteWorkspace(workspaceID) {
       return { workspaceId: workspaceID };
     },
@@ -344,6 +347,9 @@ function createTransportClient(
       throw new Error("not used");
     },
     async listWorkspaceAgentSessionMessages() {
+      throw new Error("not used");
+    },
+    async listWorkspaceAgentGeneratedFiles() {
       throw new Error("not used");
     },
     async listUserProjects() {

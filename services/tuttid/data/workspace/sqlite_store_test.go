@@ -384,6 +384,98 @@ func TestSQLiteStoreReportAndListAgentActivityMessages(t *testing.T) {
 	}
 }
 
+func TestSQLiteStoreListsWorkspaceGeneratedFiles(t *testing.T) {
+	t.Parallel()
+
+	store := openTestSQLiteStore(t)
+	ctx := context.Background()
+
+	if err := store.Create(ctx, workspacebiz.Summary{
+		ID:   "ws-agent-generated-files",
+		Name: "Workspace Agent Generated Files",
+	}); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	for _, session := range []struct {
+		id  string
+		cwd string
+	}{
+		{id: "session-1", cwd: "/workspace"},
+		{id: "session-2", cwd: "/workspace/other"},
+	} {
+		if _, err := store.ReportSessionState(ctx, agentactivitybiz.SessionStateReport{
+			WorkspaceID:      "ws-agent-generated-files",
+			AgentSessionID:   session.id,
+			Origin:           agentsessionstore.WorkspaceAgentSessionOriginRuntime,
+			Provider:         "codex",
+			Cwd:              session.cwd,
+			Status:           "completed",
+			OccurredAtUnixMS: 100,
+		}); err != nil {
+			t.Fatalf("ReportSessionState(%s) error = %v", session.id, err)
+		}
+	}
+	if _, err := store.ReportSessionMessages(ctx, agentactivitybiz.SessionMessageReport{
+		WorkspaceID:    "ws-agent-generated-files",
+		AgentSessionID: "session-1",
+		Origin:         agentsessionstore.WorkspaceAgentSessionOriginRuntime,
+		Messages: []agentactivitybiz.MessageUpdate{{
+			MessageID: "message-1",
+			Role:      "assistant",
+			Kind:      "tool_call",
+			Status:    "completed",
+			Payload: map[string]any{
+				"fileChanges": map[string]any{
+					"files": []any{
+						map[string]any{"path": "report.md"},
+					},
+				},
+			},
+			OccurredAtUnixMS: 110,
+		}},
+	}); err != nil {
+		t.Fatalf("ReportSessionMessages(session-1) error = %v", err)
+	}
+	if _, err := store.ReportSessionMessages(ctx, agentactivitybiz.SessionMessageReport{
+		WorkspaceID:    "ws-agent-generated-files",
+		AgentSessionID: "session-2",
+		Origin:         agentsessionstore.WorkspaceAgentSessionOriginRuntime,
+		Messages: []agentactivitybiz.MessageUpdate{{
+			MessageID: "message-2",
+			Role:      "assistant",
+			Kind:      "tool_call",
+			Status:    "completed",
+			Payload: map[string]any{
+				"output": map[string]any{
+					"path": "/workspace/other/notes.txt",
+				},
+			},
+			OccurredAtUnixMS: 120,
+		}},
+	}); err != nil {
+		t.Fatalf("ReportSessionMessages(session-2) error = %v", err)
+	}
+
+	result, ok, err := store.ListWorkspaceGeneratedFiles(ctx, agentactivitybiz.ListWorkspaceGeneratedFilesInput{
+		WorkspaceID: "ws-agent-generated-files",
+		SessionCwd:  "/workspace",
+		Query:       "report",
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("ListWorkspaceGeneratedFiles() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("ListWorkspaceGeneratedFiles() ok = false, want true")
+	}
+	if len(result.Files) != 1 {
+		t.Fatalf("len(files) = %d, want 1: %#v", len(result.Files), result.Files)
+	}
+	if result.Files[0].Path != "/workspace/report.md" || result.Files[0].Label != "report.md" {
+		t.Fatalf("file = %#v, want /workspace/report.md report.md", result.Files[0])
+	}
+}
+
 func TestSQLiteStoreReportsProviderSessionMessagesToCanonicalAgentSession(t *testing.T) {
 	t.Parallel()
 
@@ -812,6 +904,100 @@ func TestSQLiteStoreDeleteAgentActivitySessionSoftDeletesMessages(t *testing.T) 
 		Limit:          10,
 	}); err != nil || ok {
 		t.Fatalf("ListSessionMessages() after delete ok=%v error=%v, want ok=false", ok, err)
+	}
+}
+
+func TestSQLiteStoreClearAgentActivitySessionsHardDeletesTombstones(t *testing.T) {
+	t.Parallel()
+
+	store := openTestSQLiteStore(t)
+	ctx := context.Background()
+	const workspaceID = "ws-agent-clear"
+
+	if err := store.Create(ctx, workspacebiz.Summary{
+		ID:   workspaceID,
+		Name: "Workspace Agent Clear",
+	}); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	for _, sessionID := range []string{"session-1", "session-2"} {
+		if _, err := store.ReportSessionState(ctx, agentactivitybiz.SessionStateReport{
+			WorkspaceID:      workspaceID,
+			AgentSessionID:   sessionID,
+			Origin:           agentsessionstore.WorkspaceAgentSessionOriginRuntime,
+			Provider:         "codex",
+			Status:           "completed",
+			OccurredAtUnixMS: 100,
+		}); err != nil {
+			t.Fatalf("ReportSessionState(%s) error = %v", sessionID, err)
+		}
+		if _, err := store.ReportSessionMessages(ctx, agentactivitybiz.SessionMessageReport{
+			WorkspaceID:    workspaceID,
+			AgentSessionID: sessionID,
+			Origin:         agentsessionstore.WorkspaceAgentSessionOriginRuntime,
+			Provider:       "codex",
+			Messages: []agentactivitybiz.MessageUpdate{{
+				MessageID: "message-" + sessionID,
+				Role:      "assistant",
+				Kind:      "text",
+				Status:    "completed",
+				Payload:   map[string]any{"text": "done"},
+			}},
+		}); err != nil {
+			t.Fatalf("ReportSessionMessages(%s) error = %v", sessionID, err)
+		}
+	}
+	if removed, err := store.DeleteSession(ctx, workspaceID, "session-1"); err != nil || !removed {
+		t.Fatalf("DeleteSession() removed=%v error=%v, want removed=true", removed, err)
+	}
+
+	result, err := store.ClearSessions(ctx, workspaceID)
+	if err != nil {
+		t.Fatalf("ClearSessions() error = %v", err)
+	}
+	if result.RemovedSessions != 2 || result.RemovedMessages != 2 {
+		t.Fatalf("ClearSessions() = %#v, want 2 sessions and 2 messages", result)
+	}
+	removedIDs := map[string]bool{}
+	for _, sessionID := range result.RemovedSessionIDs {
+		removedIDs[sessionID] = true
+	}
+	if !removedIDs["session-1"] || !removedIDs["session-2"] {
+		t.Fatalf("ClearSessions() removed session IDs = %#v, want session-1 and session-2", result.RemovedSessionIDs)
+	}
+
+	recreated, err := store.ReportSessionState(ctx, agentactivitybiz.SessionStateReport{
+		WorkspaceID:      workspaceID,
+		AgentSessionID:   "session-1",
+		Origin:           agentsessionstore.WorkspaceAgentSessionOriginRuntime,
+		Provider:         "codex",
+		Status:           "completed",
+		OccurredAtUnixMS: 200,
+	})
+	if err != nil {
+		t.Fatalf("ReportSessionState() after clear error = %v", err)
+	}
+	if !recreated.Accepted {
+		t.Fatal("ReportSessionState() after clear accepted = false, want true")
+	}
+	messageResult, err := store.ReportSessionMessages(ctx, agentactivitybiz.SessionMessageReport{
+		WorkspaceID:    workspaceID,
+		AgentSessionID: "session-1",
+		Origin:         agentsessionstore.WorkspaceAgentSessionOriginRuntime,
+		Provider:       "codex",
+		Messages: []agentactivitybiz.MessageUpdate{{
+			MessageID: "message-reimported",
+			Role:      "assistant",
+			Kind:      "text",
+			Status:    "completed",
+			Payload:   map[string]any{"text": "reimported"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("ReportSessionMessages() after clear error = %v", err)
+	}
+	if messageResult.AcceptedCount != 1 {
+		t.Fatalf("ReportSessionMessages() after clear accepted count = %d, want 1", messageResult.AcceptedCount)
 	}
 }
 

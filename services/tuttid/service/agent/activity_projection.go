@@ -363,6 +363,29 @@ func (p *ActivityProjection) DeleteSession(ctx context.Context, workspaceID stri
 	return removed, nil
 }
 
+func (p *ActivityProjection) ClearSessions(ctx context.Context, workspaceID string) (ClearSessionsResult, error) {
+	if p == nil || p.repo == nil {
+		return ClearSessionsResult{}, nil
+	}
+	workspaceID = strings.TrimSpace(workspaceID)
+	result, err := p.repo.ClearSessions(ctx, workspaceID)
+	if err != nil {
+		return ClearSessionsResult{}, err
+	}
+	for _, agentSessionID := range result.RemovedSessionIDs {
+		agentSessionID = strings.TrimSpace(agentSessionID)
+		if agentSessionID == "" {
+			continue
+		}
+		p.publishActivityUpdated(ctx, workspaceID, agentSessionID, "session_deleted", activitySessionDeletedEventPayload(workspaceID, agentSessionID))
+	}
+	return ClearSessionsResult{
+		RemovedMessages:   result.RemovedMessages,
+		RemovedSessions:   result.RemovedSessions,
+		RemovedSessionIDs: result.RemovedSessionIDs,
+	}, nil
+}
+
 func (p *ActivityProjection) UpdateSessionPinned(ctx context.Context, workspaceID string, agentSessionID string, pinned bool) (PersistedSession, bool, error) {
 	if p == nil || p.repo == nil {
 		return PersistedSession{}, false, nil
@@ -451,6 +474,37 @@ func (p *ActivityProjection) ListSessionMessages(
 		Messages:       sessionMessagesFromActivity(page.Messages),
 		LatestVersion:  page.LatestVersion,
 		HasMore:        page.HasMore,
+	}, true
+}
+
+func (p *ActivityProjection) ListWorkspaceGeneratedFiles(
+	input agentactivitybiz.ListWorkspaceGeneratedFilesInput,
+) (GeneratedFileList, bool) {
+	if p == nil || p.repo == nil {
+		return GeneratedFileList{}, false
+	}
+	list, ok, err := p.repo.ListWorkspaceGeneratedFiles(context.Background(), input)
+	if err != nil {
+		slog.Warn("list workspace agent generated files failed",
+			"event", "workspace.agent_generated_files.list_failed",
+			"workspace_id", input.WorkspaceID,
+			"error", err,
+		)
+		return GeneratedFileList{}, false
+	}
+	if !ok {
+		return GeneratedFileList{}, false
+	}
+	files := make([]GeneratedFile, 0, len(list.Files))
+	for _, file := range list.Files {
+		files = append(files, GeneratedFile{
+			Path:  strings.TrimSpace(file.Path),
+			Label: strings.TrimSpace(file.Label),
+		})
+	}
+	return GeneratedFileList{
+		WorkspaceID: strings.TrimSpace(list.WorkspaceID),
+		Files:       files,
 	}, true
 }
 

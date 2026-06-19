@@ -11,7 +11,10 @@ import {
   connectDesktopHostPreferencesEventStream,
   createDesktopHostPreferencesEventStreamClient
 } from "./desktopHostPreferencesEventStream";
-import { exportDesktopDeveloperLogsAndNotify } from "./developerLogsDesktop.ts";
+import {
+  createDesktopDeveloperLogsService,
+  exportDesktopDeveloperLogsAndNotify
+} from "./developerLogsDesktop.ts";
 import {
   applyDesktopThemeSource,
   syncDesktopWindowBackgroundColors
@@ -96,6 +99,11 @@ export async function bootstrapDesktopApp(): Promise<void> {
   await flushDesktopLogger();
   await configureApplicationMenu({
     checkForUpdates: () => desktopAppServices.updateService.checkForUpdates(),
+    clearDeveloperLogs: () =>
+      createDesktopDeveloperLogsService(
+        desktopAppServices.preferences,
+        desktopAppServices.tuttidClient
+      ).clearLogs(),
     exportDeveloperLogs: () =>
       exportDesktopDeveloperLogsAndNotify(
         desktopAppServices.preferences,

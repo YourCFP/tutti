@@ -3,6 +3,7 @@ import {
   getAgentActivityRuntime,
   getOptionalAgentActivityRuntime
 } from "../../../../../agentActivityRuntime";
+import { getOptionalAgentHostApi } from "../../../../../agentActivityHost";
 import type { AgentGUIProvider } from "../types";
 import { getAgentSessionViewStoreSnapshot } from "../agentSessions/agentSessionViewStore";
 import {
@@ -19,6 +20,7 @@ import {
   type WorkspaceAgentActivitySnapshot,
   type WorkspaceAgentActivitySyncState
 } from "../../../../../shared/workspaceAgentActivityTypes";
+import type { RuntimeDiagnosticsDetailValue } from "../../../../../shared/contracts/dto";
 import {
   clearAgentGUIConversationCreatePendingState,
   clearAgentGUIConversationSubmitPendingState,
@@ -31,6 +33,9 @@ import {
 import { workspaceAgentSnapshotForConversations } from "./agentGuiConversationListSnapshot";
 
 const REFRESH_DEBOUNCE_MS = 200;
+const UPDATE_STORM_DIAGNOSTIC_WINDOW_MS = 1000;
+const UPDATE_STORM_DIAGNOSTIC_THRESHOLD = 8;
+const MAX_DIAGNOSTIC_STACK_LENGTH = 2000;
 
 export interface AgentGUIConversationListQuery {
   workspaceId: string;
@@ -87,6 +92,16 @@ const localCreatedConversationIdsByQueryKey = new Map<string, Set<string>>();
 const deletedConversationIdsByQueryKey = new Map<string, Set<string>>();
 const runtimeRefreshUnsubscribeByWorkspaceId = new Map<string, () => void>();
 const activeConversationIdsByQueryKey = new Map<string, Map<string, string>>();
+const updateStormDiagnosticsByQueryKey = new Map<
+  string,
+  {
+    firstReason: ConversationListUpdateReason;
+    firstStack: string | null;
+    logged: boolean;
+    updateCount: number;
+    windowStartedAtMs: number;
+  }
+>();
 
 function normalizeQuery(
   input: AgentGUIConversationListQuery
@@ -471,6 +486,187 @@ function areConversationListsEqual(
   return left.every((conversation, index) =>
     areConversationsEqual(conversation, right[index]!)
   );
+}
+
+function addChangedConversationField(
+  fields: Set<string>,
+  changedIds: string[],
+  conversationId: string,
+  field: string
+): void {
+  fields.add(field);
+  if (!changedIds.includes(conversationId) && changedIds.length < 5) {
+    changedIds.push(conversationId);
+  }
+}
+
+function describeConversationListChange(
+  previous: readonly AgentGUIConversationSummary[],
+  next: readonly AgentGUIConversationSummary[]
+): {
+  changedFields: string;
+  changedIds: string;
+  orderChanged: boolean;
+} {
+  const fields = new Set<string>();
+  const changedIds: string[] = [];
+  let orderChanged = false;
+  if (previous.length !== next.length) {
+    fields.add("length");
+  }
+  const maxLength = Math.max(previous.length, next.length);
+  for (let index = 0; index < maxLength; index += 1) {
+    const left = previous[index];
+    const right = next[index];
+    if (!left || !right) {
+      addChangedConversationField(
+        fields,
+        changedIds,
+        left?.id ?? right?.id ?? "unknown",
+        left ? "removed" : "added"
+      );
+      continue;
+    }
+    if (left.id !== right.id) {
+      orderChanged = true;
+      addChangedConversationField(fields, changedIds, right.id, "order");
+      continue;
+    }
+    if (left.title !== right.title) {
+      addChangedConversationField(fields, changedIds, right.id, "title");
+    }
+    if (left.status !== right.status) {
+      addChangedConversationField(fields, changedIds, right.id, "status");
+    }
+    if (left.cwd !== right.cwd) {
+      addChangedConversationField(fields, changedIds, right.id, "cwd");
+    }
+    if (!areConversationProjectsEqual(left.project, right.project)) {
+      addChangedConversationField(fields, changedIds, right.id, "project");
+    }
+    if (left.sortTimeUnixMs !== right.sortTimeUnixMs) {
+      addChangedConversationField(
+        fields,
+        changedIds,
+        right.id,
+        "sortTimeUnixMs"
+      );
+    }
+    if (left.updatedAtUnixMs !== right.updatedAtUnixMs) {
+      addChangedConversationField(
+        fields,
+        changedIds,
+        right.id,
+        "updatedAtUnixMs"
+      );
+    }
+    if ((left.pinnedAtUnixMs ?? 0) !== (right.pinnedAtUnixMs ?? 0)) {
+      addChangedConversationField(
+        fields,
+        changedIds,
+        right.id,
+        "pinnedAtUnixMs"
+      );
+    }
+    if (left.hasUnreadCompletion !== right.hasUnreadCompletion) {
+      addChangedConversationField(
+        fields,
+        changedIds,
+        right.id,
+        "hasUnreadCompletion"
+      );
+    }
+    if (
+      !areConversationTitleFallbacksEqual(
+        left.titleFallback,
+        right.titleFallback
+      )
+    ) {
+      addChangedConversationField(
+        fields,
+        changedIds,
+        right.id,
+        "titleFallback"
+      );
+    }
+    if (!areConversationSyncStatesEqual(left.syncState, right.syncState)) {
+      addChangedConversationField(fields, changedIds, right.id, "syncState");
+    }
+  }
+  return {
+    changedFields: Array.from(fields).sort().join(",") || "unknown",
+    changedIds: changedIds.join(","),
+    orderChanged
+  };
+}
+
+function truncateDiagnosticStack(stack: string | undefined): string | null {
+  if (!stack) {
+    return null;
+  }
+  return stack.length > MAX_DIAGNOSTIC_STACK_LENGTH
+    ? stack.slice(0, MAX_DIAGNOSTIC_STACK_LENGTH)
+    : stack;
+}
+
+function recordConversationListUpdateDiagnostics(input: {
+  current: AgentGUIConversationListQueryState;
+  nextConversations: readonly AgentGUIConversationSummary[];
+  reason: ConversationListUpdateReason;
+}): void {
+  const now = Date.now();
+  const currentWindow = updateStormDiagnosticsByQueryKey.get(
+    input.current.queryKey
+  );
+  const windowState =
+    currentWindow &&
+    now - currentWindow.windowStartedAtMs <= UPDATE_STORM_DIAGNOSTIC_WINDOW_MS
+      ? currentWindow
+      : {
+          firstReason: input.reason,
+          firstStack: truncateDiagnosticStack(new Error().stack),
+          logged: false,
+          updateCount: 0,
+          windowStartedAtMs: now
+        };
+  windowState.updateCount += 1;
+  updateStormDiagnosticsByQueryKey.set(input.current.queryKey, windowState);
+  if (
+    windowState.logged ||
+    windowState.updateCount < UPDATE_STORM_DIAGNOSTIC_THRESHOLD
+  ) {
+    return;
+  }
+  windowState.logged = true;
+  const change = describeConversationListChange(
+    input.current.conversations,
+    input.nextConversations
+  );
+  const details: Record<string, RuntimeDiagnosticsDetailValue> = {
+    changedFields: change.changedFields,
+    changedIds: change.changedIds,
+    firstReason: windowState.firstReason,
+    firstStack: windowState.firstStack,
+    nextCount: input.nextConversations.length,
+    orderChanged: change.orderChanged,
+    previousCount: input.current.conversations.length,
+    provider: input.current.query.provider,
+    queryKey: input.current.queryKey,
+    reason: input.reason,
+    sessionOrigin: input.current.query.sessionOrigin,
+    updateCount: windowState.updateCount,
+    windowMs: UPDATE_STORM_DIAGNOSTIC_WINDOW_MS,
+    workspaceId: input.current.query.workspaceId
+  };
+  getOptionalAgentHostApi()?.debug?.logRuntimeDiagnostics?.({
+    source: "renderer-workspace-surface",
+    level: "info",
+    event: "agent-gui.conversation-list.update-storm",
+    // i18n-check-ignore: Internal diagnostic log message.
+    message:
+      "Agent GUI conversation list changed repeatedly in a short window.",
+    details
+  });
 }
 
 function mergeLoadedConversations(
@@ -989,6 +1185,11 @@ export function updateAgentGUIConversationListConversations(
     if (areConversationListsEqual(current.conversations, sortedConversations)) {
       return current;
     }
+    recordConversationListUpdateDiagnostics({
+      current,
+      nextConversations: sortedConversations,
+      reason: _reason
+    });
     return {
       ...current,
       conversations: sortedConversations
@@ -1305,6 +1506,7 @@ export function resetAgentGUIConversationListStoreForTests(): void {
   resetAgentGUIConversationPendingStateForTests();
   deletedConversationIdsByQueryKey.clear();
   activeConversationIdsByQueryKey.clear();
+  updateStormDiagnosticsByQueryKey.clear();
   snapshot = EMPTY_SNAPSHOT;
   emitChange();
 }

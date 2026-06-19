@@ -46,7 +46,7 @@ test("agent provider dock status falls back to unavailable when status is missin
   });
 });
 
-test("agent provider dock status only shows install for not installed providers", () => {
+test("agent provider dock status shows install and refresh for not installed providers", () => {
   const props = resolveAgentProviderDockStatusProps({
     copy,
     isLoading: false,
@@ -59,7 +59,41 @@ test("agent provider dock status only shows install for not installed providers"
     })
   });
 
-  assert.deepEqual(props.hoverActions, [{ id: "install", label: "install" }]);
+  assert.deepEqual(props.hoverActions, [
+    { id: "install", label: "install" },
+    { id: "refresh", label: "refresh" }
+  ]);
+});
+
+test("agent provider dock status shows loading while install is pending", () => {
+  const props = resolveAgentProviderDockStatusProps({
+    copy,
+    isLoading: false,
+    pendingActionIds: new Set(["install"]),
+    status: createStatus({
+      actions: [
+        { id: "install", kind: "daemon_action" },
+        { id: "refresh", kind: "refresh" }
+      ],
+      availability: "not_installed"
+    })
+  });
+
+  assert.deepEqual(props, {
+    hoverActions: [
+      {
+        disabled: true,
+        id: "install",
+        label: "install",
+        pendingLabel: "installing"
+      },
+      { id: "refresh", label: "refresh" }
+    ],
+    state: {
+      kind: "loading",
+      reason: "installing"
+    }
+  });
 });
 
 test("agent provider dock status shows login reason with login and refresh actions for auth required providers", () => {

@@ -140,17 +140,6 @@ export function createWorkspaceWindowContainer(): WorkspaceWindowContainerResult
     reporterService,
     runtimeApi: desktopApi.runtime
   });
-  registerRichTextAtServices(registry, {
-    tuttidClient,
-    appCenterApps: () => appCenterService.store.apps,
-    getLocale: getActiveLocale,
-    resolveAgentIconUrl: resolveWorkspaceRichTextAgentIconUrl,
-    userAvatarPlaceholderUrl,
-    resolveSessionStatusView: createDesktopAgentSessionStatusViewResolver({
-      normalizeDisplayStatus: normalizeAgentActivityDisplayStatus,
-      statusLabel: workspaceAgentActivityStatusLabel
-    })
-  });
   const workspaceUserProjectService = registerWorkspaceUserProjectServices(
     registry,
     {
@@ -161,16 +150,33 @@ export function createWorkspaceWindowContainer(): WorkspaceWindowContainerResult
       workspaceId: environment.startupWorkspaceID ?? "__default__"
     }
   );
-  registerWorkspaceAgentServices(registry, {
+  const workspaceAgentServices = registerWorkspaceAgentServices(registry, {
     eventStreamClient: tuttidEventStreamClient,
     hostFilesApi: desktopApi.host.files,
     tuttidClient,
+    notifications: notificationService,
     reporterService,
     runtimeApi: desktopApi.runtime,
     terminalCommandRunner: createAgentProviderTerminalCommandRunner(
       desktopApi.runtime
     ),
     workspaceUserProjectService
+  });
+  registerRichTextAtServices(registry, {
+    tuttidClient,
+    appCenterApps: () => appCenterService.store.apps,
+    getLocale: getActiveLocale,
+    resolveAgentIconUrl: resolveWorkspaceRichTextAgentIconUrl,
+    userAvatarPlaceholderUrl,
+    resolveSessionStatusView: createDesktopAgentSessionStatusViewResolver({
+      normalizeDisplayStatus: normalizeAgentActivityDisplayStatus,
+      statusLabel: workspaceAgentActivityStatusLabel
+    }),
+    agentProviderStatuses: () => {
+      const snapshot =
+        workspaceAgentServices.agentProviderStatusService.getSnapshot();
+      return snapshot.capturedAt === null ? undefined : snapshot.statuses;
+    }
   });
   registerWorkspaceWorkbenchServices(registry, {
     browserApi: desktopApi.browser,

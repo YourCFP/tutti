@@ -125,9 +125,27 @@ export type TuttiExternalWorkspaceFeature =
   | "agent-connect"
   | "agent-chat";
 
+export const tuttiExternalWorkspaceAgentProviders = [
+  "claude-code",
+  "codex",
+  "nexight",
+  "hermes",
+  "gemini",
+  "openclaw"
+] as const;
+
+export type TuttiExternalWorkspaceAgentProvider =
+  (typeof tuttiExternalWorkspaceAgentProviders)[number];
+
 export interface TuttiExternalWorkspaceOpenFeatureInput {
+  autoSubmit?: boolean;
+  draftPrompt?: string;
   feature: TuttiExternalWorkspaceFeature;
-  provider?: string;
+  provider?: TuttiExternalWorkspaceAgentProvider;
+}
+
+export interface TuttiExternalReferenceOpenInput {
+  href: string;
 }
 
 export const tuttiExternalLogLevels = [
@@ -172,6 +190,9 @@ export interface TuttiExternalBridge {
   workspace: {
     openFeature(input: TuttiExternalWorkspaceOpenFeatureInput): Promise<void>;
   };
+  references: {
+    open(input: TuttiExternalReferenceOpenInput): Promise<void>;
+  };
   logs: {
     write(input: TuttiExternalLogInput): void;
   };
@@ -203,6 +224,13 @@ export type TuttiExternalRendererRequest =
       appId: string;
       input: TuttiExternalSettingsOpenInput;
       operation: "settings.open";
+      requestId: string;
+      workspaceId: string;
+    }
+  | {
+      appId: string;
+      input: TuttiExternalReferenceOpenInput;
+      operation: "references.open";
       requestId: string;
       workspaceId: string;
     };

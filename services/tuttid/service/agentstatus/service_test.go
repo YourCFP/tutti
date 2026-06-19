@@ -11,8 +11,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -163,6 +165,126 @@ func TestServiceListReportsReadyWhenInstalledAndAuthenticated(t *testing.T) {
 	}
 }
 
+func TestServiceListUsesCodexLoginStatusCommand(t *testing.T) {
+	service := testService(func(name string) (string, error) {
+		return "/usr/local/bin/" + name, nil
+	}, map[string]bool{})
+	service.RunAuthStatusCommand = func(_ context.Context, spec ProviderSpec, binaryPath string) (AuthInfo, bool) {
+		if spec.Provider != "codex" {
+			t.Fatalf("Provider = %q, want codex", spec.Provider)
+		}
+		if strings.Join(spec.AuthStatusCommand, " ") != "login status" {
+			t.Fatalf("AuthStatusCommand = %v, want login status", spec.AuthStatusCommand)
+		}
+		if binaryPath != "/usr/local/bin/codex" {
+			t.Fatalf("binaryPath = %q, want /usr/local/bin/codex", binaryPath)
+		}
+		return parseCodexAuthStatusOutput([]byte("Logged in using ChatGPT"))
+	}
+
+	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"codex"}})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	status := onlyStatus(t, snapshot)
+	if status.Availability.Status != AvailabilityReady {
+		t.Fatalf("Availability.Status = %q, want %q", status.Availability.Status, AvailabilityReady)
+	}
+	if status.Auth.Status != AuthAuthenticated {
+		t.Fatalf("Auth.Status = %q, want %q", status.Auth.Status, AuthAuthenticated)
+	}
+}
+
+func TestServiceListDoesNotUseCodexAuthMarkerAfterConfigError(t *testing.T) {
+	service := testService(func(name string) (string, error) {
+		return "/usr/local/bin/" + name, nil
+	}, map[string]bool{"/home/test/.codex/auth.json": true})
+	service.RunAuthStatusCommand = func(_ context.Context, spec ProviderSpec, _ string) (AuthInfo, bool) {
+		if spec.Provider != "codex" {
+			t.Fatalf("Provider = %q, want codex", spec.Provider)
+		}
+		return parseAuthStatusCommandOutput("codex", []byte("Error loading configuration: /home/test/.codex/config.toml:8:16: unknown variant `priority`, expected `fast` or `flex`"))
+	}
+
+	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"codex"}})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	status := onlyStatus(t, snapshot)
+	if status.Availability.Status != AvailabilityAuthRequired {
+		t.Fatalf("Availability.Status = %q, want %q", status.Availability.Status, AvailabilityAuthRequired)
+	}
+	if status.Availability.ReasonCode != "auth_unknown" {
+		t.Fatalf("ReasonCode = %q, want auth_unknown", status.Availability.ReasonCode)
+	}
+	if status.Auth.Status != AuthUnknown {
+		t.Fatalf("Auth.Status = %q, want %q", status.Auth.Status, AuthUnknown)
+	}
+}
+
+func TestServiceListReportsInstallActionWhenCodexAdapterCommandFails(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, "bin")
+	codexPath := filepath.Join(binDir, "codex")
+	adapterPath := filepath.Join(binDir, "codex-acp")
+	writeExecutable(t, codexPath, "#!/bin/sh\nexit 0\n")
+	writeExecutable(t, adapterPath, "#!/bin/sh\necho 'codex-acp failed to start' >&2\nexit 127\n")
+
+	service := Service{
+		Environ: func() []string {
+			return []string{"PATH=" + binDir}
+		},
+		FileExists: func(path string) bool {
+			return path == filepath.Join(home, ".codex", "auth.json")
+		},
+		HomeDir: func() (string, error) {
+			return home, nil
+		},
+		LookPath: func(name string) (string, error) {
+			switch name {
+			case "codex":
+				return codexPath, nil
+			case "codex-acp":
+				return adapterPath, nil
+			default:
+				return "", errors.New("not found")
+			}
+		},
+		IsExecutableFile: isTestExecutableUnderHome(home),
+		Now: func() time.Time {
+			return time.Date(2026, 6, 2, 8, 0, 0, 0, time.UTC)
+		},
+		RunAuthStatusCommand: func(context.Context, ProviderSpec, string) (AuthInfo, bool) {
+			return AuthInfo{Status: AuthAuthenticated}, true
+		},
+	}
+
+	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"codex"}})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	status := onlyStatus(t, snapshot)
+	if status.Availability.Status != AvailabilityNotInstalled {
+		t.Fatalf("Availability.Status = %q, want %q", status.Availability.Status, AvailabilityNotInstalled)
+	}
+	if status.Availability.ReasonCode != "acp_adapter_launch_failed" {
+		t.Fatalf("ReasonCode = %q, want acp_adapter_launch_failed", status.Availability.ReasonCode)
+	}
+	if !status.CLI.Installed {
+		t.Fatal("CLI.Installed = false, want true")
+	}
+	if status.Adapter.Installed {
+		t.Fatal("Adapter.Installed = true, want false")
+	}
+	action := firstAction(t, status.Actions)
+	if action.ID != ActionInstall || action.Kind != ActionKindDaemonAction {
+		t.Fatalf("first action = %#v, want daemon install", action)
+	}
+}
+
 func TestServiceListIgnoresStaleGlobalClaudeACPAdapter(t *testing.T) {
 	home := t.TempDir()
 	binDir := filepath.Join(home, ".nvm", "versions", "node", "v24.12.0", "bin")
@@ -218,6 +340,130 @@ func TestServiceListIgnoresStaleGlobalClaudeACPAdapter(t *testing.T) {
 	}
 	if len(status.Adapter.Command) == 0 || status.Adapter.Command[0] != filepath.Join(runtimeRoot, "node", "bin", npmBinaryNameForTest()) {
 		t.Fatalf("Adapter.Command = %#v, want managed npm command", status.Adapter.Command)
+	}
+	action := firstAction(t, status.Actions)
+	if action.ID != ActionInstall || action.Kind != ActionKindDaemonAction {
+		t.Fatalf("first action = %#v, want daemon install action", action)
+	}
+}
+
+func TestServiceListReportsInstallActionWhenExternalAdapterCommandFails(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, ".local", "bin")
+	claudePath := filepath.Join(binDir, "claude")
+	writeExecutable(t, claudePath, "#!/bin/sh\nexit 0\n")
+
+	registryStore, prefixDir := fakeClaudeExternalRegistry(t)
+	runtimeRoot := fakeManagedRuntimeRoot(t)
+	writeExecutable(
+		t,
+		filepath.Join(runtimeRoot, "node", "bin", npmBinaryNameForTest()),
+		"#!/bin/sh\necho 'sh: claude-agent-acp: command not found' >&2\nexit 127\n",
+	)
+	packageDir := npmPackageInstallDir(prefixDir, "@agentclientprotocol/claude-agent-acp")
+	writePackageManifest(t, packageDir, "@agentclientprotocol/claude-agent-acp", "0.46.0")
+
+	service := Service{
+		Environ: func() []string {
+			return []string{"PATH=/usr/bin:/bin"}
+		},
+		HomeDir: func() (string, error) {
+			return home, nil
+		},
+		LookPath: func(name string) (string, error) {
+			if name == "claude" {
+				return claudePath, nil
+			}
+			return "", errors.New("not found")
+		},
+		IsExecutableFile: isTestExecutableUnderHome(home),
+		Now: func() time.Time {
+			return time.Date(2026, 6, 2, 8, 0, 0, 0, time.UTC)
+		},
+		RunAuthStatusCommand: func(context.Context, ProviderSpec, string) (AuthInfo, bool) {
+			return AuthInfo{Status: AuthAuthenticated}, true
+		},
+		ExternalAgentRegistry: registryStore,
+		ManagedRuntime:        fakeManagedRuntimeResolver(t, runtimeRoot),
+	}
+
+	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"claude-code"}})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	status := onlyStatus(t, snapshot)
+	if status.Availability.Status != AvailabilityNotInstalled {
+		t.Fatalf("Availability.Status = %q, want %q", status.Availability.Status, AvailabilityNotInstalled)
+	}
+	if status.Availability.ReasonCode != "acp_adapter_launch_failed" {
+		t.Fatalf("ReasonCode = %q, want acp_adapter_launch_failed", status.Availability.ReasonCode)
+	}
+	if !status.CLI.Installed {
+		t.Fatal("CLI.Installed = false, want true")
+	}
+	if status.Adapter.Installed {
+		t.Fatal("Adapter.Installed = true, want false")
+	}
+	action := firstAction(t, status.Actions)
+	if action.ID != ActionInstall || action.Kind != ActionKindDaemonAction {
+		t.Fatalf("first action = %#v, want daemon install action", action)
+	}
+}
+
+func TestServiceListReportsInstallActionWhenExternalAdapterCommandFailsAfterReadyWindow(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, ".local", "bin")
+	claudePath := filepath.Join(binDir, "claude")
+	writeExecutable(t, claudePath, "#!/bin/sh\nexit 0\n")
+
+	registryStore, prefixDir := fakeClaudeExternalRegistry(t)
+	runtimeRoot := fakeManagedRuntimeRoot(t)
+	writeExecutable(
+		t,
+		filepath.Join(runtimeRoot, "node", "bin", npmBinaryNameForTest()),
+		"#!/bin/sh\nsleep 0.2\necho 'sh: claude-agent-acp: command not found' >&2\nexit 127\n",
+	)
+	packageDir := npmPackageInstallDir(prefixDir, "@agentclientprotocol/claude-agent-acp")
+	writePackageManifest(t, packageDir, "@agentclientprotocol/claude-agent-acp", "0.46.0")
+
+	service := Service{
+		Environ: func() []string {
+			return []string{"PATH=/usr/bin:/bin"}
+		},
+		HomeDir: func() (string, error) {
+			return home, nil
+		},
+		LookPath: func(name string) (string, error) {
+			if name == "claude" {
+				return claudePath, nil
+			}
+			return "", errors.New("not found")
+		},
+		IsExecutableFile: isTestExecutableUnderHome(home),
+		Now: func() time.Time {
+			return time.Date(2026, 6, 2, 8, 0, 0, 0, time.UTC)
+		},
+		ProbeReadyAfter: 10 * time.Millisecond,
+		ProbeTimeout:    2 * time.Second,
+		RunAuthStatusCommand: func(context.Context, ProviderSpec, string) (AuthInfo, bool) {
+			return AuthInfo{Status: AuthAuthenticated}, true
+		},
+		ExternalAgentRegistry: registryStore,
+		ManagedRuntime:        fakeManagedRuntimeResolver(t, runtimeRoot),
+	}
+
+	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"claude-code"}})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	status := onlyStatus(t, snapshot)
+	if status.Availability.Status != AvailabilityNotInstalled {
+		t.Fatalf("Availability.Status = %q, want %q", status.Availability.Status, AvailabilityNotInstalled)
+	}
+	if status.Availability.ReasonCode != "acp_adapter_launch_failed" {
+		t.Fatalf("ReasonCode = %q, want acp_adapter_launch_failed", status.Availability.ReasonCode)
 	}
 	action := firstAction(t, status.Actions)
 	if action.ID != ActionInstall || action.Kind != ActionKindDaemonAction {
@@ -519,6 +765,70 @@ func TestServiceRunActionInstallsThenProbesProvider(t *testing.T) {
 	}
 }
 
+func TestServiceRunCodexCLILatestInstallerDownloadsLatestAssets(t *testing.T) {
+	home := t.TempDir()
+	installDir := filepath.Join(home, ".local", "bin")
+	archivePath, archiveSHA256 := codexCLIPackageArchive(t)
+	target, ok := codexCLIPackageTarget(runtime.GOOS, runtime.GOARCH)
+	if !ok {
+		t.Skipf("codex CLI package target unavailable for %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+	archiveName := "codex-package-" + target + ".tar.gz"
+	requestedPaths := []string{}
+	installerServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requestedPaths = append(requestedPaths, request.URL.Path)
+		switch request.URL.Path {
+		case "/" + archiveName:
+			http.ServeFile(writer, request, archivePath)
+		case "/codex-package_SHA256SUMS":
+			_, _ = writer.Write([]byte(archiveSHA256 + "  " + archiveName + "\n"))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer installerServer.Close()
+
+	service := probeTestService(home)
+	service.HTTPClient = installerServer.Client()
+	result, err := service.runCodexCLILatestInstaller(context.Background(), InstallerSpec{
+		Kind: InstallerKindCodexCLILatest,
+		CodexCLI: &CodexCLILatestInstallerSpec{
+			BaseURL: installerServer.URL,
+		},
+	}, installDir)
+	if err != nil {
+		t.Fatalf("runCodexCLILatestInstaller() error = %v", err)
+	}
+	if result.ExitCode != 0 {
+		t.Fatalf("ExitCode = %d, want 0; stderr=%q", result.ExitCode, result.Stderr)
+	}
+	if result.Stdout == "" {
+		t.Fatal("Stdout is empty, want install summary")
+	}
+	for _, path := range requestedPaths {
+		if strings.Contains(path, "api.github.com") || strings.Contains(path, "/api/") {
+			t.Fatalf("requested path %q, want latest/download asset paths only", path)
+		}
+	}
+	if !slices.Equal(requestedPaths, []string{"/" + archiveName, "/codex-package_SHA256SUMS"}) {
+		t.Fatalf("requestedPaths = %#v, want archive then checksum", requestedPaths)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".codex", "packages", "standalone", "current", "bin", "codex")); err != nil {
+		t.Fatalf("current codex missing: %v", err)
+	}
+	visiblePath := filepath.Join(installDir, "codex")
+	if !service.executableFile(visiblePath) {
+		t.Fatalf("visible codex path %s is not executable", visiblePath)
+	}
+	output, err := exec.Command(visiblePath, "--version").CombinedOutput()
+	if err != nil {
+		t.Fatalf("run installed codex: %v; output=%s", err, output)
+	}
+	if strings.TrimSpace(string(output)) != "codex 1.2.3" {
+		t.Fatalf("codex --version = %q, want codex 1.2.3", strings.TrimSpace(string(output)))
+	}
+}
+
 func TestServiceRunActionReportsInstallCommandFailures(t *testing.T) {
 	home := t.TempDir()
 	service := probeTestService(home)
@@ -666,6 +976,69 @@ func TestServiceRunActionUpgradesStaleClaudeACPAdapter(t *testing.T) {
 	}
 	if result.Probe == nil || result.Probe.Status != ProbeReady {
 		t.Fatalf("Probe = %#v, want ready probe after upgrade", result.Probe)
+	}
+}
+
+func TestServiceResolveProviderCommandCreatesExternalRegistryNPMPrefix(t *testing.T) {
+	home := t.TempDir()
+	registryStore, prefixDir := fakeClaudeExternalRegistry(t)
+	runtimeRoot := fakeManagedRuntimeRoot(t)
+	service := probeTestService(home)
+	service.ExternalAgentRegistry = registryStore
+	service.ManagedRuntime = fakeManagedRuntimeResolver(t, runtimeRoot)
+
+	if _, err := os.Stat(prefixDir); !os.IsNotExist(err) {
+		t.Fatalf("prefix dir exists before resolve: err=%v", err)
+	}
+
+	result, err := service.ResolveProviderCommand(context.Background(), "claude-code")
+	if err != nil {
+		t.Fatalf("ResolveProviderCommand() error = %v", err)
+	}
+	if _, err := os.Stat(prefixDir); err != nil {
+		t.Fatalf("prefix dir was not created before npm exec: %v", err)
+	}
+	if len(result.Command) == 0 ||
+		!slices.Contains(result.Command, "--prefix") ||
+		!slices.Contains(result.Command, prefixDir) ||
+		!slices.Contains(result.Command, "exec") {
+		t.Fatalf("Command = %#v, want managed npm exec with prefix", result.Command)
+	}
+}
+
+func TestServiceResolveProviderCommandUsesInstalledExternalRegistryNPMBin(t *testing.T) {
+	home := t.TempDir()
+	registryStore, prefixDir := fakeClaudeExternalRegistry(t)
+	runtimeRoot := fakeManagedRuntimeRoot(t)
+	packageDir := npmPackageInstallDir(prefixDir, "@agentclientprotocol/claude-agent-acp")
+	binPath := filepath.Join(prefixDir, "node_modules", ".bin", "claude-agent-acp")
+	writePackageManifestWithBin(
+		t,
+		packageDir,
+		"@agentclientprotocol/claude-agent-acp",
+		"0.46.0",
+		"claude-agent-acp",
+		"dist/index.js",
+	)
+	writeExecutable(t, binPath, "#!/bin/sh\nexit 0\n")
+
+	service := probeTestService(home)
+	service.ExternalAgentRegistry = registryStore
+	service.IsExecutableFile = func(path string) bool {
+		stat, err := os.Stat(path)
+		return err == nil && !stat.IsDir() && stat.Mode().Perm()&0111 != 0
+	}
+	service.ManagedRuntime = fakeManagedRuntimeResolver(t, runtimeRoot)
+
+	result, err := service.ResolveProviderCommand(context.Background(), "claude-code")
+	if err != nil {
+		t.Fatalf("ResolveProviderCommand() error = %v", err)
+	}
+	if len(result.Command) == 0 || result.Command[0] != binPath {
+		t.Fatalf("Command = %#v, want installed npm bin %q", result.Command, binPath)
+	}
+	if slices.Contains(result.Command, "exec") {
+		t.Fatalf("Command = %#v, want installed bin without npm exec", result.Command)
 	}
 }
 
@@ -1136,6 +1509,68 @@ func TestServiceListRetriesClaudeAuthStatusCommandWhenOutputIsUnrecognized(t *te
 	}
 }
 
+func TestServiceListFallsBackToClaudeAuthMarkerWhenAuthStatusCommandIsUnrecognized(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, ".nvm", "versions", "node", "v24.12.0", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin dir: %v", err)
+	}
+	claudePath := filepath.Join(binDir, "claude")
+	writeExecutable(t, claudePath, "#!/bin/sh\nexit 0\n")
+	writeExecutable(t, filepath.Join(binDir, "claude-agent-acp"), "#!/bin/sh\nexit 0\n")
+	writePackageManifest(t, binDir, "@agentclientprotocol/claude-agent-acp", "0.46.0")
+	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte(`{"userID":"user_123"}`), 0o600); err != nil {
+		t.Fatalf("write claude marker: %v", err)
+	}
+	registryStore, prefixDir := fakeClaudeExternalRegistry(t)
+	runtimeRoot := fakeManagedRuntimeRoot(t)
+	packageDir := npmPackageInstallDir(prefixDir, "@agentclientprotocol/claude-agent-acp")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		t.Fatalf("mkdir package dir: %v", err)
+	}
+	writePackageManifest(t, packageDir, "@agentclientprotocol/claude-agent-acp", "0.46.0")
+
+	service := Service{
+		Environ: func() []string {
+			return []string{"PATH=/usr/bin:/bin"}
+		},
+		HomeDir: func() (string, error) {
+			return home, nil
+		},
+		LookPath: func(_ string) (string, error) {
+			return "", errors.New("not found")
+		},
+		Now: func() time.Time {
+			return time.Date(2026, 6, 2, 8, 0, 0, 0, time.UTC)
+		},
+		AuthStatusCommandRetryDelay: time.Nanosecond,
+		RunAuthStatusCommand: func(_ context.Context, spec ProviderSpec, binaryPath string) (AuthInfo, bool) {
+			if spec.Provider != "claude-code" {
+				t.Fatalf("auth status provider = %q, want claude-code", spec.Provider)
+			}
+			if binaryPath != claudePath {
+				t.Fatalf("auth status binaryPath = %q, want %q", binaryPath, claudePath)
+			}
+			return AuthInfo{}, false
+		},
+		ExternalAgentRegistry: registryStore,
+		ManagedRuntime:        fakeManagedRuntimeResolver(t, runtimeRoot),
+	}
+
+	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"claude-code"}})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	status := onlyStatus(t, snapshot)
+	if status.Availability.Status != AvailabilityReady {
+		t.Fatalf("Availability.Status = %q, want %q", status.Availability.Status, AvailabilityReady)
+	}
+	if status.Auth.Status != AuthAuthenticated {
+		t.Fatalf("Auth.Status = %q, want %q", status.Auth.Status, AuthAuthenticated)
+	}
+}
+
 func TestParseClaudeAuthStatusOutputReportsAuthenticated(t *testing.T) {
 	auth, ok := parseClaudeAuthStatusOutput([]byte(`{"loggedIn":true,"authMethod":"oauth"}`))
 	if !ok {
@@ -1146,6 +1581,32 @@ func TestParseClaudeAuthStatusOutputReportsAuthenticated(t *testing.T) {
 	}
 	if auth.AccountLabel != "oauth" {
 		t.Fatalf("AccountLabel = %q, want oauth", auth.AccountLabel)
+	}
+}
+
+func TestParseClaudeAuthMarkerContentReportsAuthenticated(t *testing.T) {
+	auth, ok := parseClaudeAuthMarkerContent([]byte(`{"loggedIn":true,"email":"dev@example.com"}`))
+	if !ok {
+		t.Fatal("parseClaudeAuthMarkerContent ok = false, want true")
+	}
+	if auth.Status != AuthAuthenticated {
+		t.Fatalf("Status = %q, want %q", auth.Status, AuthAuthenticated)
+	}
+	if auth.AccountLabel != "dev@example.com" {
+		t.Fatalf("AccountLabel = %q, want dev@example.com", auth.AccountLabel)
+	}
+}
+
+func TestParseClaudeAuthMarkerContentUsesUserIDFallback(t *testing.T) {
+	auth, ok := parseClaudeAuthMarkerContent([]byte(`{"userID":"user_123"}`))
+	if !ok {
+		t.Fatal("parseClaudeAuthMarkerContent ok = false, want true")
+	}
+	if auth.Status != AuthAuthenticated {
+		t.Fatalf("Status = %q, want %q", auth.Status, AuthAuthenticated)
+	}
+	if auth.AccountLabel != "user_123" {
+		t.Fatalf("AccountLabel = %q, want user_123", auth.AccountLabel)
 	}
 }
 
@@ -1298,6 +1759,19 @@ func writePackageManifest(t *testing.T, dir string, name string, version string)
 	}
 }
 
+func writePackageManifestWithBin(t *testing.T, dir string, name string, version string, binName string, binTarget string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("create package manifest dir: %v", err)
+	}
+	content := `{"name":` + quoteJSONString(name) +
+		`,"version":` + quoteJSONString(version) +
+		`,"bin":{` + quoteJSONString(binName) + `:` + quoteJSONString(binTarget) + `}}`
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(content), 0o644); err != nil {
+		t.Fatalf("write package manifest: %v", err)
+	}
+}
+
 func fakeClaudeExternalRegistry(t *testing.T) (externalagentregistry.Store, string) {
 	t.Helper()
 	root := t.TempDir()
@@ -1412,6 +1886,63 @@ func releaseBinaryArchive(t *testing.T, binaryName string, contents string) (str
 	data, err := os.ReadFile(archivePath)
 	if err != nil {
 		t.Fatalf("read archive: %v", err)
+	}
+	sum := sha256.Sum256(data)
+	return archivePath, hex.EncodeToString(sum[:])
+}
+
+func codexCLIPackageArchive(t *testing.T) (string, string) {
+	t.Helper()
+	archivePath := filepath.Join(t.TempDir(), "codex-package.tar.gz")
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("create codex package archive: %v", err)
+	}
+	gzipWriter := gzip.NewWriter(file)
+	tarWriter := tar.NewWriter(gzipWriter)
+	files := map[string]struct {
+		mode     int64
+		contents string
+	}{
+		"codex-package.json": {
+			mode:     0o644,
+			contents: `{"name":"codex-package","version":"1.2.3"}`,
+		},
+		"bin/codex": {
+			mode:     0o755,
+			contents: "#!/bin/sh\necho 'codex 1.2.3'\n",
+		},
+		"codex-path/rg": {
+			mode:     0o755,
+			contents: "#!/bin/sh\necho rg\n",
+		},
+	}
+	for name, file := range files {
+		contentBytes := []byte(file.contents)
+		header := &tar.Header{
+			Name: name,
+			Mode: file.mode,
+			Size: int64(len(contentBytes)),
+		}
+		if err := tarWriter.WriteHeader(header); err != nil {
+			t.Fatalf("write codex package header: %v", err)
+		}
+		if _, err := tarWriter.Write(contentBytes); err != nil {
+			t.Fatalf("write codex package contents: %v", err)
+		}
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatalf("close codex package tar writer: %v", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatalf("close codex package gzip writer: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close codex package archive file: %v", err)
+	}
+	data, err := os.ReadFile(archivePath)
+	if err != nil {
+		t.Fatalf("read codex package archive: %v", err)
 	}
 	sum := sha256.Sum256(data)
 	return archivePath, hex.EncodeToString(sum[:])

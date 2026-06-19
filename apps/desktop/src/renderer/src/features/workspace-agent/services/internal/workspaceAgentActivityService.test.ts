@@ -89,6 +89,48 @@ test("WorkspaceAgentActivityService.importExternalSessions refreshes sessions an
   assert.equal(projectRefreshCalls, 1);
 });
 
+test("WorkspaceAgentActivityService.listAgentGeneratedFiles delegates to tuttid workspace aggregate", async () => {
+  const calls: unknown[] = [];
+  const service = new WorkspaceAgentActivityService({
+    tuttidClient: {
+      listWorkspaceAgentGeneratedFiles: async (
+        workspaceId: string,
+        request: Parameters<TuttidClient["listWorkspaceAgentGeneratedFiles"]>[1]
+      ) => {
+        calls.push({ request, workspaceId });
+        return {
+          entries: [{ label: "report.md", path: "/workspace/report.md" }],
+          workspaceId
+        };
+      }
+    } as unknown as TuttidClient,
+    runtimeApi: {
+      logTerminalDiagnostic: async () => {}
+    }
+  });
+
+  const result = await service.listAgentGeneratedFiles({
+    limit: 20,
+    query: "report",
+    sessionCwd: "/workspace",
+    workspaceId: " ws-1 "
+  });
+
+  assert.deepEqual(calls, [
+    {
+      request: {
+        limit: 20,
+        query: "report",
+        sessionCwd: "/workspace"
+      },
+      workspaceId: "ws-1"
+    }
+  ]);
+  assert.deepEqual(result.entries, [
+    { label: "report.md", path: "/workspace/report.md" }
+  ]);
+});
+
 test("WorkspaceAgentActivityService.submitPlanDecision runs planMode-off then sendInput for a codex implement decision", async () => {
   const service = createService();
 

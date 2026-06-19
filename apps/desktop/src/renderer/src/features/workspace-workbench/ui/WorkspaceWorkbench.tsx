@@ -1,12 +1,5 @@
 import type * as React from "react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WorkspaceSummary } from "@tutti-os/client-tuttid-ts";
 import {
   defaultIssueManagerWorkbenchTypeId,
@@ -45,6 +38,10 @@ import {
   createWorkspaceAgentGuiDraftLaunchRequest,
   createWorkspaceAgentGuiSessionLaunchRequest
 } from "../services/workspaceAgentGuiLaunch.ts";
+import {
+  resolveWorkspaceAgentChatProvider,
+  resolveWorkspaceAgentProviderLaunchIntent
+} from "../services/workspaceOpenFeatureRequest.ts";
 import type { WorkspaceLaunchpadOpenTrigger } from "../services/workspaceLaunchpadAnalytics.ts";
 import {
   registerWorkspaceBrowserLaunchHandler,
@@ -63,9 +60,18 @@ import {
   registerWorkspaceIssueManagerLaunchHandler,
   type WorkspaceIssueManagerLaunchRequest
 } from "../services/workspaceIssueManagerLaunchCoordinator.ts";
+import {
+  buildGroupChatDeepLinkUrl,
+  registerGroupChatLaunchHandler,
+  type GroupChatLaunchRequest
+} from "../services/groupChatLaunchCoordinator.ts";
+import type { IWorkspaceAppCenterService } from "@renderer/features/workspace-app-center/services/workspaceAppCenterService.interface";
+import {
+  findWorkspaceApp,
+  workspaceAppWebviewTypeID
+} from "@renderer/features/workspace-app-center";
 import { workspaceLaunchpadDockActionId } from "../services/workspaceLaunchpadModel.ts";
 import { requestWorkspaceMessageCenterOpen } from "../services/workspaceMessageCenterCoordinator.ts";
-import { resolveWorkspaceAgentGuiLabel } from "../services/workspaceAgentProviderCatalog.ts";
 import { workspaceBrowserNodeID } from "../services/workspaceWorkbenchNodeIds.ts";
 import { WorkspaceChrome } from "./WorkspaceChrome";
 import { WorkspaceAppExternalBridge } from "./WorkspaceAppExternalBridge";
@@ -165,6 +171,7 @@ function ReadyWorkspaceWorkbench({
   const unregisterBrowserLaunchRef = useRef<(() => void) | null>(null);
   const unregisterFilesLaunchRef = useRef<(() => void) | null>(null);
   const unregisterIssueManagerLaunchRef = useRef<(() => void) | null>(null);
+  const unregisterGroupChatLaunchRef = useRef<(() => void) | null>(null);
   const openedOnboardingWorkspacesRef = useRef(new Set<string>());
   const closeLaunchpad = useCallback(() => {
     setLaunchpadOpen(false);
@@ -214,6 +221,8 @@ function ReadyWorkspaceWorkbench({
       unregisterFilesLaunchRef.current = null;
       unregisterIssueManagerLaunchRef.current?.();
       unregisterIssueManagerLaunchRef.current = null;
+      unregisterGroupChatLaunchRef.current?.();
+      unregisterGroupChatLaunchRef.current = null;
 
       if (!host) {
         return;
@@ -224,6 +233,7 @@ function ReadyWorkspaceWorkbench({
           state.workspace.id,
           async ({
             agentSessionId,
+            autoSubmit,
             draftPrompt,
             provider,
             userProjectPath
@@ -232,6 +242,7 @@ function ReadyWorkspaceWorkbench({
             await host.launchNode(
               normalizedDraftPrompt
                 ? createWorkspaceAgentGuiDraftLaunchRequest({
+                    autoSubmit,
                     draftPrompt: normalizedDraftPrompt,
                     provider,
                     userProjectPath
@@ -256,6 +267,12 @@ function ReadyWorkspaceWorkbench({
             return openWorkspaceIssueManagerNode(host, request);
           }
         );
+      unregisterGroupChatLaunchRef.current = registerGroupChatLaunchHandler(
+        state.workspace.id,
+        async (request) => {
+          return openGroupChatNode(host, appCenterService, request);
+        }
+      );
       unregisterBrowserLaunchRef.current =
         registerWorkspaceBrowserLaunchHandler(
           state.workspace.id,
@@ -264,7 +281,7 @@ function ReadyWorkspaceWorkbench({
           }
         );
     },
-    [runtime, state.workspace.id]
+    [appCenterService, runtime, state.workspace.id]
   );
 
   useEffect(() => {
@@ -277,6 +294,8 @@ function ReadyWorkspaceWorkbench({
       unregisterFilesLaunchRef.current = null;
       unregisterIssueManagerLaunchRef.current?.();
       unregisterIssueManagerLaunchRef.current = null;
+      unregisterGroupChatLaunchRef.current?.();
+      unregisterGroupChatLaunchRef.current = null;
     };
   }, []);
 
@@ -308,15 +327,43 @@ function ReadyWorkspaceWorkbench({
         return;
       }
       if (request.feature === "agent-chat") {
-        // “已绑定，去使用”：打开已绑定（默认）provider 的对话框。
+        // “已绑定，去使用”：优先打开请求指定的 provider，再回退到默认 provider。
         const snapshot = agentProviderStatusService.getSnapshot();
-        const preferred = normalizeDesktopAgentGUIProvider(
-          snapshot.defaultProvider ?? request.provider
-        );
-        void requestWorkspaceAgentGuiLaunch({
-          provider: preferred,
-          workspaceId
-        }).catch(() => {});
+        const preferred = resolveWorkspaceAgentChatProvider({
+          defaultProvider: snapshot.defaultProvider,
+          requestedProvider: request.provider
+        });
+        void (async () => {
+          await agentProviderStatusService
+            .ensureLoaded({ providers: [preferred] })
+            .catch(() => null);
+          const intent = resolveWorkspaceAgentProviderLaunchIntent(
+            agentProviderStatusService.getStatus(preferred)
+          );
+          if (intent.kind === "launch") {
+            await requestWorkspaceAgentGuiLaunch({
+              provider: preferred,
+              workspaceId,
+              ...(request.draftPrompt?.trim()
+                ? {
+                    autoSubmit: request.autoSubmit === true,
+                    draftPrompt: request.draftPrompt.trim()
+                  }
+                : {})
+            });
+            return;
+          }
+          if (intent.kind === "action") {
+            await agentProviderStatusService.runAction(
+              preferred,
+              intent.actionId,
+              {
+                workbenchHost,
+                workspaceId
+              }
+            );
+          }
+        })().catch(() => {});
         return;
       }
       if (request.feature === "agent-connect") {
@@ -329,33 +376,23 @@ function ReadyWorkspaceWorkbench({
         const targetStatus = snapshot.statuses.find(
           (candidate) => String(candidate.provider) === provider
         );
-        const availability = targetStatus?.availability.status;
-        if (!targetStatus || availability === "ready") {
+        const intent = resolveWorkspaceAgentProviderLaunchIntent(
+          targetStatus ?? null
+        );
+        if (intent.kind === "launch") {
           void requestWorkspaceAgentGuiLaunch({
             provider,
             workspaceId
           }).catch(() => {});
           return;
         }
-        const actionId =
-          availability === "not_installed"
-            ? targetStatus.actions.find((action) => action.id === "install")?.id
-            : availability === "auth_required"
-              ? targetStatus.actions.find((action) => action.id === "login")?.id
-              : targetStatus.actions.find((action) => action.kind !== "refresh")
-                  ?.id;
-        if (actionId) {
+        if (intent.kind === "action" && targetStatus) {
           void agentProviderStatusService
-            .runAction(targetStatus.provider, actionId, {
+            .runAction(targetStatus.provider, intent.actionId, {
               workbenchHost,
               workspaceId
             })
             .catch(() => {});
-        } else {
-          void requestWorkspaceAgentGuiLaunch({
-            provider,
-            workspaceId
-          }).catch(() => {});
         }
         return;
       }
@@ -379,6 +416,13 @@ function ReadyWorkspaceWorkbench({
 
     let canceled = false;
     const openOnboarding = async () => {
+      if (
+        await runtime.workbenchHostService.hasWorkspaceOnboardingAutoOpened(
+          workspaceId
+        )
+      ) {
+        return;
+      }
       for (let attempt = 0; attempt < 20 && !canceled; attempt += 1) {
         await appCenterService.refresh(workspaceId);
         const app = appCenterService.store.apps.find(
@@ -400,6 +444,9 @@ function ReadyWorkspaceWorkbench({
             appId: onboardingAppId,
             workspaceId
           });
+          await runtime.workbenchHostService.markWorkspaceOnboardingAutoOpened(
+            workspaceId
+          );
           return;
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -411,7 +458,12 @@ function ReadyWorkspaceWorkbench({
     return () => {
       canceled = true;
     };
-  }, [appCenterService, state.workspace.id, workbenchHost]);
+  }, [
+    appCenterService,
+    runtime.workbenchHostService,
+    state.workspace.id,
+    workbenchHost
+  ]);
 
   useEffect(() => {
     const missionControlShortcutsEnabled =
@@ -517,46 +569,12 @@ function ReadyWorkspaceWorkbench({
         workspaceId={state.workspace.id}
         onClose={closeLaunchpad}
       />
-      <WorkspaceAgentConnectingCard service={agentProviderStatusService} />
       <WorkspaceCloseGuardDialog
         request={runtime.closeDialog.request}
         onCancel={runtime.closeDialog.onCancel}
         onConfirm={runtime.closeDialog.onConfirm}
       />
     </main>
-  );
-}
-
-function WorkspaceAgentConnectingCard({
-  service
-}: {
-  service: IAgentProviderStatusService;
-}) {
-  const { t } = useTranslation();
-  const snapshot = useSyncExternalStore(
-    (listener) => service.subscribe(listener),
-    () => service.getSnapshot(),
-    () => service.getSnapshot()
-  );
-  const pending = snapshot.pendingActions.find(
-    (action) => action.actionId === "install"
-  );
-  if (!pending) {
-    return null;
-  }
-  const label = resolveWorkspaceAgentGuiLabel(
-    normalizeDesktopAgentGUIProvider(pending.provider)
-  );
-  return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-28 z-50 flex justify-center">
-      <div className="pointer-events-auto flex w-64 flex-col items-center gap-3 rounded-2xl border border-border bg-background px-6 py-5 text-center shadow-xl">
-        <div className="text-[15px] font-semibold text-foreground">{label}</div>
-        <div className="text-[12.5px] leading-relaxed text-muted-foreground">
-          {t("workspace.workbenchDesktop.agentProviders.installing")}
-        </div>
-        <LoadingIcon className="size-5 animate-spin text-muted-foreground" />
-      </div>
-    </div>
   );
 }
 
@@ -582,6 +600,45 @@ async function openWorkspaceFilesNode(
         path: request.path
       },
       type: "reveal-file"
+    }
+  );
+  return true;
+}
+
+async function openGroupChatNode(
+  host: WorkbenchHostHandle,
+  appCenterService: IWorkspaceAppCenterService,
+  request: GroupChatLaunchRequest
+): Promise<boolean> {
+  const app = findWorkspaceApp(appCenterService, "group-chat");
+  const launchUrl = app?.launchUrl?.trim() ?? "";
+  if (!launchUrl) {
+    return false;
+  }
+
+  const nodeId = await host.launchNode({
+    launchSource: "agent_command",
+    payload: { appId: "group-chat" },
+    reason: "host",
+    typeId: workspaceAppWebviewTypeID
+  });
+  if (!nodeId) {
+    return false;
+  }
+
+  const deepLinkUrl = buildGroupChatDeepLinkUrl(launchUrl, request);
+  if (deepLinkUrl === launchUrl) {
+    return true;
+  }
+
+  host.activateNode(
+    { nodeId },
+    {
+      payload: {
+        appId: "group-chat",
+        url: deepLinkUrl
+      },
+      type: "open-url"
     }
   );
   return true;

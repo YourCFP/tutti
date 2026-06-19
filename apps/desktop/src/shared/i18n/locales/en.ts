@@ -84,6 +84,11 @@ export const en = {
     },
     menu: {
       checkForUpdates: "Check for Updates...",
+      clearLogsCompletedDetail: "Cleared {{count}} log files.",
+      clearLogsCompletedMessage: "Service logs have been cleared.",
+      clearLogsFailed: "Unable to clear logs",
+      clearLogsTitle: "Clear Logs",
+      clearServiceLogs: "Clear Service Logs...",
       edit: "Edit",
       exportLogsFailed: "Unable to export logs",
       exportLogsTitle: "Export Logs",
@@ -438,8 +443,15 @@ export const en = {
         analyticsDebugDescription:
           "Shows a floating panel with local analytics events in development builds",
         analyticsDebugLabel: "Analytics event panel",
+        clearConversationHistory: "Clear all conversations",
+        clearConversationHistoryConfirm:
+          "Delete all agent conversation history in this workspace? This cannot be undone.",
         clearLogs: "Clear logs",
+        clearingConversationHistory: "Clearing...",
         clearingLogs: "Clearing...",
+        conversationHistoryCleared: "Cleared {{count}} conversations.",
+        conversationHistoryClearFailed:
+          "We couldn't clear conversation history right now.",
         daemonLogLabel: "Daemon log",
         desktopLogLabel: "Desktop log",
         exportLogs: "Export logs",

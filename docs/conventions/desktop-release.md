@@ -151,6 +151,12 @@ When `TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL` is configured, the download buttons
 
 After a successful mirrored upload, the workflow also upserts a managed `Direct Downloads` section into the GitHub Release body so the release description matches the Feishu direct links.
 
+The mirrored desktop release also writes mutable `latest.json` metadata at the release asset prefix root. That file lists the current desktop release tag, version, and CloudFront/static URLs for every uploaded asset:
+
+```text
+https://<asset-base-url>/latest.json
+```
+
 ## Required Secrets
 
 Signed macOS releases require:

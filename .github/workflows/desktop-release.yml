@@ -405,6 +405,26 @@ jobs:
             --recursive \
             --cache-control "public, max-age=31536000, immutable"
 
+      - name: Build desktop release latest metadata
+        if: ${{ env.TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL != '' }}
+        env:
+          RELEASE_ASSET_BASE_URL: ${{ env.TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL }}
+          RELEASE_TAG: ${{ env.TUTTI_DESKTOP_RELEASE_TAG }}
+        run: node apps/desktop/scripts/build-release-latest.mjs release-assets release-latest.json
+
+      - name: Upload desktop release latest metadata to AWS S3
+        if: ${{ env.TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL != '' }}
+        run: |
+          prefix="${TUTTI_DESKTOP_RELEASE_ASSETS_S3_PREFIX%/}"
+          if [ -n "${prefix}" ]; then
+            s3_root="s3://${TUTTI_DESKTOP_RELEASE_ASSETS_S3_BUCKET}/${prefix}"
+          else
+            s3_root="s3://${TUTTI_DESKTOP_RELEASE_ASSETS_S3_BUCKET}"
+          fi
+          aws s3 cp release-latest.json "${s3_root}/latest.json" \
+            --content-type "application/json" \
+            --cache-control "public, max-age=60"
+
       - name: Update release notes with direct downloads
         if: ${{ env.TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL != '' }}
         env:

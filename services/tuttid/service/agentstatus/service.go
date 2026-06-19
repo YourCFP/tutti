@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
 	externalagentregistry "github.com/tutti-os/tutti/services/tuttid/service/externalagentregistry"
 	managedruntime "github.com/tutti-os/tutti/services/tuttid/service/managedruntime"
 )
@@ -176,13 +177,14 @@ type Service struct {
 	ManagedRuntime              managedruntime.Resolver
 }
 
-const authStatusCommandTimeout = 3 * time.Second
+const authStatusCommandTimeout = 5 * time.Second
 const authStatusCommandAttempts = 2
 const defaultAuthStatusCommandRetryDelay = 150 * time.Millisecond
 const defaultInstallTimeout = 5 * time.Minute
 const defaultProbeReadyAfter = 600 * time.Millisecond
 const defaultProbeTimeout = 3 * time.Second
 const defaultProbeWaitDelay = 500 * time.Millisecond
+const externalRegistryNPMProbeTimeoutPadding = 100 * time.Millisecond
 
 func (s Service) List(ctx context.Context, input ListInput) (Snapshot, error) {
 	now := s.now()
@@ -227,12 +229,30 @@ func (s Service) Probe(ctx context.Context, input ProbeInput) (ProbeResult, erro
 		return result, nil
 	}
 	if !status.Adapter.Installed {
+		if status.Availability.ReasonCode == "acp_adapter_launch_failed" {
+			return s.probeAdapterRuntimeCommand(ctx, spec, runtimeResolution, now), nil
+		}
 		result.Status = ProbeFailed
 		result.ReasonCode = firstNonBlank(status.Availability.ReasonCode, "acp_adapter_not_found")
 		result.Message = agentProviderProbeAdapterUnavailableMessage(result.ReasonCode)
 		return result, nil
 	}
 
+	return s.probeAdapterRuntimeCommand(ctx, spec, runtimeResolution, now), nil
+}
+
+func (s Service) probeAdapterRuntimeCommand(
+	ctx context.Context,
+	spec ProviderSpec,
+	runtimeResolution providerRuntimeResolution,
+	now time.Time,
+) ProbeResult {
+	result := ProbeResult{
+		Provider:   spec.Provider,
+		CheckedAt:  now,
+		BinaryPath: runtimeResolution.AdapterPath,
+		Command:    cloneStrings(spec.AdapterCommand),
+	}
 	command := cloneStrings(spec.AdapterCommand)
 	if len(command) == 0 {
 		command = cloneStrings(spec.BinaryNames)
@@ -241,7 +261,7 @@ func (s Service) Probe(ctx context.Context, input ProbeInput) (ProbeResult, erro
 		result.Status = ProbeSkipped
 		result.ReasonCode = "probe_command_unavailable"
 		result.Message = "Provider probe command is unavailable"
-		return result, nil
+		return result
 	}
 
 	env := s.commandResolver().Env(spec.AdapterEnv)
@@ -252,7 +272,7 @@ func (s Service) Probe(ctx context.Context, input ProbeInput) (ProbeResult, erro
 	} else {
 		result.BinaryPath = command[0]
 	}
-	return s.probeCommand(ctx, result, command, env), nil
+	return s.probeCommandWithReadyAfter(ctx, result, command, env, s.probeReadyAfterForSpec(spec))
 }
 
 func (s Service) RunAction(ctx context.Context, input RunActionInput) (RunActionResult, error) {
@@ -350,6 +370,14 @@ func (s Service) statusForSpec(ctx context.Context, spec ProviderSpec, now time.
 	installed := strings.TrimSpace(runtimeResolution.CLIPath) != ""
 	adapterInstalled := strings.TrimSpace(runtimeResolution.AdapterPath) != ""
 	adapterReady := adapterInstalled && adapterPackageRequirementSatisfied(spec.AdapterPackage, runtimeResolution.AdapterVersion)
+	adapterLaunchFailed := false
+	if installed && adapterReady && s.shouldProbeAdapterCommandForStatus(spec, runtimeResolution) {
+		probe := s.probeAdapterRuntimeCommand(ctx, spec, runtimeResolution, now)
+		if probe.Status == ProbeFailed {
+			adapterReady = false
+			adapterLaunchFailed = true
+		}
+	}
 	auth := s.resolveAuth(ctx, spec, installed, runtimeResolution.CLIPath)
 	availability := Availability{
 		CheckedAt: &now,
@@ -364,6 +392,10 @@ func (s Service) statusForSpec(ctx context.Context, spec ProviderSpec, now time.
 	} else if !adapterInstalled {
 		availability.Status = AvailabilityNotInstalled
 		availability.ReasonCode = firstNonBlank(runtimeResolution.ReasonCode, spec.AdapterUnavailableReasonCode, "acp_adapter_not_found")
+		actions = append(actions, daemonAction(ActionInstall))
+	} else if adapterLaunchFailed {
+		availability.Status = AvailabilityNotInstalled
+		availability.ReasonCode = "acp_adapter_launch_failed"
 		actions = append(actions, daemonAction(ActionInstall))
 	} else if !adapterReady {
 		availability.Status = AvailabilityNotInstalled
@@ -400,10 +432,36 @@ func (s Service) statusForSpec(ctx context.Context, spec ProviderSpec, now time.
 	}
 }
 
+func (s Service) shouldProbeAdapterCommandForStatus(spec ProviderSpec, runtimeResolution providerRuntimeResolution) bool {
+	if strings.TrimSpace(spec.ExternalRegistryID) != "" {
+		return true
+	}
+	return spec.Provider == agentprovider.Codex && s.executableFile(runtimeResolution.AdapterPath)
+}
+
+func (s Service) probeReadyAfterForSpec(spec ProviderSpec) time.Duration {
+	if strings.TrimSpace(spec.ExternalRegistryID) != "" && spec.AdapterInstall.RegistryNPM != nil {
+		return externalRegistryNPMProbeReadyAfter(s.probeTimeout())
+	}
+	return s.probeReadyAfter()
+}
+
+func externalRegistryNPMProbeReadyAfter(timeout time.Duration) time.Duration {
+	if timeout <= 0 {
+		timeout = defaultProbeTimeout
+	}
+	if timeout <= 200*time.Millisecond {
+		return timeout / 2
+	}
+	return timeout - externalRegistryNPMProbeTimeoutPadding
+}
+
 func agentProviderProbeAdapterUnavailableMessage(reasonCode string) string {
 	switch strings.TrimSpace(reasonCode) {
 	case "acp_adapter_version_mismatch":
 		return "ACP adapter version does not match the required package version"
+	case "acp_adapter_launch_failed":
+		return "ACP adapter command failed to start"
 	case ReasonExternalAgentRegistryUnavailable:
 		return "ACP external agent registry is unavailable"
 	case ReasonManagedRuntimeUnavailable:

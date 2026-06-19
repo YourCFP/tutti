@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -56,8 +56,7 @@ test("resolves workspace app web log path under app logs dir", () => {
 });
 
 test("workspace app frontend log writer appends to web.log", async () => {
-  const root = join(tmpdir(), `tutti-web-log-${Date.now()}`);
-  await mkdir(root, { recursive: true });
+  const root = await mkdtemp(join(tmpdir(), "tutti-web-log-"));
 
   const writer = new WorkspaceAppFrontendLogWriter(
     root,
@@ -76,13 +75,14 @@ test("workspace app frontend log writer appends to web.log", async () => {
     { event: "page.ready" }
   );
 
-  await new Promise((resolve) => setTimeout(resolve, 50));
-
   const logPath = resolveWorkspaceAppWebLogPath(root, {
     appID: "demo-app",
     workspaceID: "workspace-1"
   });
-  const content = await readFile(logPath, "utf8");
+  const content = await readWorkspaceAppWebLogUntil(logPath, [
+    /web_event="page.loaded"/,
+    /web_event="page.ready"/
+  ]);
 
   assert.match(content, /web_event="page.loaded"/);
   assert.match(content, /web_event="page.ready"/);
@@ -121,3 +121,30 @@ test("normalizes workspace app preload diagnostic payloads", () => {
     null
   );
 });
+
+async function readWorkspaceAppWebLogUntil(
+  logPath: string,
+  patterns: RegExp[]
+): Promise<string> {
+  const deadline = Date.now() + 1_000;
+  let lastContent = "";
+  let lastError: unknown;
+
+  while (Date.now() < deadline) {
+    try {
+      lastContent = await readFile(logPath, "utf8");
+      if (patterns.every((pattern) => pattern.test(lastContent))) {
+        return lastContent;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  if (lastContent) {
+    return lastContent;
+  }
+  throw lastError;
+}
