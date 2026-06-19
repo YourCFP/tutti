@@ -61,4 +61,81 @@ Rules:
 - Supported input schema is a small object-only subset: `type`, `properties`, `required`, and property `description`.
 - Property `type` may be `string`, `boolean`, or `integer`.
 - `defaultMode` may be `json` or `table`; table output must declare static columns.
-- Handler responses must use the `CliCommandOutput` shape, such as `{"kind":"json","value":{"ok":true}}`.
+- Successful handler responses must return the `CliCommandOutput` shape directly. Do not wrap it in an invoke response such as `{"ok":true,"output":...}`.
+
+Runtime request body:
+
+- Tutti posts an invoke envelope to the app handler, not the command input object directly.
+- App handlers must validate and execute `body.input` against the command `inputSchema`.
+- Keep accepting direct raw input only as an optional local-test/backward-compatibility path; do not require it for Tutti runtime calls.
+
+Example handler request body:
+
+```json
+{
+  "schemaVersion": "tutti.app.cli.invoke.v1",
+  "commandId": "automation.run",
+  "appId": "app_automation",
+  "scope": "automation",
+  "path": ["run"],
+  "workspaceId": "workspace-id",
+  "input": {
+    "name": "daily-report",
+    "dry-run": true
+  },
+  "outputMode": "json",
+  "context": {
+    "source": "cli",
+    "parentCommandId": null
+  }
+}
+```
+
+Successful handler response body:
+
+```json
+{
+  "kind": "json",
+  "value": {
+    "ok": true,
+    "runId": "run-123"
+  }
+}
+```
+
+Table output response body:
+
+```json
+{
+  "kind": "table",
+  "columns": [
+    { "key": "name", "label": "Name" },
+    { "key": "status", "label": "Status" }
+  ],
+  "rows": [
+    { "name": "daily-report", "status": "queued" }
+  ]
+}
+```
+
+Text output response body:
+
+```json
+{
+  "kind": "text",
+  "text": "Queued daily-report."
+}
+```
+
+Error response body:
+
+```json
+{
+  "error": {
+    "code": "invalid_input",
+    "message": "Missing required input: name"
+  }
+}
+```
+
+Return a non-2xx HTTP status for errors. Tutti surfaces the `error.message` to CLI callers.
