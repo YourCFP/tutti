@@ -22,10 +22,10 @@ describe("buildIssueRunPrompt", () => {
       workspaceRoot: "/tmp/workspace"
     });
 
-    expect(prompt).toContain("You are handling an issue task.");
+    expect(prompt).toContain("You are handling a task.");
     expect(prompt).toContain("Task title: Implement shell");
     expect(prompt).toContain("References:");
-    expect(prompt).not.toContain("你正在处理一个任务事项");
+    expect(prompt).not.toContain("你正在处理一个任务。");
   });
 
   it("builds Chinese prompt copy when requested", () => {
@@ -38,9 +38,9 @@ describe("buildIssueRunPrompt", () => {
       workspaceRoot: "/tmp/workspace"
     });
 
-    expect(prompt).toContain("你正在处理一个任务事项。");
+    expect(prompt).toContain("你正在处理一个任务。");
     expect(prompt).toContain("任务标题: Implement shell");
     expect(prompt).toContain("引用资料:");
-    expect(prompt).not.toContain("You are handling an issue task.");
+    expect(prompt).not.toContain("You are handling a task.");
   });
 });

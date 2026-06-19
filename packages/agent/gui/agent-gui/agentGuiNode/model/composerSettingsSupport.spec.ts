@@ -101,7 +101,8 @@ describe("composerSettingsSupportFromOptions", () => {
       speed: false,
       permission: false,
       plan: false,
-      browser: false
+      browser: false,
+      computer: false
     });
   });
 

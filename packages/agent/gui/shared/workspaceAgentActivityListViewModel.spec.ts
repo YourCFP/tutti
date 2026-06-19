@@ -903,7 +903,7 @@ describe("buildWorkspaceAgentActivityListViewModel", () => {
           cwd: "/repo",
           lifecycleStatus: "active",
           status: "working",
-          title: "Current issue"
+          title: "Current task"
         }
       ]
     };

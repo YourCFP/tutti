@@ -2190,11 +2190,12 @@ describe("AgentGUINode", () => {
     });
     renderAgentGUINode();
 
-    expect(
-      screen.getByText("agentHost.workspaceAgentStatusWorking").parentElement
-    ).toHaveAttribute(
+    // The session status group surfaces the failed-sync hint: the label is shown
+    // and its containing group carries the hint as a hover title.
+    const syncHint = screen.getByText("agentHost.agentGui.syncFailed");
+    expect(syncHint.parentElement).toHaveAttribute(
       "title",
-      "agentHost.workspaceAgentStatusWorking · agentHost.agentGui.syncFailed"
+      "agentHost.agentGui.syncFailed"
     );
   });
 
@@ -3303,9 +3304,11 @@ describe("AgentGUINode", () => {
     });
     renderAgentGUINode();
 
+    // A completed conversation must not appear busy even when older transcript
+    // rows still contain a running tool call: the composer shows Send, not Stop.
     expect(
-      screen.getAllByText("agentHost.workspaceAgentStatusCompleted").length
-    ).toBeGreaterThan(0);
+      screen.getByRole("button", { name: "agentHost.agentGui.send" })
+    ).toBeTruthy();
     expect(
       screen.queryByRole("button", { name: "agentHost.agentGui.stop" })
     ).toBeNull();
@@ -3653,7 +3656,7 @@ describe("AgentGUINode", () => {
     expect(palette).toHaveClass("h-full");
     expect(palette).toHaveClass("overflow-y-auto");
     expect(palette).not.toHaveClass("grid");
-    const firstOption = screen.getByText("web").closest("button");
+    const firstOption = screen.getByText("web").closest('[role="option"]');
     expect(firstOption).toHaveClass("nodrag");
     expect(firstOption).toHaveClass("flex");
     expect(firstOption).toHaveClass("min-h-9");
@@ -3742,7 +3745,7 @@ describe("AgentGUINode", () => {
     });
     renderAgentGUINode();
 
-    fireEvent.click(screen.getByText("read").closest("button")!);
+    fireEvent.click(screen.getByText("read").closest('[role="option"]')!);
 
     expect(mockUpdateDraftContent).toHaveBeenCalledWith(createDraft("/read "));
     expect(mockSubmitPrompt).not.toHaveBeenCalled();
@@ -3759,7 +3762,7 @@ describe("AgentGUINode", () => {
     });
     renderAgentGUINode();
 
-    const readOption = screen.getByText("read").closest("button");
+    const readOption = screen.getByText("read").closest('[role="option"]');
     expect(readOption).not.toBeNull();
     expect(readOption).toHaveAttribute("aria-selected", "false");
     expect(readOption).not.toHaveClass("bg-[var(--transparency-block)]");

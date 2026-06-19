@@ -6249,7 +6249,7 @@ describe("useAgentGUINodeController", () => {
 
     expect(result.current.viewModel.activeConversationId).toBeNull();
     expect(result.current.viewModel.draftPrompt).toContain(
-      "[@wang jomes & Codex Current issue]"
+      "[@wang jomes & Codex Current task]"
     );
     expect(result.current.viewModel.draftPrompt).not.toContain(
       "[@this session"
@@ -6503,8 +6503,9 @@ describe("useAgentGUINodeController", () => {
             speed: null,
             // Sent as-is; tuttid clamps planMode for codex at session create.
             planMode: true,
-            // Browser use is tri-state and omitted until explicitly changed;
-            // the daemon applies provider defaults and clamps support.
+            // Browser use defaults to true for a new session (draftSettings
+            // browserUse ?? true); the daemon clamps it to provider support.
+            browserUse: true,
             permissionModeId: "full-access"
           }
         })

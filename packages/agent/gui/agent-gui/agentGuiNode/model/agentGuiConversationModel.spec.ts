@@ -524,7 +524,7 @@ describe("agentGuiConversationModel", () => {
     ).toEqual(
       expect.objectContaining({
         provider: "hermes",
-        title: "Current issue",
+        title: "Current task",
         titleFallback: null,
         updatedAtUnixMs: 20
       })
