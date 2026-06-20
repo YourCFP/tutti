@@ -1135,9 +1135,19 @@ describe("AgentInteractivePromptSurface", () => {
       />
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Small Minimal change" })
-    );
+    const smallOption = screen.getByRole("button", {
+      name: "Small Minimal change"
+    });
+    const largeOption = screen.getByRole("button", {
+      name: "Large Broader cleanup"
+    });
+
+    expect(smallOption.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(smallOption);
+    expect(smallOption.getAttribute("aria-pressed")).toBe("true");
+    expect(largeOption.getAttribute("aria-pressed")).toBe("false");
+    expect(onSubmit).not.toHaveBeenCalled();
+
     fireEvent.click(screen.getByRole("button", { name: labels.nextQuestion }));
     fireEvent.change(screen.getByPlaceholderText(labels.answerPlaceholder), {
       target: { value: "Include API docs parity." }

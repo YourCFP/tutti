@@ -2826,12 +2826,18 @@ aside.workspace-agents-status-panel
   text-align: left;
   transition:
     background-color 150ms ease,
+    box-shadow 150ms ease,
     color 150ms ease;
 }
 
 .agent-gui-conversation__interactive-option-button:hover:not(:disabled),
 .agent-gui-conversation__interactive-option-button[data-active="true"] {
   background: var(--transparency-hover);
+}
+
+.agent-gui-conversation__interactive-option-button[data-active="true"] {
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--text-primary) 24%, transparent);
 }
 
 .agent-gui-conversation__interactive-option-display {
@@ -3065,6 +3071,13 @@ aside.workspace-agents-status-panel
   font-size: 11px;
   font-weight: 560;
   padding: 6px 12px;
+}
+
+.agent-gui-conversation__interactive-prompt-actions button:disabled {
+  cursor: not-allowed;
+  background: var(--transparency-block);
+  color: var(--text-disabled);
+  opacity: 0.58;
 }
 
 .agent-gui-conversation__user-message-flow,

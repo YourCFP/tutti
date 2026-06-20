@@ -806,6 +806,7 @@ function FullAskUserPromptSurface({
                   type="button"
                   className={styles.interactiveOptionButton}
                   data-active={active}
+                  aria-pressed={active}
                   aria-label={interactiveOptionLabel(
                     option.label,
                     option.description
