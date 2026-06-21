@@ -4009,6 +4009,41 @@ describe("AgentGUINode", () => {
     ).toBeTruthy();
   });
 
+  it("groups slash palette plugin and connector entries into separate sections", () => {
+    mockViewModel = createViewModel({
+      activeConversationId: "session-1",
+      draftPrompt: "/",
+      availableCommands: [],
+      availableSkills: [
+        {
+          name: "frontend-design",
+          trigger: "$frontend-design",
+          sourceKind: "plugin",
+          pluginName: "product-design",
+          description: "Design product UI"
+        },
+        {
+          name: "Google Drive",
+          trigger: "$google-drive",
+          sourceKind: "connector",
+          kind: "connector",
+          description: "Reference files from Drive"
+        }
+      ]
+    });
+    renderAgentGUINode();
+
+    expect(
+      screen.getByText("agentHost.agentGui.slashPalettePluginsGroup")
+    ).toBeTruthy();
+    expect(
+      screen.getByText("agentHost.agentGui.slashPaletteConnectorsGroup")
+    ).toBeTruthy();
+    expect(
+      screen.queryByText("agentHost.agentGui.slashPaletteSkillsGroup")
+    ).toBeNull();
+  });
+
   it("hides slash palette group headers when only one section is present", () => {
     mockViewModel = createViewModel({
       activeConversationId: "session-1",

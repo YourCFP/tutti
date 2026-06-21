@@ -172,15 +172,19 @@ vi.mock("./AgentSlashCommandPalette", () => ({
     onSelectCapability,
     onSelectCapabilitySettings,
     onSelectSkill,
+    connectorsGroupLabel,
+    pluginsGroupLabel,
     skillsGroupLabel
   }: {
     capabilitiesGroupLabel?: string;
     commandsGroupLabel: string;
+    connectorsGroupLabel: string;
     entries: any[];
     onSelect: (command: any) => void;
     onSelectCapability?: (capability: any) => void;
     onSelectCapabilitySettings?: (capability: any) => void;
     onSelectSkill: (skill: any) => void;
+    pluginsGroupLabel: string;
     skillsGroupLabel: string;
   }) => (
     <div data-testid="mock-slash-palette">
@@ -190,8 +194,28 @@ vi.mock("./AgentSlashCommandPalette", () => ({
       {entries.some((entry) => entry.type === "capability") ? (
         <div>{capabilitiesGroupLabel}</div>
       ) : null}
-      {entries.some((entry) => entry.type === "skill") ? (
+      {entries.some(
+        (entry) =>
+          entry.type === "skill" &&
+          entry.skill?.sourceKind !== "plugin" &&
+          entry.skill?.sourceKind !== "connector" &&
+          entry.skill?.kind !== "connector"
+      ) ? (
         <div>{skillsGroupLabel}</div>
+      ) : null}
+      {entries.some(
+        (entry) =>
+          entry.type === "skill" && entry.skill?.sourceKind === "plugin"
+      ) ? (
+        <div>{pluginsGroupLabel}</div>
+      ) : null}
+      {entries.some(
+        (entry) =>
+          entry.type === "skill" &&
+          (entry.skill?.sourceKind === "connector" ||
+            entry.skill?.kind === "connector")
+      ) ? (
+        <div>{connectorsGroupLabel}</div>
       ) : null}
       {entries.map((entry) => (
         <div key={entry.key}>
@@ -2841,6 +2865,9 @@ function createLabels(): Parameters<typeof AgentComposer>[0]["labels"] {
     slashPaletteCommandsGroup: "命令",
     slashPaletteCapabilitiesGroup: "能力",
     slashPaletteSkillsGroup: "技能",
+    slashPalettePluginsGroup: "插件",
+    slashPaletteConnectorsGroup: "连接器",
+    slashPaletteMcpGroup: "MCP",
     slashStatusTitle: "Status",
     slashStatusSession: "Session",
     slashStatusBaseUrl: "Base URL",

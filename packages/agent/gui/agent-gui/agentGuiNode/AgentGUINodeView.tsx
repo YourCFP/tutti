@@ -318,6 +318,9 @@ export interface AgentGUIViewLabels {
   slashPaletteCommandsGroup: string;
   slashPaletteCapabilitiesGroup: string;
   slashPaletteSkillsGroup: string;
+  slashPalettePluginsGroup: string;
+  slashPaletteConnectorsGroup: string;
+  slashPaletteMcpGroup: string;
   browserUseCapabilityLabel: string;
   browserUseCapabilityDescription: string;
   browserUseCapabilityDescriptionAutoConnect: string;
@@ -1679,6 +1682,9 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       slashPaletteCommandsGroup: labels.slashPaletteCommandsGroup,
       slashPaletteCapabilitiesGroup: labels.slashPaletteCapabilitiesGroup,
       slashPaletteSkillsGroup: labels.slashPaletteSkillsGroup,
+      slashPalettePluginsGroup: labels.slashPalettePluginsGroup,
+      slashPaletteConnectorsGroup: labels.slashPaletteConnectorsGroup,
+      slashPaletteMcpGroup: labels.slashPaletteMcpGroup,
       browserUseCapabilityLabel: labels.browserUseCapabilityLabel,
       browserUseCapabilityDescription: labels.browserUseCapabilityDescription,
       browserUseCapabilityDescriptionAutoConnect:
@@ -1798,6 +1804,9 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       labels.computerUseCapabilitySettingsLabel,
       labels.slashPaletteCapabilitiesGroup,
       labels.slashPaletteCommandsGroup,
+      labels.slashPaletteConnectorsGroup,
+      labels.slashPaletteMcpGroup,
+      labels.slashPalettePluginsGroup,
       labels.slashPaletteSkillsGroup,
       labels.slashStatusClose,
       labels.slashStatusContext,

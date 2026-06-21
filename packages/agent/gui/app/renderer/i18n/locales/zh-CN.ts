@@ -754,6 +754,9 @@ export const zhCN = {
       slashPaletteCommandsGroup: "命令",
       slashPaletteCapabilitiesGroup: "能力",
       slashPaletteSkillsGroup: "技能",
+      slashPalettePluginsGroup: "插件",
+      slashPaletteConnectorsGroup: "连接器",
+      slashPaletteMcpGroup: "MCP",
       browserUseCapabilityLabel: "浏览器",
       browserUseCapabilityDescription: "让 Agent 使用浏览器。",
       browserUseCapabilityDescriptionAutoConnect:

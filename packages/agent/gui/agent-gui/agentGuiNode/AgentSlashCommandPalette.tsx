@@ -37,6 +37,9 @@ interface AgentSlashCommandPaletteProps {
   commandsGroupLabel: string;
   capabilitiesGroupLabel: string;
   skillsGroupLabel: string;
+  pluginsGroupLabel: string;
+  connectorsGroupLabel: string;
+  mcpGroupLabel: string;
   onHighlightChange: (index: number) => void;
   onSelect: (command: AgentSessionCommand) => void;
   onSelectCapability: (capability: AgentSlashCommandCapability) => void;
@@ -70,6 +73,9 @@ export function AgentSlashCommandPalette({
   commandsGroupLabel,
   capabilitiesGroupLabel,
   skillsGroupLabel,
+  pluginsGroupLabel,
+  connectorsGroupLabel,
+  mcpGroupLabel,
   onHighlightChange,
   onSelect,
   onSelectCapability,
@@ -115,11 +121,14 @@ export function AgentSlashCommandPalette({
                   : paletteStyles.groupHeaderSeparated
               )}
             >
-              {groupType === "command"
-                ? commandsGroupLabel
-                : groupType === "capability"
-                  ? capabilitiesGroupLabel
-                  : skillsGroupLabel}
+              {labelForEntryGroupType(groupType, {
+                commandsGroupLabel,
+                capabilitiesGroupLabel,
+                skillsGroupLabel,
+                pluginsGroupLabel,
+                connectorsGroupLabel,
+                mcpGroupLabel
+              })}
             </div>
           ) : null;
         return (
@@ -188,10 +197,55 @@ export function AgentSlashCommandPalette({
   );
 }
 
-type AgentSlashPaletteEntryGroup = "command" | "capability" | "skill";
+type AgentSlashPaletteEntryGroup =
+  | "command"
+  | "capability"
+  | "skill"
+  | "plugin"
+  | "connector"
+  | "mcp";
 
 function entryGroupType(
   entry: AgentSlashPaletteEntry
 ): AgentSlashPaletteEntryGroup {
-  return entry.type;
+  if (entry.type !== "skill") {
+    return entry.type;
+  }
+  if (
+    entry.skill.sourceKind === "connector" ||
+    entry.skill.kind === "connector"
+  ) {
+    return "connector";
+  }
+  if (entry.skill.sourceKind === "plugin") {
+    return "plugin";
+  }
+  return "skill";
+}
+
+function labelForEntryGroupType(
+  groupType: AgentSlashPaletteEntryGroup,
+  labels: {
+    commandsGroupLabel: string;
+    capabilitiesGroupLabel: string;
+    skillsGroupLabel: string;
+    pluginsGroupLabel: string;
+    connectorsGroupLabel: string;
+    mcpGroupLabel: string;
+  }
+): string {
+  switch (groupType) {
+    case "command":
+      return labels.commandsGroupLabel;
+    case "capability":
+      return labels.capabilitiesGroupLabel;
+    case "plugin":
+      return labels.pluginsGroupLabel;
+    case "connector":
+      return labels.connectorsGroupLabel;
+    case "mcp":
+      return labels.mcpGroupLabel;
+    case "skill":
+      return labels.skillsGroupLabel;
+  }
 }

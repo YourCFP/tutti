@@ -241,6 +241,9 @@ export interface AgentComposerProps {
     slashPaletteCommandsGroup: string;
     slashPaletteCapabilitiesGroup: string;
     slashPaletteSkillsGroup: string;
+    slashPalettePluginsGroup: string;
+    slashPaletteConnectorsGroup: string;
+    slashPaletteMcpGroup: string;
     slashStatusTitle: string;
     slashStatusSession: string;
     slashStatusBaseUrl: string;
@@ -2346,6 +2349,9 @@ export function AgentComposer({
                 commandsGroupLabel={labels.slashPaletteCommandsGroup}
                 capabilitiesGroupLabel={labels.slashPaletteCapabilitiesGroup}
                 skillsGroupLabel={labels.slashPaletteSkillsGroup}
+                pluginsGroupLabel={labels.slashPalettePluginsGroup}
+                connectorsGroupLabel={labels.slashPaletteConnectorsGroup}
+                mcpGroupLabel={labels.slashPaletteMcpGroup}
                 onHighlightChange={setHighlightedIndex}
                 onSelect={selectCommand}
                 onSelectCapability={selectCapability}

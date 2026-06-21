@@ -817,6 +817,9 @@ export const en = {
       slashPaletteCommandsGroup: "Commands",
       slashPaletteCapabilitiesGroup: "Capabilities",
       slashPaletteSkillsGroup: "Skills",
+      slashPalettePluginsGroup: "Plugins",
+      slashPaletteConnectorsGroup: "Connectors",
+      slashPaletteMcpGroup: "MCP",
       browserUseCapabilityLabel: "Browser",
       browserUseCapabilityDescription: "Let the agent use a browser.",
       browserUseCapabilityDescriptionAutoConnect:

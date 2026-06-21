@@ -11,6 +11,9 @@ describe("AgentSlashCommandPalette", () => {
         commandsGroupLabel="Commands"
         capabilitiesGroupLabel="Capabilities"
         skillsGroupLabel="Skills"
+        pluginsGroupLabel="Plugins"
+        connectorsGroupLabel="Connectors"
+        mcpGroupLabel="MCP"
         highlightedIndex={0}
         entries={[
           {
@@ -78,6 +81,9 @@ describe("AgentSlashCommandPalette", () => {
         commandsGroupLabel="Commands"
         capabilitiesGroupLabel="Capabilities"
         skillsGroupLabel="Skills"
+        pluginsGroupLabel="Plugins"
+        connectorsGroupLabel="Connectors"
+        mcpGroupLabel="MCP"
         highlightedIndex={0}
         entries={[
           {
@@ -119,6 +125,9 @@ describe("AgentSlashCommandPalette", () => {
         commandsGroupLabel="Commands"
         capabilitiesGroupLabel="Capabilities"
         skillsGroupLabel="Skills"
+        pluginsGroupLabel="Plugins"
+        connectorsGroupLabel="Connectors"
+        mcpGroupLabel="MCP"
         highlightedIndex={0}
         entries={[
           {
@@ -161,6 +170,9 @@ describe("AgentSlashCommandPalette", () => {
         commandsGroupLabel="Commands"
         capabilitiesGroupLabel="Capabilities"
         skillsGroupLabel="Skills"
+        pluginsGroupLabel="Plugins"
+        connectorsGroupLabel="Connectors"
+        mcpGroupLabel="MCP"
         highlightedIndex={0}
         entries={[
           {
@@ -195,5 +207,52 @@ describe("AgentSlashCommandPalette", () => {
       "border-t",
       "border-[var(--border-1)]"
     );
+  });
+
+  it("separates plugin and connector skill entries into source groups", () => {
+    render(
+      <AgentSlashCommandPalette
+        label="Slash commands"
+        commandsGroupLabel="Commands"
+        capabilitiesGroupLabel="Capabilities"
+        skillsGroupLabel="Skills"
+        pluginsGroupLabel="Plugins"
+        connectorsGroupLabel="Connectors"
+        mcpGroupLabel="MCP"
+        highlightedIndex={0}
+        entries={[
+          {
+            type: "skill",
+            key: "skill:plugin-review",
+            label: "plugin-review",
+            skill: {
+              name: "plugin-review",
+              trigger: "$plugin-review",
+              sourceKind: "plugin",
+              pluginName: "review-tools"
+            }
+          },
+          {
+            type: "skill",
+            key: "skill:google-drive",
+            label: "google-drive",
+            skill: {
+              name: "Google Drive",
+              trigger: "$google-drive",
+              sourceKind: "connector",
+              kind: "connector"
+            }
+          }
+        ]}
+        onHighlightChange={vi.fn()}
+        onSelect={vi.fn()}
+        onSelectCapability={vi.fn()}
+        onSelectSkill={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Plugins")).toBeInTheDocument();
+    expect(screen.getByText("Connectors")).toBeInTheDocument();
+    expect(screen.queryByText("Skills")).toBeNull();
   });
 });
