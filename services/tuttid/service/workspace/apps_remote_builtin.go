@@ -64,6 +64,51 @@ func shouldMaterializeRemoteBuiltin(appPackage workspacebiz.AppPackage, builtin 
 	return validateExtractedAppPackage(appPackage.PackageDir, appPackage.Manifest) != nil
 }
 
+func (s *AppCenterService) materializeEmbeddedArchiveBuiltinPackage(ctx context.Context, builtin builtinapps.App) (workspacebiz.AppPackage, error) {
+	unlock := s.remoteBuiltinInstallLocks.Lock(builtin.Manifest.AppID + "@" + builtin.Manifest.Version)
+	defer unlock()
+
+	downloadParent := filepath.Join(s.stateDir(), "apps", "downloads")
+	if err := os.MkdirAll(downloadParent, 0o755); err != nil {
+		return workspacebiz.AppPackage{}, fmt.Errorf("create app download dir: %w", err)
+	}
+	archiveFile, err := os.CreateTemp(downloadParent, safeAppPathSegment(builtin.Manifest.AppID)+"-embedded-*.zip")
+	if err != nil {
+		return workspacebiz.AppPackage{}, fmt.Errorf("create embedded app archive file: %w", err)
+	}
+	archivePath := archiveFile.Name()
+	if err := archiveFile.Close(); err != nil {
+		return workspacebiz.AppPackage{}, fmt.Errorf("close embedded app archive file: %w", err)
+	}
+	defer func() {
+		_ = os.Remove(archivePath)
+	}()
+
+	startedAt := time.Now()
+	slog.Info(
+		"embedded builtin app package materialize started",
+		"appId", builtin.Manifest.AppID,
+		"version", builtin.Manifest.Version,
+		"artifactPath", builtin.Distribution.EmbeddedArtifactPath,
+		"archivePath", archivePath,
+	)
+	if err := builtinapps.CopyArchiveTo(builtin, archivePath); err != nil {
+		return workspacebiz.AppPackage{}, err
+	}
+	appPackage, err := s.materializeBuiltinArchivePackage(ctx, builtin, archivePath, true)
+	if err != nil {
+		return workspacebiz.AppPackage{}, err
+	}
+	slog.Info(
+		"embedded builtin app package materialize completed",
+		"appId", builtin.Manifest.AppID,
+		"version", builtin.Manifest.Version,
+		"artifactPath", builtin.Distribution.EmbeddedArtifactPath,
+		"duration", time.Since(startedAt),
+	)
+	return appPackage, nil
+}
+
 func (s *AppCenterService) downloadRemoteBuiltinPackage(ctx context.Context, builtin builtinapps.App) (workspacebiz.AppPackage, error) {
 	artifactURL := strings.TrimSpace(builtin.Distribution.ArtifactURL)
 	artifactSHA256 := strings.TrimSpace(builtin.Distribution.ArtifactSHA256)
@@ -125,10 +170,14 @@ func (s *AppCenterService) downloadRemoteBuiltinPackage(ctx context.Context, bui
 		return workspacebiz.AppPackage{}, fmt.Errorf("remote builtin app %q artifact sha256 mismatch", builtin.Manifest.AppID)
 	}
 
+	return s.materializeBuiltinArchivePackage(ctx, builtin, archivePath, false)
+}
+
+func (s *AppCenterService) materializeBuiltinArchivePackage(ctx context.Context, builtin builtinapps.App, archivePath string, activate bool) (workspacebiz.AppPackage, error) {
 	stagingParent := filepath.Join(s.stateDir(), "apps")
 	stagingDir, err := os.MkdirTemp(stagingParent, "remote-builtin-*")
 	if err != nil {
-		return workspacebiz.AppPackage{}, fmt.Errorf("create remote builtin staging dir: %w", err)
+		return workspacebiz.AppPackage{}, fmt.Errorf("create builtin app staging dir: %w", err)
 	}
 	defer func() {
 		_ = os.RemoveAll(stagingDir)
@@ -153,13 +202,13 @@ func (s *AppCenterService) downloadRemoteBuiltinPackage(ctx context.Context, bui
 
 	packageDir := s.packageCacheDir(manifest.AppID, manifest.Version)
 	if err := os.RemoveAll(packageDir); err != nil {
-		return workspacebiz.AppPackage{}, fmt.Errorf("replace remote builtin app package dir: %w", err)
+		return workspacebiz.AppPackage{}, fmt.Errorf("replace builtin app package dir: %w", err)
 	}
 	if err := copyDirectory(packageRoot, packageDir); err != nil {
-		return workspacebiz.AppPackage{}, fmt.Errorf("copy remote builtin app package: %w", err)
+		return workspacebiz.AppPackage{}, fmt.Errorf("copy builtin app package: %w", err)
 	}
 	if err := validateExtractedAppPackage(packageDir, manifest); err != nil {
-		return workspacebiz.AppPackage{}, fmt.Errorf("validate copied remote builtin app package: %w", err)
+		return workspacebiz.AppPackage{}, fmt.Errorf("validate copied builtin app package: %w", err)
 	}
 	appPackage := workspacebiz.AppPackage{
 		AppID:        manifest.AppID,
@@ -169,8 +218,14 @@ func (s *AppCenterService) downloadRemoteBuiltinPackage(ctx context.Context, bui
 		ManifestJSON: manifestJSON,
 		Source:       workspacebiz.AppPackageSourceBuiltin,
 	}
-	if err := s.Store.PutAppPackageVersion(ctx, appPackage); err != nil {
-		return workspacebiz.AppPackage{}, err
+	if activate {
+		if err := s.Store.PutAppPackage(ctx, appPackage); err != nil {
+			return workspacebiz.AppPackage{}, err
+		}
+	} else {
+		if err := s.Store.PutAppPackageVersion(ctx, appPackage); err != nil {
+			return workspacebiz.AppPackage{}, err
+		}
 	}
 	return appPackage, nil
 }

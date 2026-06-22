@@ -252,6 +252,20 @@ func TestParseAppManifestJSONAcceptsRuntimeProfile(t *testing.T) {
 	}
 }
 
+func TestParseAppManifestJSONAcceptsStandaloneRuntimeProfile(t *testing.T) {
+	t.Parallel()
+
+	manifest, _, err := ParseAppManifestJSON([]byte(
+		`{"schemaVersion":"tutti.app.manifest.v1","appId":"test-app","version":"0.1.0","name":"Test App","description":"Test app","icon":{"type":"asset","src":"icon.png"},"runtime":{"bootstrap":"bootstrap.sh","healthcheckPath":"/healthz","profile":"standalone"}}`,
+	))
+	if err != nil {
+		t.Fatalf("ParseAppManifestJSON() error = %v, want nil for runtime.profile", err)
+	}
+	if manifest.Runtime.Profile != "standalone" {
+		t.Fatalf("Runtime.Profile = %q, want standalone", manifest.Runtime.Profile)
+	}
+}
+
 func TestParseAppManifestJSONRejectsUnsupportedRuntimeProfile(t *testing.T) {
 	t.Parallel()
 
