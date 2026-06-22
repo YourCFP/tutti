@@ -320,8 +320,7 @@ test("runAction reports daemon install action failures and skips refresh", async
                 {
                   command: {
                     cwd: "/workspace",
-                    input:
-                      "npm install -g @openai/codex @zed-industries/codex-acp\n"
+                    input: "npm install -g @openai/codex\n"
                   },
                   id: "install",
                   kind: "terminal_command"
@@ -1040,7 +1039,7 @@ function createProbeResponse(
 ): AgentProviderProbeResponse {
   return {
     checkedAt: "2026-06-02T08:00:00.000Z",
-    command: ["codex-acp"],
+    command: ["codex"],
     provider,
     status
   };
@@ -1130,7 +1129,7 @@ function createProviderStatus(input: {
   return {
     actions: input.actions,
     adapter: {
-      command: ["codex-acp"],
+      command: ["codex"],
       installed:
         input.adapterInstalled ??
         (input.availability !== "not_installed" &&

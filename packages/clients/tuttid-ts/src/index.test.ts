@@ -684,7 +684,7 @@ test("shared tuttid client probes agent providers", async () => {
       return new Response(
         JSON.stringify({
           checkedAt: "2026-06-02T08:00:00.000Z",
-          command: ["/usr/local/bin/codex-acp"],
+          command: ["/usr/local/bin/codex"],
           provider: "codex",
           status: "ready"
         }),
@@ -702,7 +702,7 @@ test("shared tuttid client probes agent providers", async () => {
   assert.equal(requestPath, "/v1/agent-providers/codex/probe");
   assert.deepEqual(result, {
     checkedAt: "2026-06-02T08:00:00.000Z",
-    command: ["/usr/local/bin/codex-acp"],
+    command: ["/usr/local/bin/codex"],
     provider: "codex",
     status: "ready"
   });

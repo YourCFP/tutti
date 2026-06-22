@@ -102,14 +102,18 @@ func DefaultRegistry() Registry {
 			LoginArgs: []string{"auth", "login"},
 		},
 		agentprovider.Codex: {
-			Provider:           agentprovider.Codex,
-			BinaryNames:        []string{"codex"},
-			AdapterBinaryNames: []string{"codex-acp"},
-			AdapterCommand:     []string{"codex-acp"},
+			Provider:    agentprovider.Codex,
+			BinaryNames: []string{"codex"},
+			// Codex talks to the local codex binary's built-in app-server; there
+			// is no separate ACP adapter. Resolve/probe that command directly so
+			// availability reflects "codex app-server" rather than bare `codex`
+			// (which is an interactive TUI and fails headless with
+			// "stdin is not a terminal").
+			AdapterBinaryNames: []string{"codex"},
+			AdapterCommand:     []string{"codex", "app-server"},
 			AuthStatusCommand:  []string{"login", "status"},
 			AuthMarkerPaths:    []string{"~/.codex/auth.json"},
 			Install:            codexCLIInstallerSpec(),
-			AdapterInstall:     codexACPInstallerSpec(),
 			LoginArgs:          []string{"login"},
 		},
 		agentprovider.Nexight: {
@@ -171,40 +175,13 @@ func DefaultRegistry() Registry {
 	return Registry{Specs: specs}
 }
 
+// codexCLIInstallerSpec installs the first-party codex binary via the
+// daemon-managed GitHub-release installer. This runs headlessly (HTTP download
+// + checksum + extract + symlink), unlike the official `curl … | sh` script
+// which aborts with "stdin is not a terminal" when run without a TTY.
 func codexCLIInstallerSpec() InstallerSpec {
 	return InstallerSpec{
-		Kind:           InstallerKindOfficialScript,
-		DisplayCommand: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
-		ScriptURL:      "https://chatgpt.com/codex/install.sh",
-		ScriptShell:    "sh",
-	}
-}
-
-func codexACPInstallerSpec() InstallerSpec {
-	return InstallerSpec{
-		Kind:           InstallerKindGitHubReleaseBinary,
-		DisplayCommand: "Install codex-acp v0.15.0 from GitHub releases",
-		ReleaseBinary: &ReleaseBinaryInstallerSpec{
-			BinaryName: "codex-acp",
-			Version:    "v0.15.0",
-			Assets: map[string]ReleaseBinaryAsset{
-				releaseBinaryPlatformKey("darwin", "arm64"): {
-					URL:    "https://github.com/zed-industries/codex-acp/releases/download/v0.15.0/codex-acp-0.15.0-aarch64-apple-darwin.tar.gz",
-					SHA256: "sha256:356b1faf3aa0feb15781d5c8a86c46e1ab623a2bf4908b251acb35df9af2fb79",
-				},
-				releaseBinaryPlatformKey("darwin", "amd64"): {
-					URL:    "https://github.com/zed-industries/codex-acp/releases/download/v0.15.0/codex-acp-0.15.0-x86_64-apple-darwin.tar.gz",
-					SHA256: "sha256:ffbd10e9a5f19fc4a22469b2dfeea6f8860286b50d2c00c906db06d7a03bb145",
-				},
-				releaseBinaryPlatformKey("linux", "arm64"): {
-					URL:    "https://github.com/zed-industries/codex-acp/releases/download/v0.15.0/codex-acp-0.15.0-aarch64-unknown-linux-gnu.tar.gz",
-					SHA256: "sha256:154bbb0e9d8549c6bc89b7c8d75fb745a3baace18a755bfd69cbc8c177458ba0",
-				},
-				releaseBinaryPlatformKey("linux", "amd64"): {
-					URL:    "https://github.com/zed-industries/codex-acp/releases/download/v0.15.0/codex-acp-0.15.0-x86_64-unknown-linux-gnu.tar.gz",
-					SHA256: "sha256:71dcf628a618a82f3b7f3b7383182cdf33dd41c1cbecaf7e3c833f36e44155d1",
-				},
-			},
-		},
+		Kind:     InstallerKindCodexCLILatest,
+		CodexCLI: &CodexCLILatestInstallerSpec{},
 	}
 }

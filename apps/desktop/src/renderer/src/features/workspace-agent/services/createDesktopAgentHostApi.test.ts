@@ -1458,7 +1458,7 @@ test("desktop agent host api reports failed activation from tuttid session", asy
       async createWorkspaceAgentSession(_workspaceId, request) {
         return createSession({
           id: request.agentSessionId,
-          lastError: `exec: "codex-acp": executable file not found in $PATH`,
+          lastError: `exec: "codex": executable file not found in $PATH`,
           status: "failed"
         });
       }
@@ -1482,8 +1482,8 @@ test("desktop agent host api reports failed activation from tuttid session", asy
   assert.equal(result.session.status, "failed");
   assert.deepEqual(result.error, {
     code: "agent_session_start_failed",
-    debugMessage: `exec: "codex-acp": executable file not found in $PATH`,
-    message: `exec: "codex-acp": executable file not found in $PATH`
+    debugMessage: `exec: "codex": executable file not found in $PATH`,
+    message: `exec: "codex": executable file not found in $PATH`
   });
   assert.deepEqual(reporterCalls, [
     [

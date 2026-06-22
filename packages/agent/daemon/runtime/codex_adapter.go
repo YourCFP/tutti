@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	codexACPCommand       = "codex-acp"
 	nexightACPCommand     = "nexight-acp"
 	codexAgentRoutingEnv  = "TUTTI_AGENT_ROUTING=1"
 	codexRoutingPreload   = "LD_PRELOAD=" + runtimepaths.BundlePreloadSOPath
@@ -103,20 +102,6 @@ type pendingACPResponse struct {
 	payload  map[string]any
 	result   map[string]any
 	err      error
-}
-
-func NewCodexAdapter(transport ProcessTransport) *CodexAdapter {
-	return NewCodexAdapterWithHostMetadata(transport, LegacyHostMetadata())
-}
-
-func NewCodexAdapterWithHostMetadata(transport ProcessTransport, host HostMetadata) *CodexAdapter {
-	return newCodexFamilyAdapter(transport, codexAdapterConfig{
-		provider:            ProviderCodex,
-		command:             []string{codexACPCommand},
-		adapterName:         "codex-acp",
-		authRequiredMessage: "Codex ACP requires authentication in the runtime VM. Sync the Codex host credentials, then retry this session.",
-		fallbackTitles:      []string{"", ProviderCodex},
-	}, host)
 }
 
 func NewNexightAdapter(transport ProcessTransport) *CodexAdapter {
