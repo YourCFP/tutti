@@ -254,6 +254,7 @@ export function normalizeTuttiExternalPdfPrintHtmlInput(
     ...(input.pageSize !== undefined && input.pageSize !== null
       ? { pageSize: normalizePdfPageSize(input.pageSize) }
       : {}),
+    ...(input.preferCSSPageSize === true ? { preferCSSPageSize: true } : {}),
     ...(input.margin !== undefined && input.margin !== null
       ? { margin: normalizePdfMargin(input.margin) }
       : {})
@@ -486,11 +487,30 @@ function normalizePdfBaseUrl(value: string): string {
   return url.toString();
 }
 
-function normalizePdfPageSize(value: unknown): "A4" | "Letter" {
+function normalizePdfPageSize(
+  value: unknown
+): TuttiExternalPdfPrintHtmlInput["pageSize"] {
   if (value === "A4" || value === "Letter") {
     return value;
   }
+  if (isRecord(value)) {
+    const width = normalizePdfPageSizeSide(value.width, "width");
+    const height = normalizePdfPageSizeSide(value.height, "height");
+    return { width, height };
+  }
   throw new Error("pdf.printHtmlToPdf pageSize is unsupported.");
+}
+
+function normalizePdfPageSizeSide(
+  value: unknown,
+  side: "height" | "width"
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    throw new Error(
+      `pdf.printHtmlToPdf pageSize ${side} must be a positive number.`
+    );
+  }
+  return value;
 }
 
 function normalizePdfMargin(value: unknown): TuttiExternalPdfMargin {

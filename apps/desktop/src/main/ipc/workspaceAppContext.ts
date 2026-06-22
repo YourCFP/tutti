@@ -499,6 +499,7 @@ async function printWorkspaceAppHtmlToPdf(
     const pdf = await printWindow.webContents.printToPDF({
       margins: printMargins(input.margin),
       pageSize: input.pageSize ?? "A4",
+      preferCSSPageSize: input.preferCSSPageSize === true,
       printBackground: input.printBackground !== false
     });
     return { bytes: new Uint8Array(pdf) };

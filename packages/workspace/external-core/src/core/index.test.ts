@@ -194,7 +194,8 @@ test("normalizes PDF print HTML input", () => {
         right: "10mm",
         top: "12mm"
       },
-      pageSize: "A4",
+      pageSize: { width: 13.333333, height: 7.5 },
+      preferCSSPageSize: true,
       printBackground: false,
       title: " Report "
     }),
@@ -207,7 +208,8 @@ test("normalizes PDF print HTML input", () => {
         right: "10mm",
         top: "12mm"
       },
-      pageSize: "A4",
+      pageSize: { width: 13.333333, height: 7.5 },
+      preferCSSPageSize: true,
       printBackground: false,
       title: "Report"
     }
@@ -234,6 +236,14 @@ test("rejects invalid PDF print HTML input", () => {
         margin: { top: "12pt" }
       }),
     /margin top unit is unsupported/
+  );
+  assert.throws(
+    () =>
+      normalizeTuttiExternalPdfPrintHtmlInput({
+        html: "<h1>Doc</h1>",
+        pageSize: { width: 13.333333, height: 0 }
+      }),
+    /pageSize height must be a positive number/
   );
 });
 

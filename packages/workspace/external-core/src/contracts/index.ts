@@ -190,11 +190,20 @@ export interface TuttiExternalPdfMargin {
   top?: string;
 }
 
+export type TuttiExternalPdfPageSize =
+  | "A4"
+  | "Letter"
+  | {
+      height: number;
+      width: number;
+    };
+
 export interface TuttiExternalPdfPrintHtmlInput {
   baseUrl?: string;
   html: string;
   margin?: TuttiExternalPdfMargin;
-  pageSize?: "A4" | "Letter";
+  pageSize?: TuttiExternalPdfPageSize;
+  preferCSSPageSize?: boolean;
   printBackground?: boolean;
   title?: string;
 }
