@@ -35,6 +35,15 @@ const initializedMetadataKeys = [
 ] as const;
 export const COMPACT_LAUNCH_WIDTH_THRESHOLD = 1440;
 export const COMPACT_LAUNCH_FRAME_SCALE = 0.85;
+export const closedDockWindowFramesMetadataKey =
+  "workbenchHostClosedDockWindowFrames";
+const maxClosedDockWindowFrameEntries = 128;
+
+export interface ClosedDockWindowFrameEntry {
+  dockEntryId: string;
+  frame: WorkbenchFrame;
+  typeId: string;
+}
 
 export function createDefaultLaunchResult(
   definition: WorkbenchHostNodeDefinition,
@@ -191,6 +200,109 @@ export function resolveWorkbenchLaunchedHostNodeFrame(input: {
     surfaceSize: input.currentState.surfaceSize,
     constraints: input.currentState.layoutConstraints
   });
+}
+
+export function closedDockWindowFrameEntryKey(input: {
+  dockEntryId: string;
+  typeId: string;
+}): string {
+  return JSON.stringify([input.typeId, input.dockEntryId]);
+}
+
+export function readClosedDockWindowFrameEntries(
+  metadata: WorkbenchSnapshot["metadata"]
+): Map<string, ClosedDockWindowFrameEntry> {
+  const value = metadata?.[closedDockWindowFramesMetadataKey];
+  if (
+    !isRecord(value) ||
+    value.version !== 1 ||
+    !Array.isArray(value.entries)
+  ) {
+    return new Map();
+  }
+
+  const entries = new Map<string, ClosedDockWindowFrameEntry>();
+  for (const entry of value.entries.slice(0, maxClosedDockWindowFrameEntries)) {
+    const normalized = normalizeClosedDockWindowFrameEntry(entry);
+    if (!normalized) {
+      continue;
+    }
+    entries.set(closedDockWindowFrameEntryKey(normalized), normalized);
+  }
+  return entries;
+}
+
+export function writeClosedDockWindowFrameEntries(
+  metadata: WorkbenchSnapshot["metadata"],
+  entries: Iterable<ClosedDockWindowFrameEntry>
+): WorkbenchSnapshot["metadata"] {
+  const normalizedEntries = Array.from(entries)
+    .map(normalizeClosedDockWindowFrameEntry)
+    .filter((entry): entry is ClosedDockWindowFrameEntry => entry !== null)
+    .slice(-maxClosedDockWindowFrameEntries);
+  const nextMetadata = { ...(metadata ?? {}) };
+  if (normalizedEntries.length === 0) {
+    delete nextMetadata[closedDockWindowFramesMetadataKey];
+  } else {
+    nextMetadata[closedDockWindowFramesMetadataKey] = {
+      version: 1,
+      entries: normalizedEntries
+    };
+  }
+  return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
+}
+
+function normalizeClosedDockWindowFrameEntry(
+  value: unknown
+): ClosedDockWindowFrameEntry | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const typeId = normalizeNonEmptyString(value.typeId);
+  const dockEntryId = normalizeNonEmptyString(value.dockEntryId);
+  const frame = normalizeWorkbenchFrame(value.frame);
+  if (!typeId || !dockEntryId || !frame) {
+    return null;
+  }
+
+  return {
+    dockEntryId,
+    frame,
+    typeId
+  };
+}
+
+function normalizeWorkbenchFrame(value: unknown): WorkbenchFrame | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const x = normalizeFiniteNumber(value.x);
+  const y = normalizeFiniteNumber(value.y);
+  const width = normalizeFiniteNumber(value.width);
+  const height = normalizeFiniteNumber(value.height);
+  if (x === null || y === null || width === null || height === null) {
+    return null;
+  }
+  if (width < 160 || height < 120) {
+    return null;
+  }
+
+  return { height, width, x, y };
+}
+
+function normalizeFiniteNumber(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+  return Math.round(value);
+}
+
+function normalizeNonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function resolveLaunchFramePolicy(

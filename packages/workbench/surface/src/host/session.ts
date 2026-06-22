@@ -7,19 +7,23 @@ import type {
   WorkbenchDebugDiagnostics
 } from "../store/types.ts";
 import {
+  type ClosedDockWindowFrameEntry,
   compactRestoredWorkbenchHostNodes,
   createDefaultLaunchResult,
   createProjectedNodeID,
   createWorkbenchLaunchedHostNode,
   createWorkbenchProjectedHostNode,
+  closedDockWindowFrameEntryKey,
   persistedWorkbenchState,
   projectedWorkbenchNodeStack,
+  readClosedDockWindowFrameEntries,
   resolveWorkbenchLaunchedHostNodeFrame,
   restoredSnapshotNodesByID,
   shallowArrayEqual,
   stateFromSnapshotOrDefinitions,
   stringArrayEqual,
-  updateProjectedNodeFromInput
+  updateProjectedNodeFromInput,
+  writeClosedDockWindowFrameEntries
 } from "./sessionState.ts";
 import { readWorkbenchHostExternalState } from "./externalState.ts";
 import { sanitizeWorkbenchHostSnapshot } from "./snapshotSanitizer.ts";
@@ -102,6 +106,10 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
   private isDisposed = false;
   private isSnapshotLoaded = false;
   private loadedSnapshot: WorkbenchSnapshot | null;
+  private closedDockWindowFrameEntries = new Map<
+    string,
+    ClosedDockWindowFrameEntry
+  >();
   private loadGeneration = 0;
   private loadPromise: Promise<void> | null = null;
   private readonly nodeLeases = new Map<string, WorkbenchHostNodeLeaseHandle>();
@@ -150,6 +158,9 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
       this.nodeDefinitionByType.set(definition.typeId, definition);
     }
     this.loadedSnapshot = this.readCachedSnapshot();
+    this.closedDockWindowFrameEntries = readClosedDockWindowFrameEntries(
+      this.loadedSnapshot?.metadata
+    );
     this.projectedNodes = input.projectedNodes ?? [];
     this.controller = createWorkbenchController<WorkbenchHostNodeData>(
       stateFromSnapshotOrDefinitions(
@@ -284,6 +295,7 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
 
   closeNode(nodeId: string): void {
     this.runWhenReady(this.loadGeneration, () => {
+      this.rememberClosedDockWindowFrame(nodeId);
       this.controller.commands.closeNode(nodeId);
     });
   }
@@ -429,6 +441,9 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
       }
 
       this.loadedSnapshot = snapshot;
+      this.closedDockWindowFrameEntries = readClosedDockWindowFrameEntries(
+        snapshot?.metadata
+      );
       this.controller.commands.replaceState(
         stateFromSnapshotOrDefinitions(
           snapshot,
@@ -442,6 +457,7 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
         return;
       }
       this.loadedSnapshot = null;
+      this.closedDockWindowFrameEntries = new Map();
       this.controller.commands.replaceState(
         stateFromSnapshotOrDefinitions(
           null,
@@ -496,6 +512,7 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
       ) {
         return;
       }
+      this.rememberClosedDockWindowFrame(node.id);
       this.controller.commands.closeNode(node.id);
     }, noop);
   }
@@ -671,23 +688,24 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
     if (!definition) {
       return null;
     }
+    const launchResult = this.applyClosedDockWindowFrame(result);
 
     const exactExisting = this.findExistingNodeByTarget({
-      instanceId: result.instanceId,
-      typeId: result.typeId
+      instanceId: launchResult.instanceId,
+      typeId: launchResult.typeId
     });
     const dockEntryExisting = exactExisting
       ? null
-      : this.findExistingNodeByDockEntry(result);
+      : this.findExistingNodeByDockEntry(launchResult);
     const existing = exactExisting ?? dockEntryExisting;
     if (existing) {
       this.controller.commands.setNodeSizeConstraints(
         existing.id,
-        result.sizeConstraints ?? definition.sizeConstraints ?? null
+        launchResult.sizeConstraints ?? definition.sizeConstraints ?? null
       );
       if (
         exactExisting &&
-        result.framePolicy === "cascade-same-type-centered"
+        launchResult.framePolicy === "cascade-same-type-centered"
       ) {
         const currentState = this.controller.getSnapshot();
         const resolvedFrame = resolveWorkbenchLaunchedHostNodeFrame({
@@ -699,13 +717,13 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
             )
           },
           definition,
-          result
+          result: launchResult
         });
         this.controller.commands.resizeNode(existing.id, resolvedFrame);
       }
       this.restoreAndFocusNode(existing.id);
-      if (result.activation) {
-        this.activateNodeNow({ nodeId: existing.id }, result.activation);
+      if (launchResult.activation) {
+        this.activateNodeNow({ nodeId: existing.id }, launchResult.activation);
       }
       return existing.id;
     }
@@ -713,13 +731,13 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
     const resolvedFrame = resolveWorkbenchLaunchedHostNodeFrame({
       currentState: this.controller.getSnapshot(),
       definition,
-      result
+      result: launchResult
     });
     const nextNode = createWorkbenchLaunchedHostNode({
-      activation: this.createActivationEnvelope(result.activation),
+      activation: this.createActivationEnvelope(launchResult.activation),
       definition,
       resolvedFrame,
-      result
+      result: launchResult
     });
     this.controller.commands.openNode(nextNode);
     this.controller.commands.focusNode(nextNode.id);
@@ -930,10 +948,13 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
         ),
         {
           activeSpaceId: this.loadedSnapshot?.activeSpaceId,
-          metadata: {
-            ...(this.loadedSnapshot?.metadata ?? {}),
-            [initializedMetadataKey]: true
-          },
+          metadata: writeClosedDockWindowFrameEntries(
+            {
+              ...(this.loadedSnapshot?.metadata ?? {}),
+              [initializedMetadataKey]: true
+            },
+            this.closedDockWindowFrameEntries.values()
+          ),
           spaces: this.loadedSnapshot?.spaces
         }
       )
@@ -946,6 +967,54 @@ class WorkbenchHostSessionController implements WorkbenchHostRuntimeHandle {
     ).then((savedSnapshot) => {
       this.loadedSnapshot = savedSnapshot;
     }, noop);
+  }
+
+  private rememberClosedDockWindowFrame(nodeId: string): void {
+    const node = this.controller
+      .getSnapshot()
+      .nodes.find((entry) => entry.id === nodeId);
+    const dockEntryId = node?.data.dockEntryId?.trim();
+    if (!node || !dockEntryId) {
+      return;
+    }
+
+    const entry: ClosedDockWindowFrameEntry = {
+      dockEntryId,
+      frame:
+        node.displayMode === "fullscreen" && node.restoreFrame
+          ? node.restoreFrame
+          : node.frame,
+      typeId: node.data.typeId
+    };
+    this.closedDockWindowFrameEntries.set(
+      closedDockWindowFrameEntryKey(entry),
+      entry
+    );
+  }
+
+  private applyClosedDockWindowFrame(
+    result: WorkbenchHostLaunchResult
+  ): WorkbenchHostLaunchResult {
+    const dockEntryId = result.dockEntryId?.trim();
+    if (!dockEntryId) {
+      return result;
+    }
+
+    const entry = this.closedDockWindowFrameEntries.get(
+      closedDockWindowFrameEntryKey({
+        dockEntryId,
+        typeId: result.typeId
+      })
+    );
+    if (!entry) {
+      return result;
+    }
+
+    return {
+      ...result,
+      defaultFrame: entry.frame,
+      framePolicy: "absolute"
+    };
   }
 
   private loadedSnapshotSaveKey(): string | null {

@@ -4,6 +4,11 @@ import {
   type WorkbenchSnapshotNode,
   type WorkbenchSnapshotSpaceV1
 } from "@tutti-os/workbench-snapshot";
+import {
+  closedDockWindowFramesMetadataKey,
+  readClosedDockWindowFrameEntries,
+  writeClosedDockWindowFrameEntries
+} from "./sessionState.ts";
 
 export interface WorkbenchHostSnapshotNodeData {
   dockEntryId?: string | null;
@@ -100,5 +105,12 @@ function sanitizeMetadata(
       sanitized[key] = true;
     }
   }
+  if (metadata?.[closedDockWindowFramesMetadataKey] !== undefined) {
+    return writeClosedDockWindowFrameEntries(
+      sanitized,
+      readClosedDockWindowFrameEntries(metadata).values()
+    );
+  }
+
   return Object.keys(sanitized).length > 0 ? sanitized : undefined;
 }

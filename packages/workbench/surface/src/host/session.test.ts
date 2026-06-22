@@ -1684,6 +1684,98 @@ test("launchNode asks host to create backing instance before opening shell", asy
   session.dispose();
 });
 
+test("launchNode restores the last manually resized dock window frame after close", async () => {
+  let savedSnapshot = createWorkbenchSnapshotFromState(
+    {
+      nodeStack: [],
+      nodes: []
+    },
+    {
+      metadata: {
+        workbenchHostInitialized: true
+      }
+    }
+  );
+  const repository = {
+    async load() {
+      return savedSnapshot;
+    },
+    async save(
+      _workspaceId: string,
+      snapshot: ReturnType<typeof createWorkbenchSnapshotFromState>
+    ) {
+      savedSnapshot = snapshot;
+      return snapshot;
+    }
+  };
+  const createSession = () =>
+    createWorkbenchHostSession({
+      nodes: [terminalNodeDefinition],
+      onLaunchRequest(request) {
+        return {
+          defaultFrame: { x: 44, y: 55, width: 720, height: 460 },
+          dockEntryId: request.dockEntryId,
+          framePolicy: "cascade",
+          instanceId: "session-1",
+          title: "Terminal 1",
+          typeId: "terminal"
+        };
+      },
+      snapshotRepository: repository,
+      workspaceId: "workspace-1"
+    });
+
+  const firstSession = createSession();
+  await firstSession.load();
+  firstSession.controller.commands.setSurfaceSize({
+    width: 1600,
+    height: 1000
+  });
+  const firstNodeId = await firstSession.launchNode({
+    dockEntryId: "dock:terminal",
+    reason: "dock",
+    typeId: "terminal"
+  });
+  assert.equal(firstNodeId, "terminal:session-1");
+  firstSession.controller.commands.resizeNode(firstNodeId, {
+    x: 70,
+    y: 75,
+    width: 900,
+    height: 600
+  });
+  firstSession.closeNode(firstNodeId);
+  firstSession.dispose();
+
+  const secondSession = createSession();
+  await secondSession.load();
+  secondSession.controller.commands.setSurfaceSize({
+    width: 1600,
+    height: 1000
+  });
+  const secondNodeId = await secondSession.launchNode({
+    dockEntryId: "dock:terminal",
+    reason: "dock",
+    typeId: "terminal"
+  });
+  const restoredNode = secondSession.controller
+    .getSnapshot()
+    .nodes.find((node) => node.id === secondNodeId);
+
+  assert.equal(secondNodeId, "terminal:session-1");
+  assert.deepEqual(
+    {
+      height: restoredNode?.frame.height,
+      width: restoredNode?.frame.width
+    },
+    {
+      height: 600,
+      width: 900
+    }
+  );
+
+  secondSession.dispose();
+});
+
 test("launchNode logs host launch failures without opening a shell", async () => {
   const diagnostics: unknown[] = [];
   const session = createWorkbenchHostSession({
