@@ -5,9 +5,9 @@ import { resolveAgentProviderDockStatusProps } from "./workspaceAgentProviderDoc
 
 const copy = {
   checking: "checking",
-  install: "install",
-  installing: "installing",
-  installRequired: "install required",
+  install: "Connect",
+  installing: "Connecting...",
+  installRequired: "Connect local agent to continue",
   login: "login",
   loginRequired: "login required",
   refresh: "refresh",
@@ -46,7 +46,7 @@ test("agent provider dock status falls back to unavailable when status is missin
   });
 });
 
-test("agent provider dock status shows install and refresh for not installed providers", () => {
+test("agent provider dock status shows connect and refresh for not installed providers", () => {
   const props = resolveAgentProviderDockStatusProps({
     copy,
     isLoading: false,
@@ -60,9 +60,10 @@ test("agent provider dock status shows install and refresh for not installed pro
   });
 
   assert.deepEqual(props.hoverActions, [
-    { id: "install", label: "install" },
+    { id: "install", label: "Connect" },
     { id: "refresh", label: "refresh" }
   ]);
+  assert.equal(props.state.reason, "Connect local agent to continue");
 });
 
 test("agent provider dock status shows loading while install is pending", () => {
@@ -84,14 +85,14 @@ test("agent provider dock status shows loading while install is pending", () => 
       {
         disabled: true,
         id: "install",
-        label: "install",
-        pendingLabel: "installing"
+        label: "Connect",
+        pendingLabel: "Connecting..."
       },
       { id: "refresh", label: "refresh" }
     ],
     state: {
       kind: "loading",
-      reason: "installing"
+      reason: "Connecting..."
     }
   });
 });

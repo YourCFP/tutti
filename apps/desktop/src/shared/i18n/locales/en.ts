@@ -550,9 +550,9 @@ export const en = {
       agentProviders: {
         checking: "Checking local CLI status...",
         comingSoon: "Coming soon",
-        install: "Install",
+        install: "Connect",
         installFailed: "Installation failed",
-        installRequired: "Install the local agent components to use this agent",
+        installRequired: "Connect the local agent to continue",
         installing: "Installing...",
         login: "Sign in",
         loginFailed: "Sign-in failed",

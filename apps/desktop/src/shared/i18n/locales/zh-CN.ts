@@ -526,9 +526,9 @@ export const zhCN = {
       agentProviders: {
         checking: "正在检测本地 CLI 状态...",
         comingSoon: "敬请期待",
-        install: "安装",
+        install: "连接",
         installFailed: "安装失败",
-        installRequired: "需要先安装本地组件才能使用这个 Agent",
+        installRequired: "需要先连接本地 Agent 才能继续",
         installing: "安装中...",
         login: "登录",
         loginFailed: "登录失败",
