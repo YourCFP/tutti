@@ -33,6 +33,7 @@ __pycache__/
 *.mobileprovision
 
 *.zip
+!services/tuttid/builtin-apps/apps/**/*.zip
 *.tar
 *.tgz
 *.dmg

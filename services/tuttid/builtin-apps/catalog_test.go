@@ -274,7 +274,7 @@ func TestRefreshRemoteCatalogAndWaitReturnsFailedCatalog(t *testing.T) {
 	}
 }
 
-func TestCatalogReturnsEmptyEmbeddedCatalogWhenRemoteURLFails(t *testing.T) {
+func TestCatalogReturnsEmbeddedCatalogWhenRemoteURLFails(t *testing.T) {
 	disableRemoteCatalogRetrySleepForTest(t)
 	t.Setenv(remoteCatalogFileEnv, "")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -287,16 +287,16 @@ func TestCatalogReturnsEmptyEmbeddedCatalogWhenRemoteURLFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Catalog() error = %v", err)
 	}
-	if len(apps) != 0 {
-		t.Fatalf("Catalog() apps = %#v, want empty embedded catalog", apps)
+	if app := findCatalogAppForTest(apps, "tutti-onboarding"); app == nil {
+		t.Fatalf("Catalog() apps = %#v, want embedded onboarding", apps)
 	}
 
 	snapshot := waitForCatalogStatusForTest(t, RemoteCatalogLoadStatusFailed)
 	if snapshot.RemoteCatalog.LastError == "" {
 		t.Fatal("remote catalog last error is empty, want failure details")
 	}
-	if len(snapshot.Apps) != 0 {
-		t.Fatalf("failed snapshot apps = %#v, want empty embedded catalog", snapshot.Apps)
+	if app := findCatalogAppForTest(snapshot.Apps, "tutti-onboarding"); app == nil {
+		t.Fatalf("failed snapshot apps = %#v, want embedded onboarding", snapshot.Apps)
 	}
 }
 
@@ -324,6 +324,37 @@ func TestRemoteCatalogURLDefaultsToPublishedCatalog(t *testing.T) {
 	_ = os.Setenv(remoteCatalogURLEnv, override)
 	if got := remoteCatalogURL(); got != override {
 		t.Fatalf("remoteCatalogURL() with override = %q, want %q", got, override)
+	}
+}
+
+func TestMergeCatalogsKeepsEmbeddedAppBeforeRemoteAppWithSameID(t *testing.T) {
+	embedded := embeddedCatalog()
+	if len(embedded) == 0 {
+		t.Fatal("embedded catalog is empty")
+	}
+	remoteManifest := embedded[0].Manifest
+	remoteManifest.Version = "9.9.9"
+
+	apps, err := mergeCatalogs(embedded, []App{
+		{
+			Manifest: remoteManifest,
+			Distribution: Distribution{
+				Kind:           DistributionRemote,
+				ArtifactURL:    "https://cdn.example.test/tutti-onboarding.zip",
+				ArtifactSHA256: "abc123",
+				IconURL:        "https://cdn.example.test/tutti-onboarding.webp",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("mergeCatalogs() error = %v", err)
+	}
+	app := findCatalogAppForTest(apps, "tutti-onboarding")
+	if app == nil {
+		t.Fatalf("merged apps = %#v, want embedded onboarding", apps)
+	}
+	if app.Manifest.Version != "0.1.0" || app.Distribution.Kind != DistributionEmbeddedArchive {
+		t.Fatalf("merged onboarding = %#v, want embedded version", app)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 
 const tuttiAppRuntimeRootEnv = "TUTTI_APP_RUNTIME_ROOT"
 const workspaceAppNodeRuntimePreloadProfile = managedruntime.NodeStaticProfile
+const workspaceAppStandaloneRuntimeProfile = "standalone"
 
 type AppRuntimeResolver = managedruntime.Resolver
 type AppRuntimeProfilePreloader = managedruntime.ProfilePreloader
@@ -28,6 +29,10 @@ func appRuntimeProfileForPackage(appPackage workspacebiz.AppPackage) string {
 
 func appRuntimeProfileForManifest(manifest workspacebiz.AppManifest) string {
 	return strings.TrimSpace(manifest.Runtime.Profile)
+}
+
+func appRuntimeProfileIsStandalone(profile string) bool {
+	return strings.TrimSpace(profile) == workspaceAppStandaloneRuntimeProfile
 }
 
 func appRuntimeEnvValue(env []string, key string) string {
