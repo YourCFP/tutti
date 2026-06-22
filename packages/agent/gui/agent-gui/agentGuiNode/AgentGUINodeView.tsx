@@ -130,6 +130,7 @@ export type AgentMentionReferenceTargetResolver = (
 ) => ReferenceLocateTarget | null;
 
 const AGENT_GUI_STICK_TO_BOTTOM_THRESHOLD_PX = 24;
+const AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE = 5;
 
 const AGENT_GUI_TIMELINE_SCROLL_AREA_CONTENT_STYLE: CSSProperties = {
   width: "100%",
@@ -301,6 +302,8 @@ export interface AgentGUIViewLabels {
   thinkingLabel: string;
   toolCallsLabel: (count: number) => string;
   openConversationWindow: string;
+  showMoreConversations: string;
+  showLessConversations: string;
   deleteSession: string;
   pinSession: string;
   unpinSession: string;
@@ -3320,6 +3323,26 @@ const AgentGUIConversationRailSection = memo(
   }: AgentGUIConversationRailSectionProps): React.JSX.Element {
     "use memo";
     const isProjectSection = section.kind === "project";
+    const [visibleItemLimit, setVisibleItemLimit] = useState(
+      AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE
+    );
+    const visibleItemCount = Math.min(visibleItemLimit, section.items.length);
+    const visibleItems = section.items.slice(0, visibleItemCount);
+    const canShowMore = visibleItemCount < section.items.length;
+    const canShowLess =
+      visibleItemCount > AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE;
+    const showMoreConversations = useCallback(() => {
+      setVisibleItemLimit((current) =>
+        Math.min(
+          section.items.length,
+          current + AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE
+        )
+      );
+    }, [section.items.length]);
+    const showLessConversations = useCallback(() => {
+      setVisibleItemLimit(AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE);
+    }, []);
+
     return (
       <section
         className={styles.conversationSection}
@@ -3439,7 +3462,7 @@ const AgentGUIConversationRailSection = memo(
                 {labels.emptyProjectConversations}
               </div>
             ) : null}
-            {section.items.map((item) => (
+            {visibleItems.map((item) => (
               <AgentGUIConversationRailItem
                 key={item.id}
                 active={item.id === activeConversationId}
@@ -3460,6 +3483,28 @@ const AgentGUIConversationRailSection = memo(
                 onOpenConversationWindow={onOpenConversationWindow}
               />
             ))}
+            {canShowMore || canShowLess ? (
+              <div className={styles.conversationSectionPagination}>
+                {canShowMore ? (
+                  <button
+                    type="button"
+                    className={styles.conversationSectionPaginationButton}
+                    onClick={showMoreConversations}
+                  >
+                    {labels.showMoreConversations}
+                  </button>
+                ) : null}
+                {canShowLess ? (
+                  <button
+                    type="button"
+                    className={styles.conversationSectionPaginationButton}
+                    onClick={showLessConversations}
+                  >
+                    {labels.showLessConversations}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       </section>

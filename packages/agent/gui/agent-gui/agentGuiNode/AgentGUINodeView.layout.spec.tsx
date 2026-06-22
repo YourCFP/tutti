@@ -493,6 +493,72 @@ describe("AgentGUINodeView layout persistence", () => {
     expect(actions.selectConversation).not.toHaveBeenCalled();
   });
 
+  it("pages each conversation rail section five sessions at a time", () => {
+    renderAgentGUINodeView({
+      labels: {
+        ...createLabels(),
+        showMoreConversations: "Show more",
+        showLessConversations: "Show less"
+      },
+      viewModel: {
+        ...createViewModel(),
+        conversations: Array.from({ length: 12 }, (_, index) =>
+          createConversationSummary(`session-${index + 1}`)
+        )
+      }
+    });
+
+    expect(
+      screen.getByTestId("agent-gui-conversation-item-session-5")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("agent-gui-conversation-item-session-6")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Show less" })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+
+    expect(
+      screen.getByTestId("agent-gui-conversation-item-session-10")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("agent-gui-conversation-item-session-11")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show more" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show less" })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show less" }));
+
+    expect(
+      screen.getByTestId("agent-gui-conversation-item-session-5")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("agent-gui-conversation-item-session-6")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Show less" })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+
+    expect(
+      screen.getByTestId("agent-gui-conversation-item-session-12")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Show more" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show less" })
+    ).toBeInTheDocument();
+  });
+
   it("does not rerender the conversation rail when only the active detail state changes", () => {
     const actions = createActions();
     const labels = createLabels();
@@ -511,7 +577,7 @@ describe("AgentGUINodeView layout persistence", () => {
 
     const { rerender } = renderAgentGUINodeView(initialOptions);
 
-    expect(conversationMetaMock.calls).toHaveLength(20);
+    expect(conversationMetaMock.calls).toHaveLength(5);
     conversationMetaMock.calls = [];
 
     rerender(
@@ -1554,6 +1620,8 @@ function createLabels(): AgentGUIViewLabels {
     thinkingLabel: "thinkingLabel",
     toolCallsLabel: (count: number) => `toolCalls:${count}`,
     openConversationWindow: "openConversationWindow",
+    showMoreConversations: "showMoreConversations",
+    showLessConversations: "showLessConversations",
     deleteSession: "deleteSession",
     pinSession: "pinSession",
     unpinSession: "unpinSession",

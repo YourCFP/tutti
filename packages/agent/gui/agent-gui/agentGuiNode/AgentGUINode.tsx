@@ -948,6 +948,8 @@ export const AgentGUINode = memo(function AgentGUINode({
       toolCallsLabel: (count: number) =>
         t("agentHost.workspaceAgentSessionDetailToolCalls", { count }),
       openConversationWindow: t("agentHost.agentGui.openConversationWindow"),
+      showMoreConversations: t("agentHost.agentGui.showMoreConversations"),
+      showLessConversations: t("agentHost.agentGui.showLessConversations"),
       deleteSession: t("agentHost.agentGui.deleteSession"),
       pinSession: t("agentHost.agentGui.pinSession"),
       unpinSession: t("agentHost.agentGui.unpinSession"),
