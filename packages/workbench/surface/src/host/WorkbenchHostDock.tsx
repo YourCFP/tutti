@@ -120,6 +120,7 @@ export function WorkbenchHostDock({
   nodeDefinitions,
   onDockEntryAction,
   onDockEntryClick,
+  onMissionControlRequestOpen,
   workspaceId
 }: {
   captureNodePreviewImage?: WorkbenchHostProps["captureNodePreviewImage"];
@@ -143,6 +144,7 @@ export function WorkbenchHostDock({
     host: WorkbenchHostHandle;
     nodeId?: string;
   }) => Promise<void> | void;
+  onMissionControlRequestOpen?: WorkbenchHostProps["onMissionControlRequestOpen"];
   workspaceId: string;
 }) {
   const minimizedNodeIDs = useMemo(
@@ -1285,6 +1287,39 @@ export function WorkbenchHostDock({
     return callback;
   }, []);
 
+  const runDockEntryAction = useCallback(
+    (entryId: string, actionId: string) => {
+      const actionKey = dockActionKey(entryId, actionId);
+      if (pendingActionKeys.has(actionKey)) {
+        return;
+      }
+      setPendingActionKeys((current) => {
+        const next = new Set(current);
+        next.add(actionKey);
+        return next;
+      });
+      void Promise.resolve(
+        onDockEntryAction?.({
+          actionId,
+          entryId,
+          host
+        })
+      )
+        .catch(() => {})
+        .finally(() => {
+          setPendingActionKeys((current) => {
+            if (!current.has(actionKey)) {
+              return current;
+            }
+            const next = new Set(current);
+            next.delete(actionKey);
+            return next;
+          });
+        });
+    },
+    [host, onDockEntryAction, pendingActionKeys]
+  );
+
   const popupEntry =
     activePopup === null
       ? null
@@ -1300,6 +1335,33 @@ export function WorkbenchHostDock({
           ): slot is Extract<WorkbenchMinimizedDockSlot, { kind: "stack" }> =>
             slot.kind === "stack"
         ) ?? null);
+  const openDockContextMenuNodeIds =
+    popupEntry?.matchedNodes.map((node) => node.id) ?? [];
+  const dockContextMenuInstanceMode =
+    popupEntry === null
+      ? undefined
+      : resolveDockEntryInstanceMode(popupEntry.entry, nodeDefinitions);
+  const canShowAllWindowsFromDockContextMenu =
+    onMissionControlRequestOpen !== undefined &&
+    dockContextMenuInstanceMode === "multi" &&
+    openDockContextMenuNodeIds.length > 1;
+  const fullscreenNodeFromDockContextMenu =
+    popupEntry === null
+      ? null
+      : resolveDockContextMenuFullscreenNode({
+          focusedNodeId: context.focusedNodeId,
+          minimizedNodeIDs,
+          nodeDefinitions,
+          nodes: popupEntry.matchedNodes
+        });
+  const canOpenFromDockContextMenu =
+    popupEntry !== null &&
+    popupEntry.matchedNodes.length === 0 &&
+    resolveWorkbenchDockEntryClick({
+      entry: popupEntry.entry,
+      instanceMode: dockContextMenuInstanceMode,
+      matchedNodes: popupEntry.matchedNodes
+    }).kind === "launch";
 
   return (
     <div
@@ -1421,7 +1483,10 @@ export function WorkbenchHostDock({
                       clickResolution.kind === "blocked" ? "false" : "true"
                     }
                     type="button"
-                    onPointerDown={() => {
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) {
+                        return;
+                      }
                       if (clickResolution.kind === "blocked") {
                         return;
                       }
@@ -1506,6 +1571,7 @@ export function WorkbenchHostDock({
                                     top: rect.top,
                                     width: rect.width
                                   },
+                                  kind: "preview",
                                   entryId: entry.id
                                 }
                           );
@@ -1536,6 +1602,37 @@ export function WorkbenchHostDock({
                           );
                           return;
                       }
+                    }}
+                    onContextMenu={(event) => {
+                      if (
+                        clickResolution.kind === "blocked" ||
+                        !dockEntryHasContextMenu(entry, resolvedEntry)
+                      ) {
+                        return;
+                      }
+                      event.preventDefault();
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      logWorkbenchDockDebug(
+                        "dock.popup.context_menu",
+                        debugDiagnostics,
+                        {
+                          anchorKey,
+                          entryId: entry.id,
+                          matchedNodeCount: resolvedEntry.matchedNodes.length,
+                          typeId: entry.typeId,
+                          workspaceId
+                        }
+                      );
+                      setActivePopup({
+                        anchorRect: {
+                          height: rect.height,
+                          left: rect.left,
+                          top: rect.top,
+                          width: rect.width
+                        },
+                        kind: "context-menu",
+                        entryId: entry.id
+                      });
                     }}
                   >
                     <span
@@ -1687,7 +1784,10 @@ export function WorkbenchHostDock({
                     className="desktop-dock__btn desktop-dock__minimized-btn"
                     data-interactive="true"
                     type="button"
-                    onPointerDown={() => {
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) {
+                        return;
+                      }
                       beginDockMinimizedInteraction();
                     }}
                     onClick={(event) => {
@@ -1827,8 +1927,8 @@ export function WorkbenchHostDock({
                   data-interactive="true"
                   disabled={isPendingMinimizedNode}
                   type="button"
-                  onPointerDown={() => {
-                    if (isPendingMinimizedNode) {
+                  onPointerDown={(event) => {
+                    if (event.button !== 0 || isPendingMinimizedNode) {
                       return;
                     }
                     const restoreIntent =
@@ -2026,7 +2126,37 @@ export function WorkbenchHostDock({
         <WorkbenchHostDockPopup
           anchorRect={activePopup.anchorRect}
           placement={dockPlacement}
+          canEnterFullscreen={fullscreenNodeFromDockContextMenu !== null}
+          canShowAllWindows={canShowAllWindowsFromDockContextMenu}
           debugDiagnostics={debugDiagnostics}
+          dockRetention={
+            popupEntry.entry.dockRetention
+              ? {
+                  checked: popupEntry.entry.dockRetention.retained,
+                  disabled:
+                    popupEntry.entry.dockRetention.disabled === true ||
+                    pendingActionKeys.has(
+                      dockActionKey(
+                        popupEntry.entry.id,
+                        popupEntry.entry.dockRetention.actionId
+                      )
+                    ),
+                  label: i18n.t(
+                    popupEntry.entry.dockRetention.retained
+                      ? "dockContextMenu.removeFromDock"
+                      : "dockContextMenu.keepInDock"
+                  ),
+                  pendingLabel: pendingActionKeys.has(
+                    dockActionKey(
+                      popupEntry.entry.id,
+                      popupEntry.entry.dockRetention.actionId
+                    )
+                  )
+                    ? popupEntry.entry.dockRetention.pendingLabel
+                    : undefined
+                }
+              : null
+          }
           capturePreview={
             popupEntry.entry.capturePopupItemPreview
               ? async (item) => {
@@ -2098,7 +2228,10 @@ export function WorkbenchHostDock({
           label={popupEntry.entry.label}
           labelMode={popupEntry.entry.popupCardLabelMode}
           newWindowLabel={i18n.t("newWindow")}
+          openLabel={i18n.t("dockContextMenu.open")}
           closeWindowLabel={(title) => i18n.t("closeWindow", { title })}
+          fullscreenLabel={i18n.t("dockContextMenu.fullscreen")}
+          hideLabel={i18n.t("dockContextMenu.hide")}
           onClose={() => {
             logWorkbenchDockDebug(
               "dock.popup.close_requested",
@@ -2134,6 +2267,38 @@ export function WorkbenchHostDock({
                 })
             );
           }}
+          onEnterFullscreen={() => {
+            if (!fullscreenNodeFromDockContextMenu) {
+              return;
+            }
+            context.controller.commands.enterFullscreen(
+              fullscreenNodeFromDockContextMenu.id
+            );
+            closePopup();
+          }}
+          onHide={() => {
+            for (const node of popupEntry.matchedNodes) {
+              if (!minimizedNodeIDs.has(node.id)) {
+                host.minimizeNode(node.id);
+              }
+            }
+            closePopup();
+          }}
+          onRunDockRetentionAction={
+            popupEntry.entry.dockRetention
+              ? () => {
+                  const dockRetention = popupEntry.entry.dockRetention;
+                  if (!dockRetention || dockRetention.disabled === true) {
+                    return;
+                  }
+                  runDockEntryAction(
+                    popupEntry.entry.id,
+                    dockRetention.actionId
+                  );
+                  closePopup();
+                }
+              : undefined
+          }
           onSelectNode={(nodeId) => {
             closePopup();
             void Promise.resolve(
@@ -2151,12 +2316,38 @@ export function WorkbenchHostDock({
               }
             );
           }}
+          onShowAllWindows={() => {
+            closePopup();
+            for (const node of popupEntry.matchedNodes) {
+              if (minimizedNodeIDs.has(node.id)) {
+                context.controller.commands.restoreNode(node.id);
+              }
+            }
+            window.requestAnimationFrame(() => {
+              onMissionControlRequestOpen?.("activate", {
+                nodeIds: openDockContextMenuNodeIds,
+                trigger: "dock-context-menu"
+              });
+            });
+          }}
+          onQuit={() => {
+            for (const node of popupEntry.matchedNodes) {
+              host.requestNodeClose(node.id);
+            }
+            closePopup();
+          }}
+          quitLabel={i18n.t("dockContextMenu.quit")}
           showCreateNew={canCreateNewWindow(
             popupEntry.entry,
-            resolveDockEntryInstanceMode(popupEntry.entry, nodeDefinitions)
+            dockContextMenuInstanceMode
           )}
+          showOpen={canOpenFromDockContextMenu}
+          showAllWindowsLabel={i18n.t("dockContextMenu.showAllWindows")}
           resolveDockPreviewCacheKey={(node) =>
             resolveDockPreviewCacheKey(workspaceId, node)
+          }
+          variant={
+            activePopup.kind === "context-menu" ? "context-menu" : "default"
           }
         />
       ) : null}
@@ -2558,6 +2749,42 @@ function dockEntryHasHoverPanel(entry: WorkbenchHostDockEntry): boolean {
   return (
     Boolean(entry.state?.reason?.trim()) ||
     (entry.hoverActions?.length ?? 0) > 0
+  );
+}
+
+function dockEntryHasContextMenu(
+  entry: WorkbenchHostDockEntry,
+  resolvedEntry: ResolvedWorkbenchHostDockEntry
+): boolean {
+  if (resolvedEntry.matchedNodes.length > 0 || entry.dockRetention) {
+    return true;
+  }
+  return entry.clickActionId === undefined;
+}
+
+function resolveDockContextMenuFullscreenNode({
+  focusedNodeId,
+  minimizedNodeIDs,
+  nodeDefinitions,
+  nodes
+}: {
+  focusedNodeId: string | null;
+  minimizedNodeIDs: ReadonlySet<string>;
+  nodeDefinitions: ReadonlyMap<string, WorkbenchHostNodeDefinition>;
+  nodes: readonly WorkbenchMinimizedDockNode[];
+}) {
+  const candidates = nodes.filter((node) => {
+    if (node.displayMode === "fullscreen" || minimizedNodeIDs.has(node.id)) {
+      return false;
+    }
+    return (
+      nodeDefinitions.get(node.data.typeId)?.window?.fullscreenable !== false
+    );
+  });
+  return (
+    candidates.find((node) => node.id === focusedNodeId) ??
+    candidates[0] ??
+    null
   );
 }
 

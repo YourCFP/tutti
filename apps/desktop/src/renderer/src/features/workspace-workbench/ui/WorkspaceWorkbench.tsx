@@ -8,7 +8,9 @@ import {
 } from "@tutti-os/workspace-issue-manager/workbench";
 import {
   type WorkbenchHostCloseDialogRequest,
+  type WorkbenchContribution,
   type WorkbenchHostHandle,
+  type WorkbenchHostDockEntry,
   WorkbenchHost
 } from "@tutti-os/workbench-surface";
 import {
@@ -70,9 +72,15 @@ import {
   findWorkspaceApp,
   workspaceAppWebviewTypeID
 } from "@renderer/features/workspace-app-center";
-import { workspaceLaunchpadDockActionId } from "../services/workspaceLaunchpadModel.ts";
+import {
+  workspaceLaunchpadDockActionId,
+  workspaceLaunchpadDockEntryId
+} from "../services/workspaceLaunchpadModel.ts";
 import { requestWorkspaceMessageCenterOpen } from "../services/workspaceMessageCenterCoordinator.ts";
-import { workspaceBrowserNodeID } from "../services/workspaceWorkbenchNodeIds.ts";
+import {
+  workspaceBrowserNodeID,
+  workspaceFilesNodeID
+} from "../services/workspaceWorkbenchNodeIds.ts";
 import { WorkspaceChrome } from "./WorkspaceChrome";
 import { WorkspaceAppExternalBridge } from "./WorkspaceAppExternalBridge";
 import { WorkspaceLaunchpadOverlay } from "./WorkspaceLaunchpadOverlay.tsx";
@@ -81,6 +89,9 @@ import { useWorkspaceOnboardingAutoOpen } from "./useWorkspaceOnboardingAutoOpen
 import { resolveWorkspaceWorkbenchLayoutConstraints } from "./workspaceWorkbenchLayoutConstraints.ts";
 import type { DesktopWorkspaceAppExternalHostApi } from "@preload/types";
 import type { TuttiExternalFileOpenInput } from "@tutti-os/workspace-external-core/contracts";
+
+const temporaryWorkspaceAppDockRetentionActionPrefix =
+  "temporary-workspace-app-dock-retention:";
 
 interface WorkspaceWorkbenchProps {
   enableWindowCloseGuard: boolean;
@@ -159,6 +170,8 @@ function ReadyWorkspaceWorkbench({
   const hostInput = runtime.hostInput;
   const [workbenchHost, setWorkbenchHost] =
     useState<WorkbenchHostHandle | null>(null);
+  const [temporaryDockRetentionByEntryId, setTemporaryDockRetentionByEntryId] =
+    useState<Record<string, boolean>>({});
   const [launchpadOpen, setLaunchpadOpen] = useState(false);
   const [launchpadOpenTrigger, setLaunchpadOpenTrigger] =
     useState<WorkspaceLaunchpadOpenTrigger>("dock");
@@ -198,9 +211,62 @@ function ReadyWorkspaceWorkbench({
         setLaunchpadOpen(true);
         return;
       }
+      if (
+        request.actionId.startsWith(
+          temporaryWorkspaceAppDockRetentionActionPrefix
+        )
+      ) {
+        const entry = findTemporaryDockRetentionEntry({
+          contributions: hostInput.contributions,
+          dockEntries: hostInput.dockEntries,
+          entryId: request.entryId
+        });
+        setTemporaryDockRetentionByEntryId((current) => {
+          const retained =
+            current[request.entryId] ??
+            (entry
+              ? resolveTemporaryDockRetentionDefault({
+                  appCenterService,
+                  entry
+                })
+              : false);
+          return {
+            ...current,
+            [request.entryId]: !retained
+          };
+        });
+        return;
+      }
       return hostInput.onDockEntryAction?.(request);
     },
-    [hostInput.onDockEntryAction]
+    [
+      appCenterService,
+      hostInput.contributions,
+      hostInput.dockEntries,
+      hostInput.onDockEntryAction
+    ]
+  );
+  const contributions = useMemo(
+    () =>
+      hostInput.contributions?.map((contribution) =>
+        resolveTemporaryDockRetentionContribution({
+          appCenterService,
+          contribution,
+          retainedByEntryId: temporaryDockRetentionByEntryId
+        })
+      ),
+    [appCenterService, hostInput.contributions, temporaryDockRetentionByEntryId]
+  );
+  const dockEntries = useMemo(
+    () =>
+      hostInput.dockEntries?.map((entry) =>
+        resolveTemporaryDockRetentionEntry({
+          appCenterService,
+          entry,
+          retainedByEntryId: temporaryDockRetentionByEntryId
+        })
+      ),
+    [appCenterService, hostInput.dockEntries, temporaryDockRetentionByEntryId]
   );
   const onDockEntryClick = useCallback(
     (request: Parameters<NonNullable<typeof hostInput.onDockEntryClick>>[0]) =>
@@ -470,17 +536,18 @@ function ReadyWorkspaceWorkbench({
       <WorkbenchHost
         captureNodePreviewImage={hostInput.captureNodePreviewImage}
         className="h-full"
-        contributions={hostInput.contributions}
+        contributions={contributions}
         debugDiagnostics={hostInput.debugDiagnostics}
         dockPreviewCache={hostInput.dockPreviewCache}
         dockPlacement={runtime.dockPlacement}
-        dockEntries={hostInput.dockEntries}
+        dockEntries={dockEntries}
         dockStateSource={hostInput.dockStateSource}
         externalStateSource={hostInput.externalStateSource}
         i18n={runtime.appI18n}
         layoutConstraints={layoutConstraints}
         missionControl={{
           mode: runtime.missionControl.mode,
+          nodeIds: runtime.missionControl.nodeIds ?? undefined,
           onRequestClose: runtime.missionControl.close
         }}
         minimizeAnimation={runtime.minimizeAnimation}
@@ -490,6 +557,20 @@ function ReadyWorkspaceWorkbench({
         onHandleReady={onWorkbenchHostHandleReady}
         onLaunchRequest={hostInput.onLaunchRequest}
         onMissionControlAdapterReady={runtime.onMissionControlAdapterReady}
+        onMissionControlRequestOpen={(mode, request) => {
+          runtime.missionControl.open(
+            mode,
+            request
+              ? {
+                  nodeIds: request.nodeIds,
+                  trigger:
+                    request.trigger === "dock-context-menu"
+                      ? "button"
+                      : undefined
+                }
+              : "button"
+          );
+        }}
         onNodeCloseRequest={hostInput.onNodeCloseRequest}
         renderTopChrome={(chromeContext) => (
           <WorkspaceChrome
@@ -533,6 +614,97 @@ function ReadyWorkspaceWorkbench({
       />
     </main>
   );
+}
+
+function resolveTemporaryDockRetentionEntry({
+  appCenterService,
+  entry,
+  retainedByEntryId
+}: {
+  appCenterService: IWorkspaceAppCenterService;
+  entry: WorkbenchHostDockEntry;
+  retainedByEntryId: Readonly<Record<string, boolean>>;
+}): WorkbenchHostDockEntry {
+  if (
+    entry.id === workspaceLaunchpadDockEntryId ||
+    entry.id === workspaceFilesNodeID
+  ) {
+    return entry;
+  }
+  const retained =
+    retainedByEntryId[entry.id] ??
+    resolveTemporaryDockRetentionDefault({ appCenterService, entry });
+  return {
+    ...entry,
+    dockRetention: {
+      actionId: `${temporaryWorkspaceAppDockRetentionActionPrefix}${encodeURIComponent(entry.id)}`,
+      retained
+    },
+    visibility: retained ? "always" : "when-open"
+  };
+}
+
+function resolveTemporaryDockRetentionContribution({
+  appCenterService,
+  contribution,
+  retainedByEntryId
+}: {
+  appCenterService: IWorkspaceAppCenterService;
+  contribution: WorkbenchContribution;
+  retainedByEntryId: Readonly<Record<string, boolean>>;
+}): WorkbenchContribution {
+  if (!contribution.dockEntries?.length) {
+    return contribution;
+  }
+  return {
+    ...contribution,
+    dockEntries: contribution.dockEntries.map((entry) =>
+      resolveTemporaryDockRetentionEntry({
+        appCenterService,
+        entry,
+        retainedByEntryId
+      })
+    )
+  };
+}
+
+function resolveTemporaryDockRetentionDefault({
+  appCenterService,
+  entry
+}: {
+  appCenterService: IWorkspaceAppCenterService;
+  entry: WorkbenchHostDockEntry;
+}): boolean {
+  const appId = readWorkspaceAppIdFromDockEntryId(entry.id);
+  const app = appId ? findWorkspaceApp(appCenterService, appId) : null;
+  return app?.installed ?? (entry.visibility ?? "always") === "always";
+}
+
+function findTemporaryDockRetentionEntry({
+  contributions,
+  dockEntries,
+  entryId
+}: {
+  contributions: readonly WorkbenchContribution[] | undefined;
+  dockEntries: readonly WorkbenchHostDockEntry[] | undefined;
+  entryId: string;
+}): WorkbenchHostDockEntry | null {
+  return (
+    dockEntries?.find((entry) => entry.id === entryId) ??
+    contributions
+      ?.flatMap((contribution) => contribution.dockEntries ?? [])
+      .find((entry) => entry.id === entryId) ??
+    null
+  );
+}
+
+function readWorkspaceAppIdFromDockEntryId(
+  value: string | null | undefined
+): string | null {
+  const prefix = "workspace-app:";
+  return value?.startsWith(prefix)
+    ? decodeURIComponent(value.slice(prefix.length))
+    : null;
 }
 
 async function openWorkspaceFilesNode(

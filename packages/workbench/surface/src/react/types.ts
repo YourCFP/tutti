@@ -17,6 +17,7 @@ export interface WorkbenchSurfacePresentation {
   frameByNodeId: ReadonlyMap<string, WorkbenchFrame>;
   interaction?: WorkbenchSurfacePresentationInteraction | null;
   mode: "mission-control";
+  visibleNodeIds: ReadonlySet<string>;
 }
 
 export interface WorkbenchSurfacePresentationInteraction {

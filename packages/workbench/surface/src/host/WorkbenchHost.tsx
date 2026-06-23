@@ -36,6 +36,7 @@ export function WorkbenchHost({
   onHandleReady,
   onLaunchRequest,
   onMissionControlAdapterReady,
+  onMissionControlRequestOpen,
   onNodeCloseRequest,
   projectedNodes,
   renderBottomChrome,
@@ -71,6 +72,7 @@ export function WorkbenchHost({
     [contributions, dockEntries]
   );
   const missionControlMode = missionControl?.mode ?? null;
+  const missionControlNodeIds = missionControl?.nodeIds;
   const missionControlClose = missionControl?.onRequestClose ?? noop;
   const missionControlEnabled =
     missionControlMode !== null || onMissionControlAdapterReady !== undefined;
@@ -113,6 +115,7 @@ export function WorkbenchHost({
     nodeDefinitionByType,
     onDockEntryAction,
     onDockEntryClick,
+    onMissionControlRequestOpen,
     renderBottomChrome,
     renderTopChrome,
     workspaceId
@@ -120,6 +123,7 @@ export function WorkbenchHost({
   const missionControlState = useWorkbenchMissionControlState({
     adapter: missionControlAdapter,
     mode: missionControlMode,
+    nodeIds: missionControlNodeIds,
     onRequestClose: missionControlClose
   });
   const missionControlPresence =

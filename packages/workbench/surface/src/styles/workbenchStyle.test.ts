@@ -12,6 +12,44 @@ test("floating window bodies do not reserve a right-side content margin", () => 
   );
 });
 
+test("mission control hidden presentation windows are invisible and inert", () => {
+  const css = readFileSync(resolve("src/styles/workbench.css"), "utf8");
+
+  assert.match(
+    css,
+    /\.workbench-window-shell\[data-presentation-visibility="hidden"\]\s*{[^}]*visibility:\s*hidden;[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s
+  );
+});
+
+test("dock retained entry removal animates width and icon exit", () => {
+  const css = readFileSync(resolve("src/styles/workbench.css"), "utf8");
+
+  assert.match(
+    css,
+    /\.desktop-dock-plate\s*{[^}]*transition:\s*width 220ms cubic-bezier\(0\.22, 1, 0\.36, 1\);/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock\[data-dock-placement="left"\]\s*{[^}]*transition:\s*height 600ms cubic-bezier\(0\.16, 1, 0\.3, 1\);/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__slot\[data-presence="exiting"\]\s*{[^}]*animation:\s*desktop-dock-slot-collapse 600ms cubic-bezier\(0\.4, 0, 0\.2, 1\)[^}]*both;/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__slot\[data-presence="exiting"\]\s+\.desktop-dock__icon-shell\s*{[^}]*animation:\s*desktop-dock-presence-exit 420ms cubic-bezier\(0\.4, 0, 0\.2, 1\)[^}]*both;/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__separator\[data-presence="exiting"\]\s*{[^}]*animation:\s*desktop-dock-separator-collapse 600ms/s
+  );
+  assert.match(css, /@keyframes desktop-dock-slot-collapse/);
+  assert.match(css, /@keyframes desktop-dock-slot-collapse-left/);
+  assert.match(css, /@keyframes desktop-dock-separator-collapse/);
+  assert.match(css, /@keyframes desktop-dock-separator-collapse-left/);
+});
+
 test("left dock placement owns vertical frame and popup placement styles", () => {
   const css = readFileSync(resolve("src/styles/workbench.css"), "utf8");
 
@@ -62,7 +100,19 @@ test("left dock placement owns vertical frame and popup placement styles", () =>
   assert.doesNotMatch(css, /desktop-dock-left-stack-card-fan-in/);
   assert.match(
     css,
-    /\.desktop-dock\[data-dock-placement="left"\]\s+\.desktop-dock__slot\[data-node-state="open"\]::before,[\s\S]*?\.desktop-dock\[data-dock-placement="left"\]\s+\.desktop-dock__slot\[data-node-state="minimized"\]::before\s*{[^}]*right:\s*auto;[^}]*left:\s*var\(--desktop-dock-indicator-offset\);/s
+    /\.desktop-dock\[data-dock-placement="left"\]\s+\.desktop-dock__slot\[data-node-state="open"\]::before,[\s\S]*?\.desktop-dock\[data-dock-placement="left"\]\s+\.desktop-dock__slot\[data-node-state="minimized"\]::before\s*{[^}]*right:\s*auto;[^}]*left:\s*calc\(var\(--desktop-dock-indicator-offset\) - 2px\);/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__slot\[data-node-state="open"\]::before,[\s\S]*?\.desktop-dock__slot\[data-node-state="minimized"\]::before\s*{[^}]*--desktop-dock-indicator-color:\s*var\(--text-tertiary\);[^}]*bottom:\s*calc\(var\(--desktop-dock-indicator-offset\) - 2px\);[^}]*width:\s*5px;[^}]*height:\s*5px;[^}]*background:\s*var\(--desktop-dock-indicator-color\);[^}]*box-shadow:\s*0 0 0 0\.5px rgb\(0 0 0 \/ 12%\);/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__slot\[data-node-state="open"\]\[data-wallpaper-tone="dark"\]::before,[\s\S]*?\.desktop-dock__slot\[data-node-state="minimized"\]\[data-wallpaper-tone="dark"\]::before\s*{[^}]*--desktop-dock-indicator-color:\s*rgb\(255 255 255 \/ 78%\);[^}]*box-shadow:\s*0 0 0 0\.5px rgb\(0 0 0 \/ 42%\);/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__slot\[data-node-state="open"\]\[data-wallpaper-tone="light"\]::before,[\s\S]*?\.desktop-dock__slot\[data-node-state="minimized"\]\[data-wallpaper-tone="light"\]::before\s*{[^}]*--desktop-dock-indicator-color:\s*rgb\(0 0 0 \/ 46%\);[^}]*box-shadow:\s*0 0 0 0\.5px rgb\(255 255 255 \/ 58%\);/s
   );
 });
 
@@ -247,6 +297,14 @@ test("dock overflow keeps scroll controls viewport-bound", () => {
     /\.desktop-dock\[data-dock-hover-panel-open="true"\]\s+\.desktop-dock__items\s*{[^}]*mask-image:\s*none;/s
   );
   assert.match(css, /@keyframes desktop-dock-bounce-translate/s);
+  assert.match(
+    css,
+    /@keyframes desktop-dock-bounce-translate\s*{[\s\S]*?45%\s*{[^}]*translate:\s*0 -14px;/s
+  );
+  assert.match(
+    css,
+    /@keyframes desktop-dock-bounce-translate-left\s*{[\s\S]*?45%\s*{[^}]*translate:\s*14px 0;/s
+  );
   assert.match(
     css,
     /\.desktop-dock__slot\[data-bouncing="true"\]\s+\.desktop-dock__icon-content,/s

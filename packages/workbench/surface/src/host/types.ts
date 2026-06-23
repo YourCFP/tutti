@@ -189,6 +189,13 @@ export interface WorkbenchHostDockEntryAction {
   pendingLabel?: string;
 }
 
+export interface WorkbenchHostDockEntryRetentionAction {
+  actionId: string;
+  disabled?: boolean;
+  pendingLabel?: string;
+  retained: boolean;
+}
+
 export type WorkbenchHostDockEntryDiagnostics = Record<string, unknown>;
 
 export interface WorkbenchHostDockPopupItemInput {
@@ -245,6 +252,7 @@ export interface WorkbenchHostDockEntry {
   id: string;
   label: string;
   diagnostics?: WorkbenchHostDockEntryDiagnostics;
+  dockRetention?: WorkbenchHostDockEntryRetentionAction;
   instanceMode?: WorkbenchHostNodeInstanceStrategy["mode"];
   launchBehavior?: WorkbenchHostDockEntryLaunchBehavior;
   launchPayload?: unknown;
@@ -268,6 +276,7 @@ export type WorkbenchHostDockEntryDynamicState = Partial<
     | "attentionToken"
     | "badge"
     | "diagnostics"
+    | "dockRetention"
     | "hoverActions"
     | "launchBehavior"
     | "order"
@@ -514,7 +523,13 @@ export interface WorkbenchHostChromeRenderContext {
 
 export interface WorkbenchHostMissionControlProps {
   mode: WorkbenchMissionControlMode | null;
+  nodeIds?: readonly string[];
   onRequestClose: () => void;
+}
+
+export interface WorkbenchHostMissionControlOpenRequest {
+  nodeIds?: readonly string[];
+  trigger?: "dock-context-menu";
 }
 
 export interface WorkbenchHostClosePreparationContext {
@@ -583,6 +598,10 @@ export interface WorkbenchHostProps {
     | void;
   onMissionControlAdapterReady?: (
     adapter: WorkbenchMissionControlAdapter<WorkbenchHostNodeData> | null
+  ) => void;
+  onMissionControlRequestOpen?: (
+    mode: WorkbenchMissionControlMode,
+    request?: WorkbenchHostMissionControlOpenRequest
   ) => void;
   onNodeCloseRequest?: (
     request: WorkbenchHostNodeCloseRequest

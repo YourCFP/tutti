@@ -114,7 +114,7 @@ test("WorkspaceSettingsService opens the managed models pane with a focused prov
   assert.equal(service.store.managedModels.focusRequestID, 2);
 });
 
-test("WorkspaceSettingsService opens general settings with a focused anchor", () => {
+test("WorkspaceSettingsService opens agent settings with a focused anchor", () => {
   const service = new WorkspaceSettingsService({
     client: createWorkspaceSettingsClient({})
   });
@@ -127,7 +127,7 @@ test("WorkspaceSettingsService opens general settings with a focused anchor", ()
     }
   );
 
-  assert.equal(service.store.activeSection, "general");
+  assert.equal(service.store.activeSection, "agent");
   assert.equal(service.store.generalFocusAnchor, "browser-use");
   assert.equal(service.store.generalFocusRequestID, 1);
 
@@ -139,7 +139,7 @@ test("WorkspaceSettingsService opens general settings with a focused anchor", ()
     }
   );
 
-  assert.equal(service.store.activeSection, "general");
+  assert.equal(service.store.activeSection, "agent");
   assert.equal(service.store.generalFocusAnchor, "computer-use");
   assert.equal(service.store.generalFocusRequestID, 2);
 });

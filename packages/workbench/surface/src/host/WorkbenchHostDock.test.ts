@@ -342,6 +342,60 @@ test("dock new window launch returns the created node id to the genie boundary",
   );
 });
 
+test("dock entry context menu opens the command menu", () => {
+  assert.match(source, /onContextMenu=\{\(event\) => \{/);
+  assert.match(
+    source,
+    /clickResolution\.kind === "blocked" \|\|[\s\S]*?!dockEntryHasContextMenu\(entry, resolvedEntry\)/
+  );
+  assert.match(source, /"dock\.popup\.context_menu"/);
+  assert.match(
+    source,
+    /setActivePopup\(\{\s*anchorRect: \{\s*height: rect\.height,\s*left: rect\.left,\s*top: rect\.top,\s*width: rect\.width\s*\},\s*kind: "context-menu",\s*entryId: entry\.id\s*\}\);/
+  );
+});
+
+test("dock action-only entries do not open a context menu", () => {
+  assert.match(source, /function dockEntryHasContextMenu/);
+  assert.match(
+    source,
+    /resolvedEntry\.matchedNodes\.length > 0 \|\| entry\.dockRetention/
+  );
+  assert.match(source, /return entry\.clickActionId === undefined;/);
+});
+
+test("dock context menu exposes window and app commands", () => {
+  assert.match(source, /canShowAllWindowsFromDockContextMenu/);
+  assert.match(source, /const dockContextMenuInstanceMode =/);
+  assert.match(
+    source,
+    /canShowAllWindowsFromDockContextMenu =[\s\S]*?onMissionControlRequestOpen !== undefined &&[\s\S]*?dockContextMenuInstanceMode === "multi" &&[\s\S]*?openDockContextMenuNodeIds\.length > 1;/
+  );
+  assert.match(
+    source,
+    /for \(const node of popupEntry\.matchedNodes\) \{[\s\S]*?if \(minimizedNodeIDs\.has\(node\.id\)\) \{[\s\S]*?context\.controller\.commands\.restoreNode\(node\.id\);/
+  );
+  assert.match(
+    source,
+    /window\.requestAnimationFrame\(\(\) => \{[\s\S]*?onMissionControlRequestOpen\?\.\(\s*"activate",\s*\{[\s\S]*?nodeIds: openDockContextMenuNodeIds,[\s\S]*?trigger: "dock-context-menu"/
+  );
+  assert.match(source, /openDockContextMenuNodeIds/);
+  assert.match(
+    source,
+    /const openDockContextMenuNodeIds =\s*popupEntry\?\.matchedNodes\.map\(\(node\) => node\.id\) \?\? \[\];/
+  );
+  assert.match(source, /host\.minimizeNode\(node\.id\);/);
+  assert.match(source, /host\.requestNodeClose\(node\.id\);/);
+  assert.match(source, /resolveDockContextMenuFullscreenNode/);
+  assert.match(source, /context\.controller\.commands\.enterFullscreen/);
+  assert.match(source, /dockContextMenu\.fullscreen/);
+  assert.match(source, /canOpenFromDockContextMenu/);
+  assert.match(source, /dockContextMenu\.open/);
+  assert.match(source, /popupEntry\.entry\.dockRetention/);
+  assert.match(source, /dockContextMenu\.keepInDock/);
+  assert.match(source, /dockContextMenu\.removeFromDock/);
+});
+
 test("dock entry clicks within the bounce window are throttled like a single click", () => {
   assert.match(source, /const DOCK_ENTRY_CLICK_THROTTLE_MS = DOCK_BOUNCE_MS;/);
   assert.match(
@@ -358,7 +412,7 @@ test("dock entry clicks within the bounce window are throttled like a single cli
   );
   assert.match(
     source,
-    /onPointerDown=\{\(\) => \{\s*if \(clickResolution\.kind === "blocked"\) \{\s*return;\s*\}\s*if \(isDockEntryClickThrottled\(anchorKey\)\) \{\s*return;\s*\}\s*beginDockIconInteraction\(anchorKey\);\s*\}\}/
+    /onPointerDown=\{\(event\) => \{\s*if \(event\.button !== 0\) \{\s*return;\s*\}\s*if \(clickResolution\.kind === "blocked"\) \{\s*return;\s*\}\s*if \(isDockEntryClickThrottled\(anchorKey\)\) \{\s*return;\s*\}\s*beginDockIconInteraction\(anchorKey\);\s*\}\}/
   );
   assert.match(
     source,

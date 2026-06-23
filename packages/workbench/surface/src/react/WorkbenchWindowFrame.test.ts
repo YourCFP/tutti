@@ -75,3 +75,35 @@ test("layout selection chrome uses shared accent and stationary check tokens", (
   assert.match(source, /text-\[var\(--white-stationary\)\]/);
   assert.doesNotMatch(source, /border-2 border-\[var\(--border-focus\)\]/);
 });
+
+test("mission control hides windows outside the presentation target set", () => {
+  const source = readFileSync(
+    resolve("src/react/WorkbenchWindowFrame.tsx"),
+    "utf8"
+  );
+
+  assert.match(source, /const isPresentationHidden =/);
+  assert.match(source, /!presentation\?\.visibleNodeIds\.has\(node\.id\)/);
+  assert.match(
+    source,
+    /data-presentation-visibility=\{\s*isPresentationHidden \? "hidden" : "visible"\s*\}/
+  );
+  assert.match(
+    source,
+    /aria-hidden=\{hiddenMounted \|\| isPresentationHidden \? true : undefined\}/
+  );
+});
+
+test("mission control presentation tracks the visible target window ids", () => {
+  const stateSource = readFileSync(
+    resolve("src/mission-control/useWorkbenchMissionControlState.ts"),
+    "utf8"
+  );
+  const typeSource = readFileSync(resolve("src/react/types.ts"), "utf8");
+
+  assert.match(typeSource, /visibleNodeIds: ReadonlySet<string>;/);
+  assert.match(
+    stateSource,
+    /visibleNodeIds: new Set\(orderedNodes\.map\(\(node\) => node\.id\)\)/
+  );
+});

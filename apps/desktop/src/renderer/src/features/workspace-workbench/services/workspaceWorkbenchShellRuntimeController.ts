@@ -14,6 +14,7 @@ import type { IReporterService } from "../../analytics/services/reporterService.
 import { createWorkspaceCloseGuardDialogController } from "./internal/workspaceCloseGuardDialogController.ts";
 import {
   createWorkspaceMissionControlController,
+  type WorkspaceMissionControlOpenRequest,
   type WorkspaceMissionControlTrigger
 } from "./internal/workspaceMissionControlController.ts";
 import { createWorkspaceWallpaperSelectionController } from "./internal/workspaceWallpaperSelectionController.ts";
@@ -46,6 +47,7 @@ export interface WorkspaceWorkbenchShellMissionControlSnapshot {
   canOpen: boolean;
   isOpen: boolean;
   mode: WorkbenchMissionControlMode | null;
+  nodeIds: readonly string[] | null;
   shortcutsEnabled: boolean;
   visibleWindowCount: number;
 }
@@ -90,7 +92,9 @@ export interface WorkspaceWorkbenchShellRuntimeController {
     close: () => void;
     open: (
       mode: WorkbenchMissionControlMode,
-      trigger?: WorkspaceMissionControlTrigger
+      request?:
+        | WorkspaceMissionControlOpenRequest
+        | WorkspaceMissionControlTrigger
     ) => void;
     setAdapter: (
       adapter: WorkbenchMissionControlAdapter<WorkbenchHostNodeData> | null

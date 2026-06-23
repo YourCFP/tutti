@@ -50,6 +50,7 @@ export function useWorkbenchHostSurfaceRenderers(input: {
   nodeDefinitionByType: Map<string, WorkbenchHostNodeDefinition>;
   onDockEntryAction?: WorkbenchHostProps["onDockEntryAction"];
   onDockEntryClick?: WorkbenchHostProps["onDockEntryClick"];
+  onMissionControlRequestOpen?: WorkbenchHostProps["onMissionControlRequestOpen"];
   renderBottomChrome?: WorkbenchHostProps["renderBottomChrome"];
   renderTopChrome?: WorkbenchHostProps["renderTopChrome"];
   workspaceId: string;
@@ -175,6 +176,7 @@ export function useWorkbenchHostSurfaceRenderers(input: {
           nodeDefinitions={input.nodeDefinitionByType}
           onDockEntryAction={input.onDockEntryAction}
           onDockEntryClick={input.onDockEntryClick}
+          onMissionControlRequestOpen={input.onMissionControlRequestOpen}
           workspaceId={input.workspaceId}
         />
       </WorkbenchHostSurfaceRenderErrorBoundary>
@@ -192,6 +194,7 @@ export function useWorkbenchHostSurfaceRenderers(input: {
       input.nodeDefinitionByType,
       input.onDockEntryAction,
       input.onDockEntryClick,
+      input.onMissionControlRequestOpen,
       input.workspaceId
     ]
   );

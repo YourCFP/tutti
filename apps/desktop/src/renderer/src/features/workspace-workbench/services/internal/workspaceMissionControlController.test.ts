@@ -21,6 +21,7 @@ test("workspace mission control controller stays closed without an adapter", () 
     canOpen: false,
     isOpen: false,
     mode: null,
+    nodeIds: null,
     shortcutsEnabled: true,
     visibleWindowCount: 0
   });
@@ -36,6 +37,7 @@ test("workspace mission control controller requires multiple visible nodes", () 
     canOpen: false,
     isOpen: false,
     mode: null,
+    nodeIds: null,
     shortcutsEnabled: true,
     visibleWindowCount: 1
   });
@@ -54,6 +56,7 @@ test("workspace mission control controller opens and closes from snapshot state"
     canOpen: true,
     isOpen: true,
     mode: "activate",
+    nodeIds: null,
     shortcutsEnabled: false,
     visibleWindowCount: 2
   });
@@ -63,6 +66,7 @@ test("workspace mission control controller opens and closes from snapshot state"
     canOpen: true,
     isOpen: false,
     mode: null,
+    nodeIds: null,
     shortcutsEnabled: true,
     visibleWindowCount: 2
   });
@@ -129,6 +133,7 @@ test("workspace mission control controller closes when adapter is removed", () =
     canOpen: false,
     isOpen: false,
     mode: null,
+    nodeIds: null,
     shortcutsEnabled: true,
     visibleWindowCount: 0
   });
@@ -147,8 +152,28 @@ test("workspace mission control controller follows adapter visible node updates"
     canOpen: true,
     isOpen: false,
     mode: null,
+    nodeIds: null,
     shortcutsEnabled: true,
     visibleWindowCount: 3
+  });
+});
+
+test("workspace mission control controller scopes open requests to node ids", () => {
+  const controller = createWorkspaceMissionControlController();
+  controller.setAdapter(createMissionControlAdapter(4));
+
+  controller.open("activate", {
+    nodeIds: ["node-1", "node-3"],
+    trigger: "button"
+  });
+
+  assert.deepEqual(controller.getSnapshot(), {
+    canOpen: true,
+    isOpen: true,
+    mode: "activate",
+    nodeIds: ["node-1", "node-3"],
+    shortcutsEnabled: false,
+    visibleWindowCount: 2
   });
 });
 

@@ -109,7 +109,7 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       this.store.activeSection = options.section;
     }
     if (options?.anchor) {
-      this.store.activeSection = "general";
+      this.store.activeSection = "agent";
       this.store.generalFocusAnchor = options.anchor;
       this.store.generalFocusRequestID += 1;
     }

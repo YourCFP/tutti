@@ -23,14 +23,21 @@ test("workspace settings developer panel exposes analytics debug switch only whe
 test("workspace settings panel lists appearance below general", () => {
   assert.match(
     source,
-    /id: "general" as const,[\s\S]*id: "appearance" as const,[\s\S]*id: "apps" as const,[\s\S]*id: "about" as const,[\s\S]*id: "developer" as const/
+    /id: "general" as const,[\s\S]*id: "agent" as const,[\s\S]*id: "appearance" as const,[\s\S]*id: "apps" as const,[\s\S]*id: "about" as const,[\s\S]*id: "developer" as const/
   );
 });
 
-test("workspace settings general panel lists agent defaults before language", () => {
+test("workspace settings agent panel lists agent controls", () => {
   assert.match(
     source,
-    /workspace\.externalImport\.settingsLabel[\s\S]*workspace\.settings\.general\.defaultAgentProviderLabel[\s\S]*workspace\.settings\.general\.browserUseConnectionModeLabel[\s\S]*workspace\.settings\.general\.preventSleepLabel[\s\S]*workspace\.settings\.general\.languageLabel/
+    /function WorkspaceAgentSettingsSection[\s\S]*workspace\.externalImport\.settingsLabel[\s\S]*workspace\.settings\.general\.defaultAgentProviderLabel[\s\S]*workspace\.settings\.general\.browserUseConnectionModeLabel[\s\S]*<ComputerUseSetupRow/
+  );
+});
+
+test("workspace settings general panel lists system controls", () => {
+  assert.match(
+    source,
+    /function WorkspaceGeneralSettingsSection[\s\S]*workspace\.settings\.general\.preventSleepLabel[\s\S]*workspace\.settings\.general\.languageLabel/
   );
 });
 
@@ -49,10 +56,10 @@ test("workspace settings default provider only offers Codex and Claude Code", ()
   );
 });
 
-test("workspace settings general panel owns browser-use connection mode", () => {
+test("workspace settings agent panel owns browser-use connection mode", () => {
   assert.match(
     source,
-    /function WorkspaceGeneralSettingsSection[\s\S]*workspace\.settings\.general\.browserUseConnectionModeLabel[\s\S]*workspace\.settings\.general\.browserUseConnectionModeOptions\.autoConnect[\s\S]*workspace\.settings\.general\.preventSleepLabel/
+    /function WorkspaceAgentSettingsSection[\s\S]*workspace\.settings\.general\.browserUseConnectionModeLabel[\s\S]*workspace\.settings\.general\.browserUseConnectionModeOptions\.autoConnect[\s\S]*<ComputerUseSetupRow/
   );
   assert.match(source, /changeBrowserUseConnectionMode/);
 });

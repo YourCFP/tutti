@@ -9,10 +9,16 @@ import type { IReporterService } from "../../../analytics/services/reporterServi
 
 export type WorkspaceMissionControlTrigger = "button" | "keyboard";
 
+export interface WorkspaceMissionControlOpenRequest {
+  nodeIds?: readonly string[];
+  trigger?: WorkspaceMissionControlTrigger;
+}
+
 export interface WorkspaceMissionControlSnapshot {
   canOpen: boolean;
   isOpen: boolean;
   mode: WorkbenchMissionControlMode | null;
+  nodeIds: readonly string[] | null;
   shortcutsEnabled: boolean;
   visibleWindowCount: number;
 }
@@ -22,7 +28,9 @@ export interface WorkspaceMissionControlController {
   getSnapshot: () => WorkspaceMissionControlSnapshot;
   open: (
     mode: WorkbenchMissionControlMode,
-    trigger?: WorkspaceMissionControlTrigger
+    request?:
+      | WorkspaceMissionControlOpenRequest
+      | WorkspaceMissionControlTrigger
   ) => void;
   setAdapter: (
     adapter: WorkbenchMissionControlAdapter<WorkbenchHostNodeData> | null
@@ -42,7 +50,8 @@ export function createWorkspaceMissionControlController(
     null;
   let unsubscribeAdapter: (() => void) | null = null;
   let activatedAt: number | null = null;
-  let snapshot = createSnapshot({ adapter, mode: null });
+  let nodeIds: readonly string[] | null = null;
+  let snapshot = createSnapshot({ adapter, mode: null, nodeIds });
   const listeners = new Set<() => void>();
   const now = () => dependencies.reporterNow?.() ?? Date.now();
 
@@ -51,8 +60,12 @@ export function createWorkspaceMissionControlController(
       listener();
     }
   };
-  const setMode = (mode: WorkbenchMissionControlMode | null) => {
-    const nextSnapshot = createSnapshot({ adapter, mode });
+  const setMode = (
+    mode: WorkbenchMissionControlMode | null,
+    nextNodeIds: readonly string[] | null = mode === null ? null : nodeIds
+  ) => {
+    nodeIds = nextNodeIds;
+    const nextSnapshot = createSnapshot({ adapter, mode, nodeIds });
     if (isEqualSnapshot(snapshot, nextSnapshot)) {
       return;
     }
@@ -62,10 +75,17 @@ export function createWorkspaceMissionControlController(
   };
   const refreshSnapshot = () => {
     const nextMode =
-      !adapter || adapter.getSnapshot().visibleNodes.length <= 1
+      !adapter || countVisibleNodes(adapter, nodeIds) <= 1
         ? null
         : snapshot.mode;
-    const nextSnapshot = createSnapshot({ adapter, mode: nextMode });
+    if (nextMode === null) {
+      nodeIds = null;
+    }
+    const nextSnapshot = createSnapshot({
+      adapter,
+      mode: nextMode,
+      nodeIds
+    });
     if (isEqualSnapshot(snapshot, nextSnapshot)) {
       return;
     }
@@ -89,17 +109,25 @@ export function createWorkspaceMissionControlController(
     getSnapshot: () => {
       return snapshot;
     },
-    open: (mode, trigger = "button") => {
-      if (!snapshot.canOpen || snapshot.mode === mode) {
+    open: (mode, request = "button") => {
+      const normalizedRequest =
+        typeof request === "string" ? { trigger: request } : request;
+      const nextNodeIds = normalizedRequest.nodeIds ?? null;
+      const nextSnapshot = createSnapshot({
+        adapter,
+        mode,
+        nodeIds: nextNodeIds
+      });
+      if (!nextSnapshot.canOpen || isEqualSnapshot(snapshot, nextSnapshot)) {
         return;
       }
 
       activatedAt = now();
-      setMode(mode);
+      setMode(mode, nextNodeIds);
       reportActivated(
         {
           mode,
-          trigger,
+          trigger: normalizedRequest.trigger ?? "button",
           windowCount: snapshot.visibleWindowCount
         },
         dependencies
@@ -165,20 +193,35 @@ function reportDeactivated(
 
 function createSnapshot({
   adapter,
-  mode
+  mode,
+  nodeIds
 }: {
   adapter: WorkbenchMissionControlAdapter<WorkbenchHostNodeData> | null;
   mode: WorkbenchMissionControlMode | null;
+  nodeIds: readonly string[] | null;
 }): WorkspaceMissionControlSnapshot {
-  const visibleWindowCount = adapter?.getSnapshot().visibleNodes.length ?? 0;
+  const visibleWindowCount = countVisibleNodes(adapter, nodeIds);
   const canOpen = visibleWindowCount > 1;
   return {
     canOpen,
     isOpen: mode !== null,
     mode,
+    nodeIds,
     shortcutsEnabled: mode === null,
     visibleWindowCount
   };
+}
+
+function countVisibleNodes(
+  adapter: WorkbenchMissionControlAdapter<WorkbenchHostNodeData> | null,
+  nodeIds: readonly string[] | null
+): number {
+  const visibleNodes = adapter?.getSnapshot().visibleNodes ?? [];
+  if (nodeIds === null) {
+    return visibleNodes.length;
+  }
+  const nodeIdSet = new Set(nodeIds);
+  return visibleNodes.filter((node) => nodeIdSet.has(node.id)).length;
 }
 
 function isEqualSnapshot(
@@ -189,7 +232,21 @@ function isEqualSnapshot(
     left.canOpen === right.canOpen &&
     left.isOpen === right.isOpen &&
     left.mode === right.mode &&
+    areEqualNodeIds(left.nodeIds, right.nodeIds) &&
     left.shortcutsEnabled === right.shortcutsEnabled &&
     left.visibleWindowCount === right.visibleWindowCount
   );
+}
+
+function areEqualNodeIds(
+  left: readonly string[] | null,
+  right: readonly string[] | null
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (left === null || right === null || left.length !== right.length) {
+    return false;
+  }
+  return left.every((nodeId, index) => nodeId === right[index]);
 }

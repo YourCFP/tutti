@@ -388,6 +388,7 @@ export const en = {
         apps: "Apps",
         sectionsLabel: "Settings sections",
         appearance: "Appearance",
+        agent: "Agent",
         developer: "Developer",
         general: "General"
       },

@@ -24,3 +24,24 @@ test("WorkspaceWorkbench forwards open-directory mode to workspace files", () =>
     /payload:\s*\{\s*\.\.\.\(request\.mode \? \{ mode: request\.mode \} : \{\}\),\s*path: request\.path\s*\}/s
   );
 });
+
+test("WorkspaceWorkbench uses temporary dock retention to control app visibility", () => {
+  assert.match(source, /temporaryWorkspaceAppDockRetentionActionPrefix/);
+  assert.match(source, /resolveTemporaryDockRetentionContribution/);
+  assert.match(
+    source,
+    /contribution\.dockEntries\.map\(\(entry\) =>\s*resolveTemporaryDockRetentionEntry/
+  );
+  assert.match(source, /findTemporaryDockRetentionEntry/);
+  assert.match(source, /entry\.id === workspaceLaunchpadDockEntryId/);
+  assert.match(source, /entry\.id === workspaceFilesNodeID/);
+  assert.match(
+    source,
+    /actionId:\s*`\$\{temporaryWorkspaceAppDockRetentionActionPrefix\}\$\{encodeURIComponent\(entry\.id\)\}`/
+  );
+  assert.match(
+    source,
+    /return app\?\.installed \?\? \(entry\.visibility \?\? "always"\) === "always";/
+  );
+  assert.match(source, /visibility:\s*retained \? "always" : "when-open"/);
+});

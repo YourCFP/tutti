@@ -24,7 +24,7 @@ const browserNodeEn = {
     back: "Back",
     forward: "Forward",
     openDevTools: "Open DevTools",
-    openExternal: "Open in browser",
+    openExternal: "Open in external browser",
     reload: "Reload"
   },
   addressLabel: "Address",
@@ -50,7 +50,7 @@ const browserNodeZhCN = {
     back: "后退",
     forward: "前进",
     openDevTools: "打开开发者工具",
-    openExternal: "在浏览器中打开",
+    openExternal: "使用外部浏览器打开",
     reload: "重新加载"
   },
   addressLabel: "地址",

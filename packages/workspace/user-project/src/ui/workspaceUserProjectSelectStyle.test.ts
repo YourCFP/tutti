@@ -46,3 +46,8 @@ test("workspace user project select closes its portal when disabled", () => {
   );
   assert.match(source, /\}, \[disabled, isSelectOpen\]\);/);
 });
+
+test("workspace user project select shows a visible action separator", () => {
+  assert.match(source, /data-workspace-user-project-action-separator="true"/);
+  assert.match(source, /borderTop:\s*"1px solid var\(--line-2\)"/);
+});

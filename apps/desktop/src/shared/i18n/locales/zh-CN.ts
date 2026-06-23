@@ -366,6 +366,7 @@ export const zhCN = {
         apps: "应用",
         sectionsLabel: "设置分区",
         appearance: "外观",
+        agent: "Agent",
         developer: "开发者",
         general: "通用"
       },
