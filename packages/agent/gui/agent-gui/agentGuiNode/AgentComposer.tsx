@@ -30,6 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger
 } from "../../app/renderer/components/ui/tooltip";
+import { ZoomableImage } from "../../app/renderer/components/ZoomableImage";
 import type { AgentConversationPromptVM } from "../../shared/agentConversation/contracts/agentConversationVM";
 import { cn } from "../../app/renderer/lib/utils";
 import { AddIcon, Select, SelectTrigger } from "@tutti-os/ui-system";
@@ -2248,9 +2249,13 @@ export function AgentComposer({
                     {visibleDraftImages.map((image) => (
                       <div
                         key={image.id}
-                        className="group relative aspect-square min-w-0 overflow-hidden rounded-[6px] border border-[var(--line-1)] bg-[var(--background-fronted)]"
+                        className={cn(
+                          "group relative aspect-square min-w-0 overflow-hidden rounded-[6px] border border-[var(--line-1)] bg-[var(--background-fronted)]",
+                          "[&>[data-rmiz]]:block [&>[data-rmiz]]:size-full",
+                          "[&>[data-rmiz]>[data-rmiz-content]]:block [&>[data-rmiz]>[data-rmiz-content]]:size-full"
+                        )}
                       >
-                        <img
+                        <ZoomableImage
                           src={image.previewUrl}
                           alt={image.name}
                           className="size-full object-cover"

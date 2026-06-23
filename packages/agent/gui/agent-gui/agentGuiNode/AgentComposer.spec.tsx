@@ -2491,6 +2491,108 @@ describe("AgentComposer", () => {
     expect(onSubmit).toHaveBeenCalledWith(expectedContent);
   });
 
+  it("opens a zoom preview for pasted image drafts", async () => {
+    let draftContent = createDraft("");
+    const onDraftContentChange = vi.fn((nextDraft: AgentComposerDraft) => {
+      draftContent = nextDraft;
+    });
+    const renderComposer = () => (
+      <AgentComposer
+        workspaceId="workspace-1"
+        currentUserId="user-1"
+        provider="codex"
+        draftContent={draftContent}
+        availableCommands={[] satisfies readonly AgentHostAgentSessionCommand[]}
+        disabled={false}
+        submitDisabled={false}
+        placeholder="placeholder"
+        composerSettings={createComposerSettings()}
+        queuedPrompts={[]}
+        drainingQueuedPromptId={null}
+        canQueueWhileBusy={false}
+        showStopButton={false}
+        activePrompt={null}
+        isInterrupting={false}
+        isSendingTurn={false}
+        isSubmittingPrompt={false}
+        labels={createLabels()}
+        workspaceUserProjectI18n={workspaceUserProjectI18n}
+        onDraftContentChange={onDraftContentChange}
+        onSettingsChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onSendQueuedPromptNext={vi.fn()}
+        onRemoveQueuedPrompt={vi.fn()}
+        onEditQueuedPrompt={vi.fn()}
+        onInterruptCurrentTurn={vi.fn()}
+        onSubmitInteractivePrompt={vi.fn()}
+      />
+    );
+    const { rerender } = render(renderComposer());
+
+    fireEvent.click(screen.getByTestId("mock-paste-image"));
+    rerender(renderComposer());
+
+    expect(screen.getByRole("img", { name: "screen.png" })).toHaveClass(
+      "cursor-zoom-in",
+      "size-full",
+      "object-cover"
+    );
+    fireEvent.click(screen.getByRole("img", { name: "screen.png" }));
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("removes pasted image drafts without opening the zoom preview", () => {
+    let draftContent = createDraft("");
+    const onDraftContentChange = vi.fn((nextDraft: AgentComposerDraft) => {
+      draftContent = nextDraft;
+    });
+    const renderComposer = () => (
+      <AgentComposer
+        workspaceId="workspace-1"
+        currentUserId="user-1"
+        provider="codex"
+        draftContent={draftContent}
+        availableCommands={[] satisfies readonly AgentHostAgentSessionCommand[]}
+        disabled={false}
+        submitDisabled={false}
+        placeholder="placeholder"
+        composerSettings={createComposerSettings()}
+        queuedPrompts={[]}
+        drainingQueuedPromptId={null}
+        canQueueWhileBusy={false}
+        showStopButton={false}
+        activePrompt={null}
+        isInterrupting={false}
+        isSendingTurn={false}
+        isSubmittingPrompt={false}
+        labels={createLabels()}
+        workspaceUserProjectI18n={workspaceUserProjectI18n}
+        onDraftContentChange={onDraftContentChange}
+        onSettingsChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onSendQueuedPromptNext={vi.fn()}
+        onRemoveQueuedPrompt={vi.fn()}
+        onEditQueuedPrompt={vi.fn()}
+        onInterruptCurrentTurn={vi.fn()}
+        onSubmitInteractivePrompt={vi.fn()}
+      />
+    );
+    const { rerender } = render(renderComposer());
+
+    fireEvent.click(screen.getByTestId("mock-paste-image"));
+    rerender(renderComposer());
+
+    const drafts = screen.getByTestId("agent-gui-composer-image-drafts");
+    fireEvent.click(within(drafts).getByRole("button", { name: "移除引用" }));
+    rerender(renderComposer());
+
+    expect(
+      screen.queryByTestId("agent-gui-composer-image-drafts")
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("keeps pasted image previews visible while the prompt is submitting", () => {
     let draftContent = createDraft("");
     const onDraftContentChange = vi.fn((nextDraft: AgentComposerDraft) => {
