@@ -584,7 +584,12 @@ export function WorkspaceUserProjectSelect({
                 </SelectItem>
               );
             })}
-            {visibleProjects.length > 0 ? <SelectSeparator /> : null}
+            {visibleProjects.length > 0 ? (
+              <SelectSeparator
+                className="my-1 bg-[var(--line-2)]"
+                data-workspace-user-project-action-separator="true"
+              />
+            ) : null}
             {effectiveApi?.selectDirectory ? (
               <SelectItem
                 className={classNames?.item}

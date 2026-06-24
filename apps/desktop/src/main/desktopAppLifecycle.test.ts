@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createDesktopAppLifecycleHandlers,
+  requestDesktopAppQuitFromCommandShortcut,
+  resetDesktopAppQuitShortcutForTest,
   type DesktopAppLifecycleRuntime
 } from "./desktopAppLifecycle.ts";
 import type { TuttidManager } from "./daemon/tuttidManager";
@@ -68,6 +70,9 @@ function createRuntime(events: string[]): DesktopAppLifecycleRuntime {
     },
     quit() {
       events.push("app:quit");
+    },
+    showQuitShortcutToast() {
+      events.push("windows:show-quit-shortcut-toast");
     }
   };
 }
@@ -114,6 +119,7 @@ test("before quit waits for managed tuttid stop before quitting the app", async 
 
   await Promise.resolve();
   await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(prevented, true);
   assert.equal(
@@ -187,4 +193,42 @@ test("before quit does not trigger a second stop while shutdown is already in pr
       "app:quit"
     ].join("|")
   );
+});
+
+test("command quit shortcut shows a toast before quitting on the next press", () => {
+  const events: string[] = [];
+  resetDesktopAppQuitShortcutForTest();
+
+  requestDesktopAppQuitFromCommandShortcut({
+    now: () => 1_000,
+    quit: () => events.push("app:quit"),
+    showQuitShortcutToast: () => events.push("toast")
+  });
+  requestDesktopAppQuitFromCommandShortcut({
+    now: () => 2_000,
+    quit: () => events.push("app:quit"),
+    showQuitShortcutToast: () => events.push("toast")
+  });
+
+  assert.deepEqual(events, ["toast", "app:quit"]);
+  resetDesktopAppQuitShortcutForTest();
+});
+
+test("command quit shortcut confirmation expires", () => {
+  const events: string[] = [];
+  resetDesktopAppQuitShortcutForTest();
+
+  requestDesktopAppQuitFromCommandShortcut({
+    now: () => 1_000,
+    quit: () => events.push("app:quit"),
+    showQuitShortcutToast: () => events.push("toast")
+  });
+  requestDesktopAppQuitFromCommandShortcut({
+    now: () => 7_000,
+    quit: () => events.push("app:quit"),
+    showQuitShortcutToast: () => events.push("toast")
+  });
+
+  assert.deepEqual(events, ["toast", "toast"]);
+  resetDesktopAppQuitShortcutForTest();
 });

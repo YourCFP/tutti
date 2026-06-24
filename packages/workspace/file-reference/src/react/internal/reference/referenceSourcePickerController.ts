@@ -138,6 +138,7 @@ export interface ReferenceSourcePickerController {
    */
   loadMoreSearch(): void;
   toggleSelection(node: ReferenceNode): void;
+  toggleSingleSelectionAndExpand(node: ReferenceNode): void;
   clearSelection(): void;
   /**
    * 选中归一。文件 → 单条;文件夹按所属源区分:
@@ -661,11 +662,18 @@ export function createReferenceSourcePickerController(
         nodeId: SOURCE_ROOT_NODE_ID
       };
       for (const ref of refs) {
-        const { entries } = await aggregator.listChildren(scope, parent);
         const targetKey = nodeRefKey(ref);
-        const node = entries.find(
-          (entry) => nodeRefKey(entry.ref) === targetKey
-        );
+        let cursor: string | null = null;
+        let node: ReferenceNode | undefined;
+        do {
+          const { entries, nextCursor } = await aggregator.listChildren(
+            scope,
+            parent,
+            { cursor }
+          );
+          node = entries.find((entry) => nodeRefKey(entry.ref) === targetKey);
+          cursor = nextCursor ?? null;
+        } while (!node && cursor);
         if (!node) {
           break;
         }
@@ -868,6 +876,37 @@ export function createReferenceSourcePickerController(
             : [...current.selection, node]
         };
       });
+    },
+    toggleSingleSelectionAndExpand(node) {
+      const key = nodeRefKey(node.ref);
+      setSnapshot((current) => {
+        if (current.selection.length > 1) {
+          return current;
+        }
+        const exists = current.selection.some(
+          (item) => nodeRefKey(item.ref) === key
+        );
+        return {
+          ...current,
+          selection: exists ? [] : [node]
+        };
+      });
+      if (node.kind === "folder") {
+        const sourceId = node.ref.sourceId;
+        const childKey = nodeRefKey(node.ref);
+        updateTab(sourceId, (tab) =>
+          tab.expandedKeys[childKey] === true
+            ? tab
+            : {
+                ...tab,
+                expandedKeys: { ...tab.expandedKeys, [childKey]: true }
+              }
+        );
+        const childState = snapshot.bySource[sourceId]?.childrenByKey[childKey];
+        if (!childState?.loaded && !childState?.loading) {
+          void loadChildren(sourceId, node, { append: false });
+        }
+      }
     },
     clearSelection() {
       setSnapshot({ selection: [] });

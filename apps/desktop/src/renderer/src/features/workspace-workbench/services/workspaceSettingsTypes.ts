@@ -5,6 +5,7 @@ import type {
 
 export type WorkspaceSettingsSectionID =
   | "about"
+  | "agent"
   | "appearance"
   | "apps"
   | "developer"

@@ -47,10 +47,12 @@ export interface WorkbenchMissionControlState {
 export function useWorkbenchMissionControlState<TData>({
   adapter,
   mode,
+  nodeIds,
   onRequestClose
 }: {
   adapter: WorkbenchMissionControlAdapter<TData> | null;
   mode: WorkbenchMissionControlMode | null;
+  nodeIds?: readonly string[];
   onRequestClose: () => void;
 }): WorkbenchMissionControlState | null {
   const isActive = mode !== null && adapter !== null;
@@ -70,7 +72,17 @@ export function useWorkbenchMissionControlState<TData>({
     snapshot?.layoutConstraints ?? defaultWorkbenchLayoutConstraints;
   const surfaceSize: WorkbenchSize =
     snapshot?.surfaceSize ?? defaultWorkbenchSurfaceSize;
-  const visibleNodes = snapshot?.visibleNodes ?? [];
+  const scopedNodeIdSet = useMemo(
+    () => (nodeIds === undefined ? null : new Set(nodeIds)),
+    [nodeIds]
+  );
+  const visibleNodes = useMemo(() => {
+    const nextVisibleNodes = snapshot?.visibleNodes ?? [];
+    if (scopedNodeIdSet === null) {
+      return nextVisibleNodes;
+    }
+    return nextVisibleNodes.filter((node) => scopedNodeIdSet.has(node.id));
+  }, [scopedNodeIdSet, snapshot?.visibleNodes]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -227,9 +239,17 @@ export function useWorkbenchMissionControlState<TData>({
               onNodePress: onPreviewPress,
               selectedNodeIds: selectedNodeIdSet
             },
-            mode: "mission-control"
+            mode: "mission-control",
+            visibleNodeIds: new Set(orderedNodes.map((node) => node.id))
           },
-    [mode, onPreviewPress, onRequestClose, previewItems, selectedNodeIdSet]
+    [
+      mode,
+      onPreviewPress,
+      onRequestClose,
+      orderedNodes,
+      previewItems,
+      selectedNodeIdSet
+    ]
   );
 
   useEffect(() => {

@@ -29,12 +29,14 @@ export function WorkbenchHost({
   i18n,
   layoutConstraints,
   missionControl,
+  minimizeAnimation,
   nodes,
   onDockEntryAction,
   onDockEntryClick,
   onHandleReady,
   onLaunchRequest,
   onMissionControlAdapterReady,
+  onMissionControlRequestOpen,
   onNodeCloseRequest,
   projectedNodes,
   renderBottomChrome,
@@ -70,6 +72,7 @@ export function WorkbenchHost({
     [contributions, dockEntries]
   );
   const missionControlMode = missionControl?.mode ?? null;
+  const missionControlNodeIds = missionControl?.nodeIds;
   const missionControlClose = missionControl?.onRequestClose ?? noop;
   const missionControlEnabled =
     missionControlMode !== null || onMissionControlAdapterReady !== undefined;
@@ -112,6 +115,7 @@ export function WorkbenchHost({
     nodeDefinitionByType,
     onDockEntryAction,
     onDockEntryClick,
+    onMissionControlRequestOpen,
     renderBottomChrome,
     renderTopChrome,
     workspaceId
@@ -119,6 +123,7 @@ export function WorkbenchHost({
   const missionControlState = useWorkbenchMissionControlState({
     adapter: missionControlAdapter,
     mode: missionControlMode,
+    nodeIds: missionControlNodeIds,
     onRequestClose: missionControlClose
   });
   const missionControlPresence =
@@ -130,11 +135,13 @@ export function WorkbenchHost({
       className={className}
       captureNodePreviewImage={surfaceRenderers.captureNodePreviewImage}
       controller={hostSession.controller}
+      debugDiagnostics={debugDiagnostics}
       dockPreviewCache={dockPreviewCache}
       dockPlacement={dockPlacement}
       interactive={!isHydrating}
       layoutConstraints={layoutConstraints}
       missionControlPhase={missionControlPresence.phase}
+      minimizeAnimation={minimizeAnimation}
       presentation={missionControlState?.presentation ?? null}
       renderBackdrop={
         missionControlRenderedState
@@ -151,6 +158,7 @@ export function WorkbenchHost({
       renderBottomChrome={surfaceRenderers.renderBottomChrome}
       renderDock={surfaceRenderers.renderDock}
       renderNode={surfaceRenderers.renderNode}
+      renderNodeGeniePreview={surfaceRenderers.renderNodeGeniePreview}
       renderOverlay={
         missionControlRenderedState
           ? () => (
@@ -172,6 +180,9 @@ export function WorkbenchHost({
       resolveFullscreenHeaderMode={surfaceRenderers.resolveFullscreenHeaderMode}
       resolveDockAnchorKey={surfaceRenderers.resolveDockAnchorKey}
       shortcutsEnabled={shortcutsEnabled}
+      shouldCaptureNodePreviewImage={
+        surfaceRenderers.shouldCaptureNodePreviewImage
+      }
       wallpaper={wallpaper}
       windowChromeI18n={windowChromeI18n}
       windowChromeMode={surfaceRenderers.windowChromeMode}

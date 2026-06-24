@@ -81,6 +81,7 @@ const issueManagerEn = {
   emptyState: "Create a task, add the goal and references, then let Agent run",
   labels: {
     allStatus: "All",
+    boardView: "Board",
     content: "Content",
     contextReferences: "Context references",
     createTopicDialogTitle: "New topic",
@@ -103,6 +104,8 @@ const issueManagerEn = {
     scrollStatusTabsRight: "Scroll status tabs right",
     status: "Status",
     subtasks: "Subtasks",
+    subtaskViewMode: "Subtask view mode",
+    listView: "List",
     taskAcceptance: "Task pending acceptance",
     topic: "Topic",
     topicDefault: "Default",
@@ -180,7 +183,7 @@ const issueManagerEn = {
   referencePicker: {
     browse: "Browse",
     clearFilter: "Clear filter",
-    confirm: "Use selected references",
+    confirm: "Use references",
     emptyDirectory: "This folder is empty.",
     emptyPreview: "Select a file to view details.",
     emptySearch: "No matching files or folders.",
@@ -311,6 +314,7 @@ const issueManagerZhCN = {
   emptyState: "新建任务，补充需求描述和相关文件，即可让 Agent 执行",
   labels: {
     allStatus: "全部",
+    boardView: "看板",
     content: "内容",
     contextReferences: "上下文引用",
     createTopicDialogTitle: "新建主题",
@@ -332,7 +336,9 @@ const issueManagerZhCN = {
     scrollStatusTabsLeft: "向左滚动状态标签",
     scrollStatusTabsRight: "向右滚动状态标签",
     status: "状态",
-    subtasks: "任务",
+    subtasks: "子任务",
+    subtaskViewMode: "子任务视图模式",
+    listView: "列表",
     taskAcceptance: "任务待验收",
     topic: "主题",
     topicDefault: "默认",
@@ -406,7 +412,7 @@ const issueManagerZhCN = {
   referencePicker: {
     browse: "浏览",
     clearFilter: "清除筛选",
-    confirm: "使用已选引用",
+    confirm: "引用文件",
     emptyDirectory: "当前目录为空",
     emptyPreview: "选择一个文件查看详情",
     emptySearch: "没有匹配的文件或文件夹",

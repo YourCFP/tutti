@@ -320,8 +320,7 @@ test("runAction reports daemon install action failures and skips refresh", async
                 {
                   command: {
                     cwd: "/workspace",
-                    input:
-                      "npm install -g @openai/codex @zed-industries/codex-acp\n"
+                    input: "npm install -g @openai/codex\n"
                   },
                   id: "install",
                   kind: "terminal_command"
@@ -399,6 +398,60 @@ test("runAction reports install failures and clears pending state", async () => 
   assert.deepEqual(notifications.items, [
     {
       description: "network unavailable",
+      tone: "error",
+      title: "Installation failed"
+    }
+  ]);
+});
+
+test("runAction summarizes Claude regional availability install failures", async () => {
+  const notifications = createNotificationRecorder();
+  const service = new DesktopAgentProviderStatusService(
+    {
+      tuttidClient: createTuttidClient({
+        actionRuns: [
+          {
+            actionID: "install",
+            completedAt: "2026-06-02T08:00:00.000Z",
+            message:
+              '<!DOCTYPE html><html><head><title>App unavailable in region | Claude</title><meta content="Unfortunately, Claude isn&#x27;t available here." name="description"></head></html>',
+            provider: "claude-code",
+            reasonCode: "install_command_failed",
+            status: "failed"
+          }
+        ],
+        snapshots: [
+          createStatusResponse([
+            createProviderStatus({
+              actions: [
+                {
+                  command: {
+                    cwd: "/workspace",
+                    input: "npm install -g @anthropic-ai/claude-code\n"
+                  },
+                  id: "install",
+                  kind: "terminal_command"
+                }
+              ],
+              availability: "not_installed",
+              provider: "claude-code"
+            })
+          ])
+        ]
+      }),
+      terminalCommandRunner: {
+        async runTerminalCommand() {}
+      }
+    },
+    notifications.service
+  );
+
+  await service.refresh();
+  await assert.rejects(() => service.runAction("claude-code", "install"));
+
+  assert.deepEqual(notifications.items, [
+    {
+      description: "Claude isn't available in this region.",
       tone: "error",
       title: "Installation failed"
     }
@@ -1040,7 +1093,7 @@ function createProbeResponse(
 ): AgentProviderProbeResponse {
   return {
     checkedAt: "2026-06-02T08:00:00.000Z",
-    command: ["codex-acp"],
+    command: ["codex"],
     provider,
     status
   };
@@ -1130,7 +1183,7 @@ function createProviderStatus(input: {
   return {
     actions: input.actions,
     adapter: {
-      command: ["codex-acp"],
+      command: ["codex"],
       installed:
         input.adapterInstalled ??
         (input.availability !== "not_installed" &&

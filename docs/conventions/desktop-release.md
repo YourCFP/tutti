@@ -43,7 +43,7 @@ The release workflow file is `.github/workflows/desktop-release.yml`.
 Supported triggers:
 
 - pushing a tag matching `tutti-desktop-v*`
-- scheduled run at `01:30 UTC` every day
+- scheduled run at `00:15 UTC` every day (`08:15` Beijing time)
 - manual `workflow_dispatch`
 
 Supported manual modes:
@@ -115,7 +115,7 @@ Current updater behavior:
 - stable channel only
 - packaged builds only
 - default policy is `prompt`
-- scheduled update check interval is six hours
+- scheduled update check interval is three hours
 - macOS update checks are disabled for unsupported unsigned or ad-hoc bundles
 
 macOS auto-update metadata must keep x64, arm64, and universal zip entries in `latest-mac.yml`. The file names must include `${arch}` so `electron-updater` can distinguish `mac-x64`, `mac-arm64`, and `mac-universal` assets.

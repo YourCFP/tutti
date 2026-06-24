@@ -6,10 +6,12 @@ import type {
   DesktopBrowserUseConnectionMode,
   DesktopDockIconStyle,
   DesktopDockPlacement,
+  DesktopMinimizeAnimation,
   DesktopSleepPreventionMode,
   DesktopUpdateChannel,
   DesktopUpdatePolicy
 } from "@shared/preferences";
+import { defaultDesktopMinimizeAnimation } from "../../../../../../shared/preferences/index.ts";
 import type { DesktopThemeSource, DesktopThemeState } from "@shared/theme";
 import {
   INotificationService,
@@ -108,7 +110,7 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       this.store.activeSection = options.section;
     }
     if (options?.anchor) {
-      this.store.activeSection = "general";
+      this.store.activeSection = "agent";
       this.store.generalFocusAnchor = options.anchor;
       this.store.generalFocusRequestID += 1;
     }
@@ -286,6 +288,27 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       this.notifications.error({
         title: createActiveTranslator().t(
           "workspace.settings.appearance.dockIconStyleSaveFailed"
+        )
+      });
+    }
+  }
+
+  async changeMinimizeAnimation(
+    animation: DesktopMinimizeAnimation
+  ): Promise<void> {
+    if (
+      this.desktopPreferences.store.minimizeAnimation === animation ||
+      this.desktopPreferences.store.changingMinimizeAnimation === animation
+    ) {
+      return;
+    }
+
+    try {
+      await this.desktopPreferences.setMinimizeAnimation(animation);
+    } catch {
+      this.notifications.error({
+        title: createActiveTranslator().t(
+          "workspace.settings.appearance.minimizeAnimationSaveFailed"
         )
       });
     }
@@ -1013,6 +1036,7 @@ const noopDesktopPreferencesStore: DesktopPreferencesReadableStoreState = {
   changingDockIconStyle: null,
   changingDockPlacement: null,
   changingLocale: null,
+  changingMinimizeAnimation: null,
   changingSleepPreventionMode: null,
   changingThemeSource: null,
   changingUpdateChannel: null,
@@ -1022,6 +1046,7 @@ const noopDesktopPreferencesStore: DesktopPreferencesReadableStoreState = {
   dockPlacement: "bottom",
   fileDefaultOpenersByExtension: {},
   locale: "en",
+  minimizeAnimation: defaultDesktopMinimizeAnimation,
   sleepPreventionMode: "never",
   theme: createNoopTheme("dark"),
   updateChannel: "rc",
@@ -1051,6 +1076,9 @@ const noopDesktopPreferences: DesktopPreferencesService = {
   },
   setLocale(locale) {
     return Promise.resolve(locale);
+  },
+  setMinimizeAnimation(animation) {
+    return Promise.resolve(animation);
   },
   setSleepPreventionMode(mode) {
     return Promise.resolve(mode);

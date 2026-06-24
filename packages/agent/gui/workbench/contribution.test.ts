@@ -21,13 +21,31 @@ function readDockEntryIconSrc(icon: unknown): string | undefined {
   return (icon as ReactElement<{ src?: string }>).props.src;
 }
 
+function createTestAgentGuiWorkbenchContribution(
+  input: Omit<
+    Parameters<typeof createAgentGuiWorkbenchContribution>[0],
+    "renderMinimizedPreview"
+  > &
+    Partial<
+      Pick<
+        Parameters<typeof createAgentGuiWorkbenchContribution>[0],
+        "renderMinimizedPreview"
+      >
+    >
+) {
+  return createAgentGuiWorkbenchContribution({
+    renderMinimizedPreview: () => null,
+    ...input
+  });
+}
+
 describe("agent GUI workbench contribution copy", () => {
   it("uses package defaults when the host does not provide copy", () => {
     expect(resolveAgentGuiWorkbenchContributionCopy()).toEqual(
       agentGuiWorkbenchDefaultCopy
     );
 
-    const contribution = createAgentGuiWorkbenchContribution({
+    const contribution = createTestAgentGuiWorkbenchContribution({
       renderBody: () => null,
       workspaceId: "workspace-1"
     });
@@ -49,7 +67,7 @@ describe("agent GUI workbench contribution copy", () => {
   });
 
   it("uses packaged dock icons when the host does not provide icon URLs", () => {
-    const contribution = createAgentGuiWorkbenchContribution({
+    const contribution = createTestAgentGuiWorkbenchContribution({
       renderBody: () => null,
       workspaceId: "workspace-1"
     });
@@ -64,7 +82,7 @@ describe("agent GUI workbench contribution copy", () => {
   });
 
   it("lets hosts override packaged dock icons explicitly", () => {
-    const contribution = createAgentGuiWorkbenchContribution({
+    const contribution = createTestAgentGuiWorkbenchContribution({
       dockIconUrls: {
         codex: "app://icons/codex.png"
       },
@@ -178,7 +196,7 @@ describe("agent GUI workbench contribution copy", () => {
   });
 
   it("preserves the 90 percent visible-area frame during compact launches", () => {
-    const contribution = createAgentGuiWorkbenchContribution({
+    const contribution = createTestAgentGuiWorkbenchContribution({
       renderBody: () => null,
       workspaceId: "workspace-1"
     });
@@ -217,7 +235,7 @@ describe("agent GUI workbench contribution copy", () => {
   });
 
   it("matches codex panel nodes and only renders popup previews through the host renderer", async () => {
-    const contribution = createAgentGuiWorkbenchContribution({
+    const contribution = createTestAgentGuiWorkbenchContribution({
       renderBody: () => null,
       workspaceId: "workspace-1"
     });
@@ -253,7 +271,7 @@ describe("agent GUI workbench contribution copy", () => {
   });
 
   it("uses the host preview renderer for agent GUI dock popup previews", async () => {
-    const contribution = createAgentGuiWorkbenchContribution({
+    const contribution = createTestAgentGuiWorkbenchContribution({
       renderBody: () => null,
       renderPreview: () => "preview",
       resolveDockPopupTitle: (state) =>
@@ -298,8 +316,58 @@ describe("agent GUI workbench contribution copy", () => {
     expect(preview?.revision).not.toContain("Stale session title");
   });
 
+  it("uses the host minimized preview renderer for agent GUI minimized slots", () => {
+    const contribution = createTestAgentGuiWorkbenchContribution({
+      renderBody: () => null,
+      renderMinimizedPreview: () => "minimized-preview",
+      resolveDockPopupTitle: (state) =>
+        state?.lastActiveAgentSessionId === "session-1"
+          ? "Current session title"
+          : null,
+      workspaceId: "workspace-1"
+    });
+    const minimizedDock = contribution.nodes?.[0]?.window?.minimizedDock;
+    expect(minimizedDock?.kind).toBe("component");
+    if (minimizedDock?.kind !== "component") {
+      throw new Error("expected component minimized preview");
+    }
+
+    const preview =
+      minimizedDock.providePreview({
+        externalNodeState: {
+          lastActiveAgentSessionId: "session-1",
+          lastActiveConversationTitle: "Stale session title"
+        },
+        externalWorkspaceState: null,
+        host: {} as never,
+        isFocused: false,
+        isMinimized: true,
+        node: {
+          data: {
+            dockEntryId: agentGuiWorkbenchTypeId,
+            instanceId: "agent-gui:codex:panel:test-1",
+            typeId: agentGuiWorkbenchTypeId
+          },
+          displayMode: "floating",
+          frame: { height: 560, width: 1040, x: 0, y: 0 },
+          id: "agent-gui:agent-gui:codex:panel:test-1",
+          isMinimized: true,
+          restoreFrame: null,
+          title: "Codex"
+        } as never
+      }) ?? null;
+
+    expect(preview?.kind).toBe("component");
+    if (preview?.kind !== "component") {
+      throw new Error("expected component preview content");
+    }
+    expect(preview.element).toBe("minimized-preview");
+    expect(preview.revision).toContain("Current session title");
+    expect(preview.revision).not.toContain("Stale session title");
+  });
+
   it("shows a new-session action when collapsed", () => {
-    const contribution = createAgentGuiWorkbenchContribution({
+    const contribution = createTestAgentGuiWorkbenchContribution({
       renderBody: () => null,
       workspaceId: "workspace-1"
     });
@@ -367,7 +435,7 @@ describe("agent GUI workbench contribution copy", () => {
   });
 
   it("keeps the app title separate from the active session title when collapsed", () => {
-    const contribution = createAgentGuiWorkbenchContribution({
+    const contribution = createTestAgentGuiWorkbenchContribution({
       renderBody: () => null,
       resolveDockPopupTitle: (state) =>
         state?.lastActiveAgentSessionId === "session-1"

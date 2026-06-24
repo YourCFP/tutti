@@ -17,6 +17,7 @@ export interface WorkbenchSurfacePresentation {
   frameByNodeId: ReadonlyMap<string, WorkbenchFrame>;
   interaction?: WorkbenchSurfacePresentationInteraction | null;
   mode: "mission-control";
+  visibleNodeIds: ReadonlySet<string>;
 }
 
 export interface WorkbenchSurfacePresentationInteraction {
@@ -45,10 +46,13 @@ export interface WorkbenchDockContext<TData = unknown> {
     ): void;
     registerDockAnchor(anchorKey: string, element: HTMLElement | null): void;
     shouldAnimateMinimizedDockEnter(nodeID: string): boolean;
+    isPendingMinimizedDockNode(nodeID: string): boolean;
   };
 }
 
 export type WorkbenchDockPlacement = "bottom" | "left";
+
+export type WorkbenchMinimizeAnimation = "scale" | "genie" | "off";
 
 export interface WorkbenchWindowActionContext<TData = unknown> {
   node: WorkbenchNode<TData>;

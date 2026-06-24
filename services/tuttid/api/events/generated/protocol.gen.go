@@ -6,7 +6,7 @@ import "encoding/json"
 
 const (
 	BusinessEventProtocolVersion = 1
-	BusinessEventCatalogRevision = "sha256:c499c873559c8876"
+	BusinessEventCatalogRevision = "sha256:ff1c86a41db3a5a4"
 )
 
 type Topic string
@@ -106,6 +106,7 @@ type PreferencesDesktopPreferences struct {
 	DockPlacement                 string            `json:"dockPlacement"`
 	FileDefaultOpenersByExtension map[string]string `json:"fileDefaultOpenersByExtension"`
 	Locale                        string            `json:"locale"`
+	MinimizeAnimation             string            `json:"minimizeAnimation"`
 	SleepPreventionMode           string            `json:"sleepPreventionMode"`
 	ThemeSource                   string            `json:"themeSource"`
 	UpdateChannel                 string            `json:"updateChannel"`

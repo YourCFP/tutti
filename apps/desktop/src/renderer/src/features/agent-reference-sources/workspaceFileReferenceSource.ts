@@ -13,6 +13,7 @@ import type {
 } from "@tutti-os/workspace-file-reference/contracts";
 import {
   WORKSPACE_ROOT_GROUP_NODE_ID,
+  matchesFilterCategories,
   normalizeReferenceNodeKind
 } from "@tutti-os/workspace-file-reference/core";
 import type { DesktopI18nKey } from "@shared/i18n";
@@ -22,6 +23,7 @@ export const WORKSPACE_FILE_SOURCE_ID = "workspace-file";
 
 /** 「最近访问」二级分组的 nodeId 哨兵。listChildren 据此走 recent 取数链路。 */
 const RECENT_GROUP_NODE_ID = "__recent__";
+const RECENT_SEARCH_CANDIDATE_LIMIT = 100;
 
 /**
  * 本地源左栏固定「位置」(顺序即展示顺序),复刻 macOS Finder 边栏收藏:
@@ -142,12 +144,35 @@ export function createWorkspaceFileReferenceSource(input: {
       scope: ReferenceScope,
       { query, filters, limit, signal, withinNodeId }: SearchInput
     ): Promise<SearchResult> {
+      if (withinNodeId === RECENT_GROUP_NODE_ID) {
+        if (!adapter.listRecentReferences) {
+          return { entries: [], nextCursor: null };
+        }
+        const normalizedQuery = query.trim().toLowerCase();
+        const refs = await adapter.listRecentReferences({
+          workspaceId: scope.workspaceId,
+          limit: RECENT_SEARCH_CANDIDATE_LIMIT,
+          ...(signal ? { signal } : {})
+        });
+        const filteredRefs = refs.filter((ref) =>
+          matchesRecentReferenceSearch(ref, normalizedQuery, filters ?? [])
+        );
+        return {
+          entries:
+            limit === undefined
+              ? filteredRefs.map(referenceToNode)
+              : filteredRefs.slice(0, limit).map(referenceToNode),
+          nextCursor: null
+        };
+      }
+
       if (!adapter.searchReferences) {
         return { entries: [], nextCursor: null };
       }
       // 搜索范围 = 左栏选中的「位置」(withinNodeId,本地源 nodeId 即路径)。
-      // 「最近访问」是虚拟列表、「个人」是源根(home),两者无对应子目录 → 跨整根搜索;
-      // 其余固定位置(下载/文稿/桌面,相对路径)下钻到 daemon 限定遍历起点。
+      // 「最近访问」已在上方用 recent 列表本地过滤;「个人」是源根(home),
+      // 无对应子目录 → 跨整根搜索;其余固定位置(下载/文稿/桌面,相对路径)
+      // 下钻到 daemon 限定遍历起点。
       const within =
         withinNodeId &&
         withinNodeId !== RECENT_GROUP_NODE_ID &&
@@ -198,4 +223,21 @@ function basename(path: string): string {
   const trimmed = path.replace(/\/+$/, "");
   const index = trimmed.lastIndexOf("/");
   return index >= 0 ? trimmed.slice(index + 1) : trimmed;
+}
+
+function matchesRecentReferenceSearch(
+  ref: WorkspaceFileReference,
+  query: string,
+  filters: readonly string[]
+): boolean {
+  const name = ref.displayName?.trim() || basename(ref.path);
+  const isFolder = normalizeReferenceNodeKind(ref.kind) === "folder";
+  if (!matchesFilterCategories(name, isFolder, filters)) {
+    return false;
+  }
+  return (
+    query.length === 0 ||
+    name.toLowerCase().includes(query) ||
+    ref.path.toLowerCase().includes(query)
+  );
 }

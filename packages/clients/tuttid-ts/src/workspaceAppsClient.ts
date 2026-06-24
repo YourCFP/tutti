@@ -1,4 +1,5 @@
 import {
+  cancelWorkspaceAppUpload,
   cancelWorkspaceAppFactoryJob,
   createWorkspaceAppFactoryJob,
   deleteWorkspaceApp,
@@ -9,12 +10,16 @@ import {
   importWorkspaceApp,
   installWorkspaceApp,
   launchWorkspaceApp,
+  loadLocalWorkspaceApp,
   listWorkspaceAppReferences,
   listWorkspaceAppFactoryJobs,
   listWorkspaceApps,
+  completeWorkspaceAppUpload,
+  prepareWorkspaceAppUpload,
   prepareWorkspaceAppFactoryJobModification,
   publishWorkspaceAppFactoryJob,
   refreshWorkspaceAppCatalog,
+  reloadLocalWorkspaceApp,
   replaceWorkspaceAppIcon,
   retryWorkspaceApp,
   retryWorkspaceAppFactoryJobValidation,
@@ -25,7 +30,7 @@ import {
   uninstallWorkspaceApp
 } from "./generated/index.ts";
 import type { Client } from "./generated/client/index.ts";
-import { unwrapData } from "./tuttidClientResponse.ts";
+import { unwrapAccepted, unwrapData } from "./tuttidClientResponse.ts";
 import type { TuttidClient } from "./tuttidClientTypes.ts";
 
 type WorkspaceAppsClient = Pick<
@@ -40,13 +45,18 @@ type WorkspaceAppsClient = Pick<
   | "importWorkspaceApp"
   | "installWorkspaceApp"
   | "launchWorkspaceApp"
+  | "loadLocalWorkspaceApp"
   | "listWorkspaceAppReferences"
   | "searchWorkspaceAppReferences"
+  | "prepareWorkspaceAppUpload"
+  | "completeWorkspaceAppUpload"
+  | "cancelWorkspaceAppUpload"
   | "listWorkspaceAppFactoryJobs"
   | "listWorkspaceApps"
   | "prepareWorkspaceAppFactoryJobModification"
   | "publishWorkspaceAppFactoryJob"
   | "refreshWorkspaceAppCatalog"
+  | "reloadLocalWorkspaceApp"
   | "replaceWorkspaceAppIcon"
   | "retryWorkspaceApp"
   | "retryWorkspaceAppFactoryJobValidation"
@@ -87,6 +97,34 @@ export function createWorkspaceAppsClient(client: Client): WorkspaceAppsClient {
         "Search workspace app references request failed."
       );
     },
+    async prepareWorkspaceAppUpload(workspaceID, appID, request) {
+      const response = await prepareWorkspaceAppUpload({
+        client,
+        body: request,
+        path: { appID, workspaceID }
+      });
+      return unwrapData(
+        response,
+        "Prepare workspace app upload request failed."
+      );
+    },
+    async completeWorkspaceAppUpload(workspaceID, appID, uploadID) {
+      const response = await completeWorkspaceAppUpload({
+        client,
+        path: { appID, uploadID, workspaceID }
+      });
+      return unwrapData(
+        response,
+        "Complete workspace app upload request failed."
+      ).file;
+    },
+    async cancelWorkspaceAppUpload(workspaceID, appID, uploadID) {
+      const response = await cancelWorkspaceAppUpload({
+        client,
+        path: { appID, uploadID, workspaceID }
+      });
+      unwrapAccepted(response, "Cancel workspace app upload request failed.");
+    },
     async refreshWorkspaceAppCatalog(workspaceID) {
       const response = await refreshWorkspaceAppCatalog({
         client,
@@ -120,6 +158,15 @@ export function createWorkspaceAppsClient(client: Client): WorkspaceAppsClient {
         path: { workspaceID }
       });
       return unwrapData(response, "Import workspace app request failed.").app;
+    },
+    async loadLocalWorkspaceApp(workspaceID, request) {
+      const response = await loadLocalWorkspaceApp({
+        client,
+        body: request,
+        path: { workspaceID }
+      });
+      return unwrapData(response, "Load local workspace app request failed.")
+        .app;
     },
     async uninstallWorkspaceApp(workspaceID, appID) {
       const response = await uninstallWorkspaceApp({
@@ -165,6 +212,15 @@ export function createWorkspaceAppsClient(client: Client): WorkspaceAppsClient {
         path: { appID, workspaceID }
       });
       return unwrapData(response, "Replace workspace app icon request failed.")
+        .app;
+    },
+    async reloadLocalWorkspaceApp(workspaceID, appID, request) {
+      const response = await reloadLocalWorkspaceApp({
+        ...(request ? { body: request } : {}),
+        client,
+        path: { appID, workspaceID }
+      });
+      return unwrapData(response, "Reload local workspace app request failed.")
         .app;
     },
     async startEnabledWorkspaceApps(workspaceID) {

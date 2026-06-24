@@ -41,6 +41,13 @@ type AppCenterService struct {
 	activeInstallTrackers map[string]*installProgressTracker
 
 	remoteBuiltinInstallLocks keyedOperationLocks
+
+	uploadMu       sync.Mutex
+	uploadSessions map[string]*workspaceAppUploadSession
+
+	uploadJanitorOnce     sync.Once
+	uploadJanitorStop     chan struct{}
+	uploadJanitorInterval time.Duration
 }
 
 type workspaceAppInstallJobStatus string
@@ -93,9 +100,16 @@ func (s *AppCenterService) InitBuiltinPackages(ctx context.Context) error {
 		return err
 	}
 	for _, builtin := range builtins {
-		if builtin.Distribution.Kind == builtinapps.DistributionRemote {
+		switch builtin.Distribution.Kind {
+		case builtinapps.DistributionRemote:
+			continue
+		case builtinapps.DistributionEmbeddedArchive:
+			if _, err := s.materializeEmbeddedArchiveBuiltinPackage(ctx, builtin); err != nil {
+				return fmt.Errorf("initialize embedded builtin app archive %q: %w", builtin.Manifest.AppID, err)
+			}
 			continue
 		}
+
 		packageDir := s.packageCacheDir(builtin.Manifest.AppID, builtin.Manifest.Version)
 		if err := builtinapps.CopyTo(builtin, packageDir); err != nil {
 			return fmt.Errorf("initialize builtin app package %q: %w", builtin.Manifest.AppID, err)
@@ -282,7 +296,9 @@ func (s *AppCenterService) runInstallJob(workspaceID string, appID string, runti
 	go func() {
 		defer wg.Done()
 		var err error
-		if strings.TrimSpace(runtimeProfileHint) == workspaceAppNodeRuntimePreloadProfile {
+		if appRuntimeProfileIsStandalone(runtimeProfileHint) {
+			err = nil
+		} else if strings.TrimSpace(runtimeProfileHint) == workspaceAppNodeRuntimePreloadProfile {
 			err = s.runner().PreloadRuntimeForProfile(tracker.runtimeProgressContext(ctx), workspaceAppNodeRuntimePreloadProfile)
 		} else {
 			err = s.runner().PreloadRuntime(tracker.runtimeProgressContext(ctx))
@@ -482,7 +498,7 @@ func (s *AppCenterService) runner() *AppRunner {
 
 func (s *AppCenterService) maybePreloadRuntimeForUninstalledApps(apps []workspacebiz.WorkspaceApp) {
 	for _, app := range apps {
-		if app.Installation == nil {
+		if app.Installation == nil && !appRuntimeProfileIsStandalone(appRuntimeProfileForPackage(app.Package)) {
 			s.startRuntimePreload()
 			return
 		}

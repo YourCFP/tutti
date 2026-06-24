@@ -67,6 +67,34 @@ describe("sortRecommendedApps", () => {
     );
   });
 
+  it("places installed recommended apps before uninstalled apps in the same section", () => {
+    const apps = [
+      createApp({
+        id: "ai-slide",
+        name: "AI PPT",
+        sourceKind: "bundled",
+        tags: ["coming-soon"]
+      }),
+      createApp({
+        id: "ai-doc",
+        installed: true,
+        name: "AI Document",
+        sourceKind: "bundled"
+      }),
+      createApp({
+        id: "ai-sheet",
+        name: "AI Sheet",
+        sourceKind: "bundled",
+        tags: ["coming-soon"]
+      })
+    ];
+
+    assert.deepEqual(
+      sortRecommendedApps(apps).map((app) => app.id),
+      ["ai-doc", "ai-slide", "ai-sheet"]
+    );
+  });
+
   it("places unlisted apps after configured apps and keeps coming soon after ready", () => {
     const apps = [
       createApp({
@@ -153,6 +181,7 @@ function createApp(
         AppCenterViewModel["apps"][number],
         | "category"
         | "createdAtUnixMs"
+        | "installed"
         | "sourceKind"
         | "statusLabelKey"
         | "tags"
@@ -168,6 +197,7 @@ function createApp(
     canOpenFolder: false,
     canOpenPackageFolder: false,
     canPublishFactoryUpdate: false,
+    canReloadLocal: false,
     canReplaceIcon: false,
     canRetry: false,
     canUninstall: false,

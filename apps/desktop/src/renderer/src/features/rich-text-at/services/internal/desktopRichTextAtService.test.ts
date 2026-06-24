@@ -445,49 +445,26 @@ test("desktop rich text @ service assembles agent session providers by capabilit
   });
 });
 
-test("desktop rich text @ service assembles workspace app providers by capability", async () => {
+test("desktop rich text @ service assembles workspace app providers from mention candidates", async () => {
   const listCalls: string[] = [];
   const service = new DesktopRichTextAtService({
     tuttidClient: {
-      async listCliCapabilities(workspaceId?: string) {
-        listCalls.push(workspaceId ?? "");
+      async listWorkspaceAppMentionCandidates(workspaceId: string) {
+        listCalls.push(workspaceId);
         return {
-          commands: [
-            {
-              id: "issue-manager.issue.list",
-              path: ["issue", "list"],
-              summary: "List issues",
-              output: { defaultMode: "table", json: true, table: null },
-              source: { kind: "builtin" }
-            },
-            {
-              id: "app.app-weather.weather.forecast",
-              description: "Inspect weather forecasts.",
-              path: ["weather", "forecast"],
-              summary: "Get a forecast",
-              output: { defaultMode: "json", json: true, table: null },
-              source: {
-                appId: "app-weather",
-                appDescription: "Weather app manifest description.",
-                appName: "Weather Desk",
-                cliDescription: "Plan weather-sensitive work.",
-                iconUrl: "data:image/png;base64,weather",
-                kind: "app"
-              }
-            },
-            {
-              id: "app.app-weather.weather.alerts",
-              path: ["weather", "alerts"],
-              summary: "List weather alerts",
-              output: { defaultMode: "json", json: true, table: null },
-              source: {
-                appId: "app-weather",
-                appDescription: "Weather app manifest description.",
-                appName: "Weather Desk",
-                cliDescription: "Plan weather-sensitive work.",
-                kind: "app"
-              }
-            }
+          workspaceId,
+          apps: [
+            createWorkspaceAppMentionCandidate({
+              appId: "app-weather",
+              commandCount: 2,
+              commandDescriptions: ["Inspect weather forecasts."],
+              commandPaths: ["weather forecast", "weather alerts"],
+              commandSummaries: ["Get a forecast", "List weather alerts"],
+              description: "Plan weather-sensitive work.",
+              displayName: "Weather Desk",
+              iconUrl: "data:image/png;base64,weather",
+              scopes: ["weather"]
+            })
           ]
         };
       }
@@ -522,6 +499,7 @@ test("desktop rich text @ service assembles workspace app providers by capabilit
       commandSummaries: ["Get a forecast", "List weather alerts"],
       displayName: "Weather Desk",
       iconUrl: "data:image/png;base64,weather",
+      referencesListSupported: false,
       scopes: ["weather"],
       workspaceId: "workspace-1"
     }
@@ -543,42 +521,39 @@ test("desktop rich text @ service assembles workspace app providers by capabilit
   });
 });
 
-test("desktop rich text @ service assembles provider agent mention apps from capabilities", async () => {
+test("desktop rich text @ service assembles provider agent mention apps from mention candidates", async () => {
   const service = new DesktopRichTextAtService({
     tuttidClient: {
-      async listCliCapabilities() {
+      async listWorkspaceAppMentionCandidates(workspaceId: string) {
         return {
-          commands: [
-            {
-              id: "agent-context.codex.start",
+          workspaceId,
+          apps: [
+            createWorkspaceAppMentionCandidate({
+              appId: "agent-codex",
+              commandCount: 1,
+              commandDescriptions: [
+                "Start a Codex agent session in the current workspace."
+              ],
+              commandPaths: ["codex start"],
+              commandSummaries: ["Start a Codex agent session"],
               description:
                 "Start a Codex agent session in the current workspace.",
-              path: ["codex", "start"],
-              summary: "Start a Codex agent session",
-              output: { defaultMode: "table", json: true, table: null },
-              source: {
-                appId: "agent-codex",
-                appName: "Codex",
-                cliDescription:
-                  "Start a Codex agent session in the current workspace.",
-                kind: "app"
-              }
-            },
-            {
-              id: "agent-context.claude.start",
+              displayName: "Codex",
+              scopes: ["codex"]
+            }),
+            createWorkspaceAppMentionCandidate({
+              appId: "agent-claude-code",
+              commandCount: 1,
+              commandDescriptions: [
+                "Start a Claude Code agent session in the current workspace."
+              ],
+              commandPaths: ["claude start"],
+              commandSummaries: ["Start a Claude Code agent session"],
               description:
                 "Start a Claude Code agent session in the current workspace.",
-              path: ["claude", "start"],
-              summary: "Start a Claude Code agent session",
-              output: { defaultMode: "table", json: true, table: null },
-              source: {
-                appId: "agent-claude-code",
-                appName: "Claude Code",
-                cliDescription:
-                  "Start a Claude Code agent session in the current workspace.",
-                kind: "app"
-              }
-            }
+              displayName: "Claude Code",
+              scopes: ["claude"]
+            })
           ]
         };
       }
@@ -618,6 +593,7 @@ test("desktop rich text @ service assembles provider agent mention apps from cap
       commandSummaries: ["Start a Codex agent session"],
       displayName: "Codex",
       iconUrl: tuttiAgentAssetUrls.codex,
+      referencesListSupported: false,
       scopes: ["codex"],
       workspaceId: "workspace-1"
     },
@@ -633,6 +609,7 @@ test("desktop rich text @ service assembles provider agent mention apps from cap
       commandSummaries: ["Start a Claude Code agent session"],
       displayName: "Claude Code",
       iconUrl: tuttiAgentAssetUrls.claudeCode,
+      referencesListSupported: false,
       scopes: ["claude"],
       workspaceId: "workspace-1"
     }
@@ -654,42 +631,39 @@ test("desktop rich text @ service assembles provider agent mention apps from cap
   });
 });
 
-test("desktop rich text @ service hides provider agent app mentions until the agent is ready", async () => {
+test("desktop rich text @ service hides agent pseudo app mentions using cached provider readiness", async () => {
   const service = new DesktopRichTextAtService({
     tuttidClient: {
-      async listCliCapabilities() {
+      async listWorkspaceAppMentionCandidates(workspaceId: string) {
         return {
-          commands: [
-            {
-              id: "agent-context.codex.start",
+          workspaceId,
+          apps: [
+            createWorkspaceAppMentionCandidate({
+              appId: "agent-codex",
+              commandCount: 1,
+              commandDescriptions: [
+                "Start a Codex agent session in the current workspace."
+              ],
+              commandPaths: ["codex start"],
+              commandSummaries: ["Start a Codex agent session"],
               description:
                 "Start a Codex agent session in the current workspace.",
-              path: ["codex", "start"],
-              summary: "Start a Codex agent session",
-              output: { defaultMode: "table", json: true, table: null },
-              source: {
-                appId: "agent-codex",
-                appName: "Codex",
-                cliDescription:
-                  "Start a Codex agent session in the current workspace.",
-                kind: "app"
-              }
-            },
-            {
-              id: "agent-context.claude.start",
+              displayName: "Codex",
+              scopes: ["codex"]
+            }),
+            createWorkspaceAppMentionCandidate({
+              appId: "agent-claude-code",
+              commandCount: 1,
+              commandDescriptions: [
+                "Start a Claude Code agent session in the current workspace."
+              ],
+              commandPaths: ["claude start"],
+              commandSummaries: ["Start a Claude Code agent session"],
               description:
                 "Start a Claude Code agent session in the current workspace.",
-              path: ["claude", "start"],
-              summary: "Start a Claude Code agent session",
-              output: { defaultMode: "table", json: true, table: null },
-              source: {
-                appId: "agent-claude-code",
-                appName: "Claude Code",
-                cliDescription:
-                  "Start a Claude Code agent session in the current workspace.",
-                kind: "app"
-              }
-            }
+              displayName: "Claude Code",
+              scopes: ["claude"]
+            })
           ]
         };
       }
@@ -729,22 +703,20 @@ test("desktop rich text @ service hides provider agent app mentions until the ag
 test("desktop rich text @ service uses task icon fallback for issue manager app mentions", async () => {
   const service = new DesktopRichTextAtService({
     tuttidClient: {
-      async listCliCapabilities() {
+      async listWorkspaceAppMentionCandidates(workspaceId: string) {
         return {
-          commands: [
-            {
-              id: "issue-manager.issue.list",
-              description: "List workspace tasks.",
-              path: ["issue", "list"],
-              summary: "List tasks",
-              output: { defaultMode: "table", json: true, table: null },
-              source: {
-                appId: "issue-manager",
-                appName: "Task Manager",
-                cliDescription: "Manage workspace tasks and runs.",
-                kind: "app"
-              }
-            }
+          workspaceId,
+          apps: [
+            createWorkspaceAppMentionCandidate({
+              appId: "issue-manager",
+              commandCount: 1,
+              commandDescriptions: ["List workspace tasks."],
+              commandPaths: ["issue list"],
+              commandSummaries: ["List tasks"],
+              description: "Manage workspace tasks and runs.",
+              displayName: "Task Manager",
+              scopes: ["issue"]
+            })
           ]
         };
       }
@@ -775,6 +747,7 @@ test("desktop rich text @ service uses task icon fallback for issue manager app 
       commandSummaries: ["List tasks"],
       displayName: "Task Manager",
       iconUrl: tuttiIssueAssetUrls.default,
+      referencesListSupported: false,
       scopes: ["issue"],
       workspaceId: "workspace-1"
     }
@@ -808,6 +781,55 @@ function iconUrlFromProviderItem(item: unknown): string {
   return typeof iconUrl === "string" ? iconUrl : "";
 }
 
+function createWorkspaceAppMentionCandidate(input: {
+  appId: string;
+  commandCount?: number;
+  commandDescriptions?: string[];
+  commandPaths?: string[];
+  commandSummaries?: string[];
+  description: string;
+  displayName: string;
+  iconUrl?: string | null;
+  localizations?: Array<{
+    description?: string | null;
+    displayName?: string | null;
+    locale: string;
+    tags?: string[];
+  }>;
+  referencesListSupported?: boolean;
+  referencesSearchSupported?: boolean;
+  scopes?: string[];
+  source?: "workspace_app" | "cli_app";
+}) {
+  return {
+    appId: input.appId,
+    availableIconUrl: null,
+    cli: {
+      commandCount: input.commandCount ?? 0,
+      commandDescriptions: input.commandDescriptions ?? [],
+      commandPaths: input.commandPaths ?? [],
+      commandSummaries: input.commandSummaries ?? [],
+      scopes: input.scopes ?? []
+    },
+    description: input.description,
+    displayName: input.displayName,
+    enabled: true,
+    iconUrl: input.iconUrl ?? null,
+    installed: true,
+    localizations: (input.localizations ?? []).map((localization) => ({
+      description: localization.description ?? null,
+      displayName: localization.displayName ?? null,
+      locale: localization.locale,
+      tags: localization.tags ?? []
+    })),
+    references: {
+      listSupported: input.referencesListSupported ?? false,
+      searchSupported: input.referencesSearchSupported ?? false
+    },
+    source: input.source ?? "cli_app"
+  };
+}
+
 function createAgentProviderStatus(input: {
   availability: AgentProviderStatus["availability"]["status"];
   provider: WorkspaceAgentProvider;
@@ -831,25 +853,22 @@ function createAgentProviderStatus(input: {
   };
 }
 
-test("desktop rich text @ service falls back to app description for workspace app mentions", async () => {
+test("desktop rich text @ service uses mention candidate description for workspace app mentions", async () => {
   const service = new DesktopRichTextAtService({
     tuttidClient: {
-      async listCliCapabilities() {
+      async listWorkspaceAppMentionCandidates(workspaceId: string) {
         return {
-          commands: [
-            {
-              id: "app.automation.automation.list",
-              path: ["automation", "list"],
-              summary: "List automations",
-              output: { defaultMode: "table", json: true, table: null },
-              source: {
-                appId: "automation",
-                appDescription:
-                  "Schedule and review recurring automation runs.",
-                appName: "Automation",
-                kind: "app"
-              }
-            }
+          workspaceId,
+          apps: [
+            createWorkspaceAppMentionCandidate({
+              appId: "automation",
+              commandCount: 1,
+              commandPaths: ["automation list"],
+              commandSummaries: ["List automations"],
+              description: "Schedule and review recurring automation runs.",
+              displayName: "Automation",
+              scopes: ["automation"]
+            })
           ]
         };
       }
@@ -885,27 +904,23 @@ test("desktop rich text @ service falls back to app description for workspace ap
   );
 });
 
-test("desktop rich text @ service prefers cli scope description for workspace app mentions", async () => {
+test("desktop rich text @ service searches workspace app command metadata from mention candidates", async () => {
   const service = new DesktopRichTextAtService({
     tuttidClient: {
-      async listCliCapabilities() {
+      async listWorkspaceAppMentionCandidates(workspaceId: string) {
         return {
-          commands: [
-            {
-              id: "app.automation.automation.list",
-              description: "List automation definitions.",
-              path: ["automation", "list"],
-              summary: "List automations",
-              output: { defaultMode: "table", json: true, table: null },
-              source: {
-                appId: "automation",
-                appDescription:
-                  "Schedule and review recurring automation runs.",
-                appName: "Automation",
-                cliDescription: "Manage automations.",
-                kind: "app"
-              }
-            }
+          workspaceId,
+          apps: [
+            createWorkspaceAppMentionCandidate({
+              appId: "automation",
+              commandCount: 1,
+              commandDescriptions: ["List automation definitions."],
+              commandPaths: ["automation list"],
+              commandSummaries: ["List automations"],
+              description: "Manage automations.",
+              displayName: "Automation",
+              scopes: ["automation"]
+            })
           ]
         };
       }
@@ -938,23 +953,29 @@ test("desktop rich text @ service prefers cli scope description for workspace ap
 test("desktop rich text @ service emits enriched app + session meta when enrichment deps supplied", async () => {
   const service = new DesktopRichTextAtService({
     tuttidClient: {
-      async listCliCapabilities() {
+      async listWorkspaceAppMentionCandidates(workspaceId: string) {
         return {
-          commands: [
-            {
-              id: "app.app-weather.weather.forecast",
-              description: "Inspect weather forecasts.",
-              path: ["weather", "forecast"],
-              summary: "Get a forecast",
-              output: { defaultMode: "json", json: true, table: null },
-              source: {
-                appId: "app-weather",
-                appDescription: "Weather app manifest description.",
-                appName: "Weather Desk",
-                cliDescription: "Plan weather-sensitive work.",
-                kind: "app"
-              }
-            }
+          workspaceId,
+          apps: [
+            createWorkspaceAppMentionCandidate({
+              appId: "app-weather",
+              commandCount: 1,
+              commandDescriptions: ["Inspect weather forecasts."],
+              commandPaths: ["weather forecast"],
+              commandSummaries: ["Get a forecast"],
+              description: "Plan weather-sensitive work.",
+              displayName: "Weather Desk",
+              iconUrl: "https://icons/weather.png",
+              localizations: [
+                {
+                  description: "Planifiez selon la météo.",
+                  displayName: "Bureau Météo",
+                  locale: "fr-FR",
+                  tags: []
+                }
+              ],
+              scopes: ["weather"]
+            })
           ]
         };
       },
@@ -987,21 +1008,6 @@ test("desktop rich text @ service emits enriched app + session meta when enrichm
         };
       }
     } as unknown as TuttidClient,
-    appCenterApps: () => [
-      {
-        appId: "app-weather",
-        name: "Weather Desk",
-        description: "Plan weather-sensitive work.",
-        iconUrl: "https://icons/weather.png",
-        localizations: [
-          {
-            locale: "fr-FR",
-            name: "Bureau Météo",
-            description: "Planifiez selon la météo."
-          }
-        ]
-      } as never
-    ],
     getLocale: () => "fr-FR",
     resolveAgentIconUrl: (provider) => `https://agents/${provider}.png`,
     userAvatarPlaceholderUrl: "https://avatars/placeholder.png",

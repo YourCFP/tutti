@@ -144,6 +144,71 @@ exec "$TUTTI_APP_PYTHON" "$TUTTI_APP_PACKAGE_DIR/server.py"
 	}
 }
 
+func TestAppRunnerStartsStandaloneAppWithoutResolvingManagedRuntime(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bootstrap.sh runner test is POSIX-only")
+	}
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 is required for runner standalone test")
+	}
+
+	root := t.TempDir()
+	packageDir := filepath.Join(root, "package")
+	runtimeDir := filepath.Join(root, "runtime")
+	dataDir := filepath.Join(root, "data")
+	logDir := filepath.Join(root, "logs")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(packageDir) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "bootstrap.sh"), []byte(`#!/bin/sh
+set -eu
+exec python3 "$TUTTI_APP_PACKAGE_DIR/server.py"
+`), 0o755); err != nil {
+		t.Fatalf("WriteFile(bootstrap.sh) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "server.py"), []byte(pythonAppReadyServerScript("/healthz", false)), 0o644); err != nil {
+		t.Fatalf("WriteFile(server.py) error = %v", err)
+	}
+
+	resolver := &appRuntimeResolverStub{called: make(chan struct{})}
+	runner := &AppRunner{
+		HealthcheckTimeout: 10 * time.Second,
+		RuntimeResolver:    resolver,
+	}
+	state, err := runner.Start(context.Background(), AppStartInput{
+		WorkspaceID:     "ws-runner",
+		WorkspaceName:   "Runner Workspace",
+		WorkspaceRoot:   root,
+		AppID:           "standalone",
+		PackageDir:      packageDir,
+		Bootstrap:       "bootstrap.sh",
+		HealthcheckPath: "/healthz",
+		RuntimeProfile:  workspaceAppStandaloneRuntimeProfile,
+		RuntimeDir:      runtimeDir,
+		DataDir:         dataDir,
+		LogDir:          logDir,
+	})
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = runner.Stop(context.Background(), "ws-runner", "standalone")
+	})
+	if state.Status != workspacebiz.AppRuntimeStatusPreparing {
+		t.Fatalf("Start() status = %q, want preparing, lastError=%v", state.Status, state.LastError)
+	}
+	state = waitForRunnerStatus(t, runner, "ws-runner", "standalone", workspacebiz.AppRuntimeStatusRunning)
+	if state.LaunchURL == nil || !strings.HasPrefix(*state.LaunchURL, "http://127.0.0.1:") {
+		t.Fatalf("LaunchURL = %v", state.LaunchURL)
+	}
+
+	select {
+	case <-resolver.called:
+		t.Fatal("standalone app resolved managed runtime")
+	default:
+	}
+}
+
 func TestAppRunnerRestartStartsFreshProcessAndWritesStartupDiagnostic(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("bootstrap.sh runner test is POSIX-only")

@@ -559,6 +559,27 @@ func (e DesktopLocale) Valid() bool {
 	}
 }
 
+// Defines values for DesktopMinimizeAnimation.
+const (
+	DesktopMinimizeAnimationGenie DesktopMinimizeAnimation = "genie"
+	DesktopMinimizeAnimationOff   DesktopMinimizeAnimation = "off"
+	DesktopMinimizeAnimationScale DesktopMinimizeAnimation = "scale"
+)
+
+// Valid indicates whether the value is a known member of the DesktopMinimizeAnimation enum.
+func (e DesktopMinimizeAnimation) Valid() bool {
+	switch e {
+	case DesktopMinimizeAnimationGenie:
+		return true
+	case DesktopMinimizeAnimationOff:
+		return true
+	case DesktopMinimizeAnimationScale:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DesktopSleepPreventionMode.
 const (
 	Always            DesktopSleepPreventionMode = "always"
@@ -798,28 +819,28 @@ func (e IssueManagerTaskContextRefParentKind) Valid() bool {
 
 // Defines values for PermissionModeSemantic.
 const (
-	PermissionModeSemanticAcceptEdits    PermissionModeSemantic = "accept-edits"
-	PermissionModeSemanticAskBeforeWrite PermissionModeSemantic = "ask-before-write"
-	PermissionModeSemanticAuto           PermissionModeSemantic = "auto"
-	PermissionModeSemanticFullAccess     PermissionModeSemantic = "full-access"
-	PermissionModeSemanticLockedDown     PermissionModeSemantic = "locked-down"
-	PermissionModeSemanticUnconfigurable PermissionModeSemantic = "unconfigurable"
+	AcceptEdits    PermissionModeSemantic = "accept-edits"
+	AskBeforeWrite PermissionModeSemantic = "ask-before-write"
+	Auto           PermissionModeSemantic = "auto"
+	FullAccess     PermissionModeSemantic = "full-access"
+	LockedDown     PermissionModeSemantic = "locked-down"
+	Unconfigurable PermissionModeSemantic = "unconfigurable"
 )
 
 // Valid indicates whether the value is a known member of the PermissionModeSemantic enum.
 func (e PermissionModeSemantic) Valid() bool {
 	switch e {
-	case PermissionModeSemanticAcceptEdits:
+	case AcceptEdits:
 		return true
-	case PermissionModeSemanticAskBeforeWrite:
+	case AskBeforeWrite:
 		return true
-	case PermissionModeSemanticAuto:
+	case Auto:
 		return true
-	case PermissionModeSemanticFullAccess:
+	case FullAccess:
 		return true
-	case PermissionModeSemanticLockedDown:
+	case LockedDown:
 		return true
-	case PermissionModeSemanticUnconfigurable:
+	case Unconfigurable:
 		return true
 	default:
 		return false
@@ -1069,6 +1090,24 @@ func (e WorkspaceAppInstallUserPhase) Valid() bool {
 	}
 }
 
+// Defines values for WorkspaceAppMentionCandidateSource.
+const (
+	WorkspaceAppMentionCandidateSourceCliApp       WorkspaceAppMentionCandidateSource = "cli_app"
+	WorkspaceAppMentionCandidateSourceWorkspaceApp WorkspaceAppMentionCandidateSource = "workspace_app"
+)
+
+// Valid indicates whether the value is a known member of the WorkspaceAppMentionCandidateSource enum.
+func (e WorkspaceAppMentionCandidateSource) Valid() bool {
+	switch e {
+	case WorkspaceAppMentionCandidateSourceCliApp:
+		return true
+	case WorkspaceAppMentionCandidateSourceWorkspaceApp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkspaceAppMinimizeBehavior.
 const (
 	Hibernate   WorkspaceAppMinimizeBehavior = "hibernate"
@@ -1125,6 +1164,7 @@ const (
 	WorkspaceAppSourceBuiltin   WorkspaceAppSource = "builtin"
 	WorkspaceAppSourceGenerated WorkspaceAppSource = "generated"
 	WorkspaceAppSourceImported  WorkspaceAppSource = "imported"
+	WorkspaceAppSourceLocalDev  WorkspaceAppSource = "local-dev"
 )
 
 // Valid indicates whether the value is a known member of the WorkspaceAppSource enum.
@@ -1135,6 +1175,23 @@ func (e WorkspaceAppSource) Valid() bool {
 	case WorkspaceAppSourceGenerated:
 		return true
 	case WorkspaceAppSourceImported:
+		return true
+	case WorkspaceAppSourceLocalDev:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkspaceAppUploadPurpose.
+const (
+	AppAsset WorkspaceAppUploadPurpose = "app-asset"
+)
+
+// Valid indicates whether the value is a known member of the WorkspaceAppUploadPurpose enum.
+func (e WorkspaceAppUploadPurpose) Valid() bool {
+	switch e {
+	case AppAsset:
 		return true
 	default:
 		return false
@@ -1818,6 +1875,11 @@ type CompleteIssueManagerRunRequest struct {
 	Summary      *string                             `json:"summary,omitempty"`
 }
 
+// CompleteWorkspaceAppUploadResponse defines model for CompleteWorkspaceAppUploadResponse.
+type CompleteWorkspaceAppUploadResponse struct {
+	File WorkspaceAppUploadedFile `json:"file"`
+}
+
 // CopyWorkspaceFileEntryRequest defines model for CopyWorkspaceFileEntryRequest.
 type CopyWorkspaceFileEntryRequest struct {
 	Path string `json:"path"`
@@ -2012,6 +2074,9 @@ type DesktopFileDefaultOpenersByExtension map[string]DesktopFileDefaultOpener
 // DesktopLocale defines model for DesktopLocale.
 type DesktopLocale string
 
+// DesktopMinimizeAnimation defines model for DesktopMinimizeAnimation.
+type DesktopMinimizeAnimation string
+
 // DesktopPreferences defines model for DesktopPreferences.
 type DesktopPreferences struct {
 	AgentComposerDefaultsByProvider             DesktopAgentComposerDefaultsByProvider             `json:"agentComposerDefaultsByProvider"`
@@ -2023,6 +2088,7 @@ type DesktopPreferences struct {
 	DockPlacement                               DesktopDockPlacement                               `json:"dockPlacement"`
 	FileDefaultOpenersByExtension               DesktopFileDefaultOpenersByExtension               `json:"fileDefaultOpenersByExtension"`
 	Locale                                      DesktopLocale                                      `json:"locale"`
+	MinimizeAnimation                           DesktopMinimizeAnimation                           `json:"minimizeAnimation"`
 	SleepPreventionMode                         DesktopSleepPreventionMode                         `json:"sleepPreventionMode"`
 	ThemeSource                                 DesktopThemeSource                                 `json:"themeSource"`
 	UpdateChannel                               DesktopUpdateChannel                               `json:"updateChannel"`
@@ -2143,6 +2209,9 @@ type GetAgentProviderComposerOptionsRequest struct {
 	Cwd      *string                       `json:"cwd,omitempty"`
 	Locale   *DesktopLocale                `json:"locale,omitempty"`
 	Settings *AgentSessionComposerSettings `json:"settings,omitempty"`
+
+	// WorkspaceId Workspace used for Claude Code live model discovery.
+	WorkspaceId *string `json:"workspaceId,omitempty"`
 }
 
 // HealthStatusResponse defines model for HealthStatusResponse.
@@ -2431,6 +2500,13 @@ type ListWorkspacesResponse struct {
 	Workspaces []WorkspaceSummary `json:"workspaces"`
 }
 
+// LoadLocalWorkspaceAppRequest defines model for LoadLocalWorkspaceAppRequest.
+type LoadLocalWorkspaceAppRequest struct {
+	// RestartRunning Restart the app runtime if it is already running.
+	RestartRunning *bool  `json:"restartRunning,omitempty"`
+	SourceDir      string `json:"sourceDir"`
+}
+
 // MoveWorkspaceFileEntryRequest defines model for MoveWorkspaceFileEntryRequest.
 type MoveWorkspaceFileEntryRequest struct {
 	Path                string `json:"path"`
@@ -2469,6 +2545,20 @@ type PreflightUploadWorkspaceFilesResponse struct {
 	WorkspaceId         string                        `json:"workspaceId"`
 }
 
+// PrepareWorkspaceAppUploadRequest defines model for PrepareWorkspaceAppUploadRequest.
+type PrepareWorkspaceAppUploadRequest struct {
+	MimeType  string                    `json:"mimeType"`
+	Name      string                    `json:"name"`
+	Purpose   WorkspaceAppUploadPurpose `json:"purpose"`
+	SizeBytes int64                     `json:"sizeBytes"`
+}
+
+// PrepareWorkspaceAppUploadResponse defines model for PrepareWorkspaceAppUploadResponse.
+type PrepareWorkspaceAppUploadResponse struct {
+	ExpiresAt time.Time `json:"expiresAt"`
+	UploadId  string    `json:"uploadId"`
+}
+
 // PublishWorkspaceAppFactoryJobResponse defines model for PublishWorkspaceAppFactoryJobResponse.
 type PublishWorkspaceAppFactoryJobResponse struct {
 	App         WorkspaceApp           `json:"app"`
@@ -2484,6 +2574,12 @@ type PutDesktopPreferencesRequest struct {
 // PutWorkspaceWorkbenchRequest defines model for PutWorkspaceWorkbenchRequest.
 type PutWorkspaceWorkbenchRequest struct {
 	Snapshot WorkbenchSnapshot `json:"snapshot"`
+}
+
+// ReloadLocalWorkspaceAppRequest defines model for ReloadLocalWorkspaceAppRequest.
+type ReloadLocalWorkspaceAppRequest struct {
+	// RestartRunning Restart the app runtime if it is already running.
+	RestartRunning *bool `json:"restartRunning,omitempty"`
 }
 
 // RenameWorkspaceFileEntryRequest defines model for RenameWorkspaceFileEntryRequest.
@@ -2552,6 +2648,7 @@ type UpdateIssueManagerTaskRequest struct {
 	Content   *string               `json:"content,omitempty"`
 	DueAtUnix *int64                `json:"dueAtUnix,omitempty"`
 	Priority  *IssueManagerPriority `json:"priority,omitempty"`
+	SortIndex *int                  `json:"sortIndex,omitempty"`
 	Status    *IssueManagerStatus   `json:"status,omitempty"`
 	Title     *string               `json:"title,omitempty"`
 }
@@ -2806,6 +2903,9 @@ type WorkspaceApp struct {
 	Installed        bool                         `json:"installed"`
 	LastError        *string                      `json:"lastError"`
 	LaunchUrl        *string                      `json:"launchUrl"`
+
+	// LocalPackageDir Absolute package directory for unpacked local development apps.
+	LocalPackageDir  *string                      `json:"localPackageDir,omitempty"`
 	Localizations    []WorkspaceAppLocalization   `json:"localizations"`
 	MinimizeBehavior WorkspaceAppMinimizeBehavior `json:"minimizeBehavior"`
 	Port             *int                         `json:"port"`
@@ -2912,6 +3012,39 @@ type WorkspaceAppLocalization struct {
 	Tags        []string `json:"tags"`
 }
 
+// WorkspaceAppMentionCandidate defines model for WorkspaceAppMentionCandidate.
+type WorkspaceAppMentionCandidate struct {
+	AppId            string                             `json:"appId"`
+	AvailableIconUrl *string                            `json:"availableIconUrl"`
+	Cli              WorkspaceAppMentionCliMetadata     `json:"cli"`
+	Description      string                             `json:"description"`
+	DisplayName      string                             `json:"displayName"`
+	Enabled          bool                               `json:"enabled"`
+	IconUrl          *string                            `json:"iconUrl"`
+	Installed        bool                               `json:"installed"`
+	Localizations    []WorkspaceAppLocalization         `json:"localizations"`
+	References       WorkspaceAppReferencesState        `json:"references"`
+	Source           WorkspaceAppMentionCandidateSource `json:"source"`
+}
+
+// WorkspaceAppMentionCandidateSource defines model for WorkspaceAppMentionCandidateSource.
+type WorkspaceAppMentionCandidateSource string
+
+// WorkspaceAppMentionCandidatesResponse defines model for WorkspaceAppMentionCandidatesResponse.
+type WorkspaceAppMentionCandidatesResponse struct {
+	Apps        []WorkspaceAppMentionCandidate `json:"apps"`
+	WorkspaceId string                         `json:"workspaceId"`
+}
+
+// WorkspaceAppMentionCliMetadata defines model for WorkspaceAppMentionCliMetadata.
+type WorkspaceAppMentionCliMetadata struct {
+	CommandCount        int      `json:"commandCount"`
+	CommandDescriptions []string `json:"commandDescriptions"`
+	CommandPaths        []string `json:"commandPaths"`
+	CommandSummaries    []string `json:"commandSummaries"`
+	Scopes              []string `json:"scopes"`
+}
+
 // WorkspaceAppMinimizeBehavior defines model for WorkspaceAppMinimizeBehavior.
 type WorkspaceAppMinimizeBehavior string
 
@@ -2932,6 +3065,18 @@ type WorkspaceAppRuntimeStatus string
 
 // WorkspaceAppSource defines model for WorkspaceAppSource.
 type WorkspaceAppSource string
+
+// WorkspaceAppUploadPurpose defines model for WorkspaceAppUploadPurpose.
+type WorkspaceAppUploadPurpose string
+
+// WorkspaceAppUploadedFile defines model for WorkspaceAppUploadedFile.
+type WorkspaceAppUploadedFile struct {
+	MimeType  string `json:"mimeType"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Sha256    string `json:"sha256"`
+	SizeBytes int64  `json:"sizeBytes"`
+}
 
 // WorkspaceFileDirectoryResponse defines model for WorkspaceFileDirectoryResponse.
 type WorkspaceFileDirectoryResponse struct {
@@ -3425,6 +3570,9 @@ type FixWorkspaceAppFactoryJobJSONRequestBody = FixWorkspaceAppFactoryJobRequest
 // ImportWorkspaceAppJSONRequestBody defines body for ImportWorkspaceApp for application/json ContentType.
 type ImportWorkspaceAppJSONRequestBody = ImportWorkspaceAppRequest
 
+// LoadLocalWorkspaceAppJSONRequestBody defines body for LoadLocalWorkspaceApp for application/json ContentType.
+type LoadLocalWorkspaceAppJSONRequestBody = LoadLocalWorkspaceAppRequest
+
 // ExportWorkspaceAppJSONRequestBody defines body for ExportWorkspaceApp for application/json ContentType.
 type ExportWorkspaceAppJSONRequestBody = ExportWorkspaceAppRequest
 
@@ -3440,8 +3588,14 @@ type ListWorkspaceAppReferencesJSONRequestBody = AppReferenceListRequest
 // SearchWorkspaceAppReferencesJSONRequestBody defines body for SearchWorkspaceAppReferences for application/json ContentType.
 type SearchWorkspaceAppReferencesJSONRequestBody = AppReferenceSearchRequest
 
+// ReloadLocalWorkspaceAppJSONRequestBody defines body for ReloadLocalWorkspaceApp for application/json ContentType.
+type ReloadLocalWorkspaceAppJSONRequestBody = ReloadLocalWorkspaceAppRequest
+
 // RollbackWorkspaceAppJSONRequestBody defines body for RollbackWorkspaceApp for application/json ContentType.
 type RollbackWorkspaceAppJSONRequestBody = RollbackWorkspaceAppRequest
+
+// PrepareWorkspaceAppUploadJSONRequestBody defines body for PrepareWorkspaceAppUpload for application/json ContentType.
+type PrepareWorkspaceAppUploadJSONRequestBody = PrepareWorkspaceAppUploadRequest
 
 // CreateWorkspaceFileDirectoryJSONRequestBody defines body for CreateWorkspaceFileDirectory for application/json ContentType.
 type CreateWorkspaceFileDirectoryJSONRequestBody = CreateWorkspaceFileDirectoryRequest

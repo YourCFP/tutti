@@ -28,6 +28,8 @@ export interface ReferenceListGroup {
   /** 不透明分组 id;作为下钻的 parentGroupId 原样回传。 */
   id: string;
   displayName: string;
+  /** 可选的展示上下文,用于详情/搜索副标题,避免 UI 泄露不透明 group id。 */
+  parentLabel?: string | null;
   referenceCount?: number | null;
   /** 可选分组图标(data URL / 远程 URL),如应用产物源的 app 图标。 */
   iconUrl?: string | null;
@@ -270,6 +272,9 @@ function itemToNode(sourceId: string, item: ReferenceListItem): ReferenceNode {
       kind: "folder",
       displayName: item.displayName,
       hasChildren: true,
+      ...(item.parentLabel?.trim()
+        ? { contextLabel: item.parentLabel.trim() }
+        : {}),
       ...(item.referenceCount == null
         ? {}
         : { childCount: item.referenceCount }),

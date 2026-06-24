@@ -76,6 +76,32 @@ const isDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
 
 Do not read `theme`, `themeSource`, `locale`, or `lang` from URL search params for host settings.
 
+## Browser File Uploads
+
+Browser apps can ask the host to persist a `File` or `Blob` into the app's
+durable data area:
+
+```js
+const abortController = new AbortController();
+const uploaded = await window.tuttiExternal?.files?.upload?.(file, {
+  purpose: "app-asset",
+  name: file.name,
+  mimeType: file.type || "application/octet-stream",
+  onProgress(progress) {
+    console.log(progress.loadedBytes, progress.totalBytes, progress.ratio);
+  },
+  signal: abortController.signal
+});
+```
+
+The result contains `{ path, name, mimeType, sizeBytes, sha256 }`. The returned
+path is a host-managed file under the installed app's durable data directory.
+`onProgress` reports browser-to-host transfer progress. Aborting `signal` cancels
+the in-flight upload session and temporary bytes when possible. `files.upload()`
+only uploads bytes and returns file metadata; it does not create app-specific
+asset records. Apps that manage media libraries should store their own asset
+rows/documents after upload using the returned metadata.
+
 ## Browser Frontend Diagnostics
 
 When a workspace app runs inside Tutti Desktop, prefer writing browser-side diagnostics through the optional host bridge instead of posting to an app-owned `/api/log` route:

@@ -38,51 +38,11 @@ func readSessionTestdataJSON(t *testing.T, name string) map[string]any {
 	return body
 }
 
-func TestCodexAdapterStartCreatesRealACPSession(t *testing.T) {
-	t.Parallel()
-
-	transport := newScriptedACPTransport()
-	adapter := NewCodexAdapter(transport)
-
-	events, err := adapter.Start(context.Background(), testSession())
-	if err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	if len(transport.specs) != 1 {
-		t.Fatalf("process starts = %d, want 1", len(transport.specs))
-	}
-	spec := transport.specs[0]
-	if len(spec.Command) == 0 || spec.Command[0] != codexACPCommand {
-		t.Fatalf("command = %#v, want %q", spec.Command, codexACPCommand)
-	}
-	if len(spec.Command) != 1 {
-		t.Fatalf("command = %#v, want no implicit sandbox config overrides", spec.Command)
-	}
-	if spec.CWD != "/workspace" {
-		t.Fatalf("cwd = %q, want /workspace", spec.CWD)
-	}
-	if !containsString(spec.Env, codexAgentRoutingEnv) {
-		t.Fatalf("env = %#v, want agent routing env", spec.Env)
-	}
-	if !containsString(spec.Env, codexRoutingPreload) {
-		t.Fatalf("env = %#v, want routing preload env", spec.Env)
-	}
-	if len(events) != 1 || events[0].Type != activityshared.EventSessionStarted {
-		t.Fatalf("events = %#v, want session.started", events)
-	}
-	if events[0].ProviderSessionID != "codex-acp-session-1" {
-		t.Fatalf("provider session id = %q", events[0].ProviderSessionID)
-	}
-	if got := acpRequestParamCWD(t, transport.conn, acpMethodNewSession); got != "/workspace" {
-		t.Fatalf("ACP session/new cwd = %q, want /workspace", got)
-	}
-}
-
 func TestCodexAdapterStartAddsConfigOverridesForModelAndReasoning(t *testing.T) {
 	t.Parallel()
 
 	transport := newScriptedACPTransport()
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	session.Settings = &SessionSettings{
 		Model:            "gpt-5",
@@ -110,7 +70,7 @@ func TestCodexAdapterStartIgnoresUnsupportedPlanMode(t *testing.T) {
 	t.Parallel()
 
 	transport := newScriptedACPTransport()
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	session.PermissionModeID = "full-access"
 	session.Settings = &SessionSettings{
@@ -131,7 +91,7 @@ func TestCodexAdapterApplySessionSettingsDoesNotApplyUnsupportedPlanMode(t *test
 	t.Parallel()
 
 	transport := newScriptedACPTransport()
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	session.PermissionModeID = "full-access"
 	session.Settings = &SessionSettings{
@@ -168,7 +128,7 @@ func TestCodexAdapterStartDisablesReasoningSummaryForSparkModel(t *testing.T) {
 	t.Parallel()
 
 	transport := newScriptedACPTransport()
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	session.Settings = &SessionSettings{
 		Model:            "gpt-5.3-codex-spark",
@@ -211,7 +171,7 @@ func TestCodexAdapterSessionStateIncludesACPConfigOptions(t *testing.T) {
 			map[string]any{"value": "high", "name": "High"},
 		},
 	}}
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 
 	if _, err := adapter.Start(context.Background(), session); err != nil {
@@ -254,7 +214,7 @@ func TestCodexAdapterApplySessionSettingsUpdatesLiveACPConfig(t *testing.T) {
 	t.Parallel()
 
 	transport := newScriptedACPTransport()
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 
 	if _, err := adapter.Start(context.Background(), session); err != nil {
@@ -300,7 +260,7 @@ func TestCodexAdapterApplySessionSettingsSkipsUnchangedLiveACPConfig(t *testing.
 	transport.conn.configOptions = []map[string]any{
 		{"id": "reasoning_effort", "currentValue": "high"},
 	}
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 
 	if _, err := adapter.Start(context.Background(), session); err != nil {
@@ -326,7 +286,7 @@ func TestCodexAdapterApplySessionSettingsSendsChangedLiveACPConfig(t *testing.T)
 	transport.conn.configOptions = []map[string]any{
 		{"id": "reasoning_effort", "currentValue": "high"},
 	}
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 
 	if _, err := adapter.Start(context.Background(), session); err != nil {
@@ -352,7 +312,7 @@ func TestCodexAdapterApplySessionSettingsSendsChangedLiveACPConfig(t *testing.T)
 func TestCodexAdapterRequiresNewSessionWhenReasoningSummarySupportChanges(t *testing.T) {
 	t.Parallel()
 
-	adapter := NewCodexAdapter(newScriptedACPTransport())
+	adapter := NewNexightAdapter(newScriptedACPTransport())
 	session := testSession()
 	session.Settings = &SessionSettings{
 		Model:            "gpt-5.3-codex-spark",
@@ -381,7 +341,7 @@ func TestCodexAdapterRequiresNewSessionWhenReasoningSummarySupportChanges(t *tes
 func TestCodexAdapterApplySessionSettingsRejectsNewSessionOnlyModelChange(t *testing.T) {
 	t.Parallel()
 
-	adapter := NewCodexAdapter(newScriptedACPTransport())
+	adapter := NewNexightAdapter(newScriptedACPTransport())
 	session := testSession()
 	session.Settings = &SessionSettings{
 		Model:            "gpt-5.3-codex",
@@ -401,7 +361,7 @@ func TestCodexAdapterStartPreservesCommandsAdvertisedDuringNewSession(t *testing
 
 	transport := newScriptedACPTransport()
 	transport.conn.commandUpdateOnNewSession = true
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 
 	if _, err := adapter.Start(context.Background(), session); err != nil {
@@ -421,7 +381,7 @@ func TestControllerPublishesIdleCodexCommandUpdatesAfterStart(t *testing.T) {
 	t.Parallel()
 
 	transport := newScriptedACPTransport()
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	controller := NewController([]Adapter{adapter}, nil)
 	session := testSession()
 
@@ -469,7 +429,7 @@ func TestControllerPublishesIdleCodexConfigOptionsUpdatesAfterStart(t *testing.T
 	t.Parallel()
 
 	transport := newScriptedACPTransport()
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	controller := NewController([]Adapter{adapter}, nil)
 	session := testSession()
 
@@ -507,7 +467,7 @@ func TestCodexAdapterResumePreservesCommandsAdvertisedDuringLoadSession(t *testi
 
 	transport := newScriptedACPTransport()
 	transport.conn.commandUpdateOnLoadSession = true
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 
 	if err := adapter.Resume(context.Background(), session); err != nil {
@@ -528,7 +488,7 @@ func TestCodexAdapterResumeClassifiesMissingProviderSession(t *testing.T) {
 		Code:    -32002,
 		Message: "Resource not found",
 	}
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 
 	err := adapter.Resume(context.Background(), session)
@@ -549,7 +509,7 @@ func TestCodexAdapterResumeClassifiesUnsupportedRestoreAsProviderSessionNotFound
 
 	transport := newScriptedACPTransport()
 	transport.conn.supportsSessionRestore = false
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 
 	err := adapter.Resume(context.Background(), session)
@@ -566,7 +526,7 @@ func TestCodexAdapterResumeRequiresProviderSessionID(t *testing.T) {
 	t.Parallel()
 
 	transport := newScriptedACPTransport()
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	session.ProviderSessionID = ""
 
@@ -658,7 +618,7 @@ func TestCodexAdapterStartContinuesWhenSetModeDoesNotRespond(t *testing.T) {
 
 	transport := newScriptedACPTransport()
 	transport.conn.respondSetMode = false
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	session.PermissionModeID = "full-access"
 
@@ -698,7 +658,7 @@ func TestCodexAdapterStartAuthRequiredCreatesSessionState(t *testing.T) {
 
 	transport := newScriptedACPTransport()
 	transport.conn.authRequiredOnNewSession = true
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 
 	events, err := adapter.Start(context.Background(), session)
@@ -713,7 +673,7 @@ func TestCodexAdapterStartAuthRequiredCreatesSessionState(t *testing.T) {
 	if snapshot.AuthState != "auth_required" {
 		t.Fatalf("auth state = %q, want auth_required", snapshot.AuthState)
 	}
-	if got := asString(snapshot.RuntimeContext["authMessage"]); !strings.Contains(got, "Sync the Codex host credentials") {
+	if got := asString(snapshot.RuntimeContext["authMessage"]); !strings.Contains(got, "Sync the Nexight host credentials") {
 		t.Fatalf("auth message = %q, want credential sync guidance", got)
 	}
 }
@@ -721,7 +681,7 @@ func TestCodexAdapterStartAuthRequiredCreatesSessionState(t *testing.T) {
 func TestCodexAdapterExecStreamsACPUpdates(t *testing.T) {
 	t.Parallel()
 
-	adapter := NewCodexAdapter(newScriptedACPTransport())
+	adapter := NewNexightAdapter(newScriptedACPTransport())
 	session := testSession()
 	if _, err := adapter.Start(context.Background(), session); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -810,7 +770,7 @@ func TestCodexAdapterExecCompletesAssistantMessageFromPromptResult(t *testing.T)
 
 	transport := newScriptedACPTransport()
 	transport.conn.promptFinalContent = "I'll check the repo. Source note."
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	if _, err := adapter.Start(context.Background(), session); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -855,7 +815,7 @@ func TestCodexAdapterExecPreservesLongAssistantMessageContent(t *testing.T) {
 	longContent := "I'll check the repo." + strings.Repeat("完整回答", 3000)
 	transport := newScriptedACPTransport()
 	transport.conn.promptFinalContent = longContent
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	if _, err := adapter.Start(context.Background(), session); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -896,7 +856,7 @@ func TestCodexAdapterExecUsesDisplayPromptForUserMessageOnly(t *testing.T) {
 	t.Parallel()
 
 	transport := newScriptedACPTransport()
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	if _, err := adapter.Start(context.Background(), session); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -949,7 +909,7 @@ func TestCodexAdapterAllowsImagePromptWithoutInitializeCapability(t *testing.T) 
 	t.Parallel()
 
 	transport := newScriptedACPTransport()
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	if _, err := adapter.Start(context.Background(), session); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -1645,7 +1605,7 @@ func TestACPPermissionEventsCarryCanonicalToolName(t *testing.T) {
 	t.Parallel()
 
 	session := testSession()
-	adapter := NewCodexAdapter(newScriptedACPTransport())
+	adapter := NewNexightAdapter(newScriptedACPTransport())
 
 	approvalEvents, pendingApproval, err := adapter.acpPermissionRequested(
 		session,
@@ -1820,7 +1780,7 @@ func TestCodexAdapterPermissionRequestWaitsForUserSelection(t *testing.T) {
 
 	transport := newScriptedACPTransport()
 	transport.conn.promptPermission = true
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	if _, err := adapter.Start(context.Background(), session); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -1885,7 +1845,7 @@ func TestCodexAdapterPermissionRequestPreservesAbortInteractiveSelection(t *test
 
 	transport := newScriptedACPTransport()
 	transport.conn.promptPermission = true
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	if _, err := adapter.Start(context.Background(), session); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -1932,7 +1892,7 @@ func TestCodexAdapterCancelRejectsPendingPermissionRequest(t *testing.T) {
 
 	transport := newScriptedACPTransport()
 	transport.conn.promptPermission = true
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	if _, err := adapter.Start(context.Background(), session); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -1989,7 +1949,7 @@ func TestCodexAdapterExecTreatsContextCanceledAsInterrupted(t *testing.T) {
 	transport := newScriptedACPTransport()
 	gate := make(chan struct{})
 	transport.conn.pauseBeforePromptResult = gate
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	if _, err := adapter.Start(context.Background(), session); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -2046,7 +2006,7 @@ func TestCodexAdapterExecTreatsContextCanceledAsInterrupted(t *testing.T) {
 func TestCodexAdapterRejectsPermissionOutsidePromptTurn(t *testing.T) {
 	t.Parallel()
 
-	adapter := NewCodexAdapter(newScriptedACPTransport())
+	adapter := NewNexightAdapter(newScriptedACPTransport())
 	session := testSession()
 	client := newACPClient(newScriptedACPTransport().conn)
 	_, err := adapter.handleACPMessage(
@@ -2079,7 +2039,7 @@ func TestCodexAdapterSessionStateExposesPendingAskUserPromptAndSubmitsPayload(t 
 
 	transport := newScriptedACPTransport()
 	transport.conn.promptKind = "ask-user"
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	if _, err := adapter.Start(context.Background(), session); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -2142,7 +2102,7 @@ func TestCodexAdapterSessionStateExposesPendingExitPlanPrompt(t *testing.T) {
 
 	transport := newScriptedACPTransport()
 	transport.conn.promptKind = "exit-plan"
-	adapter := NewCodexAdapter(transport)
+	adapter := NewNexightAdapter(transport)
 	session := testSession()
 	if _, err := adapter.Start(context.Background(), session); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -2189,8 +2149,11 @@ func TestCodexAdapterSessionStateExposesPendingExitPlanPrompt(t *testing.T) {
 func TestCodexAdapterSessionStateIncludesModeCommandsAndConfigUpdates(t *testing.T) {
 	t.Parallel()
 
-	adapter := NewCodexAdapter(newScriptedACPTransport())
+	adapter := NewNexightAdapter(newScriptedACPTransport())
 	session := testSession()
+	// providerConfig is derived from session.Provider; exercise the Codex
+	// base-URL path (still used by the app-server adapter) explicitly.
+	session.Provider = ProviderCodex
 	codexHome := t.TempDir()
 	if err := os.WriteFile(filepath.Join(codexHome, "config.toml"), []byte(`
 model_provider = "proxy"
@@ -2616,7 +2579,7 @@ func testSession() Session {
 	return Session{
 		RoomID:            "room-1",
 		AgentSessionID:    "agent-session-1",
-		Provider:          ProviderCodex,
+		Provider:          ProviderNexight,
 		ProviderSessionID: "agent-session-1",
 		CWD:               "/workspace/room-1",
 		Status:            SessionStatusReady,

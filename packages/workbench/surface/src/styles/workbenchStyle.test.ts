@@ -12,6 +12,44 @@ test("floating window bodies do not reserve a right-side content margin", () => 
   );
 });
 
+test("mission control hidden presentation windows are invisible and inert", () => {
+  const css = readFileSync(resolve("src/styles/workbench.css"), "utf8");
+
+  assert.match(
+    css,
+    /\.workbench-window-shell\[data-presentation-visibility="hidden"\]\s*{[^}]*visibility:\s*hidden;[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s
+  );
+});
+
+test("dock retained entry removal animates width and icon exit", () => {
+  const css = readFileSync(resolve("src/styles/workbench.css"), "utf8");
+
+  assert.match(
+    css,
+    /\.desktop-dock-plate\s*{[^}]*transition:\s*width 220ms cubic-bezier\(0\.22, 1, 0\.36, 1\);/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock\[data-dock-placement="left"\]\s*{[^}]*transition:\s*height 600ms cubic-bezier\(0\.16, 1, 0\.3, 1\);/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__slot\[data-presence="exiting"\]\s*{[^}]*animation:\s*desktop-dock-slot-collapse 600ms cubic-bezier\(0\.4, 0, 0\.2, 1\)[^}]*both;/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__slot\[data-presence="exiting"\]\s+\.desktop-dock__icon-shell\s*{[^}]*animation:\s*desktop-dock-presence-exit 420ms cubic-bezier\(0\.4, 0, 0\.2, 1\)[^}]*both;/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__separator\[data-presence="exiting"\]\s*{[^}]*animation:\s*desktop-dock-separator-collapse 600ms/s
+  );
+  assert.match(css, /@keyframes desktop-dock-slot-collapse/);
+  assert.match(css, /@keyframes desktop-dock-slot-collapse-left/);
+  assert.match(css, /@keyframes desktop-dock-separator-collapse/);
+  assert.match(css, /@keyframes desktop-dock-separator-collapse-left/);
+});
+
 test("left dock placement owns vertical frame and popup placement styles", () => {
   const css = readFileSync(resolve("src/styles/workbench.css"), "utf8");
 
@@ -29,7 +67,7 @@ test("left dock placement owns vertical frame and popup placement styles", () =>
   );
   assert.match(
     css,
-    /\.desktop-dock__hover-panel\[data-dock-placement="left"\]\s*{[^}]*left:\s*calc\(\s*var\(--desktop-dock-hover-panel-anchor-left\)\s*\+\s*var\(--desktop-dock-hover-panel-anchor-width\)\s*\+\s*var\(--desktop-dock-tooltip-gap, 32px\)\s*\);/s
+    /\.desktop-dock__hover-panel\[data-dock-placement="left"\]\s*{[^}]*left:\s*calc\(\s*var\(--desktop-dock-hover-panel-anchor-left\)\s*\+\s*var\(--desktop-dock-hover-panel-anchor-width\)\s*\+\s*var\(--desktop-dock-hover-panel-gap, 12px\)\s*\);/s
   );
   assert.match(
     css,
@@ -62,7 +100,19 @@ test("left dock placement owns vertical frame and popup placement styles", () =>
   assert.doesNotMatch(css, /desktop-dock-left-stack-card-fan-in/);
   assert.match(
     css,
-    /\.desktop-dock\[data-dock-placement="left"\]\s+\.desktop-dock__slot\[data-node-state="open"\]::before,[\s\S]*?\.desktop-dock\[data-dock-placement="left"\]\s+\.desktop-dock__slot\[data-node-state="minimized"\]::before\s*{[^}]*right:\s*auto;[^}]*left:\s*var\(--desktop-dock-indicator-offset\);/s
+    /\.desktop-dock\[data-dock-placement="left"\]\s+\.desktop-dock__slot\[data-node-state="open"\]::before,[\s\S]*?\.desktop-dock\[data-dock-placement="left"\]\s+\.desktop-dock__slot\[data-node-state="minimized"\]::before\s*{[^}]*right:\s*auto;[^}]*left:\s*calc\(var\(--desktop-dock-indicator-offset\) - 2px\);/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__slot\[data-node-state="open"\]::before,[\s\S]*?\.desktop-dock__slot\[data-node-state="minimized"\]::before\s*{[^}]*--desktop-dock-indicator-color:\s*var\(--text-tertiary\);[^}]*bottom:\s*calc\(var\(--desktop-dock-indicator-offset\) - 2px\);[^}]*width:\s*5px;[^}]*height:\s*5px;[^}]*background:\s*var\(--desktop-dock-indicator-color\);[^}]*box-shadow:\s*0 0 0 0\.5px rgb\(0 0 0 \/ 12%\);/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__slot\[data-node-state="open"\]\[data-wallpaper-tone="dark"\]::before,[\s\S]*?\.desktop-dock__slot\[data-node-state="minimized"\]\[data-wallpaper-tone="dark"\]::before\s*{[^}]*--desktop-dock-indicator-color:\s*rgb\(255 255 255 \/ 78%\);[^}]*box-shadow:\s*0 0 0 0\.5px rgb\(0 0 0 \/ 42%\);/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__slot\[data-node-state="open"\]\[data-wallpaper-tone="light"\]::before,[\s\S]*?\.desktop-dock__slot\[data-node-state="minimized"\]\[data-wallpaper-tone="light"\]::before\s*{[^}]*--desktop-dock-indicator-color:\s*rgb\(0 0 0 \/ 46%\);[^}]*box-shadow:\s*0 0 0 0\.5px rgb\(255 255 255 \/ 58%\);/s
   );
 });
 
@@ -115,11 +165,19 @@ test("dock overflow keeps scroll controls viewport-bound", () => {
   );
   assert.match(
     css,
-    /\.desktop-dock__hover-panel\s*{[^}]*top:\s*var\(--desktop-dock-hover-panel-anchor-top\);[^}]*pointer-events:\s*auto;[^}]*var\(--desktop-dock-tooltip-gap, 32px\)/s
+    /\.desktop-dock\s*{[^}]*--desktop-dock-hover-panel-gap:\s*12px;/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__hover-panel\s*{[^}]*top:\s*var\(--desktop-dock-hover-panel-anchor-top\);[^}]*pointer-events:\s*auto;[^}]*var\(--desktop-dock-hover-panel-gap, 12px\)/s
   );
   assert.match(
     css,
     /\.desktop-dock__label-tooltip\s*{[^}]*top:\s*var\(--desktop-dock-label-tooltip-anchor-top\);[^}]*pointer-events:\s*none;[^}]*var\(--desktop-dock-tooltip-gap, 32px\)/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__label-tooltip\s*{[^}]*width:\s*max-content;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/s
   );
   assert.match(
     css,
@@ -173,6 +231,23 @@ test("dock overflow keeps scroll controls viewport-bound", () => {
     css,
     /\.desktop-dock\[data-dock-placement="left"\]\s+\.desktop-dock__minimized-preview\s*{[^}]*transform-origin:\s*left center;/s
   );
+  assert.match(
+    css,
+    /\.desktop-dock__minimized-preview--component\s*{[^}]*padding:\s*0;[^}]*background:\s*var\(--background-panel\);/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__minimized-preview--component > \*\s*{[^}]*width:\s*100%;[^}]*height:\s*100%;/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__minimized-preview-freeze-source\s*{[^}]*visibility:\s*hidden;[^}]*pointer-events:\s*none;/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__minimized-preview-frozen-content\s*{[^}]*display:\s*block;[^}]*overflow:\s*hidden;/s
+  );
+  assert.doesNotMatch(css, /\.workbench-genie-preview-capture__fallback/);
   assert.match(css, /\.desktop-dock__slot\s*{[^}]*flex:\s*0 0 auto;/s);
   assert.match(
     css,
@@ -225,6 +300,14 @@ test("dock overflow keeps scroll controls viewport-bound", () => {
   assert.match(css, /@keyframes desktop-dock-bounce-translate/s);
   assert.match(
     css,
+    /@keyframes desktop-dock-bounce-translate\s*{[\s\S]*?45%\s*{[^}]*translate:\s*0 -14px;/s
+  );
+  assert.match(
+    css,
+    /@keyframes desktop-dock-bounce-translate-left\s*{[\s\S]*?45%\s*{[^}]*translate:\s*14px 0;/s
+  );
+  assert.match(
+    css,
     /\.desktop-dock__slot\[data-bouncing="true"\]\s+\.desktop-dock__icon-content,/s
   );
   assert.doesNotMatch(
@@ -245,7 +328,7 @@ test("dock overflow keeps scroll controls viewport-bound", () => {
   );
   assert.match(
     css,
-    /\.desktop-dock__slot--minimized\[data-presence="entering"\]\s*{[^}]*animation:\s*desktop-dock-minimized-slot-expand 720ms/s
+    /\.desktop-dock__slot--minimized\[data-presence="entering"\]\s*{[^}]*animation:\s*none;/s
   );
   assert.match(
     css,
@@ -261,11 +344,15 @@ test("dock overflow keeps scroll controls viewport-bound", () => {
   );
   assert.match(
     css,
-    /\.desktop-dock\[data-dock-placement="left"\]\s+\.desktop-dock__slot--minimized\[data-presence="entering"\]\s*{[^}]*animation-name:\s*desktop-dock-minimized-slot-expand-left;/s
+    /\.desktop-dock\[data-dock-placement="left"\]\s+\.desktop-dock__slot--minimized\[data-presence="entering"\]\s*{[^}]*animation:\s*none;/s
   );
   assert.match(
     css,
-    /@keyframes desktop-dock-minimized-slot-expand\s*{[\s\S]*?width:\s*0;[\s\S]*?margin-inline:\s*calc\(var\(--desktop-dock-gap\) \/ -2\);[\s\S]*?width:\s*var\(--desktop-dock-size\);/
+    /\.desktop-dock__slot--minimized\[data-presence="entering"\]\s+\.desktop-dock__minimized-preview,[\s\S]*?\.desktop-dock__slot--minimized\[data-presence="entering"\]\s+\.desktop-dock__minimized-stack-icon\s*{[^}]*animation:\s*desktop-dock-minimized-icon-appear 640ms/s
+  );
+  assert.match(
+    css,
+    /\.desktop-dock__slot--minimized\[data-pending-minimize="true"\]\[data-presence="entering"\]\s+\.desktop-dock__minimized-preview,[\s\S]*?\.desktop-dock__slot--minimized\[data-pending-minimize="true"\]\[data-presence="entering"\]\s+\.desktop-dock__minimized-stack-icon\s*{[^}]*animation:\s*none;/s
   );
   assert.match(
     css,

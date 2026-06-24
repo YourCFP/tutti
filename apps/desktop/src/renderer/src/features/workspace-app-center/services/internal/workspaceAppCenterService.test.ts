@@ -107,6 +107,54 @@ test("WorkspaceAppCenterService tracks app install and forwards app open status"
   ]);
 });
 
+test("WorkspaceAppCenterService refreshes failed runtime state after launch is rejected", async () => {
+  let listCalls = 0;
+  const service = new WorkspaceAppCenterService({
+    eventStreamClient: createEventStreamClient(),
+    gateway: createGateway({
+      listWorkspaceApps: async () => {
+        listCalls += 1;
+        const failed = listCalls > 1;
+        return createSnapshot({
+          apps: [
+            createApp({
+              appId: "app-1",
+              failureReason: failed ? "process_exit" : null,
+              installed: true,
+              lastError: failed ? "exit status 1" : null,
+              runtimeStatus: failed ? "failed" : "idle",
+              source: "local-dev",
+              stateRevision: failed ? 2 : 1
+            })
+          ]
+        });
+      },
+      launchWorkspaceApp: async () => {
+        throw {
+          error: {
+            code: "invalid_request",
+            developerMessage:
+              "invalid workspace app runtime state: failed workspace apps must be retried before launch",
+            reason: "malformed_request"
+          }
+        };
+      }
+    }),
+    hostFilesApi: createHostFilesApi(),
+    hostWorkspaceApi: createHostWorkspaceApi()
+  });
+
+  await service.refresh("workspace-1");
+  await service.openApp({ appId: "app-1", workspaceId: "workspace-1" });
+
+  assert.equal(listCalls, 2);
+  assert.equal(service.store.apps[0]?.runtimeStatus, "failed");
+  assert.equal(
+    service.store.error,
+    "This app failed to start. Click Retry before opening it."
+  );
+});
+
 test("WorkspaceAppCenterService tracks app install when the success snapshot omits the app", async () => {
   const reporterCalls: ReporterEventInput[][] = [];
   let listCalls = 0;
@@ -722,6 +770,223 @@ test("WorkspaceAppCenterService does not open package folders for builtin apps",
   assert.deepEqual(openedFolders, []);
 });
 
+test("WorkspaceAppCenterService opens local-dev package folders from localPackageDir", async () => {
+  const openedFolders: OpenWorkspaceAppFolderInput[] = [];
+  const revealedPaths: string[] = [];
+  const service = new WorkspaceAppCenterService({
+    eventStreamClient: createEventStreamClient(),
+    gateway: createGateway({
+      listWorkspaceApps: async () =>
+        createSnapshot({
+          apps: [
+            createApp({
+              appId: "local-dev",
+              installed: true,
+              localPackageDir: "/Users/example/project/.tutti/dev-app",
+              source: "local-dev",
+              version: "0.1.0"
+            })
+          ]
+        })
+    }),
+    hostFilesApi: createHostFilesApi({
+      revealInFolder: async (path) => {
+        revealedPaths.push(path);
+      }
+    }),
+    hostWorkspaceApi: createHostWorkspaceApi({
+      openWorkspaceAppFolder: async (input) => {
+        openedFolders.push(input);
+      }
+    })
+  });
+
+  await service.refresh("workspace-1");
+  await service.openAppPackageFolder({
+    appId: "local-dev",
+    workspaceId: "workspace-1"
+  });
+
+  assert.deepEqual(openedFolders, []);
+  assert.deepEqual(revealedPaths, ["/Users/example/project/.tutti/dev-app"]);
+});
+
+test("WorkspaceAppCenterService loads selected local app directory", async () => {
+  const calls: Array<{
+    sourceDir: string;
+    workspaceId: string;
+    restartRunning?: boolean;
+  }> = [];
+  const service = new WorkspaceAppCenterService({
+    eventStreamClient: createEventStreamClient(),
+    gateway: createGateway({
+      loadLocalWorkspaceApp: async (workspaceId, input) => {
+        calls.push({
+          sourceDir: input.sourceDir,
+          restartRunning: input.restartRunning,
+          workspaceId
+        });
+        return createSnapshot({
+          apps: [
+            createApp({
+              appId: "local-dev",
+              installed: true,
+              localPackageDir: "/Users/example/project/.tutti/dev-app",
+              source: "local-dev"
+            })
+          ]
+        });
+      }
+    }),
+    hostFilesApi: createHostFilesApi({
+      selectDirectory: async () => "/Users/example/project"
+    }),
+    hostWorkspaceApi: createHostWorkspaceApi()
+  });
+
+  await service.loadLocalApp({ workspaceId: "workspace-1" });
+
+  assert.deepEqual(calls, [
+    {
+      restartRunning: true,
+      sourceDir: "/Users/example/project",
+      workspaceId: "workspace-1"
+    }
+  ]);
+  assert.equal(service.store.apps[0]?.source, "local-dev");
+  assert.equal(
+    service.store.apps[0]?.localPackageDir,
+    "/Users/example/project/.tutti/dev-app"
+  );
+});
+
+test("WorkspaceAppCenterService returns a repair request for invalid local app directories", async () => {
+  const service = new WorkspaceAppCenterService({
+    eventStreamClient: createEventStreamClient(),
+    gateway: createGateway({
+      loadLocalWorkspaceApp: async () => {
+        throw {
+          error: {
+            code: "invalid_request",
+            reason: "malformed_request"
+          }
+        };
+      }
+    }),
+    hostFilesApi: createHostFilesApi({
+      selectDirectory: async () => "/Users/example/project"
+    }),
+    hostWorkspaceApi: createHostWorkspaceApi()
+  });
+
+  const request = await service.loadLocalApp({ workspaceId: "workspace-1" });
+
+  assert.deepEqual(request, {
+    projectDir: "/Users/example/project",
+    sourceDir: "/Users/example/project"
+  });
+  assert.equal(service.store.error, null);
+});
+
+test("WorkspaceAppCenterService resolves local dev app folders back to the project root for repairs", async () => {
+  const service = new WorkspaceAppCenterService({
+    eventStreamClient: createEventStreamClient(),
+    gateway: createGateway({
+      loadLocalWorkspaceApp: async () => {
+        throw {
+          error: {
+            code: "invalid_request",
+            reason: "malformed_request"
+          }
+        };
+      }
+    }),
+    hostFilesApi: createHostFilesApi({
+      selectDirectory: async () => "/Users/example/project/.tutti/dev-app"
+    }),
+    hostWorkspaceApi: createHostWorkspaceApi()
+  });
+
+  const request = await service.loadLocalApp({ workspaceId: "workspace-1" });
+
+  assert.deepEqual(request, {
+    projectDir: "/Users/example/project",
+    sourceDir: "/Users/example/project/.tutti/dev-app"
+  });
+});
+
+test("WorkspaceAppCenterService keeps non-local load failures on the existing error path", async () => {
+  const service = new WorkspaceAppCenterService({
+    eventStreamClient: createEventStreamClient(),
+    gateway: createGateway({
+      loadLocalWorkspaceApp: async () => {
+        throw {
+          error: {
+            code: "service_unavailable",
+            reason: "daemon_unavailable"
+          }
+        };
+      }
+    }),
+    hostFilesApi: createHostFilesApi({
+      selectDirectory: async () => "/Users/example/project"
+    }),
+    hostWorkspaceApi: createHostWorkspaceApi()
+  });
+
+  const request = await service.loadLocalApp({ workspaceId: "workspace-1" });
+
+  assert.equal(request, null);
+  assert.equal(typeof service.store.error, "string");
+});
+
+test("WorkspaceAppCenterService reloads local app packages", async () => {
+  const calls: Array<{
+    appId: string;
+    restartRunning?: boolean;
+    workspaceId: string;
+  }> = [];
+  const service = new WorkspaceAppCenterService({
+    eventStreamClient: createEventStreamClient(),
+    gateway: createGateway({
+      reloadLocalWorkspaceApp: async (workspaceId, appId, input) => {
+        calls.push({
+          appId,
+          restartRunning: input?.restartRunning,
+          workspaceId
+        });
+        return createSnapshot({
+          apps: [
+            createApp({
+              appId,
+              installed: true,
+              localPackageDir: "/Users/example/project/.tutti/dev-app",
+              source: "local-dev",
+              stateRevision: 2
+            })
+          ]
+        });
+      }
+    }),
+    hostFilesApi: createHostFilesApi(),
+    hostWorkspaceApi: createHostWorkspaceApi()
+  });
+
+  await service.reloadLocalApp({
+    appId: "local-dev",
+    workspaceId: "workspace-1"
+  });
+
+  assert.deepEqual(calls, [
+    {
+      appId: "local-dev",
+      restartRunning: true,
+      workspaceId: "workspace-1"
+    }
+  ]);
+  assert.equal(service.store.apps[0]?.stateRevision, 2);
+});
+
 test("WorkspaceAppCenterService consumes operation errors once", async () => {
   const service = new WorkspaceAppCenterService({
     eventStreamClient: createEventStreamClient(),
@@ -1186,6 +1451,9 @@ function createGateway(
     async installWorkspaceApp() {
       return createSnapshot();
     },
+    async loadLocalWorkspaceApp() {
+      return createSnapshot();
+    },
     async launchWorkspaceApp() {
       return createSnapshot();
     },
@@ -1206,6 +1474,9 @@ function createGateway(
     },
     async replaceWorkspaceAppIcon() {
       return createApp();
+    },
+    async reloadLocalWorkspaceApp() {
+      return createSnapshot();
     },
     async retryWorkspaceApp() {
       return createSnapshot();
@@ -1233,6 +1504,7 @@ function createHostFilesApi(
     revealInFolder: async () => {},
     selectAppArchive: async () => null,
     selectAppArchiveExportPath: async () => null,
+    selectDirectory: async () => null,
     selectAppIconImage: async () => null,
     ...overrides
   };

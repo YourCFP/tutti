@@ -7,15 +7,16 @@ const source = readFileSync(
   "utf8"
 );
 
-test("preview hierarchy exposes the complete path through a UI System tooltip", () => {
-  assert.match(source, /Tooltip,\s*TooltipContent,\s*TooltipTrigger,/s);
+test("preview path exposes the complete path on truncated text", () => {
+  assert.match(source, /function ReferencePathText/);
+  assert.match(source, /const pathText = getReferenceNodePathText\(node\);/);
+  assert.match(source, /title=\{pathText\}/);
   assert.match(
     source,
-    /<TooltipTrigger asChild>\s*<div[\s\S]*className="flex flex-wrap items-center gap-y-1 text-\[12px\] leading-5"[\s\S]*<\/div>\s*<\/TooltipTrigger>/
+    /className="flex min-w-0 items-center text-\[12px\] leading-5 text-\[var\(--text-tertiary\)\]"/
   );
-  assert.match(source, /<TooltipContent[\s\S]*>\s*{hierarchyTitle}/);
-  assert.match(source, /backgroundColor:\s*"var\(--background-fronted\)"/);
-  assert.match(source, /border:\s*"1px solid var\(--border-1\)"/);
+  assert.match(source, /pathText\.slice\(0, lastSlashIndex \+ 1\)/);
+  assert.match(source, /pathText\.slice\(lastSlashIndex \+ 1\)/);
 });
 
 test("sidebar groups collapse after five items and keep load more for remote pages", () => {
@@ -82,5 +83,35 @@ test("truncated picker labels expose full text through UI System tooltips", () =
   assert.match(
     source,
     /<FullTextTooltip content=\{node\.displayName\}>[\s\S]*data-autofit-label[\s\S]*\{node\.displayName\}[\s\S]*<\/FullTextTooltip>/
+  );
+});
+
+test("reference source picker search input preserves IME composition locally", () => {
+  assert.match(
+    source,
+    /import \{ useComposedInputValue \} from "@tutti-os\/ui-react-hooks";/
+  );
+  assert.match(
+    source,
+    /const searchInput = useComposedInputValue\(\{\s*onCommit: view\.setSearchQuery,\s*value: view\.searchQuery\s*\}\);/
+  );
+  assert.match(source, /value=\{searchInput\.value\}/);
+  assert.match(source, /onBlur=\{searchInput\.onBlur\}/);
+  assert.match(source, /onChange=\{searchInput\.onChange\}/);
+  assert.match(source, /onCompositionEnd=\{searchInput\.onCompositionEnd\}/);
+  assert.match(
+    source,
+    /onCompositionStart=\{searchInput\.onCompositionStart\}/
+  );
+});
+
+test("tree row click single-selects while plus button toggles multi-selection", () => {
+  assert.match(
+    source,
+    /onClick=\{\(\) => \{\s*view\.setFocusedNode\(node\);\s*view\.toggleSingleSelectionAndExpand\(node\);\s*\}\}/
+  );
+  assert.match(
+    source,
+    /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);\s*view\.setFocusedNode\(node\);\s*view\.toggleSelection\(node\);\s*\}\}/
   );
 });

@@ -28,7 +28,10 @@ import { useDesktopPreferencesService } from "@renderer/features/desktop-prefere
 import { useWorkspaceFileManagerService } from "@renderer/features/workspace-file-manager/ui/useWorkspaceFileManagerService";
 import { useTranslation } from "@renderer/i18n";
 import { createWorkspaceWorkbenchDesktopI18nRuntime } from "@shared/i18n";
-import type { DesktopDockIconStyle } from "@shared/preferences";
+import type {
+  DesktopDockIconStyle,
+  DesktopMinimizeAnimation
+} from "@shared/preferences";
 import type { DesktopThemeAppearance } from "@shared/theme";
 import { createWorkspaceFilePreviewLaunchRequest } from "../services/workspaceFilePreviewLaunch";
 import { requestWorkspaceFilesLaunch } from "../services/workspaceFilesLaunchCoordinator";
@@ -43,7 +46,10 @@ import {
   type WorkspaceWorkbenchShellRuntimeController
 } from "../services/workspaceWorkbenchShellRuntimeController";
 import type { WorkspaceWorkbenchCapabilitySettingsTarget } from "../services/workspaceWorkbenchHostService.interface";
-import type { WorkspaceMissionControlTrigger } from "../services/workspaceMissionControlController.ts";
+import type {
+  WorkspaceMissionControlOpenRequest,
+  WorkspaceMissionControlTrigger
+} from "../services/workspaceMissionControlController.ts";
 import { renderWorkspaceFilesNodeBody } from "./WorkspaceFilesNodeBody";
 import { useWorkspaceSettingsService } from "./useWorkspaceSettingsService";
 import { useWorkspaceWorkbenchHostService } from "./useWorkspaceWorkbenchHostService";
@@ -58,6 +64,7 @@ export interface WorkspaceWorkbenchShellRuntime {
   };
   dockIconStyle: DesktopDockIconStyle;
   dockPlacement: WorkbenchDockPlacement;
+  minimizeAnimation: DesktopMinimizeAnimation;
   hostInput: ReturnType<
     WorkspaceWorkbenchShellRuntimeController["getSnapshot"]
   >["hostInput"];
@@ -66,9 +73,12 @@ export interface WorkspaceWorkbenchShellRuntime {
     close: () => void;
     isOpen: boolean;
     mode: WorkbenchMissionControlMode | null;
+    nodeIds: readonly string[] | null;
     open: (
       mode: WorkbenchMissionControlMode,
-      trigger?: WorkspaceMissionControlTrigger
+      request?:
+        | WorkspaceMissionControlOpenRequest
+        | WorkspaceMissionControlTrigger
     ) => void;
     visibleWindowCount: number;
   };
@@ -317,8 +327,19 @@ export function useWorkspaceWorkbenchShellRuntime({
       return;
     }
 
-    return workbenchHostService.onWindowCloseRequest(() => {
-      void shellRuntimeController.requestWindowClose();
+    return workbenchHostService.onWindowCloseRequest((payload) => {
+      void shellRuntimeController
+        .requestWindowClose({
+          reason: payload.reason
+        })
+        .then((outcome) => {
+          if (payload.requestId) {
+            workbenchHostService.resolveWindowCloseRequest({
+              outcome,
+              requestId: payload.requestId
+            });
+          }
+        });
     });
   }, [enableWindowCloseGuard, shellRuntimeController, workbenchHostService]);
 
@@ -391,9 +412,11 @@ export function useWorkspaceWorkbenchShellRuntime({
       close: shellRuntimeController.missionControl.close,
       isOpen: shellRuntimeSnapshot.missionControl.isOpen,
       mode: shellRuntimeSnapshot.missionControl.mode,
+      nodeIds: shellRuntimeSnapshot.missionControl.nodeIds,
       open: shellRuntimeController.missionControl.open,
       visibleWindowCount: shellRuntimeSnapshot.missionControl.visibleWindowCount
     },
+    minimizeAnimation: desktopPreferencesState.minimizeAnimation,
     onMissionControlAdapterReady:
       shellRuntimeController.missionControl.setAdapter,
     onWorkbenchHostHandleReady: handleWorkbenchHostReady,

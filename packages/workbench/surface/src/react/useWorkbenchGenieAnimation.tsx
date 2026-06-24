@@ -6,32 +6,41 @@ import {
   type ReactNode
 } from "react";
 import { createPortal, flushSync } from "react-dom";
-import type { WorkbenchController } from "../store/types.ts";
+import type {
+  WorkbenchController,
+  WorkbenchDebugDiagnostics
+} from "../store/types.ts";
 import type { WorkbenchNode } from "../core/types.ts";
+import type { WorkbenchMinimizeAnimation } from "./types.ts";
 import type {
   WorkbenchDockPreviewCache,
   WorkbenchDockPreviewCacheKeyResolver
 } from "./dockPreviewCache.ts";
 import {
   centerPointFromRect,
-  copyGenieComputedStyleTree,
+  cloneMeaningfulGenieElement,
   easeInQuadratic,
   isUsableGenieRect,
   renderGenieScanlines,
   viewportRectFromElement,
   type WorkbenchGenieDirection,
+  type WorkbenchGenieMeaningfulImageClone,
   type WorkbenchGenieViewportRect
 } from "./genieAnimation.ts";
 
 const genieDurationMs = 400;
+const scaleMinimizeDurationMs = 220;
 const genieMaxDevicePixelRatio = 2;
 const genieSnapshotScale = 1;
+const renderedGeniePreviewHeaderOffsetPx = 40;
 const minimizedDockSlotEnterAnimationMs = 720;
+const dockAnchorResolveMaxAnimationFrames = 3;
 const dockPreviewMaxWidth = 260;
 const dockPreviewMaxHeight = 170;
 const dockPreviewImageCacheMaxEntries = 96;
 const inlineImageResourceCacheMaxEntries = 160;
 const dockAnchorFallbackSizePx = 43.2;
+const genieInlineImageMaxDevicePixelRatio = 2;
 const dockPreviewImageByNodeID = new Map<string, string>();
 const inlineImageResourceByUrl = new Map<string, Promise<string | null>>();
 
@@ -42,8 +51,16 @@ interface CapturedGenieTexture {
 
 interface PreparedGenieTextureCapture {
   clone: HTMLElement;
-  imageUrls: Array<string | null>;
+  images: WorkbenchGenieMeaningfulImageClone[];
   rect: WorkbenchGenieViewportRect;
+}
+
+interface PendingRenderedGeniePreviewCapture {
+  id: number;
+  nodeID: string;
+  preview: ReactNode;
+  rect: WorkbenchGenieViewportRect;
+  usedFallbackPreview: boolean;
 }
 
 function resolveWorkbenchCaptureElement(
@@ -71,15 +88,61 @@ function isFocusedWorkbenchNode<TData>(
   return controller.getSnapshot().nodeStack.at(-1) === nodeID;
 }
 
-export interface WorkbenchGenieController {
+function isEmptyGeniePreview(preview: ReactNode): boolean {
+  return preview === null || preview === undefined || preview === false;
+}
+
+function logWorkbenchGenieDiagnostic(
+  debugDiagnostics: WorkbenchDebugDiagnostics | undefined,
+  event: string,
+  details: Record<string, unknown>,
+  level: "debug" | "info" | "warn" = "info"
+): void {
+  if (!debugDiagnostics?.isEnabled() || !debugDiagnostics.log) {
+    return;
+  }
+  void Promise.resolve(
+    debugDiagnostics.log({
+      details,
+      event,
+      level,
+      source: "workbench-genie"
+    })
+  ).catch(() => undefined);
+}
+
+function describeGenieNode<TData>(
+  node: WorkbenchNode<TData> | null | undefined
+): Record<string, unknown> {
+  if (!node) {
+    return {};
+  }
+  const data =
+    node.data && typeof node.data === "object"
+      ? (node.data as Record<string, unknown>)
+      : {};
+  return {
+    displayMode: node.displayMode,
+    instanceId: typeof data.instanceId === "string" ? data.instanceId : null,
+    isMinimized: node.isMinimized,
+    minimizedAtUnixMs: node.minimizedAtUnixMs,
+    nodeId: node.id,
+    title: node.title,
+    typeId: typeof data.typeId === "string" ? data.typeId : null
+  };
+}
+
+export interface WorkbenchGenieController<TData = unknown> {
   genieLayer: ReactNode;
   isNodeGenieHidden: (nodeID: string) => boolean;
+  isPendingMinimizedDockNode: (nodeID: string) => boolean;
   launchNodeFromAnchor: (
     anchorKey: string,
     nodeID: string,
     launch: () => Promise<string | null | void> | string | null | void
   ) => void;
   minimizeNodeToAnchor: (nodeID: string, minimize?: () => void) => void;
+  pendingMinimizedNode: WorkbenchNode<TData> | null;
   registerDockAnchor: (anchorKey: string, element: HTMLElement | null) => void;
   shouldAnimateMinimizedDockEnter: (nodeID: string) => boolean;
 }
@@ -87,6 +150,11 @@ export interface WorkbenchGenieController {
 export type WorkbenchNodePreviewImageCapture<TData = unknown> = (
   node: WorkbenchNode<TData>
 ) => Promise<string | null> | string | null;
+
+export type WorkbenchNodeGeniePreviewRenderer<TData = unknown> = (
+  node: WorkbenchNode<TData>,
+  input: { previewViewport: { height: number; width: number } }
+) => ReactNode;
 
 function shouldReduceMotion(): boolean {
   return (
@@ -120,10 +188,6 @@ function blobToDataUrl(blob: Blob): Promise<string> {
     });
     reader.readAsDataURL(blob);
   });
-}
-
-function resolveImageResourceUrl(image: HTMLImageElement): string | null {
-  return image.currentSrc || image.src || image.getAttribute("src") || null;
 }
 
 async function fetchInlineImageResource(
@@ -167,15 +231,15 @@ function readInlineImageResource(imageUrl: string): Promise<string | null> {
 
 async function inlineCloneImageResources({
   cloneRoot,
-  imageUrls
+  images
 }: {
   cloneRoot: HTMLElement;
-  imageUrls: Array<string | null>;
+  images: WorkbenchGenieMeaningfulImageClone[];
 }): Promise<void> {
   const cloneImages = Array.from(cloneRoot.querySelectorAll("img"));
 
   await Promise.all(
-    imageUrls.map(async (imageUrl, index) => {
+    images.map(async (imageInfo, index) => {
       const cloneImage = cloneImages[index];
       if (!cloneImage) {
         return;
@@ -183,10 +247,21 @@ async function inlineCloneImageResources({
 
       cloneImage.removeAttribute("srcset");
       cloneImage.removeAttribute("sizes");
+      const imageUrl = imageInfo.url;
       if (!imageUrl) {
         return;
       }
-      cloneImage.src = (await readInlineImageResource(imageUrl)) ?? imageUrl;
+      const inlineImageUrl =
+        (await readInlineImageResource(imageUrl)) ?? imageUrl;
+      const resizedImageUrl = await resizeInlineImageResourceForGenieTexture(
+        inlineImageUrl,
+        imageInfo
+      );
+      if (resizedImageUrl && resizedImageUrl !== inlineImageUrl) {
+        cloneImage.src = resizedImageUrl;
+        return;
+      }
+      cloneImage.src = inlineImageUrl;
     })
   );
 }
@@ -198,6 +273,64 @@ async function loadImageFromSvg(svg: string): Promise<HTMLImageElement> {
   return image;
 }
 
+function resolveGenieInlineImageTargetSize({
+  displayHeight,
+  displayWidth
+}: WorkbenchGenieMeaningfulImageClone): {
+  height: number;
+  width: number;
+} | null {
+  if (displayWidth <= 0 || displayHeight <= 0) {
+    return null;
+  }
+  const scale = Math.min(
+    window.devicePixelRatio || 1,
+    genieInlineImageMaxDevicePixelRatio
+  );
+  return {
+    height: Math.max(1, Math.ceil(displayHeight * scale)),
+    width: Math.max(1, Math.ceil(displayWidth * scale))
+  };
+}
+
+async function resizeInlineImageResourceForGenieTexture(
+  imageUrl: string,
+  imageInfo: WorkbenchGenieMeaningfulImageClone
+): Promise<string | null> {
+  const targetSize = resolveGenieInlineImageTargetSize(imageInfo);
+  if (!targetSize) {
+    return null;
+  }
+
+  const image = new Image();
+  image.src = imageUrl;
+  try {
+    await image.decode();
+  } catch {
+    return null;
+  }
+  if (
+    image.naturalWidth <= targetSize.width &&
+    image.naturalHeight <= targetSize.height
+  ) {
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetSize.width;
+  canvas.height = targetSize.height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return null;
+  }
+  try {
+    context.drawImage(image, 0, 0, targetSize.width, targetSize.height);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
 function prepareElementTextureCapture(
   element: HTMLElement
 ): PreparedGenieTextureCapture | null {
@@ -206,11 +339,11 @@ function prepareElementTextureCapture(
     return null;
   }
 
-  const imageUrls = Array.from(element.querySelectorAll("img")).map(
-    resolveImageResourceUrl
-  );
-  const clone = element.cloneNode(true) as HTMLElement;
-  copyGenieComputedStyleTree(element, clone);
+  const clonedElement = cloneMeaningfulGenieElement(element, windowRect);
+  if (!clonedElement) {
+    return null;
+  }
+  const { clone, images } = clonedElement;
   clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
   clone.style.position = "relative";
   clone.style.left = "0";
@@ -221,17 +354,51 @@ function prepareElementTextureCapture(
   clone.style.opacity = "1";
   clone.style.visibility = "visible";
   clone.style.pointerEvents = "none";
-  return { clone, imageUrls, rect: windowRect };
+  return {
+    clone,
+    images,
+    rect: windowRect
+  };
+}
+
+function prepareRenderedGeniePreviewCloneForTexture(
+  clone: HTMLElement,
+  textureRect: WorkbenchGenieViewportRect
+): void {
+  clone.style.width = `${textureRect.width}px`;
+  clone.style.height = `${textureRect.height}px`;
+
+  const previewElement = clone.querySelector<HTMLElement>(
+    ".workbench-genie-preview-capture__preview"
+  );
+  if (!previewElement) {
+    return;
+  }
+
+  previewElement.style.display = "block";
+  previewElement.style.width = `${textureRect.width}px`;
+  previewElement.style.height = `${textureRect.height}px`;
+  previewElement.style.padding = "0";
+  previewElement.style.border = "0";
+  previewElement.style.borderRadius = "0";
+  previewElement.style.background = "var(--background-panel)";
+  previewElement.style.boxShadow = "none";
+  previewElement.style.transform = `translateY(${renderedGeniePreviewHeaderOffsetPx}px)`;
 }
 
 async function renderPreparedElementTexture({
   clone,
-  imageUrls,
+  images,
   rect
 }: PreparedGenieTextureCapture): Promise<CapturedGenieTexture | null> {
-  await inlineCloneImageResources({ cloneRoot: clone, imageUrls });
+  await inlineCloneImageResources({
+    cloneRoot: clone,
+    images
+  });
 
-  const image = await loadImageFromSvg(createGenieSvgTexture(clone, rect));
+  const svgTexture = createGenieSvgTexture(clone, rect);
+  const image = await loadImageFromSvg(svgTexture);
+
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(rect.width * genieSnapshotScale));
   canvas.height = Math.max(1, Math.round(rect.height * genieSnapshotScale));
@@ -239,6 +406,8 @@ async function renderPreparedElementTexture({
   if (!context) {
     return null;
   }
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   return { canvas, rect };
 }
@@ -269,6 +438,34 @@ function createDockPreviewDataUrl(canvas: HTMLCanvasElement): string | null {
   }
   context.drawImage(canvas, 0, 0, output.width, output.height);
   return output.toDataURL("image/png");
+}
+
+async function renderPreviewImageTexture({
+  previewImageUrl,
+  rect
+}: {
+  previewImageUrl: string;
+  rect: WorkbenchGenieViewportRect;
+}): Promise<CapturedGenieTexture | null> {
+  if (!isUsableGenieRect(rect)) {
+    return null;
+  }
+
+  const image = new Image();
+  image.src = previewImageUrl;
+  await image.decode();
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(rect.width * genieSnapshotScale));
+  canvas.height = Math.max(1, Math.round(rect.height * genieSnapshotScale));
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return null;
+  }
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return { canvas, rect };
 }
 
 function readDockAnchorFallbackSize(element: HTMLElement): number {
@@ -362,7 +559,7 @@ export async function captureWorkbenchNodePreviewImage(
   return previewImageUrl;
 }
 
-async function captureWorkbenchNodePreviewImageForNode<TData>(
+async function captureProvidedWorkbenchNodePreviewImageForNode<TData>(
   node: WorkbenchNode<TData>,
   input: {
     captureNodePreviewImage?: WorkbenchNodePreviewImageCapture<TData>;
@@ -373,16 +570,12 @@ async function captureWorkbenchNodePreviewImageForNode<TData>(
   const previewImageUrl = await Promise.resolve(
     input.captureNodePreviewImage?.(node) ?? null
   ).catch(() => null);
-  if (previewImageUrl) {
-    writeCachedWorkbenchNodePreviewImage(node.id, previewImageUrl);
-    persistWorkbenchNodePreviewImage(node, previewImageUrl, input);
-    return previewImageUrl;
+  if (!previewImageUrl) {
+    return null;
   }
-  const capturedPreviewImageUrl = await captureWorkbenchNodePreviewImage(
-    node.id
-  );
-  persistWorkbenchNodePreviewImage(node, capturedPreviewImageUrl, input);
-  return capturedPreviewImageUrl;
+  writeCachedWorkbenchNodePreviewImage(node.id, previewImageUrl);
+  persistWorkbenchNodePreviewImage(node, previewImageUrl, input);
+  return previewImageUrl;
 }
 
 function persistWorkbenchNodePreviewImage<TData>(
@@ -436,16 +629,24 @@ function createGenieSvgTexture(
 export function useWorkbenchGenieAnimation<TData>({
   captureNodePreviewImage,
   controller,
+  debugDiagnostics,
   dockPreviewCache,
+  minimizeAnimation = "genie",
+  renderNodeGeniePreview,
   resolveDockAnchorKey,
-  resolveDockPreviewCacheKey
+  resolveDockPreviewCacheKey,
+  shouldCaptureNodePreviewImage
 }: {
   captureNodePreviewImage?: WorkbenchNodePreviewImageCapture<TData>;
   controller: WorkbenchController<TData>;
+  debugDiagnostics?: WorkbenchDebugDiagnostics;
   dockPreviewCache?: WorkbenchDockPreviewCache;
+  minimizeAnimation?: WorkbenchMinimizeAnimation;
+  renderNodeGeniePreview?: WorkbenchNodeGeniePreviewRenderer<TData>;
   resolveDockAnchorKey?: (node: WorkbenchNode<TData>) => string;
   resolveDockPreviewCacheKey?: WorkbenchDockPreviewCacheKeyResolver<TData>;
-}): WorkbenchGenieController {
+  shouldCaptureNodePreviewImage?: (node: WorkbenchNode<TData>) => boolean;
+}): WorkbenchGenieController<TData> {
   const dockAnchorElementsRef = useRef(new Map<string, HTMLElement>());
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -455,10 +656,21 @@ export function useWorkbenchGenieAnimation<TData>({
   const minimizedDockEnterAnimationTimersRef = useRef(
     new Map<string, ReturnType<typeof setTimeout>>()
   );
+  const minimizedGenieTextureByNodeIDRef = useRef(
+    new Map<string, CapturedGenieTexture>()
+  );
+  const renderedPreviewCaptureIDRef = useRef(0);
+  const renderedPreviewCaptureElementRef = useRef<HTMLDivElement | null>(null);
+  const pendingRenderedPreviewCaptureRef =
+    useRef<PendingRenderedGeniePreviewCapture | null>(null);
   const [isCanvasActive, setIsCanvasActive] = useState(false);
   const [genieHiddenNodeIDs, setGenieHiddenNodeIDs] = useState(
     () => new Set<string>()
   );
+  const [pendingMinimizedNode, setPendingMinimizedNode] =
+    useState<WorkbenchNode<TData> | null>(null);
+  const [pendingRenderedPreviewCapture, setPendingRenderedPreviewCapture] =
+    useState<PendingRenderedGeniePreviewCapture | null>(null);
 
   const registerDockAnchor = useCallback(
     (anchorKey: string, element: HTMLElement | null) => {
@@ -473,8 +685,31 @@ export function useWorkbenchGenieAnimation<TData>({
 
   const resolveDockAnchorRect = useCallback((anchorKey: string) => {
     const element = dockAnchorElementsRef.current.get(anchorKey) ?? null;
-    return element ? resolveDockAnchorViewportRect(element) : null;
+    if (!element) {
+      return null;
+    }
+    return resolveDockAnchorViewportRect(element);
   }, []);
+
+  const resolveDockAnchorRectAfterRender = useCallback(
+    async (anchorKey: string, isCurrent: () => boolean) => {
+      let dockRect = resolveDockAnchorRect(anchorKey);
+      for (
+        let frame = 0;
+        (!dockRect || !isUsableGenieRect(dockRect)) &&
+        frame < dockAnchorResolveMaxAnimationFrames;
+        frame += 1
+      ) {
+        await waitForNextAnimationFrame();
+        if (!isCurrent()) {
+          return null;
+        }
+        dockRect = resolveDockAnchorRect(anchorKey);
+      }
+      return dockRect;
+    },
+    [resolveDockAnchorRect]
+  );
 
   const resolveNodeElement = useCallback((nodeID: string) => {
     return (
@@ -528,6 +763,43 @@ export function useWorkbenchGenieAnimation<TData>({
     return minimizedDockEnterAnimationNodeIdsRef.current.has(nodeID);
   }, []);
 
+  const readMinimizedGenieTexture = useCallback((nodeID: string) => {
+    return minimizedGenieTextureByNodeIDRef.current.get(nodeID) ?? null;
+  }, []);
+
+  const writeMinimizedGenieTexture = useCallback(
+    (nodeID: string, texture: CapturedGenieTexture) => {
+      const cache = minimizedGenieTextureByNodeIDRef.current;
+      cache.delete(nodeID);
+      cache.set(nodeID, texture);
+    },
+    []
+  );
+
+  const clearMinimizedGenieTexture = useCallback((nodeID: string) => {
+    minimizedGenieTextureByNodeIDRef.current.delete(nodeID);
+  }, []);
+
+  const pruneMinimizedGenieTextures = useCallback(
+    (retainNodeID?: string) => {
+      const minimizedNodeIDs = new Set(
+        controller
+          .getSnapshot()
+          .nodes.filter((node) => node.isMinimized === true)
+          .map((node) => node.id)
+      );
+      if (retainNodeID) {
+        minimizedNodeIDs.add(retainNodeID);
+      }
+      for (const nodeID of minimizedGenieTextureByNodeIDRef.current.keys()) {
+        if (!minimizedNodeIDs.has(nodeID)) {
+          minimizedGenieTextureByNodeIDRef.current.delete(nodeID);
+        }
+      }
+    },
+    [controller]
+  );
+
   const hideNodeForGenie = useCallback((nodeID: string) => {
     setGenieHiddenNodeIDs((current) => {
       if (current.has(nodeID)) {
@@ -547,6 +819,100 @@ export function useWorkbenchGenieAnimation<TData>({
       return next;
     });
   }, []);
+
+  const clearPendingMinimizedNode = useCallback((nodeID: string) => {
+    setPendingMinimizedNode((current) =>
+      current?.id === nodeID ? null : current
+    );
+  }, []);
+
+  const clearRenderedPreviewCapture = useCallback((id: number) => {
+    if (pendingRenderedPreviewCaptureRef.current?.id !== id) {
+      return;
+    }
+    pendingRenderedPreviewCaptureRef.current = null;
+    renderedPreviewCaptureElementRef.current = null;
+    setPendingRenderedPreviewCapture(null);
+  }, []);
+
+  const requestRenderedGeniePreviewTexture = useCallback(
+    async ({
+      node,
+      textureRect
+    }: {
+      node: WorkbenchNode<TData>;
+      textureRect: WorkbenchGenieViewportRect;
+    }): Promise<CapturedGenieTexture | null> => {
+      if (!isUsableGenieRect(textureRect)) {
+        return null;
+      }
+
+      const previewViewport = {
+        height: textureRect.height,
+        width: textureRect.width
+      };
+      let preview: ReactNode = null;
+      try {
+        preview =
+          renderNodeGeniePreview?.(node, {
+            previewViewport
+          }) ?? null;
+      } catch {
+        preview = null;
+      }
+      if (isEmptyGeniePreview(preview)) {
+        return null;
+      }
+      const captureID = renderedPreviewCaptureIDRef.current + 1;
+      renderedPreviewCaptureIDRef.current = captureID;
+      const pendingCapture: PendingRenderedGeniePreviewCapture = {
+        id: captureID,
+        nodeID: node.id,
+        preview,
+        rect: textureRect,
+        usedFallbackPreview: false
+      };
+
+      pendingRenderedPreviewCaptureRef.current = pendingCapture;
+      flushSync(() => {
+        setPendingRenderedPreviewCapture(pendingCapture);
+      });
+
+      try {
+        await waitForNextAnimationFrame();
+        await waitForNextAnimationFrame();
+
+        if (pendingRenderedPreviewCaptureRef.current?.id !== captureID) {
+          return null;
+        }
+
+        const element = renderedPreviewCaptureElementRef.current;
+        if (!element) {
+          return null;
+        }
+
+        const preparedCapture = prepareElementTextureCapture(element);
+        if (!preparedCapture) {
+          return null;
+        }
+
+        prepareRenderedGeniePreviewCloneForTexture(
+          preparedCapture.clone,
+          textureRect
+        );
+        const texture = await renderPreparedElementTexture({
+          ...preparedCapture,
+          rect: textureRect
+        });
+        return texture;
+      } catch {
+        return null;
+      } finally {
+        clearRenderedPreviewCapture(captureID);
+      }
+    },
+    [clearRenderedPreviewCapture, renderNodeGeniePreview]
+  );
 
   const setupCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -676,6 +1042,116 @@ export function useWorkbenchGenieAnimation<TData>({
     [setupCanvas, stopAnimation]
   );
 
+  const runScaleWindowAnimation = useCallback(
+    ({
+      direction,
+      dockRect,
+      nodeElement,
+      onCancel,
+      onComplete,
+      skipStop
+    }: {
+      direction: WorkbenchGenieDirection;
+      dockRect: WorkbenchGenieViewportRect;
+      nodeElement: HTMLElement;
+      onCancel: () => void;
+      onComplete: () => void;
+      skipStop?: boolean;
+    }) => {
+      if (!skipStop) {
+        stopAnimation();
+      }
+      const windowRect = viewportRectFromElement(nodeElement);
+      if (!isUsableGenieRect(windowRect) || !isUsableGenieRect(dockRect)) {
+        onComplete();
+        return;
+      }
+
+      const generation = animationGenerationRef.current;
+      const fromCenter = centerPointFromRect(windowRect);
+      const toCenter = centerPointFromRect(dockRect);
+      const targetScale = Math.max(
+        0.04,
+        Math.min(
+          0.32,
+          dockRect.width / Math.max(1, windowRect.width),
+          dockRect.height / Math.max(1, windowRect.height)
+        )
+      );
+      const previousPointerEvents = nodeElement.style.pointerEvents;
+      const previousTransformOrigin = nodeElement.style.transformOrigin;
+      const previousVisibility = nodeElement.style.visibility;
+      const previousZIndex = nodeElement.style.zIndex;
+      nodeElement.style.pointerEvents = "none";
+      nodeElement.style.transformOrigin = "center center";
+      nodeElement.style.visibility = "visible";
+      nodeElement.style.zIndex = "var(--z-workbench-genie)";
+
+      const dockTransform = `translate3d(${toCenter.x - fromCenter.x}px, ${
+        toCenter.y - fromCenter.y
+      }px, 0) scale(${targetScale})`;
+      const windowTransform = "translate3d(0, 0, 0) scale(1)";
+      const keyframes =
+        direction === "open"
+          ? [
+              {
+                opacity: 0,
+                transform: dockTransform
+              },
+              {
+                opacity: 1,
+                transform: windowTransform
+              }
+            ]
+          : [
+              {
+                opacity: 1,
+                transform: windowTransform
+              },
+              {
+                opacity: 0,
+                transform: dockTransform
+              }
+            ];
+      const animation = nodeElement.animate(keyframes, {
+        duration: scaleMinimizeDurationMs,
+        easing: "cubic-bezier(0.4, 0, 0.2, 1)",
+        fill: "forwards"
+      });
+
+      const restoreElement = () => {
+        animation.cancel();
+        nodeElement.style.pointerEvents = previousPointerEvents;
+        nodeElement.style.transformOrigin = previousTransformOrigin;
+        nodeElement.style.visibility = previousVisibility;
+        nodeElement.style.zIndex = previousZIndex;
+      };
+
+      animationCleanupRef.current = () => {
+        restoreElement();
+        onCancel();
+      };
+      animation.finished
+        .then(() => {
+          if (generation !== animationGenerationRef.current) {
+            return;
+          }
+          animationCleanupRef.current = null;
+          restoreElement();
+          onComplete();
+        })
+        .catch(() => {
+          if (generation !== animationGenerationRef.current) {
+            return;
+          }
+          animationCleanupRef.current = null;
+          restoreElement();
+          onComplete();
+        });
+    },
+    [stopAnimation]
+  );
+
   useEffect(() => () => stopAnimation(false), [stopAnimation]);
 
   const startOpenOrRestoreAnimation = useCallback(
@@ -683,11 +1159,16 @@ export function useWorkbenchGenieAnimation<TData>({
       nodeID: string,
       anchorKey: string,
       generation: number,
-      dockRectFallback: WorkbenchGenieViewportRect | null
+      dockRectFallback: WorkbenchGenieViewportRect | null,
+      minimizedNode: WorkbenchNode<TData> | null
     ) => {
-      if (shouldReduceMotion()) {
+      const effectiveMinimizeAnimation = shouldReduceMotion()
+        ? "off"
+        : minimizeAnimation;
+      if (effectiveMinimizeAnimation === "off") {
         animationCleanupRef.current = null;
         showNodeForGenie(nodeID);
+        clearMinimizedGenieTexture(nodeID);
         return;
       }
 
@@ -701,29 +1182,87 @@ export function useWorkbenchGenieAnimation<TData>({
           ? resolvedDockRect
           : dockRectFallback;
       const nodeElement = resolveNodeElement(nodeID);
-      const captureTarget = nodeElement
-        ? resolveWorkbenchCaptureElement(nodeElement)
-        : null;
-      if (
-        !dockRect ||
-        !nodeElement ||
-        !captureTarget ||
-        !isUsableGenieRect(dockRect)
-      ) {
-        animationCleanupRef.current = null;
-        showNodeForGenie(nodeID);
+      if (effectiveMinimizeAnimation === "scale") {
+        if (!dockRect || !nodeElement || !isUsableGenieRect(dockRect)) {
+          animationCleanupRef.current = null;
+          showNodeForGenie(nodeID);
+          clearMinimizedGenieTexture(nodeID);
+          return;
+        }
+        flushSync(() => {
+          showNodeForGenie(nodeID);
+        });
+        runScaleWindowAnimation({
+          direction: "open",
+          dockRect,
+          nodeElement,
+          onCancel: () => {
+            flushSync(() => {
+              showNodeForGenie(nodeID);
+            });
+            clearMinimizedGenieTexture(nodeID);
+          },
+          onComplete: () => {
+            flushSync(() => {
+              showNodeForGenie(nodeID);
+            });
+            clearMinimizedGenieTexture(nodeID);
+          }
+        });
         return;
       }
 
-      const texture = await captureElementTexture(captureTarget).catch(
-        () => null
-      );
+      if (!dockRect || !isUsableGenieRect(dockRect)) {
+        animationCleanupRef.current = null;
+        showNodeForGenie(nodeID);
+        clearMinimizedGenieTexture(nodeID);
+        return;
+      }
+
+      const cachedTexture = readMinimizedGenieTexture(nodeID);
+      const restoredWindowRect = nodeElement
+        ? viewportRectFromElement(nodeElement)
+        : null;
+      const shouldRestoreFromRenderedPreview =
+        minimizedNode !== null &&
+        (shouldCaptureNodePreviewImage?.(minimizedNode) ?? true) === false;
+      const renderedPreviewTexture =
+        cachedTexture ||
+        !shouldRestoreFromRenderedPreview ||
+        !restoredWindowRect ||
+        !isUsableGenieRect(restoredWindowRect)
+          ? null
+          : await requestRenderedGeniePreviewTexture({
+              node: minimizedNode,
+              textureRect: restoredWindowRect
+            }).catch(() => null);
+      if (generation !== animationGenerationRef.current) {
+        return;
+      }
+      const captureTarget =
+        cachedTexture || renderedPreviewTexture || !nodeElement
+          ? null
+          : resolveWorkbenchCaptureElement(nodeElement);
+      if (!cachedTexture && !renderedPreviewTexture && !captureTarget) {
+        animationCleanupRef.current = null;
+        showNodeForGenie(nodeID);
+        clearMinimizedGenieTexture(nodeID);
+        return;
+      }
+
+      const texture =
+        cachedTexture ??
+        renderedPreviewTexture ??
+        (captureTarget
+          ? await captureElementTexture(captureTarget).catch(() => null)
+          : null);
       if (generation !== animationGenerationRef.current) {
         return;
       }
       if (!texture) {
         animationCleanupRef.current = null;
         showNodeForGenie(nodeID);
+        clearMinimizedGenieTexture(nodeID);
         return;
       }
 
@@ -734,12 +1273,14 @@ export function useWorkbenchGenieAnimation<TData>({
           flushSync(() => {
             showNodeForGenie(nodeID);
           });
+          clearMinimizedGenieTexture(nodeID);
           clearCanvas();
         },
         onComplete: () => {
           flushSync(() => {
             showNodeForGenie(nodeID);
           });
+          clearMinimizedGenieTexture(nodeID);
           clearCanvas();
         },
         skipStop: true,
@@ -748,9 +1289,15 @@ export function useWorkbenchGenieAnimation<TData>({
     },
     [
       clearCanvas,
+      clearMinimizedGenieTexture,
+      minimizeAnimation,
+      readMinimizedGenieTexture,
+      requestRenderedGeniePreviewTexture,
       resolveDockAnchorRect,
       resolveNodeElement,
       runGenieAnimation,
+      runScaleWindowAnimation,
+      shouldCaptureNodePreviewImage,
       showNodeForGenie
     ]
   );
@@ -774,30 +1321,60 @@ export function useWorkbenchGenieAnimation<TData>({
         return;
       }
 
+      const effectiveMinimizeAnimation = shouldReduceMotion()
+        ? "off"
+        : minimizeAnimation;
+      if (effectiveMinimizeAnimation === "off") {
+        stopAnimation();
+        flushSync(() => {
+          showNodeForGenie(nodeID);
+        });
+        void Promise.resolve(launch()).catch(() => {});
+        return;
+      }
+
       stopAnimation();
       const dockRectFallback = resolveDockAnchorRect(anchorKey);
       hideNodeForGenie(nodeID);
       animationCleanupRef.current = () => {
+        if (rafRef.current !== null) {
+          window.cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
         flushSync(() => {
           showNodeForGenie(nodeID);
         });
+        clearMinimizedGenieTexture(nodeID);
         clearCanvas();
       };
       const generation = animationGenerationRef.current;
-      flushSync(() => {
-        void launch();
+      rafRef.current = window.requestAnimationFrame(() => {
+        rafRef.current = null;
+        if (generation !== animationGenerationRef.current) {
+          return;
+        }
+        void Promise.resolve(launch())
+          .catch(() => null)
+          .then(() => {
+            if (generation !== animationGenerationRef.current) {
+              return;
+            }
+            void startOpenOrRestoreAnimation(
+              nodeID,
+              anchorKey,
+              generation,
+              dockRectFallback,
+              target
+            );
+          });
       });
-      void startOpenOrRestoreAnimation(
-        nodeID,
-        anchorKey,
-        generation,
-        dockRectFallback
-      );
     },
     [
       clearCanvas,
+      clearMinimizedGenieTexture,
       controller,
       hideNodeForGenie,
+      minimizeAnimation,
       resolveDockAnchorRect,
       showNodeForGenie,
       startOpenOrRestoreAnimation,
@@ -808,52 +1385,295 @@ export function useWorkbenchGenieAnimation<TData>({
   const minimizeNodeToAnchor = useCallback(
     (nodeID: string, minimize?: () => void) => {
       void (async () => {
+        pruneMinimizedGenieTextures();
         const target = controller
           .getSnapshot()
           .nodes.find((node) => node.id === nodeID);
         if (!target) {
+          logWorkbenchGenieDiagnostic(
+            debugDiagnostics,
+            "workbench.genie.minimize.skipped",
+            {
+              nodeId: nodeID,
+              reason: "target_missing"
+            },
+            "warn"
+          );
           return;
         }
+        clearMinimizedGenieTexture(nodeID);
         const runMinimize =
           minimize ?? (() => controller.commands.minimizeNode(nodeID));
-        if (shouldReduceMotion()) {
-          const wasFocusedForCapture = isFocusedWorkbenchNode(
-            controller,
-            nodeID
-          );
-          if (!wasFocusedForCapture) {
+        const effectiveMinimizeAnimation = shouldReduceMotion()
+          ? "off"
+          : minimizeAnimation;
+        const shouldCapturePreview =
+          shouldCaptureNodePreviewImage?.(target) ?? true;
+        if (effectiveMinimizeAnimation === "off") {
+          stopAnimation();
+          let frameID: number | null = null;
+          let timerID: ReturnType<typeof setTimeout> | null = null;
+          let minimizeCommitted = false;
+          const commitMinimize = () => {
+            if (minimizeCommitted) {
+              return;
+            }
+            minimizeCommitted = true;
+            if (frameID !== null) {
+              window.cancelAnimationFrame(frameID);
+              frameID = null;
+            }
+            if (timerID !== null) {
+              clearTimeout(timerID);
+              timerID = null;
+            }
+            animationCleanupRef.current = null;
+            flushSync(() => {
+              clearPendingMinimizedNode(nodeID);
+              showNodeForGenie(nodeID);
+              runMinimize();
+            });
+            scheduleReleaseMinimizedDockEnterAnimation(nodeID);
+          };
+          animationCleanupRef.current = () => {
+            releaseMinimizedDockEnterAnimation(nodeID);
+            commitMinimize();
+          };
+          registerMinimizedDockEnterAnimation(nodeID);
+          flushSync(() => {
+            hideNodeForGenie(nodeID);
+            setPendingMinimizedNode({
+              ...target,
+              isMinimized: true,
+              minimizedAtUnixMs: Date.now()
+            });
+          });
+          if (shouldCapturePreview) {
+            void captureProvidedWorkbenchNodePreviewImageForNode(target, {
+              captureNodePreviewImage,
+              dockPreviewCache,
+              resolveDockPreviewCacheKey
+            });
+          }
+          frameID = window.requestAnimationFrame(() => {
+            frameID = null;
+            timerID = setTimeout(commitMinimize, 0);
+          });
+          return;
+        }
+
+        if (effectiveMinimizeAnimation === "scale") {
+          stopAnimation();
+          const generation = animationGenerationRef.current;
+          const nodeElement = resolveNodeElement(nodeID);
+          if (!nodeElement) {
+            logWorkbenchGenieDiagnostic(
+              debugDiagnostics,
+              "workbench.genie.minimize.skipped",
+              {
+                ...describeGenieNode(target),
+                mode: "scale",
+                reason: "node_element_missing"
+              },
+              "warn"
+            );
+            runMinimize();
+            return;
+          }
+          const wasFocusedForCapture =
+            shouldCapturePreview && isFocusedWorkbenchNode(controller, nodeID);
+          if (shouldCapturePreview && !wasFocusedForCapture) {
             flushSync(() => {
               controller.commands.focusNode(nodeID);
             });
             await waitForNextAnimationFrame();
+            if (generation !== animationGenerationRef.current) {
+              return;
+            }
           }
-          await captureWorkbenchNodePreviewImageForNode(target, {
-            captureNodePreviewImage,
-            dockPreviewCache,
-            resolveDockPreviewCacheKey
+
+          if (shouldCapturePreview) {
+            void captureProvidedWorkbenchNodePreviewImageForNode(target, {
+              captureNodePreviewImage,
+              dockPreviewCache,
+              resolveDockPreviewCacheKey
+            });
+          }
+
+          let minimizeCommitted = false;
+          const commitMinimize = () => {
+            if (minimizeCommitted) {
+              return;
+            }
+            minimizeCommitted = true;
+            runMinimize();
+          };
+          const cleanupPendingMinimize = () => {
+            releaseMinimizedDockEnterAnimation(nodeID);
+            flushSync(() => {
+              clearPendingMinimizedNode(nodeID);
+              commitMinimize();
+            });
+          };
+          const pendingMinimizedNode: WorkbenchNode<TData> = {
+            ...target,
+            isMinimized: true,
+            minimizedAtUnixMs: Date.now()
+          };
+          registerMinimizedDockEnterAnimation(nodeID);
+
+          flushSync(() => {
+            setPendingMinimizedNode(pendingMinimizedNode);
           });
-          runMinimize();
+          animationCleanupRef.current = cleanupPendingMinimize;
+
+          await waitForNextAnimationFrame();
+          if (generation !== animationGenerationRef.current) {
+            return;
+          }
+
+          const anchorKey = resolveAnchorKeyForNode(pendingMinimizedNode);
+          const dockRect = await resolveDockAnchorRectAfterRender(
+            anchorKey,
+            () => generation === animationGenerationRef.current
+          );
+          if (generation !== animationGenerationRef.current) {
+            return;
+          }
+          if (
+            !nodeElement.isConnected ||
+            !dockRect ||
+            !isUsableGenieRect(dockRect)
+          ) {
+            logWorkbenchGenieDiagnostic(
+              debugDiagnostics,
+              "workbench.genie.minimize.skipped",
+              {
+                ...describeGenieNode(target),
+                anchorKey,
+                dockRect,
+                mode: "scale",
+                nodeElementConnected: nodeElement.isConnected,
+                registeredDockAnchorKeys: Array.from(
+                  dockAnchorElementsRef.current.keys()
+                ).filter((key) => key.startsWith("minimized:")),
+                reason: "dock_rect_unusable"
+              },
+              "warn"
+            );
+            cleanupPendingMinimize();
+            return;
+          }
+
+          runScaleWindowAnimation({
+            direction: "minimize",
+            dockRect,
+            nodeElement,
+            onCancel: () => {
+              cleanupPendingMinimize();
+            },
+            onComplete: () => {
+              animationCleanupRef.current = null;
+              flushSync(() => {
+                clearPendingMinimizedNode(nodeID);
+                commitMinimize();
+              });
+              scheduleReleaseMinimizedDockEnterAnimation(nodeID);
+            },
+            skipStop: true
+          });
           return;
         }
 
         stopAnimation();
         const generation = animationGenerationRef.current;
         const nodeElement = resolveNodeElement(nodeID);
-        const captureTarget = nodeElement
-          ? resolveWorkbenchCaptureElement(nodeElement)
-          : null;
-        if (!nodeElement || !captureTarget) {
+        if (!nodeElement) {
+          logWorkbenchGenieDiagnostic(
+            debugDiagnostics,
+            "workbench.genie.minimize.skipped",
+            {
+              ...describeGenieNode(target),
+              mode: "genie",
+              reason: "node_element_missing"
+            },
+            "warn"
+          );
           runMinimize();
           return;
+        }
+        const windowRect = viewportRectFromElement(nodeElement);
+        if (!isUsableGenieRect(windowRect)) {
+          logWorkbenchGenieDiagnostic(
+            debugDiagnostics,
+            "workbench.genie.minimize.skipped",
+            {
+              ...describeGenieNode(target),
+              mode: "genie",
+              reason: "window_rect_unusable",
+              windowRect
+            },
+            "warn"
+          );
+          runMinimize();
+          return;
+        }
+        const pendingMinimizedNode: WorkbenchNode<TData> = {
+          ...target,
+          isMinimized: true,
+          minimizedAtUnixMs: Date.now()
+        };
+        const componentPreviewTexture = shouldCapturePreview
+          ? null
+          : await requestRenderedGeniePreviewTexture({
+              node: pendingMinimizedNode,
+              textureRect: windowRect
+            }).catch(() => null);
+        if (generation !== animationGenerationRef.current) {
+          return;
+        }
+        if (!shouldCapturePreview) {
+          if (!componentPreviewTexture) {
+            logWorkbenchGenieDiagnostic(
+              debugDiagnostics,
+              "workbench.genie.texture.missing",
+              {
+                ...describeGenieNode(target),
+                mode: "genie",
+                reason: "component_preview_texture_missing",
+                shouldCapturePreview,
+                windowRect
+              },
+              "warn"
+            );
+            runMinimize();
+            return;
+          }
         }
 
-        const preparedTexture = prepareElementTextureCapture(captureTarget);
+        const captureTarget = resolveWorkbenchCaptureElement(nodeElement);
+        const preparedTexture = shouldCapturePreview
+          ? prepareElementTextureCapture(captureTarget)
+          : null;
         if (!preparedTexture) {
-          runMinimize();
-          return;
+          if (!componentPreviewTexture) {
+            logWorkbenchGenieDiagnostic(
+              debugDiagnostics,
+              "workbench.genie.minimize.skipped",
+              {
+                ...describeGenieNode(target),
+                mode: "genie",
+                reason: "prepared_texture_missing",
+                shouldCapturePreview
+              },
+              "warn"
+            );
+            runMinimize();
+            return;
+          }
         }
         const wasFocusedForCapture = isFocusedWorkbenchNode(controller, nodeID);
-        if (!wasFocusedForCapture) {
+        if (shouldCapturePreview && !wasFocusedForCapture) {
           flushSync(() => {
             controller.commands.focusNode(nodeID);
           });
@@ -862,17 +1682,45 @@ export function useWorkbenchGenieAnimation<TData>({
             return;
           }
         }
-        const previewImageUrlPromise = Promise.resolve(
-          captureNodePreviewImage?.(target) ?? null
-        ).catch(() => null);
-        const texture = await renderPreparedElementTexture(
-          preparedTexture
-        ).catch(() => null);
+        const previewImageUrlPromise = shouldCapturePreview
+          ? Promise.resolve(captureNodePreviewImage?.(target) ?? null).catch(
+              () => null
+            )
+          : Promise.resolve(null);
         const previewImageUrl = await previewImageUrlPromise;
+        const previewImageTexture =
+          shouldCapturePreview && previewImageUrl
+            ? await renderPreviewImageTexture({
+                previewImageUrl,
+                rect: windowRect
+              }).catch(() => null)
+            : null;
+        const texture =
+          componentPreviewTexture ??
+          previewImageTexture ??
+          (preparedTexture
+            ? await renderPreparedElementTexture(preparedTexture).catch(
+                () => null
+              )
+            : null);
         if (generation !== animationGenerationRef.current) {
           return;
         }
         if (!texture) {
+          logWorkbenchGenieDiagnostic(
+            debugDiagnostics,
+            "workbench.genie.minimize.skipped",
+            {
+              ...describeGenieNode(target),
+              hasComponentPreviewTexture: Boolean(componentPreviewTexture),
+              hasPreparedDomTexture: Boolean(preparedTexture),
+              hasPreviewImageTexture: Boolean(previewImageTexture),
+              mode: "genie",
+              reason: "texture_missing",
+              shouldCapturePreview
+            },
+            "warn"
+          );
           if (previewImageUrl) {
             writeCachedWorkbenchNodePreviewImage(nodeID, previewImageUrl);
             persistWorkbenchNodePreviewImage(target, previewImageUrl, {
@@ -899,37 +1747,65 @@ export function useWorkbenchGenieAnimation<TData>({
             resolveDockPreviewCacheKey
           });
         }
+        writeMinimizedGenieTexture(nodeID, texture);
+        pruneMinimizedGenieTextures(nodeID);
 
-        const cleanupHiddenNode = () => {
+        let minimizeCommitted = false;
+        const commitMinimize = () => {
+          if (minimizeCommitted) {
+            return;
+          }
+          minimizeCommitted = true;
+          runMinimize();
+        };
+        const cleanupPendingGenieMinimize = () => {
+          releaseMinimizedDockEnterAnimation(nodeID);
           flushSync(() => {
+            clearPendingMinimizedNode(nodeID);
             showNodeForGenie(nodeID);
+            commitMinimize();
           });
           clearCanvas();
         };
-        animationCleanupRef.current = cleanupHiddenNode;
+        animationCleanupRef.current = cleanupPendingGenieMinimize;
 
         registerMinimizedDockEnterAnimation(nodeID);
 
         flushSync(() => {
-          hideNodeForGenie(nodeID);
-          runMinimize();
+          setPendingMinimizedNode(pendingMinimizedNode);
         });
 
         await waitForNextAnimationFrame();
         if (generation !== animationGenerationRef.current) {
-          releaseMinimizedDockEnterAnimation(nodeID);
           return;
         }
 
-        const minimizedTarget =
-          controller.getSnapshot().nodes.find((node) => node.id === nodeID) ??
-          target;
-        const anchorKey = resolveAnchorKeyForNode(minimizedTarget);
-        const dockRect = resolveDockAnchorRect(anchorKey);
+        const anchorKey = resolveAnchorKeyForNode(pendingMinimizedNode);
+        const dockRect = await resolveDockAnchorRectAfterRender(
+          anchorKey,
+          () => generation === animationGenerationRef.current
+        );
+        if (generation !== animationGenerationRef.current) {
+          return;
+        }
         if (!dockRect || !isUsableGenieRect(dockRect)) {
-          releaseMinimizedDockEnterAnimation(nodeID);
+          logWorkbenchGenieDiagnostic(
+            debugDiagnostics,
+            "workbench.genie.minimize.skipped",
+            {
+              ...describeGenieNode(target),
+              anchorKey,
+              dockRect,
+              mode: "genie",
+              registeredDockAnchorKeys: Array.from(
+                dockAnchorElementsRef.current.keys()
+              ).filter((key) => key.startsWith("minimized:")),
+              reason: "dock_rect_unusable"
+            },
+            "warn"
+          );
           animationCleanupRef.current = null;
-          cleanupHiddenNode();
+          cleanupPendingGenieMinimize();
           return;
         }
 
@@ -937,41 +1813,51 @@ export function useWorkbenchGenieAnimation<TData>({
           direction: "minimize",
           dockRect,
           onCancel: () => {
-            releaseMinimizedDockEnterAnimation(nodeID);
-            flushSync(() => {
-              showNodeForGenie(nodeID);
-            });
-            clearCanvas();
+            cleanupPendingGenieMinimize();
           },
           onComplete: () => {
             scheduleReleaseMinimizedDockEnterAnimation(nodeID);
             flushSync(() => {
+              clearPendingMinimizedNode(nodeID);
               showNodeForGenie(nodeID);
+              commitMinimize();
             });
             clearCanvas();
           },
           skipStop: true,
           texture
         });
+        flushSync(() => {
+          hideNodeForGenie(nodeID);
+        });
       })();
     },
     [
       clearCanvas,
+      clearMinimizedGenieTexture,
       controller,
       captureNodePreviewImage,
+      clearPendingMinimizedNode,
+      debugDiagnostics,
       dockPreviewCache,
       hideNodeForGenie,
+      minimizeAnimation,
+      pruneMinimizedGenieTextures,
       registerMinimizedDockEnterAnimation,
       releaseMinimizedDockEnterAnimation,
+      requestRenderedGeniePreviewTexture,
       resolveAnchorKeyForNode,
       resolveDockPreviewCacheKey,
       resolveDockAnchorRect,
       resolveNodeElement,
       runGenieAnimation,
+      runScaleWindowAnimation,
       scheduleReleaseMinimizedDockEnterAnimation,
+      shouldCaptureNodePreviewImage,
       setupCanvas,
       showNodeForGenie,
-      stopAnimation
+      stopAnimation,
+      writeMinimizedGenieTexture
     ]
   );
 
@@ -982,6 +1868,7 @@ export function useWorkbenchGenieAnimation<TData>({
       }
       minimizedDockEnterAnimationTimersRef.current.clear();
       minimizedDockEnterAnimationNodeIdsRef.current.clear();
+      minimizedGenieTextureByNodeIDRef.current.clear();
     },
     []
   );
@@ -991,22 +1878,53 @@ export function useWorkbenchGenieAnimation<TData>({
       typeof document === "undefined"
         ? null
         : createPortal(
-            <canvas
-              ref={canvasRef}
-              className="workbench-genie-layer"
-              data-workbench-genie-layer-state={
-                isCanvasActive ? "active" : "idle"
-              }
-              aria-hidden
-            />,
+            <>
+              <canvas
+                ref={canvasRef}
+                className="workbench-genie-layer"
+                data-workbench-genie-layer-state={
+                  isCanvasActive ? "active" : "idle"
+                }
+                aria-hidden
+              />
+              {pendingRenderedPreviewCapture ? (
+                <div
+                  ref={renderedPreviewCaptureElementRef}
+                  className="workbench-genie-preview-capture"
+                  data-workbench-genie-preview-capture-id={
+                    pendingRenderedPreviewCapture.id
+                  }
+                  data-workbench-genie-preview-node-id={
+                    pendingRenderedPreviewCapture.nodeID
+                  }
+                  data-workbench-genie-preview-used-fallback={
+                    pendingRenderedPreviewCapture.usedFallbackPreview
+                      ? "true"
+                      : "false"
+                  }
+                  style={{
+                    height: pendingRenderedPreviewCapture.rect.height,
+                    width: pendingRenderedPreviewCapture.rect.width
+                  }}
+                  aria-hidden
+                >
+                  {pendingRenderedPreviewCapture.preview}
+                </div>
+              ) : null}
+            </>,
             document.body
           ),
     isNodeGenieHidden: useCallback(
       (nodeID: string) => genieHiddenNodeIDs.has(nodeID),
       [genieHiddenNodeIDs]
     ),
+    isPendingMinimizedDockNode: useCallback(
+      (nodeID: string) => pendingMinimizedNode?.id === nodeID,
+      [pendingMinimizedNode]
+    ),
     launchNodeFromAnchor,
     minimizeNodeToAnchor,
+    pendingMinimizedNode,
     registerDockAnchor,
     shouldAnimateMinimizedDockEnter
   };

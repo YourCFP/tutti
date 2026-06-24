@@ -38,6 +38,7 @@ import {
   getWorkspaceWorkbench,
   importWorkspaceExternalAgentSessions,
   listCliCapabilities,
+  listWorkspaceAppMentionCandidates,
   listWorkspaceAgentGeneratedFiles,
   listUserProjects,
   listWorkspaceAgentSessionMessages,
@@ -122,6 +123,16 @@ export function createTuttidClient(
         }
       });
       return unwrapData(response, "CLI capabilities request failed.");
+    },
+    async listWorkspaceAppMentionCandidates(workspaceID) {
+      const response = await listWorkspaceAppMentionCandidates({
+        client,
+        path: { workspaceID }
+      });
+      return unwrapData(
+        response,
+        "Workspace app mention candidates request failed."
+      );
     },
     async addWorkspaceIssueContextRefs(workspaceID, issueID, request) {
       const response = await addWorkspaceIssueContextRefs({

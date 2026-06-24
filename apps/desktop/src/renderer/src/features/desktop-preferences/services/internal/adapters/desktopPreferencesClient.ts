@@ -4,6 +4,7 @@ import type {
   TuttidClient,
   PutDesktopPreferencesRequest
 } from "@tutti-os/client-tuttid-ts";
+import { defaultDesktopMinimizeAnimation } from "../../../../../../../shared/preferences/index.ts";
 
 export interface DesktopPreferencesClient {
   connect(): Promise<void>;
@@ -228,6 +229,7 @@ function createPreferencesKey(
     preferences.defaultAgentProvider,
     preferences.dockIconStyle,
     preferences.dockPlacement,
+    preferences.minimizeAnimation ?? defaultDesktopMinimizeAnimation,
     stableFileDefaultOpenersByExtensionKey(
       preferences.fileDefaultOpenersByExtension
     ),
@@ -258,6 +260,8 @@ function preferencesEqual(
     left.defaultAgentProvider === right.defaultAgentProvider &&
     left.dockIconStyle === right.dockIconStyle &&
     left.dockPlacement === right.dockPlacement &&
+    (left.minimizeAnimation ?? defaultDesktopMinimizeAnimation) ===
+      (right.minimizeAnimation ?? defaultDesktopMinimizeAnimation) &&
     stableFileDefaultOpenersByExtensionKey(
       left.fileDefaultOpenersByExtension
     ) ===

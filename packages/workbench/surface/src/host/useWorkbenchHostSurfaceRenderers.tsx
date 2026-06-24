@@ -11,7 +11,10 @@ import type {
   WorkbenchDockPreviewCache,
   WorkbenchDockPreviewCacheKey
 } from "../react/dockPreviewCache.ts";
-import { WorkbenchHostDock } from "./WorkbenchHostDock.tsx";
+import {
+  renderMinimizedDockPreviewContent,
+  WorkbenchHostDock
+} from "./WorkbenchHostDock.tsx";
 import {
   createWorkbenchHostNodeBodyContext,
   createWorkbenchHostNodeHeaderContext
@@ -50,6 +53,7 @@ export function useWorkbenchHostSurfaceRenderers(input: {
   nodeDefinitionByType: Map<string, WorkbenchHostNodeDefinition>;
   onDockEntryAction?: WorkbenchHostProps["onDockEntryAction"];
   onDockEntryClick?: WorkbenchHostProps["onDockEntryClick"];
+  onMissionControlRequestOpen?: WorkbenchHostProps["onMissionControlRequestOpen"];
   renderBottomChrome?: WorkbenchHostProps["renderBottomChrome"];
   renderTopChrome?: WorkbenchHostProps["renderTopChrome"];
   workspaceId: string;
@@ -112,7 +116,11 @@ export function useWorkbenchHostSurfaceRenderers(input: {
   const captureNodePreviewImage = useCallback(
     async (node: WorkbenchNode<WorkbenchHostNodeData>) => {
       const definition = input.nodeDefinitionByType.get(node.data.typeId);
-      const capturePreview = definition?.window?.minimizedDock?.capturePreview;
+      const minimizedDock = definition?.window?.minimizedDock;
+      const capturePreview =
+        minimizedDock?.kind === "snapshot"
+          ? minimizedDock.capturePreview
+          : undefined;
       const snapshot = input.hostSession.getSnapshot();
       const externalState = readWorkbenchHostExternalState({
         externalStateSource: input.externalStateSource,
@@ -171,6 +179,7 @@ export function useWorkbenchHostSurfaceRenderers(input: {
           nodeDefinitions={input.nodeDefinitionByType}
           onDockEntryAction={input.onDockEntryAction}
           onDockEntryClick={input.onDockEntryClick}
+          onMissionControlRequestOpen={input.onMissionControlRequestOpen}
           workspaceId={input.workspaceId}
         />
       </WorkbenchHostSurfaceRenderErrorBoundary>
@@ -188,6 +197,7 @@ export function useWorkbenchHostSurfaceRenderers(input: {
       input.nodeDefinitionByType,
       input.onDockEntryAction,
       input.onDockEntryClick,
+      input.onMissionControlRequestOpen,
       input.workspaceId
     ]
   );
@@ -286,6 +296,57 @@ export function useWorkbenchHostSurfaceRenderers(input: {
     [input.nodeDefinitionByType]
   );
 
+  const shouldCaptureNodePreviewImage = useCallback(
+    (node: WorkbenchNode<WorkbenchHostNodeData>) => {
+      const minimizedDock = input.nodeDefinitionByType.get(node.data.typeId)
+        ?.window?.minimizedDock;
+      return minimizedDock?.kind !== "component";
+    },
+    [input.nodeDefinitionByType]
+  );
+
+  const renderNodeGeniePreview = useCallback(
+    (
+      node: WorkbenchNode<WorkbenchHostNodeData>,
+      {
+        previewViewport
+      }: { previewViewport: { height: number; width: number } }
+    ) => {
+      const minimizedDock = input.nodeDefinitionByType.get(node.data.typeId)
+        ?.window?.minimizedDock;
+      if (minimizedDock?.kind !== "component") {
+        return null;
+      }
+
+      const externalState = readWorkbenchHostExternalState({
+        externalStateSource: input.externalStateSource,
+        node,
+        workspaceId: input.workspaceId
+      });
+      const preview = minimizedDock.providePreview({
+        externalNodeState: externalState.externalNodeState,
+        externalWorkspaceState: externalState.externalWorkspaceState,
+        host: input.hostSession,
+        isFocused: input.hostSession.getSnapshot().nodeStack.at(-1) === node.id,
+        isMinimized: node.isMinimized,
+        node,
+        previewViewport
+      });
+      return preview
+        ? renderMinimizedDockPreviewContent(
+            preview,
+            "workbench-genie-preview-capture__preview"
+          )
+        : null;
+    },
+    [
+      input.externalStateSource,
+      input.hostSession,
+      input.nodeDefinitionByType,
+      input.workspaceId
+    ]
+  );
+
   const resolveDockAnchorKey = useCallback(
     (node: WorkbenchNode<WorkbenchHostNodeData>) => {
       if (
@@ -295,12 +356,20 @@ export function useWorkbenchHostSurfaceRenderers(input: {
           nodeDefinitions: input.nodeDefinitionByType
         })
       ) {
+        const snapshotNodes = input.hostSession.getSnapshot().nodes;
+        const slotNodes = snapshotNodes.some(
+          (snapshotNode) => snapshotNode.id === node.id
+        )
+          ? snapshotNodes.map((snapshotNode) =>
+              snapshotNode.id === node.id ? node : snapshotNode
+            )
+          : [...snapshotNodes, node];
         const minimizedAnchorKey =
           resolveWorkbenchMinimizedDockAnchorKeyForNode({
             nodeId: node.id,
             slots: resolveWorkbenchMinimizedDockSlots({
               nodeDefinitions: input.nodeDefinitionByType,
-              nodes: input.hostSession.getSnapshot().nodes
+              nodes: slotNodes
             })
           });
         if (minimizedAnchorKey) {
@@ -355,9 +424,11 @@ export function useWorkbenchHostSurfaceRenderers(input: {
     renderBottomChrome,
     renderDock,
     renderNode,
+    renderNodeGeniePreview,
     renderTopChrome,
     renderWindowActions,
     renderWindowHeader,
+    shouldCaptureNodePreviewImage,
     shouldKeepMinimizedNodeMounted,
     resolveDockAnchorKey,
     resolveDockPreviewCacheKey,

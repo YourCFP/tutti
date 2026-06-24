@@ -25,6 +25,11 @@ export function createDesktopTuttidClient(
     async listCliCapabilities(workspaceID, options) {
       return (await resolveClient()).listCliCapabilities(workspaceID, options);
     },
+    async listWorkspaceAppMentionCandidates(workspaceID) {
+      return (await resolveClient()).listWorkspaceAppMentionCandidates(
+        workspaceID
+      );
+    },
     async addWorkspaceIssueContextRefs(workspaceID, issueID, request) {
       return (await resolveClient()).addWorkspaceIssueContextRefs(
         workspaceID,
@@ -62,8 +67,21 @@ export function createDesktopTuttidClient(
     async importWorkspaceApp(workspaceID, request) {
       return (await resolveClient()).importWorkspaceApp(workspaceID, request);
     },
+    async loadLocalWorkspaceApp(workspaceID, request) {
+      return (await resolveClient()).loadLocalWorkspaceApp(
+        workspaceID,
+        request
+      );
+    },
     async replaceWorkspaceAppIcon(workspaceID, appID, request) {
       return (await resolveClient()).replaceWorkspaceAppIcon(
+        workspaceID,
+        appID,
+        request
+      );
+    },
+    async reloadLocalWorkspaceApp(workspaceID, appID, request) {
+      return (await resolveClient()).reloadLocalWorkspaceApp(
         workspaceID,
         appID,
         request
@@ -210,6 +228,27 @@ export function createDesktopTuttidClient(
         workspaceID,
         appID,
         request
+      );
+    },
+    async prepareWorkspaceAppUpload(workspaceID, appID, request) {
+      return (await resolveClient()).prepareWorkspaceAppUpload(
+        workspaceID,
+        appID,
+        request
+      );
+    },
+    async completeWorkspaceAppUpload(workspaceID, appID, uploadID) {
+      return (await resolveClient()).completeWorkspaceAppUpload(
+        workspaceID,
+        appID,
+        uploadID
+      );
+    },
+    async cancelWorkspaceAppUpload(workspaceID, appID, uploadID) {
+      return (await resolveClient()).cancelWorkspaceAppUpload(
+        workspaceID,
+        appID,
+        uploadID
       );
     },
     async refreshWorkspaceAppCatalog(workspaceID) {

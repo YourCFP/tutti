@@ -159,6 +159,92 @@ test("toggleNode 展开 folder 并懒加载子节点", async () => {
   );
 });
 
+test("toggleSingleSelectionAndExpand single-selects and expands folders", async () => {
+  const controller = createReferenceSourcePickerController({
+    aggregator: fakeAggregator({
+      tabs: tabsTwo,
+      children: {
+        [`workspace-file:${SOURCE_ROOT_NODE_ID}`]: {
+          entries: [folder("workspace-file", "/dir")],
+          nextCursor: null
+        },
+        "workspace-file:/dir": {
+          entries: [file("workspace-file", "/dir/a.md")],
+          nextCursor: null
+        }
+      }
+    }),
+    scope,
+    searchDebounceMs: 0
+  });
+  controller.open();
+  await flush();
+
+  controller.toggleSingleSelectionAndExpand(file("workspace-file", "/note.md"));
+  assert.deepEqual(
+    controller.getSnapshot().selection.map((node) => node.ref.nodeId),
+    ["/note.md"]
+  );
+
+  controller.toggleSingleSelectionAndExpand(folder("workspace-file", "/dir"));
+  await flush();
+  const dirKey = nodeRefKey({ sourceId: "workspace-file", nodeId: "/dir" });
+  let snapshot = controller.getSnapshot();
+  assert.equal(snapshot.bySource["workspace-file"]?.expandedKeys[dirKey], true);
+  assert.deepEqual(
+    snapshot.bySource["workspace-file"]?.childrenByKey[dirKey]?.entries.map(
+      (node) => node.ref.nodeId
+    ),
+    ["/dir/a.md"]
+  );
+  assert.deepEqual(
+    snapshot.selection.map((node) => node.ref.nodeId),
+    ["/dir"]
+  );
+
+  controller.toggleSingleSelectionAndExpand(folder("workspace-file", "/dir"));
+  snapshot = controller.getSnapshot();
+  assert.deepEqual(
+    snapshot.selection.map((node) => node.ref.nodeId),
+    []
+  );
+
+  controller.toggleSingleSelectionAndExpand(folder("workspace-file", "/dir"));
+  snapshot = controller.getSnapshot();
+  assert.deepEqual(
+    snapshot.selection.map((node) => node.ref.nodeId),
+    ["/dir"]
+  );
+
+  controller.toggleSelection(file("workspace-file", "/note.md"));
+  assert.deepEqual(
+    controller.getSnapshot().selection.map((node) => node.ref.nodeId),
+    ["/dir", "/note.md"]
+  );
+
+  controller.toggleSingleSelectionAndExpand(file("workspace-file", "/note.md"));
+  assert.deepEqual(
+    controller.getSnapshot().selection.map((node) => node.ref.nodeId),
+    ["/dir", "/note.md"]
+  );
+
+  controller.toggleSingleSelectionAndExpand(
+    file("workspace-file", "/other.md")
+  );
+  assert.deepEqual(
+    controller.getSnapshot().selection.map((node) => node.ref.nodeId),
+    ["/dir", "/note.md"]
+  );
+
+  controller.toggleSingleSelectionAndExpand(folder("workspace-file", "/dir"));
+  snapshot = controller.getSnapshot();
+  assert.equal(snapshot.bySource["workspace-file"]?.expandedKeys[dirKey], true);
+  assert.deepEqual(
+    snapshot.selection.map((node) => node.ref.nodeId),
+    ["/dir", "/note.md"]
+  );
+});
+
 test("expandNode 展开定位到的 folder 并懒加载子节点", async () => {
   const controller = createReferenceSourcePickerController({
     aggregator: fakeAggregator({
@@ -687,6 +773,72 @@ test("locatePath 把定位目标解析为真实节点路径(root → leaf)", asy
   assert.deepEqual(
     path.map((node) => node.displayName),
     ["分组一", "事项一"]
+  );
+});
+
+test("locatePath follows pagination while resolving the target path", async () => {
+  const controller = createReferenceSourcePickerController({
+    aggregator: {
+      ...fakeAggregator({
+        tabs: tabsTwo,
+        children: {
+          [`app-artifact:${SOURCE_ROOT_NODE_ID}`]: {
+            entries: [folder("app-artifact", "topic-1", "主题一")],
+            nextCursor: null
+          },
+          "app-artifact:topic-1": {
+            entries: [folder("app-artifact", "issue-old", "旧事项")],
+            nextCursor: "page-2"
+          }
+        },
+        locate: {
+          "app-artifact": [
+            { sourceId: "app-artifact", nodeId: "topic-1" },
+            { sourceId: "app-artifact", nodeId: "issue-target" }
+          ]
+        }
+      }),
+      async listChildren(_scope, ref, input): Promise<ListChildrenResult> {
+        if (ref.sourceId === "app-artifact" && ref.nodeId === "topic-1") {
+          return input?.cursor === "page-2"
+            ? {
+                entries: [folder("app-artifact", "issue-target", "目标事项")],
+                nextCursor: null
+              }
+            : {
+                entries: [folder("app-artifact", "issue-old", "旧事项")],
+                nextCursor: "page-2"
+              };
+        }
+        return fakeAggregator({
+          tabs: tabsTwo,
+          children: {
+            [`app-artifact:${SOURCE_ROOT_NODE_ID}`]: {
+              entries: [folder("app-artifact", "topic-1", "主题一")],
+              nextCursor: null
+            }
+          }
+        }).listChildren(_scope, ref, input);
+      }
+    },
+    scope,
+    searchDebounceMs: 0
+  });
+  controller.open();
+  await flush();
+
+  const path = await controller.locatePath({
+    sourceId: "app-artifact",
+    params: { issueId: "issue-target", topicId: "topic-1" }
+  });
+
+  assert.deepEqual(
+    path.map((node) => node.ref.nodeId),
+    ["topic-1", "issue-target"]
+  );
+  assert.deepEqual(
+    path.map((node) => node.displayName),
+    ["主题一", "目标事项"]
   );
 });
 

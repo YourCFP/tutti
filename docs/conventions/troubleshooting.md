@@ -43,6 +43,32 @@ Use this shape for new entries:
 
 ## Current Entries
 
+### Load unpacked project roots with source manifests
+
+- Symptom:
+  App Center's Load unpacked action rejects an app repository even though
+  `.tutti/dev-app/tutti.app.json` and `.tutti/dev-app/bootstrap.sh` are valid.
+- Quick checks:
+  Run `services/tuttid/service/workspace/app_factory_reference/scripts/check_local_dev_app.py <project-root>`.
+  If the project root also contains a publishable source `tutti.app.json`, make
+  sure the daemon and checker resolve `.tutti/dev-app` before the root manifest.
+- Root cause:
+  App repositories can keep a release source manifest at the project root while
+  using `.tutti/dev-app` as the Chrome-style local debug wrapper. If local app
+  loading treats the root manifest as authoritative first, it may validate the
+  source manifest as a package and fail on package-local files such as
+  `bootstrap.sh`, `icon.png`, or `tutti.cli.json`.
+- Fix:
+  Prefer `.tutti/dev-app/tutti.app.json` when a selected project root contains
+  both a nested dev app and a root source manifest. Directly selected app
+  package directories still load from their own `tutti.app.json`.
+- Validation:
+  Add or run service coverage for a project root with both manifests, then run
+  the local debug checker on that project root.
+- References:
+  [app_local.go](../../services/tuttid/service/workspace/app_local.go)
+  [check_local_dev_app.py](../../services/tuttid/service/workspace/app_factory_reference/scripts/check_local_dev_app.py)
+
 ### External PR review approvals do not refresh gate status
 
 - Symptom:
@@ -109,6 +135,41 @@ Use this shape for new entries:
   [client.go](../../apps/cli/internal/daemon/client.go)
   [session.go](../../services/tuttid/service/browser/session.go)
   [command.go](../../services/tuttid/service/browser/command.go)
+
+### macOS Gatekeeper dialogs appear during Codex provider probing
+
+- Symptom:
+  Opening an app or surface that reads agent composer options, provider status,
+  or capability catalog triggers repeated macOS warnings that `codex` may harm
+  the computer.
+- Quick checks:
+  Resolve the active Codex binary from `tuttid` logs or by running with the
+  same daemon environment. Then inspect the native binary behind the npm shim
+  with `spctl --assess --type execute -vv <native-codex-path>`. If it reports
+  `CSSMERR_TP_CERT_REVOKED`, remove or reinstall that specific Codex package.
+- Root cause:
+  Provider status and composer capability discovery intentionally start Codex
+  commands such as `codex login status` and `codex app-server`. If the daemon
+  resolves an older nvm global Codex package whose Developer ID certificate has
+  been revoked, each otherwise harmless background probe can become a
+  Gatekeeper dialog. This can happen even when `which codex` in the user's shell
+  points at a newer working Codex if the daemon command resolver places scanned
+  nvm fallback directories before the real PATH.
+- Fix:
+  Respect the daemon PATH before scanned nvm fallback directories, and sort nvm
+  fallback directories by Node version so fallback resolution does not pick the
+  oldest installed Node first. Do not automatically remove attributes or delete
+  arbitrary user-managed Codex binaries from Tutti; user repair scripts should
+  only move Codex packages that `spctl` explicitly reports as certificate
+  revoked, and should keep a backup.
+- Validation:
+  Run `go test ./runtimecmd` and `go test ./runtime` from
+  `packages/agent/daemon`, plus `go test ./service/agentstatus` from
+  `services/tuttid`. Verify provider status logs resolve `codex` to the same
+  npm shim the user expects from PATH, unless PATH lacks Codex and the resolver
+  intentionally falls back to a scanned nvm install.
+- References:
+  [resolver.go](../../packages/agent/daemon/runtimecmd/resolver.go)
 
 ### Malformed user skill frontmatter breaks skill discovery
 
@@ -211,6 +272,40 @@ delimited by ---`, and the composer skill picker may show partial or
   [useComposedInputValue.ts](../../packages/ui/react-hooks/src/useComposedInputValue.ts)
   [WorkspaceFileReferencePickerTree.tsx](../../packages/workspace/file-reference/src/ui/internal/reference/WorkspaceFileReferencePickerTree.tsx:131)
   [IssueManagerSidebarSections.tsx](../../packages/workspace/issue-manager/src/ui/internal/shell/IssueManagerSidebarSections.tsx:190)
+
+### Agent GUI app mentions show unavailable workspace apps
+
+- Symptom:
+  Agent GUI or rich-text `@` app search shows App Center apps that are not
+  installed or are disabled. A related slow path is the picker waiting on agent
+  provider auth/status checks before showing app candidates.
+- Quick checks:
+  Confirm the renderer calls the daemon-owned
+  `listWorkspaceAppMentionCandidates` client method instead of
+  `listCliCapabilities(..., { includeHidden: true })`. In the daemon, confirm
+  the mention endpoint calls App Center `List` for app visibility and calls
+  CLI capabilities only with `SkipCapabilityFilters: true` for metadata.
+- Root cause:
+  CLI capability listing is a command-routing surface, not an app picker
+  visibility contract. Using the filtered CLI path can trigger provider
+  availability/auth checks; using the hidden CLI path avoids the slow checks but
+  exposes uninstalled or disabled app capabilities unless App Center visibility
+  is applied by the daemon.
+- Fix:
+  Keep Agent GUI app mention candidates behind
+  `/v1/workspaces/{workspaceID}/agent-context/workspace-app-mentions`. The
+  daemon should include real App Center apps only when installed and enabled,
+  merge cheap CLI command/search metadata without provider filters, and expose
+  CLI pseudo apps only when they do not correspond to a known App Center app.
+- Validation:
+  Add route-level daemon tests for installed, disabled, uninstalled, and CLI
+  pseudo apps. Add renderer tests that the `workspace-app` provider consumes
+  mention candidates and only reads the cached agent-provider status snapshot
+  when hiding unavailable agent pseudo apps.
+- References:
+  [daemon_app_mentions.go](../../services/tuttid/api/daemon_app_mentions.go)
+  [desktopRichTextAtService.ts](../../apps/desktop/src/renderer/src/features/rich-text-at/services/internal/desktopRichTextAtService.ts)
+  [desktopAgentProviderStatusService.ts](../../apps/desktop/src/renderer/src/features/workspace-agent/services/internal/desktopAgentProviderStatusService.ts)
 
 ### Electron main/preload crashes on a workspace package `.ts` export
 
@@ -688,6 +783,31 @@ information is not available yet`, but `ps` or `lsof` still shows an older
   [appUpdateService.ts](../../apps/desktop/src/main/update/appUpdateService.ts)
   [appUpdateService.ts](../../apps/desktop/src/renderer/src/features/app-update/services/internal/appUpdateService.ts)
 
+### Desktop Performance trace export runs out of memory
+
+- Symptom:
+  Chrome DevTools Performance export or trace parsing fails with
+  `Maximum call stack size exceeded` or V8 `CALL_AND_RETRY_LAST` OOM while the
+  desktop app is running through `make dev-gui`.
+- Quick checks:
+  Keep the trace short and disable renderer diagnostics that inflate tracks:
+  `VITE_TUTTI_WHY_DID_YOU_RENDER=0 make dev-gui`. For CDP-based trace capture,
+  launch with
+  `TUTTI_ELECTRON_REMOTE_DEBUGGING_PORT=9223 TUTTI_ELECTRON_JS_FLAGS=--max-old-space-size=8192`.
+  Confirm the port with `curl http://127.0.0.1:9223/json/version`.
+- Root cause:
+  DevTools can run out of stack or old-space memory while processing large trace
+  payloads. Passing extra CLI args through `electron-vite` is not reliable enough
+  for these diagnostics, so the desktop main process owns the Electron command
+  line switches.
+- Fix:
+  Prefer CDP `Tracing.start` with `transferMode: "ReturnAsStream"` for large
+  captures instead of DevTools UI export. Record only the smallest repro window.
+- Validation:
+  Restart the desktop app, confirm the remote debugging endpoint responds, record
+  a short trace, and verify the trace JSON is written without opening the
+  Performance export path.
+
 ### Renderer component repeatedly re-renders without visible changes
 
 - Symptom:
@@ -695,9 +815,12 @@ information is not available yet`, but `ps` or `lsof` still shows an older
   `Maximum update depth exceeded`, but the current stack only points at the
   component that called `setState`.
 - Quick checks:
-  First inspect state-sync diagnostics and React Profiler to confirm the
-  component boundary. For prop identity churn, why-did-you-render is enabled by
-  default when launching with `make dev-gui`. Disable that default with
+  First inspect state-sync diagnostics. Enable the renderer-wide React Profiler
+  only when its render-storm diagnostics are needed by launching with
+  `VITE_TUTTI_REACT_PROFILER=1`; leave it off for Chrome Performance captures
+  on large workspaces because React dev component tracks can make trace
+  initialization stall. For prop identity churn, why-did-you-render is enabled
+  by default when launching with `make dev-gui`. Disable that default with
   `VITE_TUTTI_WHY_DID_YOU_RENDER=0 make dev-gui`, or set
   `localStorage.tuttiWhyDidYouRender = "0"` in DevTools and reload the renderer.
   For other development entrypoints, enable it by setting
@@ -716,4 +839,5 @@ information is not available yet`, but `ps` or `lsof` still shows an older
   component lists the expected prop or hook difference. Then disable the tool
   and run the affected renderer tests plus desktop typecheck.
 - References:
+  [main.tsx](../../apps/desktop/src/renderer/src/main.tsx)
   [whyDidYouRender.ts](../../apps/desktop/src/renderer/src/lib/whyDidYouRender.ts)

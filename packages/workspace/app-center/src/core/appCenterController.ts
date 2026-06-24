@@ -97,7 +97,14 @@ export class WorkspaceAppCenterController extends WorkspaceAppCenterControllerSt
       this.applySnapshot(input.workspaceId, snapshot);
     } catch (error) {
       if (this.store.workspaceId === input.workspaceId) {
-        this.store.apps = previousApps;
+        try {
+          const snapshot = await this.dependencies.gateway.listWorkspaceApps(
+            input.workspaceId
+          );
+          this.applySnapshot(input.workspaceId, snapshot);
+        } catch {
+          this.store.apps = previousApps;
+        }
       }
       this.setOperationError(error, {
         appId: input.appId,

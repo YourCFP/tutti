@@ -56,6 +56,20 @@ export interface WorkspaceAgentMessageCenterCardProps {
   }) => void;
 }
 
+interface WorkspaceAgentMessageCenterStackProps {
+  className?: string;
+  expanded: boolean;
+  groupId: string;
+  highlightedItemId?: string | null;
+  items: WorkspaceAgentMessageCenterItem[];
+  renderCard: (
+    item: WorkspaceAgentMessageCenterItem,
+    options?: { stackedIndex?: number }
+  ) => ReactNode;
+  onCollapse: (groupId: string) => void;
+  onExpand: (groupId: string) => void;
+}
+
 function stopMessageCenterTextPointerPropagation(
   event: ReactPointerEvent<HTMLElement>
 ): void {
@@ -229,19 +243,7 @@ export const WorkspaceAgentMessageCenterStack = memo(
     renderCard,
     onCollapse,
     onExpand
-  }: {
-    className?: string;
-    expanded: boolean;
-    groupId: string;
-    highlightedItemId?: string | null;
-    items: WorkspaceAgentMessageCenterItem[];
-    renderCard: (
-      item: WorkspaceAgentMessageCenterItem,
-      options?: { stackedIndex?: number }
-    ) => ReactNode;
-    onCollapse: (groupId: string) => void;
-    onExpand: (groupId: string) => void;
-  }): JSX.Element | null {
+  }: WorkspaceAgentMessageCenterStackProps): JSX.Element | null {
     "use memo";
     const { t } = useTranslation();
     const summaryRegion = useStackRegionPresence(!expanded);
@@ -350,8 +352,55 @@ export const WorkspaceAgentMessageCenterStack = memo(
         ) : null}
       </div>
     );
-  }
+  },
+  areMessageCenterStackPropsEqual
 );
+
+function areMessageCenterStackPropsEqual(
+  previous: WorkspaceAgentMessageCenterStackProps,
+  next: WorkspaceAgentMessageCenterStackProps
+): boolean {
+  if (
+    previous.className !== next.className ||
+    previous.expanded !== next.expanded ||
+    previous.groupId !== next.groupId ||
+    previous.onCollapse !== next.onCollapse ||
+    previous.onExpand !== next.onExpand ||
+    previous.renderCard !== next.renderCard
+  ) {
+    return false;
+  }
+  if (next.expanded) {
+    return (
+      previous.highlightedItemId === next.highlightedItemId &&
+      previous.items === next.items
+    );
+  }
+  return (
+    messageCenterCollapsedStackSignature(previous.items) ===
+    messageCenterCollapsedStackSignature(next.items)
+  );
+}
+
+function messageCenterCollapsedStackSignature(
+  items: readonly WorkspaceAgentMessageCenterItem[]
+): string {
+  const firstItem = items[0];
+  if (!firstItem) {
+    return "0";
+  }
+  const hasWaiting = items.some(isWaitingMessageCenterItem) ? "1" : "0";
+  return [
+    items.length,
+    firstItem.id,
+    firstItem.provider,
+    firstItem.userId ?? "",
+    firstItem.identity?.userName ?? "",
+    firstItem.identity?.agentName ?? "",
+    hasWaiting,
+    messageCenterStackPreviewText(firstItem)
+  ].join(":");
+}
 
 function useBatchedMessageCenterStackItems({
   expanded,
@@ -806,7 +855,7 @@ function MessageCenterOpenChatButton({
         variant="ghost"
         size="default"
         className={cn(
-          "workspace-agent-message-center__open-chat-button h-auto gap-1.5 border-0 bg-transparent p-0 text-[var(--agent-gui-accent)] shadow-none transition-[color,opacity,visibility] hover:bg-transparent hover:text-[var(--agent-gui-accent)] focus-visible:bg-transparent focus-visible:text-[var(--agent-gui-accent)] active:bg-transparent",
+          "workspace-agent-message-center__open-chat-button h-auto gap-1.5 border-0 bg-transparent p-0 text-[var(--accent-codex)] shadow-none transition-[color,opacity,visibility] hover:bg-transparent hover:text-[var(--accent-codex)] focus-visible:bg-transparent focus-visible:text-[var(--accent-codex)] active:bg-transparent",
           !alwaysVisible &&
             "invisible opacity-0 group-hover/message-card:visible group-hover/message-card:opacity-100 group-focus-within/message-card:visible group-focus-within/message-card:opacity-100"
         )}
@@ -855,7 +904,7 @@ export function MessageCenterIdentityLabel({
         userName={identity.userName}
         agentAvatarUrl={agentAvatarUrl}
       />
-      <span className="workspace-agent-message-center__identity-names flex min-w-0 items-center gap-1 truncate text-[var(--text-secondary)]">
+      <span className="workspace-agent-message-center__identity-names flex min-w-0 items-center gap-1 truncate text-[13px] leading-5 text-[var(--text-secondary)]">
         <span className="min-w-0 truncate">{identity.userName}</span>
         <span className="shrink-0 text-[var(--text-tertiary)]">&</span>
         <span className="min-w-0 truncate">{identity.agentName}</span>
@@ -1056,7 +1105,7 @@ function AgentProviderLabel({ provider }: { provider: string }): JSX.Element {
         draggable={false}
         aria-hidden="true"
       />
-      <span className="workspace-agent-message-center__provider-name min-w-0 truncate text-[var(--text-secondary)]">
+      <span className="workspace-agent-message-center__provider-name min-w-0 truncate text-[13px] leading-5 text-[var(--text-secondary)]">
         {label}
       </span>
     </span>

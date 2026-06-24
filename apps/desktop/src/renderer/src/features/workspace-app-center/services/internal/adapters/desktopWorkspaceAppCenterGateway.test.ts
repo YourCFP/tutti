@@ -109,6 +109,21 @@ test("Workspace App Center gateway preserves app failure details", () => {
   assert.equal(app.lastError, "npm install failed");
 });
 
+test("Workspace App Center gateway normalizes local-dev apps", () => {
+  const app = normalizeWorkspaceAppCenterApp(
+    createWorkspaceApp({
+      appId: "local-dev",
+      exportable: false,
+      localPackageDir: "/Users/example/project/.tutti/dev-app",
+      source: "local-dev"
+    })
+  );
+
+  assert.equal(app.source, "local-dev");
+  assert.equal(app.exportable, false);
+  assert.equal(app.localPackageDir, "/Users/example/project/.tutti/dev-app");
+});
+
 test("Workspace App Center gateway preserves app window minimum size", () => {
   const app = normalizeWorkspaceAppCenterApp(
     createWorkspaceApp({
@@ -194,8 +209,24 @@ test("Workspace App Center service ignores stale app update events", async () =>
           })
         );
       },
+      async loadLocalWorkspaceApp() {
+        return normalizeWorkspaceAppCenterSnapshot(
+          createWorkspaceAppListResponse({
+            apps: [app],
+            workspaceId: "workspace-1"
+          })
+        );
+      },
       async replaceWorkspaceAppIcon() {
         return normalizeWorkspaceAppCenterApp(app);
+      },
+      async reloadLocalWorkspaceApp() {
+        return normalizeWorkspaceAppCenterSnapshot(
+          createWorkspaceAppListResponse({
+            apps: [app],
+            workspaceId: "workspace-1"
+          })
+        );
       },
       async listWorkspaceApps() {
         return normalizeWorkspaceAppCenterSnapshot(
@@ -1274,6 +1305,7 @@ function createFakeHostFilesApi(
     selectAppArchiveExportPath(input: {
       defaultPath: string;
     }): Promise<string | null>;
+    selectDirectory(): Promise<string | null>;
     selectAppIconImage(): Promise<string | null>;
   }> = {}
 ): {
@@ -1282,6 +1314,7 @@ function createFakeHostFilesApi(
   selectAppArchiveExportPath(input: {
     defaultPath: string;
   }): Promise<string | null>;
+  selectDirectory(): Promise<string | null>;
   selectAppIconImage(): Promise<string | null>;
 } {
   return {
@@ -1291,6 +1324,9 @@ function createFakeHostFilesApi(
     },
     async selectAppArchiveExportPath(input) {
       return input.defaultPath;
+    },
+    async selectDirectory() {
+      return null;
     },
     async selectAppIconImage() {
       return "/tmp/icon.png";
@@ -1351,8 +1387,14 @@ function createFakeWorkspaceAppCenterGateway(
     async importWorkspaceApp() {
       return snapshot();
     },
+    async loadLocalWorkspaceApp() {
+      return snapshot();
+    },
     async replaceWorkspaceAppIcon() {
       return normalizeWorkspaceAppCenterApp(getApp());
+    },
+    async reloadLocalWorkspaceApp() {
+      return snapshot();
     },
     async listWorkspaceApps() {
       onListWorkspaceApps?.();

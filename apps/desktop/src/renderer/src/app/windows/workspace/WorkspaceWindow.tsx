@@ -3,6 +3,8 @@ import { InstantiationContext } from "@tutti-os/infra/di";
 import { AnalyticsDebugFloatingEntryGate } from "@renderer/features/analytics-debug";
 import { AppUpdateStatus } from "@renderer/features/app-update";
 import { WorkspaceWorkbench } from "@renderer/features/workspace-workbench";
+import { useTranslation } from "../../../i18n";
+import { Toast } from "../../../lib/toast";
 import { createWorkspaceWindowContainer } from "./createWorkspaceWindowContainer";
 import { createDeferredWorkspaceContainerDispose } from "./deferredWorkspaceContainerDispose";
 
@@ -10,6 +12,7 @@ export function WorkspaceWindow() {
   const {
     container,
     environmentMode,
+    hostWindowApi,
     startupWorkspaceID,
     workspaceAppExternalApi
   } = useMemo(() => createWorkspaceWindowContainer(), []);
@@ -22,6 +25,7 @@ export function WorkspaceWindow() {
   const routeView = searchParams.get("view") || "workspace";
   const requestedWorkspaceID = searchParams.get("workspaceId");
   const workspaceID = requestedWorkspaceID || startupWorkspaceID;
+  const { t } = useTranslation();
 
   useEffect(() => {
     containerDispose.cancel();
@@ -29,6 +33,12 @@ export function WorkspaceWindow() {
       containerDispose.schedule();
     };
   }, [containerDispose]);
+
+  useEffect(() => {
+    return hostWindowApi.onQuitShortcutToast(() => {
+      Toast.tips(t("desktop.quitShortcut.confirmToastTitle"));
+    });
+  }, [hostWindowApi, t]);
 
   return (
     <InstantiationContext instantiationService={container}>

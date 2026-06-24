@@ -22,6 +22,9 @@ import type {
   CancelWorkspaceAppFactoryJobData,
   CancelWorkspaceAppFactoryJobErrors,
   CancelWorkspaceAppFactoryJobResponses,
+  CancelWorkspaceAppUploadData,
+  CancelWorkspaceAppUploadErrors,
+  CancelWorkspaceAppUploadResponses,
   CheckUserProjectPathData,
   CheckUserProjectPathErrors,
   CheckUserProjectPathResponses,
@@ -31,6 +34,9 @@ import type {
   ClearWorkspaceAgentSessionsData,
   ClearWorkspaceAgentSessionsErrors,
   ClearWorkspaceAgentSessionsResponses,
+  CompleteWorkspaceAppUploadData,
+  CompleteWorkspaceAppUploadErrors,
+  CompleteWorkspaceAppUploadResponses,
   CompleteWorkspaceIssueRunData,
   CompleteWorkspaceIssueRunErrors,
   CompleteWorkspaceIssueRunResponses,
@@ -190,6 +196,9 @@ import type {
   ListWorkspaceAppFactoryJobsData,
   ListWorkspaceAppFactoryJobsErrors,
   ListWorkspaceAppFactoryJobsResponses,
+  ListWorkspaceAppMentionCandidatesData,
+  ListWorkspaceAppMentionCandidatesErrors,
+  ListWorkspaceAppMentionCandidatesResponses,
   ListWorkspaceAppReferencesData,
   ListWorkspaceAppReferencesErrors,
   ListWorkspaceAppReferencesResponses,
@@ -226,6 +235,9 @@ import type {
   ListWorkspaceTerminalsData,
   ListWorkspaceTerminalsErrors,
   ListWorkspaceTerminalsResponses,
+  LoadLocalWorkspaceAppData,
+  LoadLocalWorkspaceAppErrors,
+  LoadLocalWorkspaceAppResponses,
   MoveWorkspaceFileEntryData,
   MoveWorkspaceFileEntryErrors,
   MoveWorkspaceFileEntryResponses,
@@ -238,6 +250,9 @@ import type {
   PrepareWorkspaceAppFactoryJobModificationData,
   PrepareWorkspaceAppFactoryJobModificationErrors,
   PrepareWorkspaceAppFactoryJobModificationResponses,
+  PrepareWorkspaceAppUploadData,
+  PrepareWorkspaceAppUploadErrors,
+  PrepareWorkspaceAppUploadResponses,
   ProbeAgentProviderData,
   ProbeAgentProviderErrors,
   ProbeAgentProviderResponses,
@@ -247,6 +262,9 @@ import type {
   PutDesktopPreferencesData,
   PutDesktopPreferencesErrors,
   PutDesktopPreferencesResponses,
+  PutWorkspaceAppUploadContentData,
+  PutWorkspaceAppUploadContentErrors,
+  PutWorkspaceAppUploadContentResponses,
   PutWorkspaceWorkbenchData,
   PutWorkspaceWorkbenchErrors,
   PutWorkspaceWorkbenchResponses,
@@ -259,6 +277,9 @@ import type {
   RefreshWorkspaceAppCatalogData,
   RefreshWorkspaceAppCatalogErrors,
   RefreshWorkspaceAppCatalogResponses,
+  ReloadLocalWorkspaceAppData,
+  ReloadLocalWorkspaceAppErrors,
+  ReloadLocalWorkspaceAppResponses,
   RemoveWorkspaceIssueContextRefData,
   RemoveWorkspaceIssueContextRefErrors,
   RemoveWorkspaceIssueContextRefResponses,
@@ -445,6 +466,27 @@ export const invokeCliCommand = <ThrowOnError extends boolean = false>(
       "Content-Type": "application/json",
       ...options.headers
     }
+  });
+
+/**
+ * List workspace app mention candidates for agent context pickers
+ *
+ * Returns daemon-owned application mention candidates for Agent GUI and rich-text context pickers. Real workspace apps are filtered by App Center installation and enabled state. CLI capabilities only enrich search metadata; this endpoint does not run command-routing availability filters or agent provider auth checks.
+ *
+ */
+export const listWorkspaceAppMentionCandidates = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<ListWorkspaceAppMentionCandidatesData, ThrowOnError>
+) =>
+  (options.client ?? client).get<
+    ListWorkspaceAppMentionCandidatesResponses,
+    ListWorkspaceAppMentionCandidatesErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-context/workspace-app-mentions",
+    ...options
   });
 
 /**
@@ -770,6 +812,26 @@ export const importWorkspaceApp = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Load one unpacked local workspace app directory
+ */
+export const loadLocalWorkspaceApp = <ThrowOnError extends boolean = false>(
+  options: Options<LoadLocalWorkspaceAppData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    LoadLocalWorkspaceAppResponses,
+    LoadLocalWorkspaceAppErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/apps/load-local",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
  * Start enabled installed apps for one workspace
  */
 export const startEnabledWorkspaceApps = <ThrowOnError extends boolean = false>(
@@ -814,6 +876,26 @@ export const installWorkspaceApp = <ThrowOnError extends boolean = false>(
   >({
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/workspaces/{workspaceID}/apps/{appID}/install",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
+ * Reload one unpacked local workspace app directory
+ */
+export const reloadLocalWorkspaceApp = <ThrowOnError extends boolean = false>(
+  options: Options<ReloadLocalWorkspaceAppData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    ReloadLocalWorkspaceAppResponses,
+    ReloadLocalWorkspaceAppErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/apps/{appID}/reload-local",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -869,6 +951,89 @@ export const searchWorkspaceAppReferences = <
       "Content-Type": "application/json",
       ...options.headers
     }
+  });
+
+/**
+ * Prepare one managed file upload for a workspace app
+ *
+ * Creates an in-memory upload session scoped to one installed workspace app. The response only identifies the daemon upload session; desktop hosts construct the direct content upload URL and keep storage-provider details out of the app-facing browser bridge.
+ *
+ */
+export const prepareWorkspaceAppUpload = <ThrowOnError extends boolean = false>(
+  options: Options<PrepareWorkspaceAppUploadData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    PrepareWorkspaceAppUploadResponses,
+    PrepareWorkspaceAppUploadErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/apps/{appID}/uploads",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
+ * Stream upload bytes into one workspace app upload session
+ */
+export const putWorkspaceAppUploadContent = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<PutWorkspaceAppUploadContentData, ThrowOnError>
+) =>
+  (options.client ?? client).put<
+    PutWorkspaceAppUploadContentResponses,
+    PutWorkspaceAppUploadContentErrors,
+    ThrowOnError
+  >({
+    bodySerializer: null,
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/apps/{appID}/uploads/{uploadID}/content",
+    ...options,
+    headers: {
+      "Content-Type": "application/octet-stream",
+      ...options.headers
+    }
+  });
+
+/**
+ * Cancel one managed file upload session for a workspace app
+ *
+ * Drops the in-memory upload session and removes the temporary upload file when the upload has not been completed. Completed durable files are not deleted by this operation.
+ *
+ */
+export const cancelWorkspaceAppUpload = <ThrowOnError extends boolean = false>(
+  options: Options<CancelWorkspaceAppUploadData, ThrowOnError>
+) =>
+  (options.client ?? client).delete<
+    CancelWorkspaceAppUploadResponses,
+    CancelWorkspaceAppUploadErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/apps/{appID}/uploads/{uploadID}",
+    ...options
+  });
+
+/**
+ * Complete one managed file upload for a workspace app
+ */
+export const completeWorkspaceAppUpload = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<CompleteWorkspaceAppUploadData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    CompleteWorkspaceAppUploadResponses,
+    CompleteWorkspaceAppUploadErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/apps/{appID}/uploads/{uploadID}/complete",
+    ...options
   });
 
 /**
@@ -1264,7 +1429,7 @@ export const importWorkspaceExternalAgentSessions = <
   });
 
 /**
- * Get provider composer options without creating an agent session
+ * Get provider composer options with short-lived Claude Code discovery
  */
 export const getAgentProviderComposerOptions = <
   ThrowOnError extends boolean = false

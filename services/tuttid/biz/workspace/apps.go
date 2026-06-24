@@ -33,6 +33,7 @@ type AppManifest struct {
 	CLI              *AppManifestCLI              `json:"cli,omitempty"`
 	References       *AppManifestReferences       `json:"references,omitempty"`
 	Window           *AppManifestWindow           `json:"window,omitempty"`
+	Launch           *AppManifestLaunch           `json:"launch,omitempty"`
 	Author           *AppManifestAuthor           `json:"author,omitempty"`
 	Tags             []string                     `json:"tags,omitempty"`
 	LocalizationInfo *AppManifestLocalizationInfo `json:"localizationInfo,omitempty"`
@@ -64,6 +65,10 @@ type AppManifestWindow struct {
 	MinHeight        *int   `json:"minHeight,omitempty"`
 }
 
+type AppManifestLaunch struct {
+	Mode string `json:"mode"`
+}
+
 type AppManifestAuthor struct {
 	Name string `json:"name"`
 	URL  string `json:"url,omitempty"`
@@ -92,6 +97,7 @@ type AppPackage struct {
 	PackageDir           string
 	Manifest             AppManifest
 	ManifestJSON         string
+	CatalogLocalizations []AppManifestLocalization
 	Source               AppPackageSource
 	FactoryJobID         string
 	CreatedInWorkspaceID string
@@ -166,7 +172,7 @@ func (p AppPackage) IconDataURL() *string {
 
 func (p AppPackage) Localizations() []AppManifestLocalization {
 	if p.Manifest.LocalizationInfo == nil || strings.TrimSpace(p.PackageDir) == "" {
-		return nil
+		return append([]AppManifestLocalization(nil), p.CatalogLocalizations...)
 	}
 
 	localizations := make([]AppManifestLocalization, 0, len(p.Manifest.LocalizationInfo.AdditionalLocales))
@@ -179,6 +185,9 @@ func (p AppPackage) Localizations() []AppManifestLocalization {
 		if ok {
 			localizations = append(localizations, localization)
 		}
+	}
+	if len(localizations) == 0 {
+		return append([]AppManifestLocalization(nil), p.CatalogLocalizations...)
 	}
 	return localizations
 }
@@ -417,6 +426,7 @@ const (
 	AppPackageSourceBuiltin   AppPackageSource = "builtin"
 	AppPackageSourceGenerated AppPackageSource = "generated"
 	AppPackageSourceImported  AppPackageSource = "imported"
+	AppPackageSourceLocalDev  AppPackageSource = "local-dev"
 )
 
 type AppFactoryJobStatus string
@@ -539,8 +549,8 @@ func ValidateAppManifest(manifest AppManifest) error {
 	if !strings.HasPrefix(manifest.Runtime.HealthcheckPath, "/") {
 		return errors.New("app manifest runtime.healthcheckPath must start with /")
 	}
-	if profile := strings.TrimSpace(manifest.Runtime.Profile); profile != "" && profile != "node-static" {
-		return errors.New("app manifest runtime.profile must be node-static when set")
+	if profile := strings.TrimSpace(manifest.Runtime.Profile); profile != "" && profile != "node-static" && profile != "standalone" {
+		return errors.New("app manifest runtime.profile must be node-static or standalone when set")
 	}
 	if manifest.Window != nil {
 		minimizeBehavior := strings.TrimSpace(manifest.Window.MinimizeBehavior)
@@ -579,6 +589,12 @@ func ValidateAppManifest(manifest AppManifest) error {
 	}
 	if manifest.Author != nil && strings.TrimSpace(manifest.Author.Name) == "" {
 		return errors.New("app manifest author.name is required when author is provided")
+	}
+	if manifest.Launch != nil {
+		mode := strings.TrimSpace(manifest.Launch.Mode)
+		if mode != "workspace-open" {
+			return errors.New("app manifest launch.mode must be workspace-open when launch is provided")
+		}
 	}
 	for _, tag := range manifest.Tags {
 		if strings.TrimSpace(tag) == "" {

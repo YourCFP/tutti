@@ -85,6 +85,7 @@ export function useComposedInputValue({
   value
 }: UseComposedInputValueInput): UseComposedInputValueResult {
   const pendingCommitRef = useRef<ComposedInputPendingCommit | null>(null);
+  const isComposingRef = useRef(false);
   const [localValue, setLocalValue] = useState(value);
   const [isComposing, setIsComposing] = useState(false);
 
@@ -122,17 +123,19 @@ export function useComposedInputValue({
     },
     onChange: (event: ChangeEvent<HTMLInputElement>) => {
       const nextValue = event.currentTarget.value;
-      if (!isComposing) {
+      if (!isComposingRef.current) {
         commitValue(nextValue);
         return;
       }
       setLocalValue(nextValue);
     },
     onCompositionEnd: (event: CompositionEvent<HTMLInputElement>) => {
+      isComposingRef.current = false;
       setIsComposing(false);
       commitValue(event.currentTarget.value);
     },
     onCompositionStart: () => {
+      isComposingRef.current = true;
       setIsComposing(true);
     },
     value: localValue

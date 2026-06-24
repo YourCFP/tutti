@@ -60,6 +60,23 @@ func TestServiceListReportsInstallActionWhenCLIMissing(t *testing.T) {
 	}
 }
 
+func TestDefaultRegistryUsesCodexCLILatestInstaller(t *testing.T) {
+	specs, err := DefaultRegistry().Select([]string{"codex"})
+	if err != nil {
+		t.Fatalf("Select() error = %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("len(specs) = %d, want 1", len(specs))
+	}
+	install := specs[0].Install
+	if install.Kind != InstallerKindCodexCLILatest {
+		t.Fatalf("Install.Kind = %q, want %q", install.Kind, InstallerKindCodexCLILatest)
+	}
+	if install.CodexCLI == nil {
+		t.Fatalf("Install.CodexCLI = nil, want daemon-managed codex CLI installer spec")
+	}
+}
+
 func TestServiceListReportsLoginAndRefreshActionsWhenAuthMarkerMissing(t *testing.T) {
 	service := testService(func(name string) (string, error) {
 		return "/usr/local/bin/" + name, nil
@@ -92,6 +109,37 @@ func TestServiceListReportsLoginAndRefreshActionsWhenAuthMarkerMissing(t *testin
 	}
 }
 
+// specWithSeparateAdapter returns a synthetic provider spec that ships a
+// distinct ACP adapter binary (separate from its CLI). The codex provider no
+// longer has one — it talks to the codex app-server directly — but the
+// separate-adapter machinery is still exercised by other providers (e.g.
+// nexight), so these tests pin a local spec rather than DefaultRegistry's codex.
+func specWithSeparateAdapter() ProviderSpec {
+	return ProviderSpec{
+		Provider:           "codex",
+		BinaryNames:        []string{"codex"},
+		AdapterBinaryNames: []string{"codex-acp"},
+		AdapterCommand:     []string{"codex-acp"},
+		AuthMarkerPaths:    []string{"~/.codex/auth.json"},
+		Install: InstallerSpec{
+			Kind:           InstallerKindOfficialScript,
+			DisplayCommand: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+			ScriptURL:      "https://chatgpt.com/codex/install.sh",
+			ScriptShell:    "sh",
+		},
+		AdapterInstall: InstallerSpec{
+			Kind:           InstallerKindGitHubReleaseBinary,
+			DisplayCommand: "Install test adapter from GitHub releases",
+			ReleaseBinary: &ReleaseBinaryInstallerSpec{
+				BinaryName: "codex-acp",
+				Version:    "v0.0.0-test",
+				Assets:     map[string]ReleaseBinaryAsset{},
+			},
+		},
+		LoginArgs: []string{"login"},
+	}
+}
+
 func TestServiceListReportsInstallActionWhenACPAdapterMissing(t *testing.T) {
 	service := testService(func(name string) (string, error) {
 		if name == "codex" {
@@ -99,6 +147,7 @@ func TestServiceListReportsInstallActionWhenACPAdapterMissing(t *testing.T) {
 		}
 		return "", errors.New("not found")
 	}, map[string]bool{"/home/test/.codex/auth.json": true})
+	service.Registry = Registry{Specs: []ProviderSpec{specWithSeparateAdapter()}}
 
 	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"codex"}})
 	if err != nil {
@@ -233,6 +282,7 @@ func TestServiceListReportsInstallActionWhenCodexAdapterCommandFails(t *testing.
 	writeExecutable(t, adapterPath, "#!/bin/sh\necho 'codex-acp failed to start' >&2\nexit 127\n")
 
 	service := Service{
+		Registry: Registry{Specs: []ProviderSpec{specWithSeparateAdapter()}},
 		Environ: func() []string {
 			return []string{"PATH=" + binDir}
 		},
@@ -566,6 +616,7 @@ func TestServiceListUsesRuntimeCommandResolverForKnownNodeGlobalBin(t *testing.T
 	writeExecutable(t, adapterPath, "#!/bin/sh\nexit 0\n")
 
 	service := Service{
+		Registry: Registry{Specs: []ProviderSpec{specWithSeparateAdapter()}},
 		Environ: func() []string {
 			return []string{"PATH=/usr/bin:/bin"}
 		},
@@ -611,7 +662,9 @@ func TestServiceProbeReportsReadyWhenAdapterStarts(t *testing.T) {
 	adapterPath := filepath.Join(binDir, "codex-acp")
 	writeExecutable(t, adapterPath, "#!/bin/sh\nsleep 5\n")
 
-	result, err := probeTestService(home).Probe(context.Background(), ProbeInput{Provider: "codex"})
+	service := probeTestService(home)
+	service.Registry = Registry{Specs: []ProviderSpec{specWithSeparateAdapter()}}
+	result, err := service.Probe(context.Background(), ProbeInput{Provider: "codex"})
 	if err != nil {
 		t.Fatalf("Probe() error = %v", err)
 	}
@@ -646,8 +699,12 @@ func TestServiceProbeReportsFailureWhenAdapterCommandCannotStart(t *testing.T) {
 			ScriptURL:      "https://chatgpt.com/codex/install.sh",
 			ScriptShell:    "sh",
 		},
-		AdapterInstall: codexACPInstallerSpec(),
-		LoginArgs:      []string{"login"},
+		AdapterInstall: InstallerSpec{
+			Kind:           InstallerKindShellCommand,
+			DisplayCommand: "install adapter",
+			ShellCommand:   "true",
+		},
+		LoginArgs: []string{"login"},
 	}}}
 
 	result, err := service.Probe(context.Background(), ProbeInput{Provider: "codex"})
@@ -981,6 +1038,110 @@ func TestServiceRunActionUpgradesStaleClaudeACPAdapter(t *testing.T) {
 	}
 }
 
+func TestServiceRunActionSerializesConcurrentExternalRegistryNPMInstalls(t *testing.T) {
+	t.Setenv("TUTTI_STATE_DIR", t.TempDir())
+
+	home := t.TempDir()
+	binDir := filepath.Join(home, ".nvm", "versions", "node", "v24.12.0", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin dir: %v", err)
+	}
+	writeExecutable(t, filepath.Join(binDir, "claude"), "#!/bin/sh\nexit 0\n")
+
+	registryStore, prefixDir := fakeClaudeExternalRegistry(t)
+	runtimeRoot := fakeManagedRuntimeRoot(t)
+	packageDir := npmPackageInstallDir(prefixDir, "@agentclientprotocol/claude-agent-acp")
+	service := probeTestService(home)
+	service.ExternalAgentRegistry = registryStore
+	service.ManagedRuntime = fakeManagedRuntimeResolver(t, runtimeRoot)
+	service.RunAuthStatusCommand = func(context.Context, ProviderSpec, string) (AuthInfo, bool) {
+		return AuthInfo{Status: AuthAuthenticated}, true
+	}
+
+	firstInstallStarted := make(chan struct{})
+	releaseFirstInstall := make(chan struct{})
+	var npmInstallCalls atomic.Int32
+	var activeNPMInstalls atomic.Int32
+	var sawConcurrentInstall atomic.Bool
+	service.InstallCommand = func(ctx context.Context, input InstallCommandInput) (InstallCommandResult, error) {
+		isClaudeACPInstall := strings.Contains(input.Command, " install ") &&
+			strings.Contains(input.Command, "@agentclientprotocol/claude-agent-acp")
+		if !isClaudeACPInstall {
+			return InstallCommandResult{ExitCode: 0, Stdout: "patched"}, nil
+		}
+
+		if active := activeNPMInstalls.Add(1); active != 1 {
+			activeNPMInstalls.Add(-1)
+			sawConcurrentInstall.Store(true)
+			return InstallCommandResult{ExitCode: 90, Stderr: "concurrent npm install"}, nil
+		}
+		defer activeNPMInstalls.Add(-1)
+
+		callIndex := npmInstallCalls.Add(1)
+		if callIndex == 1 {
+			close(firstInstallStarted)
+			select {
+			case <-releaseFirstInstall:
+			case <-ctx.Done():
+				return InstallCommandResult{ExitCode: 1, Stderr: ctx.Err().Error()}, ctx.Err()
+			}
+		}
+
+		writePackageManifest(t, packageDir, "@agentclientprotocol/claude-agent-acp", "0.46.0")
+		return InstallCommandResult{ExitCode: 0, Stdout: "installed"}, nil
+	}
+
+	type runResult struct {
+		result RunActionResult
+		err    error
+	}
+	firstDone := make(chan runResult, 1)
+	go func() {
+		result, err := service.RunAction(context.Background(), RunActionInput{
+			Provider: "claude-code",
+			ActionID: ActionInstall,
+		})
+		firstDone <- runResult{result: result, err: err}
+	}()
+
+	<-firstInstallStarted
+	secondDone := make(chan runResult, 1)
+	go func() {
+		result, err := service.RunAction(context.Background(), RunActionInput{
+			Provider: "claude-code",
+			ActionID: ActionInstall,
+		})
+		secondDone <- runResult{result: result, err: err}
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	if got := npmInstallCalls.Load(); got != 1 {
+		t.Fatalf("npm install calls before releasing first install = %d, want 1", got)
+	}
+	close(releaseFirstInstall)
+
+	first := <-firstDone
+	if first.err != nil {
+		t.Fatalf("first RunAction() error = %v", first.err)
+	}
+	if first.result.Status != RunActionCompleted {
+		t.Fatalf("first status = %q, want %q; result=%#v", first.result.Status, RunActionCompleted, first.result)
+	}
+	second := <-secondDone
+	if second.err != nil {
+		t.Fatalf("second RunAction() error = %v", second.err)
+	}
+	if second.result.Status != RunActionCompleted {
+		t.Fatalf("second status = %q, want %q; result=%#v", second.result.Status, RunActionCompleted, second.result)
+	}
+	if got := npmInstallCalls.Load(); got != 2 {
+		t.Fatalf("npm install calls = %d, want serialized duplicate installs", got)
+	}
+	if sawConcurrentInstall.Load() {
+		t.Fatal("external registry npm installs overlapped")
+	}
+}
+
 func TestServiceResolveProviderCommandCreatesExternalRegistryNPMPrefix(t *testing.T) {
 	home := t.TempDir()
 	registryStore, prefixDir := fakeClaudeExternalRegistry(t)
@@ -1124,6 +1285,55 @@ func TestInstallCommandLockSerializesConcurrentNPMGlobalInstalls(t *testing.T) {
 	}
 }
 
+func TestInstallCommandLockSerializesConcurrentExternalRegistryNPMInstalls(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "run", "locks", "agent-provider-install.lock")
+	lock := installCommandLock{
+		command:      "external_agent_registry_npm:claude-acp:@agentclientprotocol/claude-agent-acp@0.46.0:/tmp/claude-acp",
+		lockPath:     lockPath,
+		now:          time.Now,
+		pollInterval: 10 * time.Millisecond,
+	}
+	releaseFirst, err := lock.Acquire(context.Background())
+	if err != nil {
+		t.Fatalf("Acquire() first error = %v", err)
+	}
+	defer releaseFirst()
+
+	secondAcquired := make(chan struct{})
+	secondReleased := make(chan struct{})
+	go func() {
+		releaseSecond, acquireErr := lock.Acquire(context.Background())
+		if acquireErr != nil {
+			t.Errorf("Acquire() second error = %v", acquireErr)
+			close(secondAcquired)
+			close(secondReleased)
+			return
+		}
+		close(secondAcquired)
+		releaseSecond()
+		close(secondReleased)
+	}()
+
+	select {
+	case <-secondAcquired:
+		t.Fatal("second install lock acquired before first release")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	releaseFirst()
+
+	select {
+	case <-secondAcquired:
+	case <-time.After(time.Second):
+		t.Fatal("second install lock did not acquire after first release")
+	}
+	select {
+	case <-secondReleased:
+	case <-time.After(time.Second):
+		t.Fatal("second install lock did not release")
+	}
+}
+
 func TestInstallCommandLockSkipsNonNPMCommands(t *testing.T) {
 	lockPath := filepath.Join(t.TempDir(), "run", "locks", "npm-global-install.lock")
 	var called atomic.Bool
@@ -1147,6 +1357,17 @@ func TestInstallCommandLockSkipsNonNPMCommands(t *testing.T) {
 	}
 	if _, err := os.Stat(lockPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("lock file exists for non-npm command, err = %v", err)
+	}
+}
+
+func TestInstallCommandLockUsesPackageSpecificPathForExternalRegistryNPM(t *testing.T) {
+	first := installCommandLockPath("external_agent_registry_npm:claude-acp:@agentclientprotocol/claude-agent-acp@0.46.0:/tmp/claude-acp")
+	second := installCommandLockPath("external_agent_registry_npm:other-agent:other-package@1.0.0:/tmp/other-agent")
+	if filepath.Base(first) == "npm-global-install.lock" {
+		t.Fatalf("external registry npm lock path = %q, want package-specific lock", first)
+	}
+	if filepath.Base(first) == filepath.Base(second) {
+		t.Fatalf("lock paths = %q and %q, want distinct package-specific locks", first, second)
 	}
 }
 
@@ -1634,8 +1855,10 @@ func TestRegistrySelectNormalizesAndDeduplicatesProviders(t *testing.T) {
 	}
 }
 
-func TestServiceSelectInstallDirPrefersWritablePathDir(t *testing.T) {
+func TestServiceSelectInstallDirPrefersUserLocalBin(t *testing.T) {
 	home := t.TempDir()
+	// A writable directory on PATH must NOT be preferred over the stable
+	// user-global ~/.local/bin (created on demand).
 	pathDir := filepath.Join(home, "custom-bin")
 	if err := os.MkdirAll(pathDir, 0o755); err != nil {
 		t.Fatalf("mkdir path dir: %v", err)
@@ -1653,8 +1876,33 @@ func TestServiceSelectInstallDirPrefersWritablePathDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("selectInstallDir() error = %v", err)
 	}
+	want := filepath.Join(home, ".local", "bin")
+	if installDir != want {
+		t.Fatalf("installDir = %q, want %q", installDir, want)
+	}
+}
+
+func TestServiceSelectInstallDirFallsBackToPathDirWhenHomeUnavailable(t *testing.T) {
+	root := t.TempDir()
+	pathDir := filepath.Join(root, "custom-bin")
+	if err := os.MkdirAll(pathDir, 0o755); err != nil {
+		t.Fatalf("mkdir path dir: %v", err)
+	}
+	service := Service{
+		Environ: func() []string {
+			return []string{"PATH=" + pathDir}
+		},
+		HomeDir: func() (string, error) {
+			return "", errors.New("home unavailable")
+		},
+	}
+
+	installDir, err := service.selectInstallDir()
+	if err != nil {
+		t.Fatalf("selectInstallDir() error = %v", err)
+	}
 	if installDir != pathDir {
-		t.Fatalf("installDir = %q, want %q", installDir, pathDir)
+		t.Fatalf("installDir = %q, want %q (PATH fallback)", installDir, pathDir)
 	}
 }
 

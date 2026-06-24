@@ -380,6 +380,9 @@ func (w *tuttiWiring) Close() error {
 	if w.appCenterService != nil && w.appCenterService.Runner != nil {
 		w.appCenterService.Runner.StopAll(context.Background())
 	}
+	if w.appCenterService != nil {
+		w.appCenterService.StopWorkspaceAppUploadJanitor()
+	}
 	if w.browserService != nil {
 		w.browserService.Close()
 	}

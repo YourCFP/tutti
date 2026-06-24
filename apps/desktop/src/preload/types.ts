@@ -24,6 +24,8 @@ import type {
   ConfigureAppUpdatesInput,
   DesktopWorkspaceAppFolderKind,
   DesktopHostWindowCapturePreviewInput,
+  DesktopHostWindowCloseRequestPayload,
+  DesktopHostWindowCloseRequestResolutionPayload,
   DesktopRendererDiagnosticPayload,
   DesktopTerminalDiagnosticPayload,
   DesktopTerminalStreamUrlRequest,
@@ -96,7 +98,13 @@ export interface DesktopHostWindowApi {
   capturePreview(
     input: DesktopHostWindowCapturePreviewInput
   ): Promise<string | null>;
-  onCloseRequest(listener: () => void): () => void;
+  onCloseRequest(
+    listener: (payload: DesktopHostWindowCloseRequestPayload) => void
+  ): () => void;
+  onQuitShortcutToast(listener: () => void): () => void;
+  resolveCloseRequest(
+    payload: DesktopHostWindowCloseRequestResolutionPayload
+  ): void;
 }
 
 export type DesktopWorkspaceAppExternalHostRequestResult =

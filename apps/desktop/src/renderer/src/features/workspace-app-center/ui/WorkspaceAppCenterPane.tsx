@@ -10,6 +10,7 @@ import {
   createAppCenterViewModel,
   workspaceAppManifestSchemaVersion
 } from "@tutti-os/workspace-app-center";
+import { resolveDefaultAppFactoryProvider } from "@tutti-os/workspace-app-center/core";
 import { createAppCenterI18nRuntime } from "@tutti-os/workspace-app-center/i18n";
 import type {
   AppCenterAppTab,
@@ -35,59 +36,6 @@ import {
 } from "@renderer/features/workspace-workbench/services/workspaceAgentProviderCatalog";
 import { shouldShowWorkspaceApp } from "../services/workspaceAppVisibility.ts";
 import { useWorkspaceAppCenterService } from "./useWorkspaceAppCenterService.ts";
-
-const catalogAppDisplayDefinitions = [
-  {
-    appIds: ["ai-media-canvas", "media-canvas"],
-    descriptionKey: "appCenter.catalogApps.aiMediaCanvas.description",
-    nameKey: "appCenter.catalogApps.aiMediaCanvas.name"
-  },
-  {
-    appIds: ["automation"],
-    descriptionKey: "appCenter.catalogApps.automation.description",
-    nameKey: "appCenter.catalogApps.automation.name"
-  },
-  {
-    appIds: ["daily-product-radar", "daily-tech-radar", "radar"],
-    descriptionKey: "appCenter.catalogApps.dailyProductRadar.description",
-    nameKey: "appCenter.catalogApps.dailyProductRadar.name"
-  },
-  {
-    appIds: ["ai-doc"],
-    descriptionKey: "appCenter.comingSoonApps.aiDocument.description",
-    nameKey: "appCenter.comingSoonApps.aiDocument.name"
-  },
-  {
-    appIds: ["group-chat"],
-    descriptionKey: "appCenter.catalogApps.groupChat.description",
-    nameKey: "appCenter.catalogApps.groupChat.name"
-  },
-  {
-    appIds: ["vibe-design"],
-    descriptionKey: "appCenter.catalogApps.vibeDesign.description",
-    nameKey: "appCenter.catalogApps.vibeDesign.name"
-  }
-] as const;
-
-type CatalogAppDisplayDefinition = {
-  descriptionKey: string;
-  nameKey: string;
-};
-
-const catalogAppDisplayById = new Map<string, CatalogAppDisplayDefinition>(
-  catalogAppDisplayDefinitions.flatMap((definition) =>
-    definition.appIds.map(
-      (appId) =>
-        [
-          appId,
-          {
-            descriptionKey: definition.descriptionKey,
-            nameKey: definition.nameKey
-          }
-        ] as const
-    )
-  )
-);
 
 const aiPptAppIconUrl = new URL(
   "../../../assets/workspace-canvas/dock/default/apps/PPT.png",
@@ -240,6 +188,7 @@ export function WorkspaceAppCenterPane({
         service.fixFactoryJob({ jobId, prompt, workspaceId }),
       importApp: () => service.importApp({ workspaceId }),
       installApp: (appId) => service.installApp({ appId, workspaceId }),
+      loadLocalApp: () => service.loadLocalApp({ workspaceId }),
       openApp: async (appId) => {
         await service.openApp({ appId, workspaceId });
       },
@@ -272,6 +221,24 @@ export function WorkspaceAppCenterPane({
       publishFactoryJob: (jobId) =>
         service.publishFactoryJob({ jobId, workspaceId }),
       refreshCatalog: () => service.refreshCatalog(workspaceId),
+      reloadLocalApp: (appId) => service.reloadLocalApp({ appId, workspaceId }),
+      repairLocalApp: async (request) => {
+        const draftPrompt = request.prompt.trim();
+        if (!draftPrompt) {
+          return;
+        }
+        const provider = resolveDefaultAppFactoryProvider(
+          factoryProviderOptions,
+          agentProviderSnapshot.defaultProvider
+        );
+        const userProjectPath = request.projectDir.trim();
+        await requestWorkspaceAgentGuiLaunch({
+          draftPrompt,
+          provider: normalizeDesktopAgentGUIProvider(provider),
+          ...(userProjectPath ? { userProjectPath } : {}),
+          workspaceId
+        });
+      },
       retryFactoryValidation: (jobId) =>
         service.retryFactoryValidation({ jobId, workspaceId }),
       retryApp: (appId) => service.retryApp({ appId, workspaceId }),
@@ -283,7 +250,12 @@ export function WorkspaceAppCenterPane({
         service.updateApp({ appId, trigger, workspaceId }),
       uninstallApp: (appId) => service.uninstallApp({ appId, workspaceId })
     }),
-    [service, workspaceId]
+    [
+      agentProviderSnapshot.defaultProvider,
+      factoryProviderOptions,
+      service,
+      workspaceId
+    ]
   );
   const handleActiveAppTabChange = useCallback(
     (activeAppTab: AppCenterAppTab) => {
@@ -298,9 +270,7 @@ export function WorkspaceAppCenterPane({
     const recommendedApps = withComingSoonWorkspaceApps(
       state.apps,
       comingSoonApps
-    )
-      .map((app) => withWorkspaceAppDisplayOverride(app, i18n, locale))
-      .filter((app) => shouldShowWorkspaceApp(app.appId));
+    ).filter((app) => shouldShowWorkspaceApp(app.appId));
 
     return createAppCenterViewModel({
       apps: recommendedApps.map((app) =>
@@ -424,32 +394,6 @@ function createComingSoonWorkspaceApp(input: {
   };
 }
 
-function withWorkspaceAppDisplayOverride(
-  app: WorkspaceAppCenterApp,
-  i18n: { readonly t: (key: string) => string },
-  locale: string
-): WorkspaceAppCenterApp {
-  const definition = catalogAppDisplayById.get(app.appId.trim().toLowerCase());
-  if (!definition) {
-    return app;
-  }
-  const name = i18n.t(definition.nameKey);
-  const description = i18n.t(definition.descriptionKey);
-  return {
-    ...app,
-    description,
-    name,
-    localizations: [
-      {
-        description,
-        locale,
-        name,
-        tags: []
-      }
-    ]
-  };
-}
-
 function withComingSoonWorkspaceApps(
   apps: readonly WorkspaceAppCenterApp[],
   comingSoonApps: readonly WorkspaceAppCenterApp[]
@@ -561,7 +505,12 @@ function toWorkspaceAppRecord(
       })),
       manifest,
       source: {
-        kind: app.source === "builtin" ? "bundled" : "local"
+        kind:
+          app.source === "builtin"
+            ? "bundled"
+            : app.source === "local-dev"
+              ? "local-dev"
+              : "local"
       }
     },
     category,

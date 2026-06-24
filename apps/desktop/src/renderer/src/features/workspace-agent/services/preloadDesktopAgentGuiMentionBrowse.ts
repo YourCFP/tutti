@@ -6,9 +6,7 @@ import {
   AGENT_CONTEXT_MENTION_PROVIDER_IDS,
   type AgentContextMentionProvider
 } from "@tutti-os/agent-gui/context-mention-provider";
-import type { WorkspaceAppCenterApp } from "@tutti-os/workspace-app-center";
 import { createDesktopAgentGeneratedFileMentionProvider } from "./internal/createDesktopAgentGeneratedFileMentionProvider.ts";
-import { createDesktopWorkspaceAppMentionProvider } from "../../rich-text-at/providers/desktopWorkspaceAppMentionProvider.ts";
 import { composeDesktopAgentGuiContextMentionProviders } from "./internal/composeDesktopAgentGuiContextMentionProviders.ts";
 
 // Mirrors the composer's hardcoded currentUserId (DesktopAgentGUIWorkbenchBody),
@@ -21,7 +19,7 @@ const DESKTOP_AGENT_GUI_CURRENT_USER_ID = "local";
  * provider set as the live composer body — minus the dock-file wrapper, which
  * needs a workbench host that does not exist yet at startup. The provider id set
  * (hence the cache key) is identical, so the live controller reuses this warm;
- * dock-file enrichment and any later app/locale changes fill in on first open
+ * dock-file enrichment and provider refreshes fill in on first open
  * via the 30s TTL revalidation. sessionCwd is "" because no agent session (and
  * therefore no selected project) exists yet at startup.
  */
@@ -29,8 +27,6 @@ export function preloadDesktopAgentGuiMentionBrowse(input: {
   workspaceId: string;
   baseProviders: readonly AgentContextMentionProvider[];
   agentActivityRuntime: AgentActivityRuntime;
-  apps: readonly WorkspaceAppCenterApp[];
-  locale: string;
 }): void {
   const workspaceId = input.workspaceId.trim();
   if (!workspaceId) {
@@ -50,13 +46,6 @@ export function preloadDesktopAgentGuiMentionBrowse(input: {
           workspaceId
         }),
       workspaceAppMentionProvider: workspaceAppBaseProvider
-        ? createDesktopWorkspaceAppMentionProvider({
-            apps: input.apps,
-            baseProvider: workspaceAppBaseProvider,
-            locale: input.locale,
-            workspaceId
-          })
-        : null
     }
   );
   preloadAgentMentionBrowse({

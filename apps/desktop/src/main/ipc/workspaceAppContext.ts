@@ -14,12 +14,17 @@ import {
   type DesktopWorkspaceAppExternalRendererResponse,
   type DesktopWorkspaceAppExternalRendererResult,
   type DesktopWorkspaceAppContext,
+  type DesktopWorkspaceAppFileUploadCancelInput,
+  type DesktopWorkspaceAppFileUploadCompleteInput,
+  type DesktopWorkspaceAppFileUploadPrepareInput,
+  type DesktopWorkspaceAppFileUploadPrepareResult,
   type DesktopWorkspaceAppOpenFileRequest
 } from "../../shared/contracts/ipc";
 import {
   normalizeTuttiExternalAtQueryInput,
   normalizeTuttiExternalFileOpenInput,
   normalizeTuttiExternalFileSelectInput,
+  normalizeTuttiExternalFileUploadInput,
   normalizeTuttiExternalLogInput,
   normalizeTuttiExternalPdfPrintHtmlInput,
   normalizeTuttiExternalPermissionRequestInput,
@@ -41,7 +46,8 @@ import type {
   TuttiExternalPdfPrintHtmlInput,
   TuttiExternalPdfPrintHtmlResult,
   TuttiExternalPermissionRequestInput,
-  TuttiExternalPermissionRequestResult
+  TuttiExternalPermissionRequestResult,
+  TuttiExternalUploadedFile
 } from "@tutti-os/workspace-external-core/contracts";
 import { isTuttiExternalManagedAiModelProviderId } from "@tutti-os/workspace-external-core/core";
 import type { DesktopLocale } from "../../shared/i18n";
@@ -185,6 +191,44 @@ export function registerWorkspaceAppContextIpc(
         desktopIpcChannels.appContext.openFileRequested,
         resolved
       );
+    }
+  );
+  registerDesktopIpcHandler(
+    desktopIpcChannels.appExternal.filesUploadPrepare,
+    async (event, payload) => {
+      const context = requireWorkspaceAppGuestContext(event.sender);
+      const input = normalizeWorkspaceAppUploadPrepareInput(payload);
+      const session = await requestWorkspaceAppUploadPrepare(
+        endpoint,
+        context,
+        input
+      );
+      return createWorkspaceAppUploadContentPutRequest(
+        endpoint,
+        context,
+        session.uploadId,
+        session.expiresAt
+      );
+    }
+  );
+  registerDesktopIpcHandler(
+    desktopIpcChannels.appExternal.filesUploadComplete,
+    async (event, payload) => {
+      const context = requireWorkspaceAppGuestContext(event.sender);
+      const input = normalizeWorkspaceAppUploadCompleteInput(payload);
+      return requestWorkspaceAppUploadComplete(
+        endpoint,
+        context,
+        input.uploadId
+      );
+    }
+  );
+  registerDesktopIpcHandler(
+    desktopIpcChannels.appExternal.filesUploadCancel,
+    async (event, payload) => {
+      const context = requireWorkspaceAppGuestContext(event.sender);
+      const input = normalizeWorkspaceAppUploadCancelInput(payload);
+      await requestWorkspaceAppUploadCancel(endpoint, context, input.uploadId);
     }
   );
   registerDesktopIpcHandler(
@@ -499,6 +543,7 @@ async function printWorkspaceAppHtmlToPdf(
     const pdf = await printWindow.webContents.printToPDF({
       margins: printMargins(input.margin),
       pageSize: input.pageSize ?? "A4",
+      preferCSSPageSize: input.preferCSSPageSize === true,
       printBackground: input.printBackground !== false
     });
     return { bytes: new Uint8Array(pdf) };
@@ -531,7 +576,9 @@ function loadPrintHtml(
     };
     const handleFailed: WorkspaceAppPrintLoadListener = (...args) => {
       const errorDescription =
-        typeof args[2] === "string" ? args[2] : "PDF print HTML failed to load.";
+        typeof args[2] === "string"
+          ? args[2]
+          : "PDF print HTML failed to load.";
       cleanup();
       reject(new Error(errorDescription));
     };
@@ -545,7 +592,9 @@ function loadPrintHtml(
 }
 
 function preparePrintHtml(input: TuttiExternalPdfPrintHtmlInput): string {
-  const base = input.baseUrl ? `<base href="${escapeHtml(input.baseUrl)}">` : "";
+  const base = input.baseUrl
+    ? `<base href="${escapeHtml(input.baseUrl)}">`
+    : "";
   const title = input.title ? `<title>${escapeHtml(input.title)}</title>` : "";
   const printHead = `${base}${title}`;
   if (!printHead) {
@@ -715,6 +764,260 @@ function requestWorkspaceAppExternalRenderer<
   });
 }
 
+async function requestWorkspaceAppUploadPrepare(
+  endpoint: DesktopDaemonEndpoint,
+  context: WorkspaceAppGuestContext,
+  input: DesktopWorkspaceAppFileUploadPrepareInput
+): Promise<{ expiresAt: string; uploadId: string }> {
+  const baseUrl = resolveDesktopDaemonBaseUrl(endpoint);
+  const response = await fetch(workspaceAppUploadSessionUrl(baseUrl, context), {
+    body: JSON.stringify(input),
+    headers: {
+      Authorization: `Bearer ${endpoint.accessToken}`,
+      "Content-Type": "application/json"
+    },
+    method: "POST"
+  });
+  if (!response.ok) {
+    const message = await readWorkspaceAppUploadError(
+      response,
+      "Prepare workspace app upload"
+    );
+    throw new Error(message);
+  }
+  return normalizeWorkspaceAppUploadPrepareResponse(await response.json());
+}
+
+function createWorkspaceAppUploadContentPutRequest(
+  endpoint: DesktopDaemonEndpoint,
+  context: WorkspaceAppGuestContext,
+  uploadId: string,
+  expiresAt: string
+): DesktopWorkspaceAppFileUploadPrepareResult {
+  const baseUrl = resolveDesktopDaemonBaseUrl(endpoint);
+  return {
+    expiresAt,
+    headers: {
+      Authorization: `Bearer ${createAppServerToken(
+        endpoint.accessToken,
+        context.workspaceID,
+        context.appID
+      )}`,
+      "Content-Type": "application/octet-stream"
+    },
+    method: "PUT",
+    uploadId,
+    url: new URL(
+      `${workspaceAppUploadSessionPath(context)}/${encodeURIComponent(uploadId)}/content`,
+      baseUrl
+    ).toString()
+  };
+}
+
+async function requestWorkspaceAppUploadComplete(
+  endpoint: DesktopDaemonEndpoint,
+  context: WorkspaceAppGuestContext,
+  uploadId: string
+): Promise<TuttiExternalUploadedFile> {
+  const baseUrl = resolveDesktopDaemonBaseUrl(endpoint);
+  const response = await fetch(
+    new URL(
+      `${workspaceAppUploadSessionPath(context)}/${encodeURIComponent(uploadId)}/complete`,
+      baseUrl
+    ),
+    {
+      headers: {
+        Authorization: `Bearer ${endpoint.accessToken}`
+      },
+      method: "POST"
+    }
+  );
+  if (!response.ok) {
+    const message = await readWorkspaceAppUploadError(
+      response,
+      "Complete workspace app upload"
+    );
+    throw new Error(message);
+  }
+  return normalizeWorkspaceAppUploadCompleteResponse(await response.json());
+}
+
+async function requestWorkspaceAppUploadCancel(
+  endpoint: DesktopDaemonEndpoint,
+  context: WorkspaceAppGuestContext,
+  uploadId: string
+): Promise<void> {
+  const baseUrl = resolveDesktopDaemonBaseUrl(endpoint);
+  const response = await fetch(
+    new URL(
+      `${workspaceAppUploadSessionPath(context)}/${encodeURIComponent(uploadId)}`,
+      baseUrl
+    ),
+    {
+      headers: {
+        Authorization: `Bearer ${endpoint.accessToken}`
+      },
+      method: "DELETE"
+    }
+  );
+  if (!response.ok) {
+    const message = await readWorkspaceAppUploadError(
+      response,
+      "Cancel workspace app upload"
+    );
+    throw new Error(message);
+  }
+}
+
+function workspaceAppUploadSessionUrl(
+  baseUrl: string,
+  context: WorkspaceAppGuestContext
+): URL {
+  return new URL(workspaceAppUploadSessionPath(context), baseUrl);
+}
+
+function workspaceAppUploadSessionPath(
+  context: WorkspaceAppGuestContext
+): string {
+  return `/v1/workspaces/${encodeURIComponent(context.workspaceID)}/apps/${encodeURIComponent(context.appID)}/uploads`;
+}
+
+function normalizeWorkspaceAppUploadPrepareInput(
+  payload: unknown
+): DesktopWorkspaceAppFileUploadPrepareInput {
+  if (!isRecord(payload)) {
+    throw new Error("files.upload prepare input must be an object.");
+  }
+  const input = normalizeTuttiExternalFileUploadInput(payload);
+  if (!input.name) {
+    throw new Error("files.upload name is required.");
+  }
+  if (!input.mimeType) {
+    throw new Error("files.upload mimeType is required.");
+  }
+  if (
+    typeof payload.sizeBytes !== "number" ||
+    !Number.isFinite(payload.sizeBytes) ||
+    payload.sizeBytes < 0
+  ) {
+    throw new Error("files.upload sizeBytes must be a non-negative number.");
+  }
+  return {
+    purpose: input.purpose,
+    name: input.name,
+    mimeType: input.mimeType,
+    sizeBytes: payload.sizeBytes
+  };
+}
+
+function normalizeWorkspaceAppUploadCompleteInput(
+  payload: unknown
+): DesktopWorkspaceAppFileUploadCompleteInput {
+  return { uploadId: normalizeWorkspaceAppUploadID(payload, "complete") };
+}
+
+function normalizeWorkspaceAppUploadCancelInput(
+  payload: unknown
+): DesktopWorkspaceAppFileUploadCancelInput {
+  return { uploadId: normalizeWorkspaceAppUploadID(payload, "cancel") };
+}
+
+function normalizeWorkspaceAppUploadID(
+  payload: unknown,
+  operation: "cancel" | "complete"
+): string {
+  if (!isRecord(payload)) {
+    throw new Error(`files.upload ${operation} input must be an object.`);
+  }
+  const uploadId =
+    typeof payload.uploadId === "string" ? payload.uploadId.trim() : "";
+  if (!uploadId) {
+    throw new Error("files.upload uploadId is required.");
+  }
+  return uploadId;
+}
+
+function normalizeWorkspaceAppUploadPrepareResponse(value: unknown): {
+  expiresAt: string;
+  uploadId: string;
+} {
+  if (
+    !isRecord(value) ||
+    typeof value.uploadId !== "string" ||
+    typeof value.expiresAt !== "string"
+  ) {
+    throw new Error("Workspace app upload prepare response is invalid.");
+  }
+  return {
+    expiresAt: value.expiresAt,
+    uploadId: value.uploadId
+  };
+}
+
+function normalizeWorkspaceAppUploadCompleteResponse(
+  value: unknown
+): TuttiExternalUploadedFile {
+  if (!isRecord(value)) {
+    throw new Error("Workspace app upload complete response is invalid.");
+  }
+  return normalizeWorkspaceAppUploadedFile(value.file);
+}
+
+function normalizeWorkspaceAppUploadedFile(
+  value: unknown
+): TuttiExternalUploadedFile {
+  if (
+    !isRecord(value) ||
+    typeof value.path !== "string" ||
+    typeof value.name !== "string" ||
+    typeof value.mimeType !== "string" ||
+    typeof value.sha256 !== "string" ||
+    typeof value.sizeBytes !== "number" ||
+    !Number.isFinite(value.sizeBytes)
+  ) {
+    throw new Error("Workspace app uploaded file response is invalid.");
+  }
+  return {
+    path: value.path,
+    name: value.name,
+    mimeType: value.mimeType,
+    sizeBytes: value.sizeBytes,
+    sha256: value.sha256
+  };
+}
+
+async function readWorkspaceAppUploadError(
+  response: Response,
+  operation: string
+): Promise<string> {
+  try {
+    const payload: unknown = await response.json();
+    if (isRecord(payload)) {
+      if (typeof payload.error === "string") {
+        return payload.error;
+      }
+      if (typeof payload.message === "string") {
+        return payload.message;
+      }
+      if (isRecord(payload.error)) {
+        const error = payload.error;
+        if (typeof error.developerMessage === "string") {
+          return error.developerMessage;
+        }
+        if (typeof error.message === "string") {
+          return error.message;
+        }
+        if (typeof error.reason === "string") {
+          return error.reason;
+        }
+      }
+    }
+  } catch {
+    // Keep the status fallback when the daemon does not return JSON.
+  }
+  return `${operation} failed with status ${response.status}.`;
+}
+
 async function requestManagedAiModelPermission(
   endpoint: DesktopDaemonEndpoint,
   context: WorkspaceAppGuestContext,
@@ -752,7 +1055,10 @@ async function requestManagedAiModelPermission(
     throw new Error(message);
   }
   const payload: unknown = await response.json();
-  return normalizeManagedAiModelPermissionResponse(payload);
+  return {
+    ...normalizeManagedAiModelPermissionResponse(payload),
+    contextToken
+  };
 }
 
 async function readManagedAiModelGrantError(
@@ -780,6 +1086,9 @@ function normalizeManagedAiModelPermissionResponse(
   }
   return {
     code: value.grantCode,
+    ...(typeof value.contextToken === "string"
+      ? { contextToken: value.contextToken }
+      : {}),
     ...(typeof value.expiresAt === "string"
       ? { expiresAt: value.expiresAt }
       : {}),
@@ -868,6 +1177,7 @@ function createWorkspaceAppContext(
     appId: context.appID,
     capabilities: [
       "files.open@1",
+      "files.upload@1",
       "pdf.printHtmlToPdf@1",
       "userProjects@1",
       "workspace.openFeature@1"
@@ -1005,7 +1315,9 @@ function normalizeWorkspaceAppOpenUrlLogPayload(
   };
 }
 
-function broadcastWorkspaceAppContext(payload: Partial<DesktopWorkspaceAppContext>): void {
+function broadcastWorkspaceAppContext(
+  payload: Partial<DesktopWorkspaceAppContext>
+): void {
   for (const contents of [...workspaceAppGuestWebContents]) {
     if (contents.isDestroyed()) {
       workspaceAppGuestWebContents.delete(contents);

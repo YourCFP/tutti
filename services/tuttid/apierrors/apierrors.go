@@ -40,6 +40,7 @@ const (
 	ReasonMissingDesktopAppCatalogChannel            = "missing_desktop_app_catalog_channel"
 	ReasonMissingDesktopBrowserUseConnectionMode     = "missing_desktop_browser_use_connection_mode"
 	ReasonMissingDesktopLocale                       = "missing_desktop_locale"
+	ReasonMissingDesktopMinimizeAnimation            = "missing_desktop_minimize_animation"
 	ReasonMissingDesktopSleepPreventionMode          = "missing_desktop_sleep_prevention_mode"
 	ReasonMissingDesktopThemeSource                  = "missing_desktop_theme_source"
 	ReasonMissingDesktopUpdateChannel                = "missing_desktop_update_channel"
@@ -56,6 +57,7 @@ const (
 	ReasonUnsupportedDesktopAppCatalogChannel        = "unsupported_desktop_app_catalog_channel"
 	ReasonUnsupportedDesktopBrowserUseConnectionMode = "unsupported_desktop_browser_use_connection_mode"
 	ReasonUnsupportedDesktopLocale                   = "unsupported_desktop_locale"
+	ReasonUnsupportedDesktopMinimizeAnimation        = "unsupported_desktop_minimize_animation"
 	ReasonUnsupportedDesktopSleepPreventionMode      = "unsupported_desktop_sleep_prevention_mode"
 	ReasonUnsupportedDesktopThemeSource              = "unsupported_desktop_theme_source"
 	ReasonUnsupportedDesktopUpdateChannel            = "unsupported_desktop_update_channel"
@@ -307,6 +309,17 @@ func Classify(err error) *ProtocolError {
 	if errors.As(err, &providerUnavailableErr) {
 		return AgentProviderUnavailable(providerUnavailableErr)
 	}
+	var invalidModelErr *agentservice.InvalidModelError
+	if errors.As(err, &invalidModelErr) {
+		params := map[string]any{
+			"provider": strings.TrimSpace(invalidModelErr.Provider),
+			"model":    strings.TrimSpace(invalidModelErr.Model),
+		}
+		if len(invalidModelErr.AvailableModels) > 0 {
+			params["availableModels"] = invalidModelErr.AvailableModels
+		}
+		return InvalidRequest("agent.invalid_model", WithCause(err), WithParams(params))
+	}
 	switch {
 	case errors.Is(err, workspacedata.ErrWorkspaceNotFound):
 		return WorkspaceNotFound(ReasonWorkspaceNotFound, WithCause(err))
@@ -372,10 +385,18 @@ func Classify(err error) *ProtocolError {
 		return InvalidRequest(ReasonWorkspaceAppPackageExists, WithCause(err))
 	case errors.Is(err, workspaceservice.ErrAppPackageDeleteForbidden):
 		return InvalidRequest(ReasonWorkspaceAppDeleteForbidden, WithCause(err))
+	case errors.Is(err, workspaceservice.ErrLocalAppPackageInvalid):
+		return InvalidRequest(ReasonMalformedRequest, WithCause(err))
 	case errors.Is(err, workspaceservice.ErrAppPackageIconInvalid):
 		return InvalidRequest(ReasonWorkspaceAppIconInvalid, WithCause(err))
 	case errors.Is(err, workspaceservice.ErrAppPackageIconReplaceForbidden):
 		return InvalidRequest(ReasonWorkspaceAppIconReplaceForbidden, WithCause(err))
+	case errors.Is(err, workspaceservice.ErrInvalidWorkspaceAppUpload),
+		errors.Is(err, workspaceservice.ErrWorkspaceAppUploadExpired),
+		errors.Is(err, workspaceservice.ErrWorkspaceAppUploadNotReady):
+		return InvalidRequest(ReasonMalformedRequest, WithCause(err))
+	case errors.Is(err, workspaceservice.ErrWorkspaceAppUploadNotFound):
+		return WorkspaceAppNotFound(WithCause(err))
 	case errors.Is(err, workspaceservice.ErrInvalidWorkbenchSnapshot):
 		return InvalidRequest(ReasonInvalidWorkbenchSnapshot, WithCause(err))
 	case errors.Is(err, workspaceservice.ErrTerminalNotFound):

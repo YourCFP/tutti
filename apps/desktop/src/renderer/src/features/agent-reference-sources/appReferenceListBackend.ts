@@ -30,23 +30,36 @@ type AppReferenceListItem = Awaited<
 export function createAppReferenceListBackend(
   tuttidClient: TuttidClient
 ): ReferenceListBackend {
-  // app 图标缓存:把 app 图标透传到其下所有分组节点(项目/子文件夹),
-  // 使「引用应用项目」的 bundle 不论在第几层都带应用图标。
+  // app 元数据缓存:把 app 展示名/图标透传到其下所有分组节点(项目/子文件夹),
+  // 使「引用应用项目」的详情与 bundle 都使用人类可读上下文。
+  const appLabelById = new Map<string, string>();
   const appIconById = new Map<string, string>();
-  const ensureAppIcon = async (
-    scope: ReferenceScope,
-    appId: string
-  ): Promise<string | undefined> => {
-    if (appIconById.has(appId)) {
-      return appIconById.get(appId);
-    }
-    const apps = await listReferenceSupportingApps(tuttidClient, scope);
+  const rememberApps = (
+    apps: Awaited<ReturnType<typeof listReferenceSupportingApps>>
+  ) => {
     for (const app of apps) {
+      appLabelById.set(app.appId, app.displayName?.trim() || app.appId);
       if (app.iconUrl) {
         appIconById.set(app.appId, app.iconUrl);
       }
     }
-    return appIconById.get(appId);
+  };
+  const ensureAppMetadata = async (
+    scope: ReferenceScope,
+    appId: string
+  ): Promise<{ label: string | undefined; iconUrl: string | undefined }> => {
+    if (appLabelById.has(appId) || appIconById.has(appId)) {
+      return {
+        label: appLabelById.get(appId),
+        iconUrl: appIconById.get(appId)
+      };
+    }
+    const apps = await listReferenceSupportingApps(tuttidClient, scope);
+    rememberApps(apps);
+    return {
+      label: appLabelById.get(appId),
+      iconUrl: appIconById.get(appId)
+    };
   };
 
   return {
@@ -57,11 +70,7 @@ export function createAppReferenceListBackend(
       // 根层级:列支持 references 的 app。
       if (!parentGroupId) {
         const apps = await listReferenceSupportingApps(tuttidClient, scope);
-        for (const app of apps) {
-          if (app.iconUrl) {
-            appIconById.set(app.appId, app.iconUrl);
-          }
-        }
+        rememberApps(apps);
         return {
           items: apps.map((app) => ({
             type: "group",
@@ -74,7 +83,7 @@ export function createAppReferenceListBackend(
       }
 
       const { appId, groupId } = decodeAppGroupId(parentGroupId);
-      const [response, appIconUrl] = await Promise.all([
+      const [response, appMetadata] = await Promise.all([
         tuttidClient.listWorkspaceAppReferences(scope.workspaceId, appId, {
           parentGroupId: groupId,
           filterText: filter ?? null,
@@ -82,11 +91,11 @@ export function createAppReferenceListBackend(
           limit: APP_REFERENCE_PAGE_LIMIT,
           kinds: ["file"]
         }),
-        ensureAppIcon(scope, appId)
+        ensureAppMetadata(scope, appId)
       ]);
       return {
         items: response.items.map((item) =>
-          appItemToProtocol(appId, item, undefined, appIconUrl)
+          appItemToProtocol(appId, item, appMetadata.label, appMetadata.iconUrl)
         ),
         nextCursor: response.nextCursor ?? null
       };
@@ -210,10 +219,14 @@ function appItemToProtocol(
   appIconUrl?: string
 ): ReferenceListItem {
   if (item.type === "group") {
+    const groupLabel = item.displayName?.trim();
     return {
       type: "group",
       id: `${APP_MARKER}${appId}${GROUP_MARKER}${base64UrlEncode(item.id)}`,
       displayName: item.displayName,
+      ...(appFallbackLabel && groupLabel
+        ? { parentLabel: `${appFallbackLabel} / ${groupLabel}` }
+        : {}),
       referenceCount: item.referenceCount,
       ...(appIconUrl ? { iconUrl: appIconUrl } : {})
     };

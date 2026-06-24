@@ -13,6 +13,10 @@ trusted app APIs may read or update host workspace state directly.
 - `at.query()` for host-provided mention candidates.
 - `files.select()` for user-activated workspace file picking.
 - `files.open()` for user-activated host opening/revealing of a known workspace file path.
+- `files.upload()` for trusted app upload of a browser `File`/`Blob` into the
+  app's managed durable data path, with optional progress and `AbortSignal`
+  cancellation. It returns file metadata only; app-specific asset records remain
+  owned by the calling app.
 - `permissions.request()` for user-activated host permission grants such as managed AI model access.
 - `pdf.printHtmlToPdf()` for user-activated host PDF generation from print-ready HTML.
 - `settings.open()` for user-activated host settings navigation, including the managed models tab.

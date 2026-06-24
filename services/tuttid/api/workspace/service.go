@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"time"
 
 	workspacefiles "github.com/tutti-os/tutti/packages/workspace/files"
 	workspaceissues "github.com/tutti-os/tutti/packages/workspace/issues"
@@ -32,13 +33,19 @@ type AppCenterService interface {
 	Install(context.Context, string, string) (workspacebiz.WorkspaceApp, error)
 	InstallWithOptions(context.Context, string, string, workspaceservice.InstallOptions) (workspacebiz.WorkspaceApp, error)
 	Launch(context.Context, string, string) (workspacebiz.WorkspaceApp, error)
+	LoadLocalPackage(context.Context, string, string, workspaceservice.InstallOptions) (workspacebiz.WorkspaceApp, error)
 	ListReferences(context.Context, string, string, workspacebiz.AppReferenceListInput) (workspacebiz.AppReferenceListResult, error)
 	SearchReferences(context.Context, string, string, workspacebiz.AppReferenceSearchInput) (workspacebiz.AppReferenceListResult, error)
+	PrepareWorkspaceAppUpload(context.Context, string, string, workspaceservice.PrepareWorkspaceAppUploadInput) (workspaceservice.WorkspaceAppUploadSession, error)
+	PutWorkspaceAppUploadContent(context.Context, string, string, string, workspaceservice.PutWorkspaceAppUploadContentInput) error
+	CompleteWorkspaceAppUpload(context.Context, string, string, string, time.Time) (workspaceservice.WorkspaceAppUploadedFile, error)
+	CancelWorkspaceAppUpload(context.Context, string, string, string) error
 	List(context.Context, string) ([]workspacebiz.WorkspaceApp, error)
 	CatalogLoadState() workspacebiz.AppCatalogLoadState
 	RefreshCatalog(context.Context, string) ([]workspacebiz.WorkspaceApp, error)
 	Remove(context.Context, string, string) (workspacebiz.WorkspaceApp, error)
 	ReplaceIcon(context.Context, string, string, string) (workspacebiz.WorkspaceApp, error)
+	ReloadLocalPackage(context.Context, string, string, workspaceservice.InstallOptions) (workspacebiz.WorkspaceApp, error)
 	Retry(context.Context, string, string) (workspacebiz.WorkspaceApp, error)
 	Rollback(context.Context, string, string, string) (workspacebiz.WorkspaceApp, error)
 	StartEnabled(context.Context, string) ([]workspacebiz.WorkspaceApp, error)

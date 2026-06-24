@@ -114,7 +114,7 @@ test("WorkspaceSettingsService opens the managed models pane with a focused prov
   assert.equal(service.store.managedModels.focusRequestID, 2);
 });
 
-test("WorkspaceSettingsService opens general settings with a focused anchor", () => {
+test("WorkspaceSettingsService opens agent settings with a focused anchor", () => {
   const service = new WorkspaceSettingsService({
     client: createWorkspaceSettingsClient({})
   });
@@ -127,7 +127,7 @@ test("WorkspaceSettingsService opens general settings with a focused anchor", ()
     }
   );
 
-  assert.equal(service.store.activeSection, "general");
+  assert.equal(service.store.activeSection, "agent");
   assert.equal(service.store.generalFocusAnchor, "browser-use");
   assert.equal(service.store.generalFocusRequestID, 1);
 
@@ -139,7 +139,7 @@ test("WorkspaceSettingsService opens general settings with a focused anchor", ()
     }
   );
 
-  assert.equal(service.store.activeSection, "general");
+  assert.equal(service.store.activeSection, "agent");
   assert.equal(service.store.generalFocusAnchor, "computer-use");
   assert.equal(service.store.generalFocusRequestID, 2);
 });
@@ -1027,6 +1027,7 @@ function createDesktopPreferencesService(input: {
   onSetDockPlacement?: IDesktopPreferencesService["setDockPlacement"];
   onSetFileDefaultOpenersByExtension?: IDesktopPreferencesService["setFileDefaultOpenersByExtension"];
   onSetLocale?: IDesktopPreferencesService["setLocale"];
+  onSetMinimizeAnimation?: IDesktopPreferencesService["setMinimizeAnimation"];
   onSetSleepPreventionMode?: IDesktopPreferencesService["setSleepPreventionMode"];
   onSetThemeSource?: IDesktopPreferencesService["setThemeSource"];
   onSetUpdateChannel?: IDesktopPreferencesService["setUpdateChannel"];
@@ -1051,6 +1052,8 @@ function createDesktopPreferencesService(input: {
       input.onSetFileDefaultOpenersByExtension ??
       (async (openersByExtension) => openersByExtension),
     setLocale: input.onSetLocale ?? (async (locale) => locale),
+    setMinimizeAnimation:
+      input.onSetMinimizeAnimation ?? (async (animation) => animation),
     setSleepPreventionMode:
       input.onSetSleepPreventionMode ?? (async (enabled) => enabled),
     setThemeSource:
@@ -1074,6 +1077,7 @@ function createPreferencesState(
     changingDockIconStyle: null,
     changingDockPlacement: null,
     changingLocale: null,
+    changingMinimizeAnimation: null,
     changingSleepPreventionMode: null,
     changingThemeSource: null,
     changingUpdateChannel: null,
@@ -1083,6 +1087,7 @@ function createPreferencesState(
     dockPlacement: "bottom",
     fileDefaultOpenersByExtension: { html: "defaultBrowser" },
     locale: "en",
+    minimizeAnimation: "scale",
     sleepPreventionMode: "never",
     theme: createTheme("system"),
     updateChannel: "stable",

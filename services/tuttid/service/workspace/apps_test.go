@@ -456,6 +456,54 @@ func TestAppCenterServiceListPreloadsRuntimeForUninstalledApps(t *testing.T) {
 	}
 }
 
+func TestAppCenterServiceListSkipsRuntimePreloadForUninstalledStandaloneApp(t *testing.T) {
+	t.Parallel()
+
+	store := newAppStoreStub()
+	appPackage := workspacebiz.AppPackage{
+		AppID:   "standalone-app",
+		Version: "1.0.0",
+		Manifest: workspacebiz.AppManifest{
+			SchemaVersion: workspacebiz.AppManifestSchemaVersionV1,
+			AppID:         "standalone-app",
+			Version:       "1.0.0",
+			Name:          "Standalone App",
+			Runtime: workspacebiz.AppManifestRuntime{
+				Bootstrap:       "bootstrap.sh",
+				HealthcheckPath: "/",
+				Profile:         workspaceAppStandaloneRuntimeProfile,
+			},
+		},
+		Source: workspacebiz.AppPackageSourceGenerated,
+	}
+	if err := store.PutAppPackage(context.Background(), appPackage); err != nil {
+		t.Fatalf("PutAppPackage() error = %v", err)
+	}
+	resolver := &appRuntimeResolverStub{called: make(chan struct{})}
+	service := AppCenterService{
+		Store:          store,
+		WorkspaceStore: &catalogStoreStub{getWorkspace: workspacebiz.Summary{ID: "ws-1", Name: "Workspace"}},
+		Runner:         &AppRunner{RuntimeResolver: resolver},
+		StateDir:       t.TempDir(),
+		BuiltinCatalog: func() ([]builtinapps.App, error) {
+			return nil, nil
+		},
+	}
+
+	apps, err := service.List(context.Background(), "ws-1")
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(apps) != 1 || apps[0].Installation != nil {
+		t.Fatalf("List() apps = %#v", apps)
+	}
+	select {
+	case <-resolver.called:
+		t.Fatalf("List() preloaded runtime for uninstalled standalone app")
+	default:
+	}
+}
+
 func TestAppCenterServiceListSkipsRuntimePreloadWhenAllAppsInstalled(t *testing.T) {
 	t.Parallel()
 
@@ -591,8 +639,15 @@ func TestAppCenterServiceInitializesBuiltinCatalogAndInstallState(t *testing.T) 
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
-	if len(apps) != 0 {
-		t.Fatalf("List() = %#v, want no embedded apps", apps)
+	onboarding := findWorkspaceAppForTest(apps, "tutti-onboarding")
+	if onboarding == nil {
+		t.Fatalf("List() = %#v, want embedded onboarding", apps)
+	}
+	if onboarding.Package.Manifest.Runtime.Profile != workspaceAppStandaloneRuntimeProfile {
+		t.Fatalf("onboarding runtime profile = %q, want standalone", onboarding.Package.Manifest.Runtime.Profile)
+	}
+	if _, err := os.Stat(filepath.Join(onboarding.Package.PackageDir, "bin", "darwin-arm64", "tutti-onboarding-server")); err != nil {
+		t.Fatalf("onboarding embedded server missing: %v", err)
 	}
 }
 
@@ -617,8 +672,8 @@ func TestAppCenterServiceInitializesBuiltinPackagesWhenRemoteCatalogFails(t *tes
 	}
 	if packages, err := store.ListAppPackages(context.Background()); err != nil {
 		t.Fatalf("ListAppPackages() error = %v", err)
-	} else if len(packages) != 0 {
-		t.Fatalf("ListAppPackages() = %#v, want no embedded packages", packages)
+	} else if len(packages) != 1 || packages[0].AppID != "tutti-onboarding" {
+		t.Fatalf("ListAppPackages() = %#v, want embedded onboarding package", packages)
 	}
 	state := service.CatalogLoadState()
 	if state.Status != workspacebiz.AppCatalogLoadStatusLoading && state.Status != workspacebiz.AppCatalogLoadStatusFailed {
@@ -692,6 +747,14 @@ func TestAppCenterServiceListsRemoteBuiltinBeforeDownloadAndMaterializesOnDemand
 		BuiltinCatalog: func() ([]builtinapps.App, error) {
 			return []builtinapps.App{{
 				Manifest: sourceManifest,
+				Localizations: []workspacebiz.AppManifestLocalization{
+					{
+						Locale:      "zh-CN",
+						Name:        "大型内置应用",
+						Description: "大型应用",
+						Tags:        []string{"内置", "工作区"},
+					},
+				},
 				Distribution: builtinapps.Distribution{
 					Kind:           builtinapps.DistributionRemote,
 					ArtifactURL:    fileServer.URL + "/" + filepath.Base(archivePath),
@@ -712,6 +775,10 @@ func TestAppCenterServiceListsRemoteBuiltinBeforeDownloadAndMaterializesOnDemand
 	}
 	if actualIconURL := remoteApp.ResolvedIconURL(); actualIconURL == nil || *actualIconURL != iconURL {
 		t.Fatalf("remote builtin icon url = %v, want %q", actualIconURL, iconURL)
+	}
+	localizations := remoteApp.Package.Localizations()
+	if len(localizations) != 1 || localizations[0].Locale != "zh-CN" || localizations[0].Name != "大型内置应用" {
+		t.Fatalf("remote builtin localizations = %#v", localizations)
 	}
 	if _, err := store.GetAppPackage(ctx, "large-builtin"); !errors.Is(err, workspacedata.ErrWorkspaceAppNotFound) {
 		t.Fatalf("GetAppPackage() before materialize error = %v", err)
@@ -1373,7 +1440,7 @@ func TestAppCenterServiceStartEnabledWaitsForRemoteCatalogRefresh(t *testing.T) 
 	}
 }
 
-func TestAppCenterServiceStartEnabledPreloadsRuntimeAfterRemoteCatalogRefresh(t *testing.T) {
+func TestAppCenterServiceStartEnabledDoesNotWaitForRemoteCatalogWhenNoAppsAreEnabled(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv("TUTTI_APP_CATALOG_FILE", "")
 
@@ -1416,20 +1483,6 @@ func TestAppCenterServiceStartEnabledPreloadsRuntimeAfterRemoteCatalogRefresh(t 
 	}()
 
 	select {
-	case <-catalogRequested:
-	case err := <-resultCh:
-		t.Fatalf("StartEnabled() returned before catalog request completed: %v", err)
-	case <-time.After(time.Second):
-		t.Fatal("remote catalog was not requested")
-	}
-	select {
-	case <-resolver.called:
-		t.Fatal("runtime preload started before catalog refresh completed")
-	case <-time.After(50 * time.Millisecond):
-	}
-
-	releaseCatalogResponse()
-	select {
 	case err := <-resultCh:
 		if err != nil {
 			t.Fatalf("StartEnabled() error = %v", err)
@@ -1440,8 +1493,14 @@ func TestAppCenterServiceStartEnabledPreloadsRuntimeAfterRemoteCatalogRefresh(t 
 	select {
 	case <-resolver.called:
 	case <-time.After(time.Second):
-		t.Fatal("runtime preload did not start after catalog refresh")
+		t.Fatal("runtime preload did not start")
 	}
+
+	select {
+	case <-catalogRequested:
+	case <-time.After(50 * time.Millisecond):
+	}
+	releaseCatalogResponse()
 	resolver.mu.Lock()
 	preloadedProfile := resolver.profile
 	resolver.mu.Unlock()

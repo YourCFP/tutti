@@ -73,6 +73,49 @@ test("app backend describeHandle resolves the app handle", async () => {
   });
 });
 
+test("app backend labels child groups with app and project names", async () => {
+  const tuttidClient = {
+    listWorkspaceApps: async () => ({
+      apps: [
+        {
+          appId: "vibe-design",
+          displayName: "Prototype Design",
+          installed: true,
+          enabled: true,
+          references: { listSupported: true, searchSupported: false }
+        }
+      ]
+    }),
+    listWorkspaceAppReferences: async () => ({
+      items: [
+        {
+          type: "group",
+          id: "project-23232",
+          displayName: "23232",
+          referenceCount: 0
+        }
+      ],
+      nextCursor: null
+    })
+  } as unknown as TuttidClient;
+  const backend = createAppReferenceListBackend(tuttidClient);
+
+  const result = await backend.list(scope, {
+    parentGroupId: "app:vibe-design",
+    cursor: null,
+    filter: null
+  });
+  const childGroup = result.items[0];
+
+  assert.equal(childGroup?.type, "group");
+  assert.equal(
+    childGroup && "parentLabel" in childGroup
+      ? childGroup.parentLabel
+      : undefined,
+    "Prototype Design / 23232"
+  );
+});
+
 // 点击 chip 一键定位:locate 产出的「分组 id 路径」叶子,经 describeHandle 反解应回到原句柄。
 test("app locate to a group round-trips via describeHandle", async () => {
   const backend = createAppReferenceListBackend({} as unknown as TuttidClient);

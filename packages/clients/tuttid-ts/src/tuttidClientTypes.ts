@@ -42,6 +42,7 @@ import type {
   HealthStatusResponse,
   InstallWorkspaceAppRequest,
   ImportExternalAgentSessionsRequest,
+  LoadLocalWorkspaceAppRequest,
   IssueManagerContextRefsResponse,
   IssueManagerIssue,
   IssueManagerIssueDetailResponse,
@@ -61,10 +62,13 @@ import type {
   CopyWorkspaceFileEntryRequest,
   MoveWorkspaceFileEntryRequest,
   RenameWorkspaceFileEntryRequest,
+  PrepareWorkspaceAppUploadRequest,
+  PrepareWorkspaceAppUploadResponse,
   PreflightUploadWorkspaceFilesResponse,
   PutDesktopPreferencesRequest,
   ImportWorkspaceAppRequest,
   ReplaceWorkspaceAppIconRequest,
+  ReloadLocalWorkspaceAppRequest,
   ResizeWorkspaceTerminalRequest,
   SendWorkspaceAgentSessionInputRequest,
   SubmitWorkspaceAgentInteractiveRequest,
@@ -96,6 +100,8 @@ import type {
   WorkspaceAppFactoryJob,
   WorkspaceAppFactoryJobListResponse,
   WorkspaceAppListResponse,
+  WorkspaceAppMentionCandidatesResponse,
+  WorkspaceAppUploadedFile,
   PublishWorkspaceAppFactoryJobResponse,
   RollbackWorkspaceAppRequest,
   WorkspaceSummary,
@@ -121,6 +127,9 @@ export interface TuttidClient {
     workspaceID?: string,
     options?: { includeHidden?: boolean }
   ): Promise<CliCapabilitiesResponse>;
+  listWorkspaceAppMentionCandidates(
+    workspaceID: string
+  ): Promise<WorkspaceAppMentionCandidatesResponse>;
   addWorkspaceIssueContextRefs(
     workspaceID: string,
     issueID: string,
@@ -297,6 +306,21 @@ export interface TuttidClient {
     appID: string,
     request: AppReferenceSearchRequest
   ): Promise<AppReferenceSearchResponse>;
+  prepareWorkspaceAppUpload(
+    workspaceID: string,
+    appID: string,
+    request: PrepareWorkspaceAppUploadRequest
+  ): Promise<PrepareWorkspaceAppUploadResponse>;
+  completeWorkspaceAppUpload(
+    workspaceID: string,
+    appID: string,
+    uploadID: string
+  ): Promise<WorkspaceAppUploadedFile>;
+  cancelWorkspaceAppUpload(
+    workspaceID: string,
+    appID: string,
+    uploadID: string
+  ): Promise<void>;
   refreshWorkspaceAppCatalog(
     workspaceID: string
   ): Promise<WorkspaceAppListResponse>;
@@ -313,6 +337,10 @@ export interface TuttidClient {
   importWorkspaceApp(
     workspaceID: string,
     request: ImportWorkspaceAppRequest
+  ): Promise<WorkspaceApp>;
+  loadLocalWorkspaceApp(
+    workspaceID: string,
+    request: LoadLocalWorkspaceAppRequest
   ): Promise<WorkspaceApp>;
   uninstallWorkspaceApp(
     workspaceID: string,
@@ -333,6 +361,11 @@ export interface TuttidClient {
     workspaceID: string,
     appID: string,
     request: ReplaceWorkspaceAppIconRequest
+  ): Promise<WorkspaceApp>;
+  reloadLocalWorkspaceApp(
+    workspaceID: string,
+    appID: string,
+    request?: ReloadLocalWorkspaceAppRequest
   ): Promise<WorkspaceApp>;
   listWorkspaceAppFactoryJobs(
     workspaceID: string

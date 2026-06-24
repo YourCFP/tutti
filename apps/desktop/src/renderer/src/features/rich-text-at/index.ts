@@ -8,11 +8,6 @@ export {
   type DesktopRichTextTriggerProviderRequest
 } from "./services/richTextAtService.interface";
 export {
-  createDesktopWorkspaceAppMentionProvider,
-  type CreateDesktopWorkspaceAppMentionProviderInput,
-  type DesktopWorkspaceAppMentionItem
-} from "./providers/desktopWorkspaceAppMentionProvider.ts";
-export {
   createDesktopAgentSessionMentionProvider,
   type CreateDesktopAgentSessionMentionProviderInput,
   type DesktopAgentSessionStatusView

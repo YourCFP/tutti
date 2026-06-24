@@ -3,11 +3,13 @@ import type {
   MenuItemConstructorOptions,
   MessageBoxOptions
 } from "electron";
-import type {
-  AppUpdateState,
-  ClearDeveloperLogsResult
+import {
+  desktopIpcChannels,
+  type AppUpdateState,
+  type ClearDeveloperLogsResult
 } from "../shared/contracts/ipc.ts";
 import { createTranslator, type DesktopLocale } from "../shared/i18n/index.ts";
+import { requestDesktopAppQuitFromCommandShortcut } from "./desktopAppLifecycle.ts";
 import type { DesktopLogger } from "./logging.ts";
 
 export interface ApplicationMenuOptions {
@@ -16,11 +18,13 @@ export interface ApplicationMenuOptions {
   clearDeveloperLogs?: () =>
     | ClearDeveloperLogsResult
     | Promise<ClearDeveloperLogsResult>;
+  closeFromCommandShortcut?: (ownerWindow?: BaseWindow | null) => void;
   exportDeveloperLogs?: () => unknown;
   getLocale?: () => DesktopLocale;
   logger?: DesktopLogger;
   openPerfMonitorDevTools?: (ownerWindow?: BaseWindow | null) => unknown;
   platform?: NodeJS.Platform;
+  quitFromCommandShortcut?: () => void;
   showMessageBox?: (options: MessageBoxOptions) => Promise<unknown>;
 }
 
@@ -146,11 +150,13 @@ export function createApplicationMenuTemplate({
   allowDeveloperTools = process.env.NODE_ENV === "development",
   checkForUpdates,
   clearDeveloperLogs,
+  closeFromCommandShortcut,
   exportDeveloperLogs,
   getLocale = () => "en",
   logger,
   openPerfMonitorDevTools,
   platform = process.platform,
+  quitFromCommandShortcut,
   showMessageBox
 }: ApplicationMenuOptions = {}): MenuItemConstructorOptions[] {
   const isMac = platform === "darwin";
@@ -182,7 +188,13 @@ export function createApplicationMenuTemplate({
         { role: "hideOthers" },
         { role: "unhide" },
         { type: "separator" },
-        { role: "quit" }
+        quitFromCommandShortcut
+          ? {
+              accelerator: "Command+Q",
+              label: translator.t("desktop.menu.quit"),
+              click: () => quitFromCommandShortcut()
+            }
+          : { role: "quit" }
       ]
     });
   }
@@ -190,7 +202,18 @@ export function createApplicationMenuTemplate({
   template.push(
     {
       label: translator.t("desktop.menu.file"),
-      submenu: isMac ? [{ role: "close" }] : [{ role: "quit" }]
+      submenu: isMac
+        ? [
+            closeFromCommandShortcut
+              ? {
+                  accelerator: "Command+W",
+                  label: translator.t("common.close"),
+                  click: (_menuItem, browserWindow) =>
+                    closeFromCommandShortcut(browserWindow)
+                }
+              : { role: "close" }
+          ]
+        : [{ role: "quit" }]
     },
     {
       label: translator.t("desktop.menu.edit"),
@@ -301,7 +324,7 @@ export function createApplicationMenuTemplate({
 export async function configureApplicationMenu(
   options: ApplicationMenuOptions = {}
 ): Promise<void> {
-  const { app, Menu } = await import("electron");
+  const { app, BrowserWindow, Menu } = await import("electron");
   app.setAboutPanelOptions({
     applicationName: "Tutti",
     applicationVersion: app.getVersion(),
@@ -309,6 +332,33 @@ export async function configureApplicationMenu(
     copyright: "Copyright © 2026 Tutti"
   });
   Menu.setApplicationMenu(
-    Menu.buildFromTemplate(createApplicationMenuTemplate(options))
+    Menu.buildFromTemplate(
+      createApplicationMenuTemplate({
+        quitFromCommandShortcut: () =>
+          requestDesktopAppQuitFromCommandShortcut({
+            now: () => Date.now(),
+            quit: () => app.quit(),
+            showQuitShortcutToast: () => {
+              for (const window of BrowserWindow.getAllWindows()) {
+                if (!window.webContents.isDestroyed()) {
+                  window.webContents.send(
+                    desktopIpcChannels.host.window.quitShortcutToast
+                  );
+                }
+              }
+            }
+          }),
+        closeFromCommandShortcut: (ownerWindow) => {
+          if (ownerWindow instanceof BrowserWindow) {
+            void import("./windows/workspaceWindow.ts").then(
+              ({ requestWorkspaceWindowCloseFromCommandShortcut }) => {
+                requestWorkspaceWindowCloseFromCommandShortcut(ownerWindow);
+              }
+            );
+          }
+        },
+        ...options
+      })
+    )
   );
 }

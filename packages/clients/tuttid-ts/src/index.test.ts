@@ -378,6 +378,99 @@ test("shared tuttid client lists workspace app references with exact body", asyn
   } satisfies AppReferenceListResponse);
 });
 
+test("shared tuttid client prepares completes and cancels workspace app uploads", async () => {
+  const requests: Array<{ method: string; path: string; body: unknown }> = [];
+
+  const client = createTuttidClient({
+    fetch: async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      const path = new URL(request.url).pathname;
+      const body = request.body ? await request.json() : null;
+      requests.push({ method: request.method, path, body });
+
+      if (request.method === "DELETE") {
+        return new Response(null, { status: 204 });
+      }
+      if (path.endsWith("/complete")) {
+        return new Response(
+          JSON.stringify({
+            file: {
+              path: "/state/apps/installations/canvas/data/uploads/2c/hash.png",
+              name: "image.png",
+              mimeType: "image/png",
+              sizeBytes: 5,
+              sha256: "hash"
+            }
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          uploadId: "upload-1",
+          expiresAt: "2026-06-24T12:15:00Z"
+        }),
+        {
+          status: 201,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+  });
+
+  const session = await client.prepareWorkspaceAppUpload("ws-1", "canvas", {
+    purpose: "app-asset",
+    name: "image.png",
+    mimeType: "image/png",
+    sizeBytes: 5
+  });
+  const file = await client.completeWorkspaceAppUpload(
+    "ws-1",
+    "canvas",
+    "upload-1"
+  );
+  await client.cancelWorkspaceAppUpload("ws-1", "canvas", "upload-1");
+
+  assert.deepEqual(session, {
+    uploadId: "upload-1",
+    expiresAt: "2026-06-24T12:15:00Z"
+  });
+  assert.deepEqual(file, {
+    path: "/state/apps/installations/canvas/data/uploads/2c/hash.png",
+    name: "image.png",
+    mimeType: "image/png",
+    sizeBytes: 5,
+    sha256: "hash"
+  });
+  assert.deepEqual(requests, [
+    {
+      method: "POST",
+      path: "/v1/workspaces/ws-1/apps/canvas/uploads",
+      body: {
+        purpose: "app-asset",
+        name: "image.png",
+        mimeType: "image/png",
+        sizeBytes: 5
+      }
+    },
+    {
+      method: "POST",
+      path: "/v1/workspaces/ws-1/apps/canvas/uploads/upload-1/complete",
+      body: null
+    },
+    {
+      method: "DELETE",
+      path: "/v1/workspaces/ws-1/apps/canvas/uploads/upload-1",
+      body: null
+    }
+  ]);
+});
+
 test("shared tuttid client searches workspace issue references with exact body", async () => {
   let requestMethod = "";
   let requestPath = "";
@@ -684,7 +777,7 @@ test("shared tuttid client probes agent providers", async () => {
       return new Response(
         JSON.stringify({
           checkedAt: "2026-06-02T08:00:00.000Z",
-          command: ["/usr/local/bin/codex-acp"],
+          command: ["/usr/local/bin/codex"],
           provider: "codex",
           status: "ready"
         }),
@@ -702,7 +795,7 @@ test("shared tuttid client probes agent providers", async () => {
   assert.equal(requestPath, "/v1/agent-providers/codex/probe");
   assert.deepEqual(result, {
     checkedAt: "2026-06-02T08:00:00.000Z",
-    command: ["/usr/local/bin/codex-acp"],
+    command: ["/usr/local/bin/codex"],
     provider: "codex",
     status: "ready"
   });

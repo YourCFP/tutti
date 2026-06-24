@@ -15,6 +15,7 @@ export const preferencesDesktopPreferencesSchema = {
     "dockPlacement",
     "fileDefaultOpenersByExtension",
     "locale",
+    "minimizeAnimation",
     "sleepPreventionMode",
     "themeSource",
     "updateChannel",
@@ -171,6 +172,10 @@ export const preferencesDesktopPreferencesSchema = {
     locale: {
       type: "string",
       enum: ["en", "zh-CN"]
+    },
+    minimizeAnimation: {
+      type: "string",
+      enum: ["scale", "genie", "off"]
     },
     sleepPreventionMode: {
       type: "string",
@@ -928,6 +933,7 @@ export const preferencesDesktopUpdateRequestedPayloadSchema = {
         "dockPlacement",
         "fileDefaultOpenersByExtension",
         "locale",
+        "minimizeAnimation",
         "sleepPreventionMode",
         "themeSource",
         "updateChannel",
@@ -1091,6 +1097,10 @@ export const preferencesDesktopUpdateRequestedPayloadSchema = {
         locale: {
           type: "string",
           enum: ["en", "zh-CN"]
+        },
+        minimizeAnimation: {
+          type: "string",
+          enum: ["scale", "genie", "off"]
         },
         sleepPreventionMode: {
           type: "string",
@@ -1153,6 +1163,7 @@ export const preferencesDesktopUpdatedPayloadSchema = {
         "dockPlacement",
         "fileDefaultOpenersByExtension",
         "locale",
+        "minimizeAnimation",
         "sleepPreventionMode",
         "themeSource",
         "updateChannel",
@@ -1316,6 +1327,10 @@ export const preferencesDesktopUpdatedPayloadSchema = {
         locale: {
           type: "string",
           enum: ["en", "zh-CN"]
+        },
+        minimizeAnimation: {
+          type: "string",
+          enum: ["scale", "genie", "off"]
         },
         sleepPreventionMode: {
           type: "string",

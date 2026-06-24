@@ -1,5 +1,6 @@
 import { resolveWebsiteNavigationUrl } from "../shared/utils/websiteUrl";
 import type { WorkspaceIssueMentionMode } from "@tutti-os/workspace-issue-manager/core";
+import { parseRichTextMentionHref } from "@tutti-os/ui-rich-text/core";
 
 export type WorkspaceLinkActionSource =
   | "agent-markdown"
@@ -27,6 +28,7 @@ export interface ResolvedWorkspaceFilePathCandidate {
 
 export interface OpenWorkspaceFileLinkAction {
   type: "open-workspace-file";
+  mode?: "reveal" | "open-directory";
   path: string;
   directoryPath: string;
   workspaceRoot: string;
@@ -125,7 +127,7 @@ export function resolveWorkspaceFilePathCandidate({
   const normalizedPath = normalizeWorkspaceFilePath(rawPath);
   if (
     isAbsoluteLocalPath(normalizedPath) &&
-    (isDirectAgentGeneratedImagePath(normalizedPath) ||
+    (isDirectAgentGeneratedMediaPath(normalizedPath) ||
       isDirectWorkspaceAppDataPath(normalizedPath))
   ) {
     const directoryPath = dirname(normalizedPath);
@@ -147,7 +149,7 @@ export function resolveWorkspaceFilePathCandidate({
     : normalizeWorkspaceFilePath(`${base}/${normalizedPath}`);
   if (
     !isInsideOrEqual(resolvedPath, root) &&
-    !isDirectAgentGeneratedImagePath(resolvedPath)
+    !isDirectAgentGeneratedMediaPath(resolvedPath)
   ) {
     return null;
   }
@@ -207,41 +209,32 @@ export function resolveWorkspaceMentionLinkAction({
   | OpenWorkspaceIssueLinkAction
   | OpenWorkspaceAppLinkAction
   | null {
-  const rawHref = href.trim();
-  if (!rawHref.toLowerCase().startsWith("mention://")) {
+  const mention = parseRichTextMentionHref(href, "");
+  if (!mention) {
     return null;
   }
 
-  let url: URL;
-  try {
-    url = new URL(rawHref);
-  } catch {
-    return null;
-  }
-
-  const workspaceId = url.searchParams.get("workspaceId")?.trim() || "";
-  const targetId = decodeURIComponent(url.pathname.replace(/^\/+/, "")).trim();
+  const workspaceId = mention.scope?.workspaceId?.trim() || "";
+  const targetId = mention.entityId.trim();
   if (!workspaceId || !targetId) {
     return null;
   }
 
-  if (url.hostname === "agent-session") {
-    const provider = url.searchParams.get("provider")?.trim() || null;
+  if (mention.providerId === "agent-session") {
     return {
       type: "open-agent-session",
       workspaceId,
       agentSessionId: targetId,
-      ...(provider ? { provider } : {}),
       source
     };
   }
 
-  if (url.hostname === "workspace-issue") {
-    const mode = parseWorkspaceIssueMentionMode(url.searchParams.get("mode"));
-    const outputDir = url.searchParams.get("outputDir")?.trim() || "";
-    const runId = url.searchParams.get("runId")?.trim() || "";
-    const taskId = url.searchParams.get("taskId")?.trim() || "";
-    const topicId = url.searchParams.get("topicId")?.trim() || "";
+  if (mention.providerId === "workspace-issue") {
+    const mode = parseWorkspaceIssueMentionMode(mention.scope?.mode ?? null);
+    const outputDir = mention.scope?.outputDir?.trim() || "";
+    const runId = mention.scope?.runId?.trim() || "";
+    const taskId = mention.scope?.taskId?.trim() || "";
+    const topicId = mention.scope?.topicId?.trim() || "";
     return {
       type: "open-workspace-issue",
       workspaceId,
@@ -255,11 +248,10 @@ export function resolveWorkspaceMentionLinkAction({
     };
   }
 
-  if (url.hostname === "workspace-app") {
-    const messageId = url.searchParams.get("messageId")?.trim() || null;
-    const summaryTaskId = url.searchParams.get("summaryTaskId")?.trim() || null;
-    const conversationId =
-      url.searchParams.get("conversationId")?.trim() || null;
+  if (mention.providerId === "workspace-app") {
+    const messageId = mention.scope?.messageId?.trim() || null;
+    const summaryTaskId = mention.scope?.summaryTaskId?.trim() || null;
+    const conversationId = mention.scope?.conversationId?.trim() || null;
     return {
       type: "open-workspace-app",
       workspaceId,
@@ -379,7 +371,7 @@ function isInsideOrEqual(path: string, root: string): boolean {
   );
 }
 
-function isDirectAgentGeneratedImagePath(path: string): boolean {
+export function isDirectAgentGeneratedMediaPath(path: string): boolean {
   if (!isAbsoluteLocalPath(path)) {
     return false;
   }
@@ -390,11 +382,12 @@ function isDirectAgentGeneratedImagePath(path: string): boolean {
   if (
     statePath[1] !== "agent" ||
     statePath[2] !== "runs" ||
-    !statePath.includes("generated_images")
+    (!statePath.includes("generated_images") &&
+      !statePath.includes("generated_videos"))
   ) {
     return false;
   }
-  return /\.(?:png|jpe?g|gif|webp|bmp)$/i.test(path);
+  return /\.(?:png|jpe?g|gif|webp|bmp|mp4|webm)$/i.test(path);
 }
 
 function isDirectWorkspaceAppDataPath(path: string): boolean {

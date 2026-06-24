@@ -103,6 +103,24 @@ test("reference.parentLabel 透传为节点 contextLabel,缺省时不带", async
   assert.equal(result.entries[1]?.contextLabel, undefined);
 });
 
+test("group.parentLabel 透传为节点 contextLabel,避免 UI 展示不透明 nodeId", async () => {
+  const { source } = makeSource({
+    __root__: {
+      items: [
+        {
+          type: "group",
+          id: "app:vibe-design|grp:23232",
+          displayName: "23232",
+          parentLabel: "Prototype Design / 23232"
+        } as ReferenceListResult["items"][number]
+      ],
+      nextCursor: null
+    }
+  });
+  const result = await source.listChildren(scope, { node: null });
+  assert.equal(result.entries[0]?.contextLabel, "Prototype Design / 23232");
+});
+
 test("下钻:folder 节点的 nodeId 解码回 parentGroupId 原样传给 backend", async () => {
   const { source, calls } = makeSource({
     __root__: {

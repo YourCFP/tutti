@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/tutti-os/tutti/packages/agentactivity/daemon/runtimecmd"
@@ -402,7 +403,12 @@ func installerLockCommand(spec InstallerSpec) string {
 		return spec.ShellCommand
 	}
 	if spec.Kind == InstallerKindExternalAgentRegistryNPM && spec.RegistryNPM != nil {
-		return string(spec.Kind) + ":" + spec.RegistryNPM.AgentID + ":" + spec.RegistryNPM.Package
+		return strings.Join([]string{
+			string(spec.Kind),
+			strings.TrimSpace(spec.RegistryNPM.AgentID),
+			strings.TrimSpace(spec.RegistryNPM.Package),
+			strings.TrimSpace(spec.RegistryNPM.PrefixDir),
+		}, ":")
 	}
 	return ""
 }
@@ -525,15 +531,56 @@ func (s Service) runExternalAgentRegistryNPMInstaller(ctx context.Context, spec 
 		"install",
 		packageSpec,
 	})
-	env := managedruntime.ProcessEnv(append(appRuntime.EnvOverrides, envMapToList(npmSpec.Env)...)...)
-	return s.installCommand(ctx, InstallCommandInput{
-		Command: command,
-		Env:     env,
-	})
+	baseEnv := managedruntime.ProcessEnv(append(appRuntime.EnvOverrides, envMapToList(npmSpec.Env)...)...)
+
+	// Try official npm first (fastest when reachable), then fall back through the
+	// CN-available mirrors when it is slow or blocked. Each attempt is bounded so a
+	// blocked registry fails over quickly instead of consuming the whole budget;
+	// the npm_config_registry value selects the source.
+	registries := s.agentNPMRegistries()
+	var result InstallCommandResult
+	for i, registry := range registries {
+		env := append(slices.Clone(baseEnv), "npm_config_registry="+registry)
+		attemptCtx, cancel := context.WithTimeout(ctx, perRegistryInstallTimeout)
+		result, err = s.installCommand(attemptCtx, InstallCommandInput{
+			Command: command,
+			Env:     env,
+		})
+		cancel()
+		if err == nil && result.ExitCode == 0 {
+			return result, nil
+		}
+		if i < len(registries)-1 {
+			slog.Warn(
+				"agent adapter npm install failed on registry, trying next",
+				"registry", registry,
+				"exitCode", result.ExitCode,
+				"error", err,
+			)
+		}
+	}
+	return result, err
 }
 
 func (s Service) selectInstallDir() (string, error) {
 	resolver := s.commandResolver()
+	// Prefer a stable, user-global location (~/.local/bin, then ~/bin) so
+	// installed binaries survive toolchain/version-manager churn and never
+	// land in a volatile or app-scoped PATH entry (e.g. a node-version
+	// manager's bin dir that disappears when that version is removed). These
+	// dirs are always searched by the resolver's knownExecutableDirs, so the
+	// binary stays discoverable even when ~/.local/bin is not on PATH.
+	if home, err := s.homeDir(); err == nil && strings.TrimSpace(home) != "" {
+		for _, dir := range []string{
+			filepath.Join(home, ".local", "bin"),
+			filepath.Join(home, "bin"),
+		} {
+			if err := ensureWritableInstallDir(dir); err == nil {
+				return dir, nil
+			}
+		}
+	}
+	// Fall back to the first writable directory already on the user's PATH.
 	for _, dir := range resolver.UserBinInstallDirs(nil) {
 		if err := ensureWritableInstallDir(dir); err == nil {
 			return dir, nil
@@ -717,7 +764,13 @@ func (s Service) httpClient() *http.Client {
 	if s.HTTPClient != nil {
 		return s.HTTPClient
 	}
-	return http.DefaultClient
+	// Route downloads (codex CLI package, claude install.sh, release binaries)
+	// through the macOS system proxy. This is an in-process HTTP call, so it
+	// cannot inherit the proxy env we inject into spawned children — resolve it
+	// directly. Prefers an explicit env proxy, falls back to the system proxy.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = runtimecmd.HTTPProxyFunc()
+	return &http.Client{Transport: transport}
 }
 
 func joinShellCommand(parts []string) string {

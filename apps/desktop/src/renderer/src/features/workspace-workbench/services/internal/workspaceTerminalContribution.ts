@@ -16,6 +16,7 @@ import {
 import type {
   WorkbenchContribution,
   WorkbenchHostCloseDialogRequest,
+  WorkbenchHostDockPopupItemInput,
   WorkbenchHostExternalStateSource
 } from "@tutti-os/workbench-surface";
 import type {
@@ -90,6 +91,29 @@ export function createWorkspaceTerminalContribution(input: {
     linkHandler: terminalAdapter.linkHandler,
     transport: terminalAdapter.transport
   });
+  const provideTerminalPreview = (item: WorkbenchHostDockPopupItemInput) => {
+    const snapshot = previewStore.get(item.node.id);
+    if (!snapshot) {
+      return null;
+    }
+    const externalState =
+      (item.externalNodeState as TerminalNodeExternalState | null) ?? null;
+    const theme = feature.resolveTheme({
+      runtimeKind: externalState?.runtimeKind ?? "local",
+      sessionId: externalState?.sessionId ?? null,
+      status: externalState?.status ?? "created"
+    });
+    return {
+      element: createElement(TerminalDockPreview, {
+        frame: item.node.frame,
+        snapshot,
+        theme,
+        viewport: item.previewViewport ?? null
+      }),
+      kind: "component" as const,
+      revision: snapshot.revision
+    };
+  };
 
   const contribution = createTerminalWorkbenchContribution({
     contributionId: "workspace-terminal",
@@ -128,7 +152,8 @@ export function createWorkspaceTerminalContribution(input: {
     resolveLaunchInput: (request) =>
       readTerminalWorkbenchIntent(request.payload),
     node: {
-      onPreviewChange: (change) => previewStore.update(change)
+      onPreviewChange: (change) => previewStore.update(change),
+      provideMinimizedPreview: provideTerminalPreview
     },
     shouldCloseAfterCloseFailure: ({ error, status }) =>
       shouldCloseTerminalNodeAfterCloseFailure({
@@ -144,28 +169,7 @@ export function createWorkspaceTerminalContribution(input: {
       entry.id === defaultWorkspaceTerminalWorkbenchTypeId
         ? {
             ...entry,
-            providePopupItemPreview: (item) => {
-              const snapshot = previewStore.get(item.node.id);
-              if (!snapshot) {
-                return null;
-              }
-              const externalState =
-                (item.externalNodeState as TerminalNodeExternalState | null) ??
-                null;
-              return {
-                element: createElement(TerminalDockPreview, {
-                  frame: item.node.frame,
-                  snapshot,
-                  theme: feature.resolveTheme({
-                    runtimeKind: externalState?.runtimeKind ?? "local",
-                    sessionId: externalState?.sessionId ?? null,
-                    status: externalState?.status ?? "created"
-                  })
-                }),
-                kind: "component",
-                revision: snapshot.revision
-              };
-            }
+            providePopupItemPreview: provideTerminalPreview
           }
         : entry
     ),

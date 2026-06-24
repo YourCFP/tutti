@@ -2,6 +2,66 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { openWorkspaceOnboardingIfNeeded } from "./useWorkspaceOnboardingAutoOpen.ts";
 
+test("workspace onboarding auto-open uses local app list before refreshing remote catalog", async () => {
+  let catalogRefreshCalls = 0;
+  const result = await openWorkspaceOnboardingIfNeeded({
+    appCenterService: {
+      store: {
+        apps: [
+          {
+            appId: "tutti-onboarding",
+            installed: true
+          }
+        ]
+      },
+      async refresh() {},
+      async refreshCatalog() {
+        catalogRefreshCalls += 1;
+      },
+      async installApp() {},
+      async openApp() {
+        return true;
+      }
+    },
+    wait: async () => {},
+    workbenchHostService: createWorkbenchHostService(),
+    workspaceId: "workspace-1"
+  });
+
+  assert.equal(result, "opened");
+  assert.equal(catalogRefreshCalls, 0);
+});
+
+test("workspace onboarding auto-open falls back to remote catalog when app is missing locally", async () => {
+  let catalogRefreshCalls = 0;
+  const apps: { appId: string; installed?: boolean }[] = [];
+  const result = await openWorkspaceOnboardingIfNeeded({
+    appCenterService: {
+      store: {
+        apps
+      },
+      async refresh() {},
+      async refreshCatalog() {
+        catalogRefreshCalls += 1;
+        apps.push({
+          appId: "tutti-onboarding",
+          installed: true
+        });
+      },
+      async installApp() {},
+      async openApp() {
+        return true;
+      }
+    },
+    wait: async () => {},
+    workbenchHostService: createWorkbenchHostService(),
+    workspaceId: "workspace-1"
+  });
+
+  assert.equal(result, "opened");
+  assert.equal(catalogRefreshCalls, 1);
+});
+
 test("workspace onboarding auto-open retries when the first open does not launch", async () => {
   let markCalls = 0;
   let openCalls = 0;

@@ -8,6 +8,7 @@ import {
   type AgentContextMentionProvider
 } from "@tutti-os/agent-gui/context-mention-provider";
 import { normalizeAgentTitleText } from "@tutti-os/agent-gui/agent-title-text";
+import { appCenterI18nResources } from "@tutti-os/workspace-app-center/i18n";
 import {
   createRichTextMarkdownLinkInsertResult,
   createRichTextTriggerProvider,
@@ -20,18 +21,16 @@ import type {
   RichTextTriggerProvider
 } from "@tutti-os/ui-rich-text/types";
 import {
-  tuttiAgentAssetUrls,
   tuttiFileAssetUrls,
   tuttiFolderAssetUrls,
   tuttiIssueAssetUrls
 } from "../../../../../../shared/tuttiAssetProtocol.ts";
+import { resolveDesktopWorkspaceAppDefaultIconUrl } from "../../../../../../shared/workspaceAppIconDefaults.ts";
 import type {
   DesktopRichTextAtCapability,
   DesktopRichTextTriggerProviderRequest,
   IDesktopRichTextAtService
 } from "../richTextAtService.interface";
-import type { WorkspaceAppCenterApp } from "@tutti-os/workspace-app-center";
-import { createDesktopWorkspaceAppMentionProvider } from "../../providers/desktopWorkspaceAppMentionProvider.ts";
 import { compareDesktopWorkspaceAppMentionItems } from "../../providers/desktopWorkspaceAppMentionOrdering.ts";
 import {
   createDesktopAgentSessionMentionProvider,
@@ -47,12 +46,6 @@ interface DesktopRichTextAtContributor {
 
 export interface DesktopRichTextAtServiceDependencies {
   tuttidClient: TuttidClient;
-  /**
-   * Live getter for the workspace App Center app snapshot. Read at query time so
-   * the enriched `workspace-app` provider keeps localized name/description + icon
-   * in sync with app updates. Optional so non-desktop callers/tests stay raw.
-   */
-  appCenterApps?: () => readonly WorkspaceAppCenterApp[];
   /** Active UI locale getter, read at query time so locale switches are picked up. */
   getLocale?: () => string;
   /** Resolve the rounded managed-agent icon URL for a session's provider. */
@@ -108,8 +101,22 @@ interface WorkspaceAppAtItem {
   commandSummaries: string[];
   displayName: string;
   iconUrl: string | null;
+  referencesListSupported: boolean;
   scopes: string[];
   workspaceId: string;
+}
+
+interface BuiltInWorkspaceAppMetadata {
+  readonly description: string;
+  readonly name: string;
+}
+
+interface BuiltInWorkspaceAppResource {
+  readonly appCenter: {
+    readonly catalogApps: {
+      readonly issueManager: BuiltInWorkspaceAppMetadata;
+    };
+  };
 }
 
 const {
@@ -131,7 +138,8 @@ const RICH_TEXT_MENTION_PRESENTATION_KEYS = [
   "statusDataStatus",
   "statusLabel",
   "statusPulse",
-  "userAvatarPlaceholderUrl"
+  "userAvatarPlaceholderUrl",
+  "referencesListSupported"
 ] as const satisfies readonly (keyof RichTextMentionPresentation)[];
 
 export class DesktopRichTextAtService implements IDesktopRichTextAtService {
@@ -151,7 +159,8 @@ export class DesktopRichTextAtService implements IDesktopRichTextAtService {
       createAgentSessionAtContributor(dependencies.tuttidClient),
       createWorkspaceAppAtContributor({
         tuttidClient: dependencies.tuttidClient,
-        agentProviderStatuses: dependencies.agentProviderStatuses
+        agentProviderStatuses: dependencies.agentProviderStatuses,
+        getLocale: dependencies.getLocale
       })
     ];
   }
@@ -171,7 +180,7 @@ export class DesktopRichTextAtService implements IDesktopRichTextAtService {
     if (cacheKey !== null) {
       const cachedProviders = this.providerCache.get(cacheKey);
       if (cachedProviders) {
-        return this.enrichProviders(cachedProviders, input);
+        return this.enrichProviders(cachedProviders);
       }
     }
 
@@ -183,35 +192,24 @@ export class DesktopRichTextAtService implements IDesktopRichTextAtService {
     if (cacheKey !== null) {
       this.providerCache.set(cacheKey, providers);
     }
-    return this.enrichProviders(providers, input);
+    return this.enrichProviders(providers);
   }
 
   private enrichProviders(
-    providers: readonly RichTextTriggerProvider[],
-    input: DesktopRichTextTriggerProviderRequest
+    providers: readonly RichTextTriggerProvider[]
   ): readonly RichTextTriggerProvider[] {
     const deps = this.dependencies;
     const resolveAgentIconUrl = deps.resolveAgentIconUrl;
     const userAvatarPlaceholderUrl = deps.userAvatarPlaceholderUrl;
     const resolveSessionStatusView = deps.resolveSessionStatusView;
-    const canEnrichApp =
-      deps.appCenterApps !== undefined && deps.getLocale !== undefined;
     const canEnrichSession =
       resolveAgentIconUrl !== undefined &&
       userAvatarPlaceholderUrl !== undefined &&
       resolveSessionStatusView !== undefined;
-    if (!canEnrichApp && !canEnrichSession) {
+    if (!canEnrichSession) {
       return providers;
     }
     return providers.map((provider): RichTextTriggerProvider => {
-      if (canEnrichApp && provider.id === WORKSPACE_APP_PROVIDER_ID) {
-        return createDesktopWorkspaceAppMentionProvider({
-          apps: deps.appCenterApps?.() ?? [],
-          baseProvider: provider as unknown as AgentContextMentionProvider,
-          locale: deps.getLocale?.() ?? "",
-          workspaceId: input.workspaceId
-        });
-      }
       if (canEnrichSession && provider.id === AGENT_SESSION_PROVIDER_ID) {
         return createDesktopAgentSessionMentionProvider({
           baseProvider: provider as unknown as AgentContextMentionProvider,
@@ -228,6 +226,7 @@ export class DesktopRichTextAtService implements IDesktopRichTextAtService {
 function createWorkspaceAppAtContributor(contributorInput: {
   tuttidClient: TuttidClient;
   agentProviderStatuses?: () => readonly AgentProviderStatus[] | undefined;
+  getLocale?: () => string;
 }): DesktopRichTextAtContributor {
   return {
     capability: "workspace-app",
@@ -241,17 +240,17 @@ function createWorkspaceAppAtContributor(contributorInput: {
               return [];
             }
             const response =
-              await contributorInput.tuttidClient.listCliCapabilities(
-                input.workspaceId,
-                { includeHidden: true }
+              await contributorInput.tuttidClient.listWorkspaceAppMentionCandidates(
+                input.workspaceId
               );
             if (searchInput.abortSignal?.aborted) {
               return [];
             }
-            return workspaceAppAtItemsFromCapabilities({
+            return workspaceAppAtItemsFromMentionCandidates({
               agentProviderStatuses: contributorInput.agentProviderStatuses?.(),
-              commands: response.commands,
+              candidates: response.apps,
               keyword: searchInput.keyword,
+              locale: contributorInput.getLocale?.() ?? "",
               maxResults: searchInput.maxResults,
               workspaceId: input.workspaceId
             });
@@ -270,6 +269,9 @@ function createWorkspaceAppAtContributor(contributorInput: {
               presentation: compactMentionPresentation({
                 description: item.description,
                 iconUrl: item.iconUrl ?? "",
+                referencesListSupported: item.referencesListSupported
+                  ? "true"
+                  : "",
                 subtitle: item.description
               })
             });
@@ -281,15 +283,15 @@ function createWorkspaceAppAtContributor(contributorInput: {
             }
             return resolveMentionSafely(async () => {
               const response =
-                await contributorInput.tuttidClient.listCliCapabilities(
-                  workspaceId,
-                  { includeHidden: true }
+                await contributorInput.tuttidClient.listWorkspaceAppMentionCandidates(
+                  workspaceId
                 );
-              const item = workspaceAppAtItemsFromCapabilities({
+              const item = workspaceAppAtItemsFromMentionCandidates({
                 agentProviderStatuses:
                   contributorInput.agentProviderStatuses?.(),
-                commands: response.commands,
+                candidates: response.apps,
                 keyword: "",
+                locale: contributorInput.getLocale?.() ?? "",
                 workspaceId
               }).find((app) => app.appId === identity.entityId);
               if (!item) {
@@ -300,6 +302,9 @@ function createWorkspaceAppAtContributor(contributorInput: {
                 presentation: compactMentionPresentation({
                   description: item.description,
                   iconUrl: item.iconUrl ?? "",
+                  referencesListSupported: item.referencesListSupported
+                    ? "true"
+                    : "",
                   subtitle: item.description
                 })
               };
@@ -311,85 +316,78 @@ function createWorkspaceAppAtContributor(contributorInput: {
   };
 }
 
-function workspaceAppAtItemsFromCapabilities(input: {
+function workspaceAppAtItemsFromMentionCandidates(input: {
   agentProviderStatuses?: readonly AgentProviderStatus[];
-  commands: Awaited<
-    ReturnType<TuttidClient["listCliCapabilities"]>
-  >["commands"];
+  candidates: Awaited<
+    ReturnType<TuttidClient["listWorkspaceAppMentionCandidates"]>
+  >["apps"];
   keyword: string;
+  locale: string;
   maxResults?: number;
   workspaceId: string;
 }): WorkspaceAppAtItem[] {
-  const appsById = new Map<string, WorkspaceAppAtItem>();
-  for (const command of input.commands) {
-    if (command.source.kind !== "app") {
-      continue;
-    }
-    const appId = command.source.appId?.trim() ?? "";
+  const apps: WorkspaceAppAtItem[] = [];
+  for (const candidate of input.candidates) {
+    const appId = candidate.appId.trim();
     if (!appId) {
       continue;
     }
     if (
-      !shouldIncludeWorkspaceAppCapability({
+      !shouldShowReadyAgentPseudoApp({
         agentProviderStatuses: input.agentProviderStatuses,
         appId
       })
     ) {
       continue;
     }
-    const sourceIconUrl = command.source.iconUrl?.trim() || null;
-    const iconUrl = workspaceAppIconUrl(command, appId);
-    const appName = command.source.appName?.trim() || appId;
-    const existing = appsById.get(appId);
-    const item =
-      existing ??
-      ({
-        appId,
-        commandCount: 0,
-        commandDescriptions: [],
-        commandPaths: [],
-        description: "",
-        commandSummaries: [],
-        displayName: appName,
-        iconUrl,
-        scopes: [],
-        workspaceId: input.workspaceId
-      } satisfies WorkspaceAppAtItem);
-    item.commandCount += 1;
-    if (sourceIconUrl || !item.iconUrl) {
-      item.iconUrl = iconUrl;
-    }
-    const description = workspaceAppDescriptionFromCapability(command);
-    if (description && !item.description) {
-      item.description = description;
-    }
-    const scope = command.path[0]?.trim() ?? "";
-    if (scope && !item.scopes.includes(scope)) {
-      item.scopes.push(scope);
-    }
-    const commandPath = command.path.join(" ").trim();
-    if (commandPath && !item.commandPaths.includes(commandPath)) {
-      item.commandPaths.push(commandPath);
-    }
-    const summary = command.summary.trim();
-    if (summary && !item.commandSummaries.includes(summary)) {
-      item.commandSummaries.push(summary);
-    }
-    const commandDescription = command.description?.trim() ?? "";
-    if (
-      commandDescription &&
-      !item.commandDescriptions.includes(commandDescription)
-    ) {
-      item.commandDescriptions.push(commandDescription);
-    }
-    appsById.set(appId, item);
+    const localization = findWorkspaceAppMentionLocalization(
+      candidate,
+      input.locale
+    );
+    const builtInMetadata = findBuiltInWorkspaceAppMetadata(
+      appId,
+      input.locale
+    );
+    const candidateDescription = normalizeText(candidate.description) ?? "";
+    const candidateDisplayName = normalizeText(candidate.displayName) ?? appId;
+    const builtInDescription =
+      candidate.source === "cli_app"
+        ? normalizeText(builtInMetadata?.description)
+        : null;
+    const builtInDisplayName =
+      candidate.source === "cli_app"
+        ? normalizeText(builtInMetadata?.name)
+        : null;
+    apps.push({
+      appId,
+      commandCount: candidate.cli.commandCount,
+      commandDescriptions: candidate.cli.commandDescriptions,
+      commandPaths: candidate.cli.commandPaths,
+      description:
+        normalizeText(localization?.description) ??
+        builtInDescription ??
+        candidateDescription,
+      commandSummaries: candidate.cli.commandSummaries,
+      displayName:
+        normalizeText(localization?.displayName) ??
+        builtInDisplayName ??
+        candidateDisplayName,
+      iconUrl: workspaceAppIconUrl(candidate, appId),
+      referencesListSupported: candidate.references.listSupported,
+      scopes: candidate.cli.scopes,
+      workspaceId: input.workspaceId
+    });
   }
 
   const keyword = input.keyword.trim().toLowerCase();
-  const apps = [...appsById.values()]
+  const matchedApps = apps
     .filter((app) => workspaceAppMatchesKeyword(app, keyword))
-    .sort(compareDesktopWorkspaceAppMentionItems);
-  return apps;
+    .sort((left, right) =>
+      compareDesktopWorkspaceAppMentionItems(left, right, input.locale)
+    );
+  return input.maxResults === undefined
+    ? matchedApps
+    : matchedApps.slice(0, Math.max(0, input.maxResults));
 }
 
 const WORKSPACE_AGENT_APP_PROVIDER_BY_ID: Readonly<
@@ -399,14 +397,17 @@ const WORKSPACE_AGENT_APP_PROVIDER_BY_ID: Readonly<
   "agent-codex": "codex"
 };
 
-function shouldIncludeWorkspaceAppCapability(input: {
+function shouldShowReadyAgentPseudoApp(input: {
   agentProviderStatuses?: readonly AgentProviderStatus[];
   appId: string;
 }): boolean {
-  const provider = WORKSPACE_AGENT_APP_PROVIDER_BY_ID[input.appId.trim()];
+  const provider =
+    WORKSPACE_AGENT_APP_PROVIDER_BY_ID[input.appId.trim().toLowerCase()];
   if (!provider || input.agentProviderStatuses === undefined) {
     return true;
   }
+  // UI-only guard for agent pseudo apps. This reads an existing renderer
+  // snapshot and must not trigger provider availability/auth probing.
   return input.agentProviderStatuses.some(
     (status) =>
       status.provider === provider && status.availability.status === "ready"
@@ -414,25 +415,16 @@ function shouldIncludeWorkspaceAppCapability(input: {
 }
 
 function workspaceAppIconUrl(
-  command: Awaited<
-    ReturnType<TuttidClient["listCliCapabilities"]>
-  >["commands"][number],
+  candidate: Awaited<
+    ReturnType<TuttidClient["listWorkspaceAppMentionCandidates"]>
+  >["apps"][number],
   appId: string
 ): string | null {
-  return command.source.iconUrl?.trim() || workspaceAppDefaultIconUrl(appId);
-}
-
-function workspaceAppDefaultIconUrl(appId: string): string | null {
-  switch (appId.trim()) {
-    case "agent-claude-code":
-      return tuttiAgentAssetUrls.claudeCode;
-    case "agent-codex":
-      return tuttiAgentAssetUrls.codex;
-    case "issue-manager":
-      return tuttiIssueAssetUrls.default;
-    default:
-      return null;
-  }
+  return (
+    candidate.iconUrl?.trim() ||
+    candidate.availableIconUrl?.trim() ||
+    resolveDesktopWorkspaceAppDefaultIconUrl(appId)
+  );
 }
 
 function workspaceAppMatchesKeyword(
@@ -456,16 +448,64 @@ function workspaceAppMatchesKeyword(
   return haystack.includes(keyword);
 }
 
-function workspaceAppDescriptionFromCapability(
-  command: Awaited<
-    ReturnType<TuttidClient["listCliCapabilities"]>
-  >["commands"][number]
-): string {
-  return (
-    command.source.cliDescription?.trim() ||
-    command.source.appDescription?.trim() ||
-    ""
+function findWorkspaceAppMentionLocalization(
+  app: Awaited<
+    ReturnType<TuttidClient["listWorkspaceAppMentionCandidates"]>
+  >["apps"][number],
+  locale: string
+): (typeof app.localizations)[number] | null {
+  const normalizedLocale = normalizeLocale(locale);
+  if (!normalizedLocale || app.localizations.length === 0) {
+    return null;
+  }
+
+  const exact = app.localizations.find(
+    (localization) => normalizeLocale(localization.locale) === normalizedLocale
   );
+  if (exact) {
+    return exact;
+  }
+
+  const language = normalizedLocale.split("-")[0];
+  return (
+    app.localizations.find(
+      (localization) =>
+        normalizeLocale(localization.locale)?.split("-")[0] === language
+    ) ?? null
+  );
+}
+
+function findBuiltInWorkspaceAppMetadata(
+  appId: string,
+  locale: string
+): BuiltInWorkspaceAppMetadata | null {
+  if (appId.trim() !== "issue-manager") {
+    return null;
+  }
+  const normalizedLocale = normalizeLocale(locale);
+  if (normalizedLocale?.split("-")[0] === "zh") {
+    return builtInWorkspaceAppMetadataFromResource(
+      appCenterI18nResources["zh-CN"]
+    );
+  }
+  return builtInWorkspaceAppMetadataFromResource(appCenterI18nResources.en);
+}
+
+function builtInWorkspaceAppMetadataFromResource(
+  resource: unknown
+): BuiltInWorkspaceAppMetadata {
+  return (resource as BuiltInWorkspaceAppResource).appCenter.catalogApps
+    .issueManager;
+}
+
+function normalizeLocale(value: string | null | undefined): string | null {
+  const normalized = value?.trim().replace(/_/gu, "-").toLowerCase() ?? "";
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeText(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? "";
+  return normalized.length > 0 ? normalized : null;
 }
 
 function createProviderCacheKey(

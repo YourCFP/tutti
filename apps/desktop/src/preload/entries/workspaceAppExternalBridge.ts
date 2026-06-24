@@ -1,4 +1,9 @@
-import type { DesktopWorkspaceAppContext } from "../../shared/contracts/ipc";
+import type {
+  DesktopWorkspaceAppContext,
+  DesktopWorkspaceAppFileUploadCancelInput,
+  DesktopWorkspaceAppFileUploadPrepareInput,
+  DesktopWorkspaceAppFileUploadPrepareResult
+} from "../../shared/contracts/ipc";
 import type {
   TuttiExternalAtQueryInput,
   TuttiExternalAtQueryResult,
@@ -6,6 +11,9 @@ import type {
   TuttiExternalFileOpenInput,
   TuttiExternalFileSelectInput,
   TuttiExternalFileSelectResult,
+  TuttiExternalFileUploadInput,
+  TuttiExternalFileUploadProgress,
+  TuttiExternalUploadedFile,
   TuttiExternalLogInput,
   TuttiExternalPermissionRequestInput,
   TuttiExternalPermissionRequestResult,
@@ -18,7 +26,10 @@ import type {
   TuttiExternalUserProjectRememberDefaultSelectionInput,
   TuttiExternalWorkspaceOpenFeatureInput
 } from "@tutti-os/workspace-external-core/contracts";
-import { normalizeTuttiExternalLogInput } from "@tutti-os/workspace-external-core/core";
+import {
+  normalizeTuttiExternalFileUploadInput,
+  normalizeTuttiExternalLogInput
+} from "@tutti-os/workspace-external-core/core";
 import type {
   WorkspaceUserProject,
   WorkspaceUserProjectDefaultSelection,
@@ -35,6 +46,8 @@ export interface WorkspaceAppExternalBridgeDependencies {
       listener: (context: DesktopWorkspaceAppContext) => void
     ): () => void;
   };
+  createXMLHttpRequest?: () => WorkspaceAppUploadXMLHttpRequest;
+  fetch?: typeof fetch;
   invoke<TResult>(channel: string, payload?: unknown): Promise<TResult>;
   isUserActivationActive(): boolean;
   send(channel: string, payload?: unknown): void;
@@ -43,10 +56,33 @@ export interface WorkspaceAppExternalBridgeDependencies {
   ): () => void;
 }
 
+export interface WorkspaceAppUploadXMLHttpRequest {
+  onabort: (() => void) | null;
+  onerror: (() => void) | null;
+  onload: (() => void) | null;
+  status: number;
+  upload?: {
+    onprogress:
+      | ((event: {
+          lengthComputable?: boolean;
+          loaded: number;
+          total?: number;
+        }) => void)
+      | null;
+  };
+  abort(): void;
+  open(method: string, url: string): void;
+  send(body: Blob | File): void;
+  setRequestHeader(name: string, value: string): void;
+}
+
 export const workspaceAppExternalChannels = {
   atQuery: "workspace-app-at:query",
   filesOpen: "workspace-app-files:open",
   filesSelect: "workspace-app-files:select",
+  filesUploadCancel: "workspace-app-files:upload-cancel",
+  filesUploadComplete: "workspace-app-files:upload-complete",
+  filesUploadPrepare: "workspace-app-files:upload-prepare",
   logsWrite: "workspace-app-logs:write",
   permissionsRequest: "workspace-app-permissions:request",
   pdfPrintHtml: "workspace-app-pdf:print-html",
@@ -107,6 +143,46 @@ export function createWorkspaceAppExternalBridge(
           workspaceAppExternalChannels.filesOpen,
           input
         );
+      },
+      async upload(file: Blob | File, input?: TuttiExternalFileUploadInput) {
+        const fileMetadata = normalizeWorkspaceAppUploadFile(file);
+        const uploadInput = normalizeTuttiExternalFileUploadInput(input);
+        throwIfWorkspaceAppUploadAborted(uploadInput.signal);
+        const prepareInput: DesktopWorkspaceAppFileUploadPrepareInput = {
+          purpose: uploadInput.purpose,
+          name: uploadInput.name ?? fileMetadata.name,
+          mimeType: uploadInput.mimeType ?? fileMetadata.mimeType,
+          sizeBytes: fileMetadata.sizeBytes
+        };
+        let prepared: DesktopWorkspaceAppFileUploadPrepareResult | undefined;
+        try {
+          prepared =
+            await dependencies.invoke<DesktopWorkspaceAppFileUploadPrepareResult>(
+              workspaceAppExternalChannels.filesUploadPrepare,
+              prepareInput
+            );
+          throwIfWorkspaceAppUploadAborted(uploadInput.signal);
+          await uploadWorkspaceAppFileContent(dependencies, prepared, file, {
+            onProgress: uploadInput.onProgress,
+            signal: uploadInput.signal,
+            totalBytes: fileMetadata.sizeBytes
+          });
+          throwIfWorkspaceAppUploadAborted(uploadInput.signal);
+          const uploaded = await dependencies.invoke<TuttiExternalUploadedFile>(
+            workspaceAppExternalChannels.filesUploadComplete,
+            { uploadId: prepared.uploadId }
+          );
+          throwIfWorkspaceAppUploadAborted(uploadInput.signal);
+          return uploaded;
+        } catch (error) {
+          if (prepared) {
+            await cancelWorkspaceAppUpload(dependencies, prepared.uploadId);
+          }
+          if (isWorkspaceAppUploadAbortError(error, uploadInput.signal)) {
+            throw createWorkspaceAppUploadAbortError();
+          }
+          throw error;
+        }
       }
     },
     permissions: {
@@ -254,6 +330,232 @@ export function createWorkspaceAppExternalBridge(
       }
     }
   };
+}
+
+function normalizeWorkspaceAppUploadFile(file: Blob | File): {
+  mimeType: string;
+  name: string;
+  sizeBytes: number;
+} {
+  const value = file as {
+    name?: unknown;
+    size?: unknown;
+    type?: unknown;
+  };
+  if (typeof value.size !== "number" || !Number.isFinite(value.size)) {
+    throw new Error("files.upload file must be a Blob or File.");
+  }
+  if (value.size < 0) {
+    throw new Error("files.upload file size must not be negative.");
+  }
+  const name =
+    typeof value.name === "string" && value.name.trim() !== ""
+      ? value.name.trim()
+      : "upload";
+  const mimeType =
+    typeof value.type === "string" && value.type.trim() !== ""
+      ? value.type.trim()
+      : "application/octet-stream";
+  return {
+    mimeType,
+    name,
+    sizeBytes: value.size
+  };
+}
+
+interface WorkspaceAppUploadContentOptions {
+  onProgress?: (progress: TuttiExternalFileUploadProgress) => void;
+  signal?: AbortSignal;
+  totalBytes: number;
+}
+
+async function uploadWorkspaceAppFileContent(
+  dependencies: WorkspaceAppExternalBridgeDependencies,
+  prepared: DesktopWorkspaceAppFileUploadPrepareResult,
+  file: Blob | File,
+  options: WorkspaceAppUploadContentOptions
+): Promise<void> {
+  const createXMLHttpRequest =
+    dependencies.createXMLHttpRequest ??
+    createDefaultWorkspaceAppUploadXMLHttpRequest();
+  if (options.onProgress && createXMLHttpRequest) {
+    return uploadWorkspaceAppFileContentWithXMLHttpRequest(
+      createXMLHttpRequest,
+      prepared,
+      file,
+      options
+    );
+  }
+
+  const fetchImpl = dependencies.fetch ?? globalThis.fetch;
+  if (typeof fetchImpl !== "function") {
+    throw new Error("files.upload fetch is unavailable.");
+  }
+  const response = await fetchImpl(prepared.url, {
+    body: file,
+    headers: prepared.headers,
+    method: prepared.method,
+    signal: options.signal
+  });
+  if (!response.ok) {
+    throw new Error(
+      `files.upload content transfer failed with status ${response.status}.`
+    );
+  }
+  reportWorkspaceAppUploadProgress(
+    options.onProgress,
+    options.totalBytes,
+    options.totalBytes
+  );
+}
+
+function uploadWorkspaceAppFileContentWithXMLHttpRequest(
+  createXMLHttpRequest: () => WorkspaceAppUploadXMLHttpRequest,
+  prepared: DesktopWorkspaceAppFileUploadPrepareResult,
+  file: Blob | File,
+  options: WorkspaceAppUploadContentOptions
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    throwIfWorkspaceAppUploadAborted(options.signal);
+    const request = createXMLHttpRequest();
+    const handleAbort = (): void => {
+      request.abort();
+    };
+    const cleanup = (): void => {
+      options.signal?.removeEventListener("abort", handleAbort);
+      if (request.upload) {
+        request.upload.onprogress = null;
+      }
+      request.onload = null;
+      request.onerror = null;
+      request.onabort = null;
+    };
+
+    request.onload = (): void => {
+      cleanup();
+      if (request.status >= 200 && request.status < 300) {
+        reportWorkspaceAppUploadProgress(
+          options.onProgress,
+          options.totalBytes,
+          options.totalBytes
+        );
+        resolve();
+        return;
+      }
+      reject(
+        new Error(
+          `files.upload content transfer failed with status ${request.status}.`
+        )
+      );
+    };
+    request.onerror = (): void => {
+      cleanup();
+      reject(new Error("files.upload content transfer failed."));
+    };
+    request.onabort = (): void => {
+      cleanup();
+      reject(createWorkspaceAppUploadAbortError());
+    };
+    if (request.upload) {
+      request.upload.onprogress = (event): void => {
+        reportWorkspaceAppUploadProgress(
+          options.onProgress,
+          event.loaded,
+          options.totalBytes
+        );
+      };
+    }
+    options.signal?.addEventListener("abort", handleAbort, { once: true });
+
+    try {
+      request.open(prepared.method, prepared.url);
+      for (const [name, value] of Object.entries(prepared.headers)) {
+        request.setRequestHeader(name, value);
+      }
+      request.send(file);
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
+  });
+}
+
+function createDefaultWorkspaceAppUploadXMLHttpRequest():
+  | (() => WorkspaceAppUploadXMLHttpRequest)
+  | undefined {
+  const requestConstructor = globalThis.XMLHttpRequest;
+  if (typeof requestConstructor !== "function") {
+    return undefined;
+  }
+  return () => new requestConstructor() as WorkspaceAppUploadXMLHttpRequest;
+}
+
+function reportWorkspaceAppUploadProgress(
+  onProgress: ((progress: TuttiExternalFileUploadProgress) => void) | undefined,
+  loadedBytes: number,
+  totalBytes: number
+): void {
+  if (!onProgress) {
+    return;
+  }
+  const safeTotalBytes = Math.max(0, totalBytes);
+  const safeLoadedBytes = Math.min(Math.max(0, loadedBytes), safeTotalBytes);
+  try {
+    onProgress({
+      loadedBytes: safeLoadedBytes,
+      ratio: safeTotalBytes === 0 ? 1 : safeLoadedBytes / safeTotalBytes,
+      totalBytes: safeTotalBytes
+    });
+  } catch {
+    // App progress listeners must not break the host upload state machine.
+  }
+}
+
+async function cancelWorkspaceAppUpload(
+  dependencies: WorkspaceAppExternalBridgeDependencies,
+  uploadId: string
+): Promise<void> {
+  const payload: DesktopWorkspaceAppFileUploadCancelInput = { uploadId };
+  try {
+    await dependencies.invoke<void>(
+      workspaceAppExternalChannels.filesUploadCancel,
+      payload
+    );
+  } catch {
+    // Cancellation is best-effort cleanup after the app-facing upload already failed.
+  }
+}
+
+function throwIfWorkspaceAppUploadAborted(
+  signal: AbortSignal | undefined
+): void {
+  if (signal?.aborted) {
+    throw createWorkspaceAppUploadAbortError();
+  }
+}
+
+function isWorkspaceAppUploadAbortError(
+  error: unknown,
+  signal: AbortSignal | undefined
+): boolean {
+  if (signal?.aborted) {
+    return true;
+  }
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
+function createWorkspaceAppUploadAbortError(): Error {
+  if (typeof DOMException === "function") {
+    return new DOMException("files.upload was aborted.", "AbortError");
+  }
+  const error = new Error("files.upload was aborted.");
+  error.name = "AbortError";
+  return error;
 }
 
 export function requireUserActivation(

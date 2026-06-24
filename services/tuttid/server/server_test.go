@@ -33,7 +33,7 @@ func TestListenerSpecFromEnvIncludesAccessToken(t *testing.T) {
 	}
 }
 
-func TestAuthorizeWorkspaceAppServerTokenIsLimitedToGrantExchangeAndRevoke(t *testing.T) {
+func TestAuthorizeWorkspaceAppServerTokenIsLimitedToAppServerRoutes(t *testing.T) {
 	accessToken := "desktop-session-token"
 	appToken := workspacebiz.AppServerToken(accessToken, "workspace-1", "app-1")
 
@@ -73,6 +73,15 @@ func TestAuthorizeWorkspaceAppServerTokenIsLimitedToGrantExchangeAndRevoke(t *te
 		t.Fatal("expected app token to authorize grant revoke")
 	}
 
+	allowedUploadContent, _ := http.NewRequest(
+		http.MethodPut,
+		"/v1/workspaces/workspace-1/apps/app-1/uploads/upload-1/content",
+		nil,
+	)
+	if !authorizeWorkspaceAppServerToken(allowedUploadContent, appToken, accessToken) {
+		t.Fatal("expected app token to authorize upload content PUT")
+	}
+
 	createGrant, _ := http.NewRequest(
 		http.MethodPost,
 		"/v1/workspaces/workspace-1/apps/app-1/managed-model-grants",
@@ -98,5 +107,23 @@ func TestAuthorizeWorkspaceAppServerTokenIsLimitedToGrantExchangeAndRevoke(t *te
 	)
 	if authorizeWorkspaceAppServerToken(providerModels, appToken, accessToken) {
 		t.Fatal("expected app token to reject provider model detection")
+	}
+
+	prepareUpload, _ := http.NewRequest(
+		http.MethodPost,
+		"/v1/workspaces/workspace-1/apps/app-1/uploads",
+		nil,
+	)
+	if authorizeWorkspaceAppServerToken(prepareUpload, appToken, accessToken) {
+		t.Fatal("expected app token to reject upload session creation")
+	}
+
+	completeUpload, _ := http.NewRequest(
+		http.MethodPost,
+		"/v1/workspaces/workspace-1/apps/app-1/uploads/upload-1/complete",
+		nil,
+	)
+	if authorizeWorkspaceAppServerToken(completeUpload, appToken, accessToken) {
+		t.Fatal("expected app token to reject upload completion")
 	}
 }

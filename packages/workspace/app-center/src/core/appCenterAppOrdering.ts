@@ -59,6 +59,11 @@ function compareRecommendedApps(
     return sectionOrder;
   }
 
+  const installedOrder = Number(right.installed) - Number(left.installed);
+  if (installedOrder !== 0) {
+    return installedOrder;
+  }
+
   const displayOrder =
     getRecommendedAppDisplayRank(left.id) -
     getRecommendedAppDisplayRank(right.id);

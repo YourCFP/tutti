@@ -23,6 +23,7 @@ import type {
 import type { WorkbenchSurfaceWallpaper } from "../react/WorkbenchSurface.tsx";
 import type {
   WorkbenchDockPlacement,
+  WorkbenchMinimizeAnimation,
   WorkbenchWindowHeaderDragHandleProps
 } from "../react/types.ts";
 import type { WorkbenchDockPreviewCache } from "../react/dockPreviewCache.ts";
@@ -188,6 +189,13 @@ export interface WorkbenchHostDockEntryAction {
   pendingLabel?: string;
 }
 
+export interface WorkbenchHostDockEntryRetentionAction {
+  actionId: string;
+  disabled?: boolean;
+  pendingLabel?: string;
+  retained: boolean;
+}
+
 export type WorkbenchHostDockEntryDiagnostics = Record<string, unknown>;
 
 export interface WorkbenchHostDockPopupItemInput {
@@ -197,6 +205,7 @@ export interface WorkbenchHostDockPopupItemInput {
   isFocused: boolean;
   isMinimized: boolean;
   node: WorkbenchNode<WorkbenchHostNodeData>;
+  previewViewport?: WorkbenchSize;
 }
 
 export type WorkbenchHostNodePreviewCapture = (
@@ -244,6 +253,7 @@ export interface WorkbenchHostDockEntry {
   id: string;
   label: string;
   diagnostics?: WorkbenchHostDockEntryDiagnostics;
+  dockRetention?: WorkbenchHostDockEntryRetentionAction;
   instanceMode?: WorkbenchHostNodeInstanceStrategy["mode"];
   launchBehavior?: WorkbenchHostDockEntryLaunchBehavior;
   launchPayload?: unknown;
@@ -267,6 +277,7 @@ export type WorkbenchHostDockEntryDynamicState = Partial<
     | "attentionToken"
     | "badge"
     | "diagnostics"
+    | "dockRetention"
     | "hoverActions"
     | "launchBehavior"
     | "order"
@@ -296,10 +307,15 @@ export interface WorkbenchHostNodeWindowCapabilities {
   restoreOnLoad?: boolean;
 }
 
-export interface WorkbenchHostNodeMinimizedDockCapability {
-  capturePreview?: WorkbenchHostNodePreviewCapture;
-  kind: "snapshot";
-}
+export type WorkbenchHostNodeMinimizedDockCapability =
+  | {
+      capturePreview?: WorkbenchHostNodePreviewCapture;
+      kind: "snapshot";
+    }
+  | {
+      kind: "component";
+      providePreview: WorkbenchHostDockPopupPreviewProvider;
+    };
 
 export interface WorkbenchHostSingleInstanceStrategy {
   mode?: "single";
@@ -327,6 +343,7 @@ export interface WorkbenchHostNodeBodyContext<
   instanceKey?: string | null;
   isFocused: boolean;
   node: WorkbenchNode<WorkbenchHostNodeData>;
+  previewViewport?: WorkbenchSize;
   setNodeRuntimeState(state: unknown): void;
   setSnapshotNodeState(state: unknown): void;
 }
@@ -481,6 +498,7 @@ export interface WorkbenchHostHandle {
   isHydrating?(): boolean;
   launchNode(input: WorkbenchHostLaunchInput): Promise<string | null>;
   load(): Promise<void>;
+  minimizeNode(nodeId: string): void;
   requestNodeClose(nodeId: string): void;
   reconcileProjectedNodes(
     projectedNodes: readonly WorkbenchHostProjectedNode[]
@@ -507,7 +525,13 @@ export interface WorkbenchHostChromeRenderContext {
 
 export interface WorkbenchHostMissionControlProps {
   mode: WorkbenchMissionControlMode | null;
+  nodeIds?: readonly string[];
   onRequestClose: () => void;
+}
+
+export interface WorkbenchHostMissionControlOpenRequest {
+  nodeIds?: readonly string[];
+  trigger?: "dock-context-menu";
 }
 
 export interface WorkbenchHostClosePreparationContext {
@@ -555,6 +579,7 @@ export interface WorkbenchHostProps {
   i18n?: I18nRuntime<string>;
   layoutConstraints?: WorkbenchLayoutConstraintsInput;
   missionControl?: WorkbenchHostMissionControlProps;
+  minimizeAnimation?: WorkbenchMinimizeAnimation;
   nodes?: readonly WorkbenchHostNodeDefinition[];
   onDockEntryAction?: (input: {
     actionId: string;
@@ -575,6 +600,10 @@ export interface WorkbenchHostProps {
     | void;
   onMissionControlAdapterReady?: (
     adapter: WorkbenchMissionControlAdapter<WorkbenchHostNodeData> | null
+  ) => void;
+  onMissionControlRequestOpen?: (
+    mode: WorkbenchMissionControlMode,
+    request?: WorkbenchHostMissionControlOpenRequest
   ) => void;
   onNodeCloseRequest?: (
     request: WorkbenchHostNodeCloseRequest

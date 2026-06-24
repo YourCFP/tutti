@@ -14,6 +14,7 @@ import type { IReporterService } from "../../analytics/services/reporterService.
 import { createWorkspaceCloseGuardDialogController } from "./internal/workspaceCloseGuardDialogController.ts";
 import {
   createWorkspaceMissionControlController,
+  type WorkspaceMissionControlOpenRequest,
   type WorkspaceMissionControlTrigger
 } from "./internal/workspaceMissionControlController.ts";
 import { createWorkspaceWallpaperSelectionController } from "./internal/workspaceWallpaperSelectionController.ts";
@@ -46,6 +47,7 @@ export interface WorkspaceWorkbenchShellMissionControlSnapshot {
   canOpen: boolean;
   isOpen: boolean;
   mode: WorkbenchMissionControlMode | null;
+  nodeIds: readonly string[] | null;
   shortcutsEnabled: boolean;
   visibleWindowCount: number;
 }
@@ -90,13 +92,20 @@ export interface WorkspaceWorkbenchShellRuntimeController {
     close: () => void;
     open: (
       mode: WorkbenchMissionControlMode,
-      trigger?: WorkspaceMissionControlTrigger
+      request?:
+        | WorkspaceMissionControlOpenRequest
+        | WorkspaceMissionControlTrigger
     ) => void;
     setAdapter: (
       adapter: WorkbenchMissionControlAdapter<WorkbenchHostNodeData> | null
     ) => void;
   };
-  requestWindowClose: () => Promise<void>;
+  requestWindowClose: (
+    input?: Pick<
+      Parameters<IWorkspaceWorkbenchHostService["requestWindowClose"]>[0],
+      "reason"
+    >
+  ) => Promise<"approved" | "blocked">;
   setWorkbenchHost: (host: WorkbenchHostHandle | null) => void;
   subscribe: (listener: () => void) => () => void;
   updateHostInput: (input: WorkspaceWorkbenchShellHostInput) => void;
@@ -197,9 +206,8 @@ export function createWorkspaceWorkbenchShellRuntimeController(input: {
       open: missionControl.open,
       setAdapter: missionControl.setAdapter
     },
-    requestWindowClose: async () => {
-      await windowCloseRequestController.requestClose();
-    },
+    requestWindowClose: (input = { reason: "window-close" }) =>
+      windowCloseRequestController.requestClose(input),
     setWorkbenchHost: (host) => {
       currentHost = host;
       windowCloseRequestController.setHost(host);

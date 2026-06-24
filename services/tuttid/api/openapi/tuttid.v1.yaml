@@ -18,6 +18,8 @@ tags:
   - name: workspace
   - name: terminal
   - name: agent-session
+  - name: agent-context
+  - name: app-center
   - name: app-factory
   - name: user-project
 paths:
@@ -124,6 +126,39 @@ paths:
           $ref: "#/components/responses/UnauthorizedError"
         "404":
           $ref: "#/components/responses/InvalidRequestError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/agent-context/workspace-app-mentions:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: listWorkspaceAppMentionCandidates
+      tags:
+        - agent-context
+      summary: List workspace app mention candidates for agent context pickers
+      description: >
+        Returns daemon-owned application mention candidates for Agent GUI and
+        rich-text context pickers. Real workspace apps are filtered by App Center
+        installation and enabled state. CLI capabilities only enrich search
+        metadata; this endpoint does not run command-routing availability
+        filters or agent provider auth checks.
+      responses:
+        "200":
+          description: Workspace app mention candidates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAppMentionCandidatesResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/WorkspaceNotFoundError"
         "405":
           $ref: "#/components/responses/MethodNotAllowedError"
         "502":
@@ -591,6 +626,39 @@ paths:
           $ref: "#/components/responses/WorkspaceOperationError"
         "503":
           $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/apps/load-local:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    post:
+      operationId: loadLocalWorkspaceApp
+      tags:
+        - app-center
+      summary: Load one unpacked local workspace app directory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoadLocalWorkspaceAppRequest"
+      responses:
+        "200":
+          description: Local workspace app loaded and installed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAppResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
   /v1/workspaces/{workspaceID}/apps/start-enabled:
     parameters:
       - $ref: "#/components/parameters/WorkspaceID"
@@ -679,6 +747,40 @@ paths:
           $ref: "#/components/responses/WorkspaceOperationError"
         "503":
           $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/apps/{appID}/reload-local:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/WorkspaceAppID"
+    post:
+      operationId: reloadLocalWorkspaceApp
+      tags:
+        - app-center
+      summary: Reload one unpacked local workspace app directory
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReloadLocalWorkspaceAppRequest"
+      responses:
+        "200":
+          description: Local workspace app reloaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAppResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceAppNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
   /v1/workspaces/{workspaceID}/apps/{appID}/references/list:
     parameters:
       - $ref: "#/components/parameters/WorkspaceID"
@@ -747,6 +849,150 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AppReferenceSearchResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceAppNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/apps/{appID}/uploads:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/WorkspaceAppID"
+    post:
+      operationId: prepareWorkspaceAppUpload
+      tags:
+        - app-center
+      summary: Prepare one managed file upload for a workspace app
+      description: >
+        Creates an in-memory upload session scoped to one installed workspace
+        app. The response only identifies the daemon upload session; desktop
+        hosts construct the direct content upload URL and keep storage-provider
+        details out of the app-facing browser bridge.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrepareWorkspaceAppUploadRequest"
+      responses:
+        "201":
+          description: Workspace app upload session prepared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrepareWorkspaceAppUploadResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceAppNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/apps/{appID}/uploads/{uploadID}/content:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/WorkspaceAppID"
+      - name: uploadID
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+    put:
+      operationId: putWorkspaceAppUploadContent
+      tags:
+        - app-center
+      summary: Stream upload bytes into one workspace app upload session
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "204":
+          description: Workspace app upload content accepted
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceAppNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/apps/{appID}/uploads/{uploadID}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/WorkspaceAppID"
+      - name: uploadID
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+    delete:
+      operationId: cancelWorkspaceAppUpload
+      tags:
+        - app-center
+      summary: Cancel one managed file upload session for a workspace app
+      description: >
+        Drops the in-memory upload session and removes the temporary upload
+        file when the upload has not been completed. Completed durable files are
+        not deleted by this operation.
+      responses:
+        "204":
+          description: Workspace app upload session canceled
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceAppNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/apps/{appID}/uploads/{uploadID}/complete:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/WorkspaceAppID"
+      - name: uploadID
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+    post:
+      operationId: completeWorkspaceAppUpload
+      tags:
+        - app-center
+      summary: Complete one managed file upload for a workspace app
+      responses:
+        "200":
+          description: Workspace app upload completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompleteWorkspaceAppUploadResponse"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
         "400":
@@ -1404,7 +1650,7 @@ paths:
       operationId: getAgentProviderComposerOptions
       tags:
         - agent-session
-      summary: Get provider composer options without creating an agent session
+      summary: Get provider composer options with short-lived Claude Code discovery
       requestBody:
         required: false
         content:
@@ -1413,7 +1659,7 @@ paths:
               $ref: "#/components/schemas/GetAgentProviderComposerOptionsRequest"
       responses:
         "200":
-          description: Agent provider composer options
+          description: Agent provider composer options with short-lived Claude Code discovery when needed
           content:
             application/json:
               schema:
@@ -3213,6 +3459,98 @@ components:
           allOf:
             - $ref: "#/components/schemas/CliCommandOutput"
           nullable: true
+    WorkspaceAppMentionCandidateSource:
+      type: string
+      enum:
+        - workspace_app
+        - cli_app
+    WorkspaceAppMentionCliMetadata:
+      type: object
+      additionalProperties: false
+      required:
+        - commandCount
+        - commandDescriptions
+        - commandPaths
+        - commandSummaries
+        - scopes
+      properties:
+        commandCount:
+          type: integer
+          minimum: 0
+        commandDescriptions:
+          type: array
+          items:
+            type: string
+        commandPaths:
+          type: array
+          items:
+            type: string
+        commandSummaries:
+          type: array
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
+    WorkspaceAppMentionCandidate:
+      type: object
+      additionalProperties: false
+      required:
+        - appId
+        - displayName
+        - description
+        - iconUrl
+        - availableIconUrl
+        - installed
+        - enabled
+        - source
+        - localizations
+        - references
+        - cli
+      properties:
+        appId:
+          type: string
+          minLength: 1
+        displayName:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        iconUrl:
+          type: string
+          nullable: true
+        availableIconUrl:
+          type: string
+          nullable: true
+        installed:
+          type: boolean
+        enabled:
+          type: boolean
+        source:
+          $ref: "#/components/schemas/WorkspaceAppMentionCandidateSource"
+        localizations:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAppLocalization"
+        references:
+          $ref: "#/components/schemas/WorkspaceAppReferencesState"
+        cli:
+          $ref: "#/components/schemas/WorkspaceAppMentionCliMetadata"
+    WorkspaceAppMentionCandidatesResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - workspaceId
+        - apps
+      properties:
+        workspaceId:
+          type: string
+          minLength: 1
+        apps:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAppMentionCandidate"
     ApiErrorDetails:
       type: object
       additionalProperties: false
@@ -3329,6 +3667,7 @@ components:
         - dockPlacement
         - fileDefaultOpenersByExtension
         - locale
+        - minimizeAnimation
         - sleepPreventionMode
         - themeSource
         - updateChannel
@@ -3352,6 +3691,8 @@ components:
           $ref: "#/components/schemas/DesktopFileDefaultOpenersByExtension"
         locale:
           $ref: "#/components/schemas/DesktopLocale"
+        minimizeAnimation:
+          $ref: "#/components/schemas/DesktopMinimizeAnimation"
         sleepPreventionMode:
           $ref: "#/components/schemas/DesktopSleepPreventionMode"
         themeSource:
@@ -3413,6 +3754,12 @@ components:
       type: object
       additionalProperties:
         $ref: "#/components/schemas/DesktopFileDefaultOpener"
+    DesktopMinimizeAnimation:
+      type: string
+      enum:
+        - scale
+        - genie
+        - off
     DesktopPreferencesStateResponse:
       type: object
       additionalProperties: false
@@ -3532,10 +3879,12 @@ components:
         - builtin
         - generated
         - imported
+        - local-dev
       x-enum-varnames:
         - WorkspaceAppSourceBuiltin
         - WorkspaceAppSourceGenerated
         - WorkspaceAppSourceImported
+        - WorkspaceAppSourceLocalDev
     WorkspaceAppCatalogLoadStatus:
       type: string
       enum:
@@ -3994,6 +4343,10 @@ components:
           nullable: true
         source:
           $ref: "#/components/schemas/WorkspaceAppSource"
+        localPackageDir:
+          type: string
+          nullable: true
+          description: Absolute package directory for unpacked local development apps.
         exportable:
           type: boolean
         tags:
@@ -4025,6 +4378,79 @@ components:
       enum:
         - hibernate
         - keep-mounted
+    WorkspaceAppUploadPurpose:
+      type: string
+      enum:
+        - app-asset
+    PrepareWorkspaceAppUploadRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - purpose
+        - name
+        - mimeType
+        - sizeBytes
+      properties:
+        purpose:
+          $ref: "#/components/schemas/WorkspaceAppUploadPurpose"
+        name:
+          type: string
+          minLength: 1
+        mimeType:
+          type: string
+          minLength: 1
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 0
+    PrepareWorkspaceAppUploadResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - uploadId
+        - expiresAt
+      properties:
+        uploadId:
+          type: string
+          minLength: 1
+        expiresAt:
+          type: string
+          format: date-time
+    CompleteWorkspaceAppUploadResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - file
+      properties:
+        file:
+          $ref: "#/components/schemas/WorkspaceAppUploadedFile"
+    WorkspaceAppUploadedFile:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+        - name
+        - mimeType
+        - sizeBytes
+        - sha256
+      properties:
+        path:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        mimeType:
+          type: string
+          minLength: 1
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 0
+        sha256:
+          type: string
+          minLength: 64
+          maxLength: 64
     RollbackWorkspaceAppRequest:
       type: object
       additionalProperties: false
@@ -4043,6 +4469,25 @@ components:
         archivePath:
           type: string
           minLength: 1
+    LoadLocalWorkspaceAppRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - sourceDir
+      properties:
+        sourceDir:
+          type: string
+          minLength: 1
+        restartRunning:
+          type: boolean
+          description: Restart the app runtime if it is already running.
+    ReloadLocalWorkspaceAppRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        restartRunning:
+          type: boolean
+          description: Restart the app runtime if it is already running.
     ExportWorkspaceAppRequest:
       type: object
       additionalProperties: false
@@ -4618,6 +5063,9 @@ components:
       properties:
         cwd:
           type: string
+        workspaceId:
+          type: string
+          description: Workspace used for Claude Code live model discovery.
         locale:
           $ref: "#/components/schemas/DesktopLocale"
         settings:

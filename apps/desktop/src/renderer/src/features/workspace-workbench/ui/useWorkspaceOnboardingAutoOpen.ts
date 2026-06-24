@@ -68,15 +68,18 @@ export async function openWorkspaceOnboardingIfNeeded({
     appId,
     event: "workspace-onboarding.auto-open.started",
     level: "info",
+    catalogStrategy: "local-first",
     maxInstallAttempts,
     maxAttempts,
     workspaceId
   });
+  const markerCheckStartedAt = Date.now();
   if (
     await workbenchHostService.hasWorkspaceOnboardingAutoOpened(workspaceId)
   ) {
     logAutoOpenDiagnostic(workbenchHostService, {
       appId,
+      durationMs: Date.now() - markerCheckStartedAt,
       event: "workspace-onboarding.auto-open.already-opened",
       level: "info",
       maxInstallAttempts,
@@ -85,11 +88,10 @@ export async function openWorkspaceOnboardingIfNeeded({
     });
     return "already-opened";
   }
-
-  await appCenterService.refreshCatalog(workspaceId);
   logAutoOpenDiagnostic(workbenchHostService, {
     appId,
-    event: "workspace-onboarding.auto-open.catalog-refreshed",
+    durationMs: Date.now() - markerCheckStartedAt,
+    event: "workspace-onboarding.auto-open.marker-checked",
     level: "debug",
     maxInstallAttempts,
     maxAttempts,
@@ -98,6 +100,7 @@ export async function openWorkspaceOnboardingIfNeeded({
 
   let installRequested = false;
   let installed = false;
+  let catalogFallbackAttempted = false;
   for (let attempt = 0; attempt < maxInstallAttempts; attempt += 1) {
     const attemptNumber = attempt + 1;
     if (isCanceled()) {
@@ -113,7 +116,18 @@ export async function openWorkspaceOnboardingIfNeeded({
       });
       return "canceled";
     }
+    const refreshStartedAt = Date.now();
     await appCenterService.refresh(workspaceId);
+    logAutoOpenDiagnostic(workbenchHostService, {
+      appId,
+      attempt: attemptNumber,
+      durationMs: Date.now() - refreshStartedAt,
+      event: "workspace-onboarding.auto-open.local-refreshed",
+      level: "debug",
+      maxInstallAttempts,
+      maxAttempts,
+      workspaceId
+    });
     const app = appCenterService.store.apps.find(
       (candidate) => candidate.appId === appId
     );
@@ -127,7 +141,24 @@ export async function openWorkspaceOnboardingIfNeeded({
         maxAttempts,
         workspaceId
       });
-      await wait(500);
+      if (!catalogFallbackAttempted) {
+        catalogFallbackAttempted = true;
+        const catalogRefreshStartedAt = Date.now();
+        await appCenterService.refreshCatalog(workspaceId);
+        logAutoOpenDiagnostic(workbenchHostService, {
+          appId,
+          attempt: attemptNumber,
+          durationMs: Date.now() - catalogRefreshStartedAt,
+          event: "workspace-onboarding.auto-open.catalog-refreshed",
+          level: "debug",
+          maxInstallAttempts,
+          maxAttempts,
+          reason: "app-missing-fallback",
+          workspaceId
+        });
+        continue;
+      }
+      await wait(250);
       continue;
     }
     if (app.installed) {
@@ -155,11 +186,13 @@ export async function openWorkspaceOnboardingIfNeeded({
         maxAttempts,
         workspaceId
       });
+      const installStartedAt = Date.now();
       await appCenterService.installApp({ appId, workspaceId });
       installRequested = true;
       logAutoOpenDiagnostic(workbenchHostService, {
         appId,
         attempt: attemptNumber,
+        durationMs: Date.now() - installStartedAt,
         event: "workspace-onboarding.auto-open.install-request-accepted",
         level: "info",
         maxInstallAttempts,
@@ -177,7 +210,7 @@ export async function openWorkspaceOnboardingIfNeeded({
         workspaceId
       });
     }
-    await wait(500);
+    await wait(250);
   }
 
   if (!installed) {
@@ -226,23 +259,25 @@ export async function openWorkspaceOnboardingIfNeeded({
         reason: app ? "app-not-installed" : "app-missing",
         workspaceId
       });
-      await wait(500);
+      await wait(250);
       continue;
     }
 
     openAttempted = true;
+    const openStartedAt = Date.now();
     const opened = await appCenterService.openApp({ appId, workspaceId });
     if (!opened) {
       logAutoOpenDiagnostic(workbenchHostService, {
         appId,
         attempt: attemptNumber,
+        durationMs: Date.now() - openStartedAt,
         event: "workspace-onboarding.auto-open.launch-not-ready",
         level: "warn",
         maxInstallAttempts,
         maxAttempts,
         workspaceId
       });
-      await wait(500);
+      await wait(250);
       continue;
     }
     if (isCanceled()) {
@@ -262,6 +297,7 @@ export async function openWorkspaceOnboardingIfNeeded({
     logAutoOpenDiagnostic(workbenchHostService, {
       appId,
       attempt: attemptNumber,
+      durationMs: Date.now() - openStartedAt,
       event: "workspace-onboarding.auto-open.opened",
       level: "info",
       maxInstallAttempts,
@@ -312,14 +348,35 @@ export function useWorkspaceOnboardingAutoOpen({
   useEffect(() => {
     const normalizedWorkspaceId = workspaceId.trim();
     if (!workbenchHost || !normalizedWorkspaceId) {
+      if (normalizedWorkspaceId) {
+        logAutoOpenDiagnostic(workbenchHostService, {
+          event: "workspace-onboarding.auto-open.effect-waiting",
+          level: "debug",
+          reason: !workbenchHost
+            ? "workbench-host-missing"
+            : "workspace-id-missing",
+          workspaceId: normalizedWorkspaceId
+        });
+      }
       return;
     }
     if (activeWorkspaceIdsRef.current.has(normalizedWorkspaceId)) {
+      logAutoOpenDiagnostic(workbenchHostService, {
+        event: "workspace-onboarding.auto-open.effect-skipped",
+        level: "debug",
+        reason: "workspace-already-active",
+        workspaceId: normalizedWorkspaceId
+      });
       return;
     }
 
     let canceled = false;
     activeWorkspaceIdsRef.current.add(normalizedWorkspaceId);
+    logAutoOpenDiagnostic(workbenchHostService, {
+      event: "workspace-onboarding.auto-open.effect-ready",
+      level: "debug",
+      workspaceId: normalizedWorkspaceId
+    });
     void openWorkspaceOnboardingIfNeeded({
       appCenterService,
       isCanceled: () => canceled,
@@ -357,6 +414,8 @@ function logAutoOpenDiagnostic(
   input: {
     appId?: string;
     attempt?: number;
+    catalogStrategy?: string;
+    durationMs?: number;
     event: string;
     level: "debug" | "info" | "warn" | "error";
     maxInstallAttempts?: number;

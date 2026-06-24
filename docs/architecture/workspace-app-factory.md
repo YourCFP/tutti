@@ -381,6 +381,14 @@ Tutti provides directories and lifecycle, but it does not understand app data
 schemas, run app migrations, or roll data back. Version upgrades and data
 migrations are the app's responsibility.
 
+Browser app uploads through `window.tuttiExternal.files.upload()` are stored as
+managed files under `TUTTI_APP_DATA_DIR/uploads/{sha256[0:2]}/{sha256}{ext}`.
+The upload host returns file metadata only. Apps may pass `onProgress` to track
+browser-to-host transfer progress and `signal` to cancel an in-flight upload.
+Cancellation only drops the upload session and temporary bytes; completed
+durable files are not deleted by upload cancellation. App-specific asset records
+remain owned by the app schema.
+
 Rollback only changes package code version. It does not change
 `TUTTI_APP_DATA_DIR`.
 

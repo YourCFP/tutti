@@ -19,26 +19,30 @@ import (
 	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
 )
 
+//go:embed generated/**
 var files embed.FS
 
 type App struct {
-	Manifest     workspacebiz.AppManifest
-	SourceDir    string
-	Distribution Distribution
+	Manifest      workspacebiz.AppManifest
+	SourceDir     string
+	Localizations []workspacebiz.AppManifestLocalization
+	Distribution  Distribution
 }
 
 type DistributionKind string
 
 const (
-	DistributionEmbedded DistributionKind = "embedded"
-	DistributionRemote   DistributionKind = "remote"
+	DistributionEmbedded        DistributionKind = "embedded"
+	DistributionEmbeddedArchive DistributionKind = "embedded-archive"
+	DistributionRemote          DistributionKind = "remote"
 )
 
 type Distribution struct {
-	Kind           DistributionKind
-	ArtifactURL    string
-	ArtifactSHA256 string
-	IconURL        string
+	Kind                 DistributionKind
+	ArtifactURL          string
+	ArtifactSHA256       string
+	EmbeddedArtifactPath string
+	IconURL              string
 }
 
 const (
@@ -80,8 +84,9 @@ type remoteCatalogDocument struct {
 }
 
 type remoteCatalogApp struct {
-	Manifest     workspacebiz.AppManifest `json:"manifest"`
-	Distribution remoteDistribution       `json:"distribution"`
+	Localizations []workspacebiz.AppManifestLocalization `json:"localizations,omitempty"`
+	Manifest      workspacebiz.AppManifest               `json:"manifest"`
+	Distribution  remoteDistribution                     `json:"distribution"`
 }
 
 type remoteDistribution struct {
@@ -132,12 +137,69 @@ func RemoteCatalogEnvOverrideActive() bool {
 	return ok
 }
 
+func embeddedCatalog() []App {
+	minWidth := 520
+	minHeight := 640
+	return []App{
+		{
+			Manifest: workspacebiz.AppManifest{
+				SchemaVersion: workspacebiz.AppManifestSchemaVersionV1,
+				AppID:         "tutti-onboarding",
+				Version:       "0.1.0",
+				Name:          "Getting Started",
+				Description:   "Learn Tutti and Agent collaboration",
+				Icon: workspacebiz.AppManifestIcon{
+					Type: "asset",
+					Src:  "icon.webp",
+				},
+				Runtime: workspacebiz.AppManifestRuntime{
+					Bootstrap:       "bootstrap.sh",
+					HealthcheckPath: "/healthz",
+					Profile:         "standalone",
+				},
+				Window: &workspacebiz.AppManifestWindow{
+					MinWidth:  &minWidth,
+					MinHeight: &minHeight,
+				},
+				Launch: &workspacebiz.AppManifestLaunch{
+					Mode: "workspace-open",
+				},
+				LocalizationInfo: &workspacebiz.AppManifestLocalizationInfo{
+					DefaultLocale: "en",
+					AdditionalLocales: []workspacebiz.AppManifestLocalizationFile{
+						{
+							Locale: "zh-CN",
+							File:   "locales/zh-CN/manifest.json",
+						},
+					},
+				},
+				Author: &workspacebiz.AppManifestAuthor{
+					Name: "Tutti",
+				},
+				Tags: []string{"onboarding", "getting-started", "workspace"},
+			},
+			Localizations: []workspacebiz.AppManifestLocalization{
+				{
+					Locale:      "zh-CN",
+					Name:        "新手指引",
+					Description: "带你快速上手 Tutti 和 Agent 协作",
+					Tags:        []string{"入门", "引导", "工作区"},
+				},
+			},
+			Distribution: Distribution{
+				Kind:                 DistributionEmbeddedArchive,
+				EmbeddedArtifactPath: "generated/tutti-onboarding/tutti-onboarding-0.1.0.zip",
+			},
+		},
+	}
+}
+
 func snapshot(refreshRemote bool) (CatalogSnapshot, error) {
 	return snapshotWithSource(currentRemoteCatalogSource(), refreshRemote)
 }
 
 func snapshotWithSource(source remoteCatalogSource, refreshRemote bool) (CatalogSnapshot, error) {
-	apps := []App{}
+	apps := embeddedCatalog()
 
 	remote, err := remoteCatalogSnapshot(source, refreshRemote)
 	if err != nil {
@@ -163,7 +225,7 @@ func snapshotAndWait(ctx context.Context) (CatalogSnapshot, error) {
 }
 
 func snapshotAndWaitWithSource(ctx context.Context, source remoteCatalogSource) (CatalogSnapshot, error) {
-	apps := []App{}
+	apps := embeddedCatalog()
 
 	remote, err := remoteCatalogSnapshotAndWait(ctx, source)
 	if err != nil {
@@ -237,6 +299,38 @@ func CopyTo(app App, destinationDir string) error {
 		}
 		return nil
 	})
+}
+
+func CopyArchiveTo(app App, destinationPath string) error {
+	if app.Distribution.Kind != DistributionEmbeddedArchive {
+		return fmt.Errorf("builtin app %q is not an embedded archive", app.Manifest.AppID)
+	}
+	if strings.TrimSpace(app.Distribution.EmbeddedArtifactPath) == "" {
+		return errors.New("builtin app embedded artifact path is required")
+	}
+	if strings.TrimSpace(destinationPath) == "" {
+		return errors.New("builtin app archive destination path is required")
+	}
+	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
+		return fmt.Errorf("create builtin app archive destination parent: %w", err)
+	}
+
+	sourceFile, err := files.Open(app.Distribution.EmbeddedArtifactPath)
+	if err != nil {
+		return fmt.Errorf("open builtin app archive: %w", err)
+	}
+	defer sourceFile.Close()
+
+	targetFile, err := os.OpenFile(destinationPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		return fmt.Errorf("open builtin app archive destination: %w", err)
+	}
+	defer targetFile.Close()
+
+	if _, err := io.Copy(targetFile, sourceFile); err != nil {
+		return fmt.Errorf("copy builtin app archive: %w", err)
+	}
+	return nil
 }
 
 func modeForBuiltinFile(relativePath string) os.FileMode {
@@ -571,9 +665,14 @@ func parseRemoteCatalog(data []byte) ([]App, error) {
 		if err != nil {
 			return nil, err
 		}
+		localizations, err := parseRemoteCatalogLocalizations(appID, entry.Localizations)
+		if err != nil {
+			return nil, err
+		}
 		apps = append(apps, App{
-			Manifest:     entry.Manifest,
-			Distribution: distribution,
+			Manifest:      entry.Manifest,
+			Localizations: localizations,
+			Distribution:  distribution,
 		})
 	}
 	return apps, nil
@@ -602,6 +701,40 @@ func parseRemoteDistribution(appID string, manifest workspacebiz.AppManifest, di
 		ArtifactSHA256: artifactSHA256,
 		IconURL:        iconURL,
 	}, nil
+}
+
+func parseRemoteCatalogLocalizations(appID string, localizations []workspacebiz.AppManifestLocalization) ([]workspacebiz.AppManifestLocalization, error) {
+	if len(localizations) == 0 {
+		return nil, nil
+	}
+	result := make([]workspacebiz.AppManifestLocalization, 0, len(localizations))
+	seenLocales := make(map[string]struct{}, len(localizations))
+	for index, localization := range localizations {
+		locale := strings.TrimSpace(localization.Locale)
+		if locale == "" {
+			return nil, fmt.Errorf("app catalog app %q localizations[%d].locale is required", appID, index)
+		}
+		localeKey := strings.ToLower(locale)
+		if _, ok := seenLocales[localeKey]; ok {
+			return nil, fmt.Errorf("app catalog app %q localizations[%d].locale must be unique", appID, index)
+		}
+		seenLocales[localeKey] = struct{}{}
+		normalized := workspacebiz.AppManifestLocalization{
+			Locale:      locale,
+			Name:        strings.TrimSpace(localization.Name),
+			Description: strings.TrimSpace(localization.Description),
+		}
+		for _, tag := range localization.Tags {
+			if trimmed := strings.TrimSpace(tag); trimmed != "" {
+				normalized.Tags = append(normalized.Tags, trimmed)
+			}
+		}
+		if normalized.Name == "" && normalized.Description == "" && len(normalized.Tags) == 0 {
+			continue
+		}
+		result = append(result, normalized)
+	}
+	return result, nil
 }
 
 func mergeCatalogs(embeddedApps []App, remoteApps []App) ([]App, error) {

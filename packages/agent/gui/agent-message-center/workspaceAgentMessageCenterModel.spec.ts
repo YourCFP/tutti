@@ -10,6 +10,7 @@ import {
   selectMessageCenterAttentionDeckItems,
   type WorkspaceAgentMessageCenterItem
 } from "./workspaceAgentMessageCenterModel";
+import { stabilizeWorkspaceAgentMessageCenterModel } from "./workspaceAgentMessageCenterModelStability";
 
 describe("buildWorkspaceAgentMessageCenterModel", () => {
   it("counts current-workspace sessions that need user action as waiting", () => {
@@ -306,6 +307,62 @@ describe("buildWorkspaceAgentMessageCenterModel", () => {
     ]);
   });
 
+  it("filters non-waiting items before the configured cutoff while preserving waiting items", () => {
+    const model = buildWorkspaceAgentMessageCenterModel(
+      snapshot({
+        messages: [
+          message({
+            agentSessionId: "recent",
+            messageId: "recent-message",
+            payload: { text: "Recent summary" },
+            occurredAtUnixMs: 2_100
+          }),
+          message({
+            agentSessionId: "old",
+            messageId: "old-message",
+            payload: { text: "Old summary" },
+            occurredAtUnixMs: 900
+          }),
+          message({
+            agentSessionId: "old-waiting",
+            messageId: "old-permission",
+            kind: "tool.permission_request",
+            payload: { summary: "Old approval" },
+            occurredAtUnixMs: 800
+          })
+        ],
+        sessions: [
+          session({
+            agentSessionId: "recent",
+            status: "completed",
+            startedAtUnixMs: 2_100,
+            updatedAtUnixMs: 2_100
+          }),
+          session({
+            agentSessionId: "old",
+            status: "completed",
+            startedAtUnixMs: 900,
+            updatedAtUnixMs: 900
+          }),
+          session({
+            agentSessionId: "old-waiting",
+            status: "waiting",
+            startedAtUnixMs: 800,
+            updatedAtUnixMs: 800
+          })
+        ]
+      }),
+      { itemCutoffUnixMs: 1_000 }
+    );
+
+    expect(model.items.map((item) => item.agentSessionId)).toEqual([
+      "old-waiting",
+      "recent"
+    ]);
+    expect(model.counts.all).toBe(2);
+    expect(model.counts.waiting).toBe(1);
+  });
+
   it("uses session end time when a turn has ended", () => {
     const model = buildWorkspaceAgentMessageCenterModel(
       snapshot({
@@ -526,6 +583,65 @@ describe("buildWorkspaceAgentMessageCenterModel", () => {
     });
   });
 
+  it("uses the newest pending prompt without sorting message arrays", () => {
+    const model = buildWorkspaceAgentMessageCenterModel(
+      snapshot({
+        messages: [
+          message({
+            agentSessionId: "session-1",
+            messageId: "older-ask",
+            role: "assistant",
+            kind: "tool_call",
+            status: "waiting",
+            payload: {
+              toolName: "AskUserQuestion",
+              input: {
+                requestId: "older-request",
+                questions: [
+                  {
+                    id: "older",
+                    question: "Older question?",
+                    options: [],
+                    multiSelect: false
+                  }
+                ]
+              }
+            },
+            occurredAtUnixMs: 30
+          }),
+          message({
+            agentSessionId: "session-1",
+            messageId: "newer-approval",
+            role: "assistant",
+            kind: "tool_call",
+            status: "waiting_approval",
+            payload: {
+              callType: "approval",
+              toolName: "Approval",
+              input: {
+                requestId: "newer-request",
+                options: [
+                  {
+                    optionId: "allow_once",
+                    label: "Allow once",
+                    kind: "allow_once"
+                  }
+                ]
+              }
+            },
+            occurredAtUnixMs: 40
+          })
+        ],
+        sessions: [session({ agentSessionId: "session-1", status: "waiting" })]
+      })
+    );
+
+    expect(model.items[0]?.pendingPrompt).toMatchObject({
+      kind: "approval",
+      requestId: "newer-request"
+    });
+  });
+
   it("uses caller-provided labels for needs-attention fallback prompts", () => {
     const model = buildWorkspaceAgentMessageCenterModel(
       snapshot({
@@ -645,6 +761,40 @@ describe("buildWorkspaceAgentMessageCenterModel", () => {
     expect(model.items[0]?.digest.primary).toMatchObject({
       kind: "outcome",
       summary: "codex"
+    });
+  });
+
+  it("keeps digest summaries on the tool-output path", () => {
+    const model = buildWorkspaceAgentMessageCenterModel(
+      snapshot({
+        messages: [
+          message({
+            agentSessionId: "session-1",
+            messageId: "tool-1",
+            kind: "tool_call",
+            status: "completed",
+            payload: {
+              output: { summary: "53 tests passed" },
+              title: "Bash",
+              toolName: "Bash"
+            },
+            occurredAtUnixMs: 20
+          })
+        ],
+        sessions: [
+          session({
+            agentSessionId: "session-1",
+            status: "completed"
+          })
+        ]
+      })
+    );
+
+    expect(model.items[0]?.lastAgentMessageSummary).toBe("Bash");
+    expect(model.items[0]?.digest.primary).toMatchObject({
+      kind: "outcome",
+      summary: "53 tests passed",
+      occurredAtUnixMs: 20
     });
   });
 
@@ -769,6 +919,92 @@ describe("buildWorkspaceAgentMessageCenterModel", () => {
   });
 });
 
+describe("stabilizeWorkspaceAgentMessageCenterModel", () => {
+  it("returns the previous model when rebuilt items are equivalent", () => {
+    const activitySnapshot = snapshot({
+      messages: [
+        message({
+          agentSessionId: "session-1",
+          messageId: "assistant-1",
+          payload: { text: "Finished" },
+          occurredAtUnixMs: 10
+        })
+      ],
+      sessions: [
+        session({
+          agentSessionId: "session-1",
+          status: "completed"
+        })
+      ]
+    });
+    const previous = buildWorkspaceAgentMessageCenterModel(activitySnapshot);
+    const next = buildWorkspaceAgentMessageCenterModel(activitySnapshot);
+
+    const stable = stabilizeWorkspaceAgentMessageCenterModel(previous, next);
+
+    expect(stable).toBe(previous);
+    expect(stable.items).toBe(previous.items);
+    expect(stable.items[0]).toBe(previous.items[0]);
+  });
+
+  it("reuses unchanged item references while keeping changed items fresh", () => {
+    const previous = buildWorkspaceAgentMessageCenterModel(
+      snapshot({
+        messages: [
+          message({
+            agentSessionId: "session-1",
+            messageId: "assistant-1",
+            payload: { text: "Session one" },
+            occurredAtUnixMs: 10
+          }),
+          message({
+            agentSessionId: "session-2",
+            messageId: "assistant-2",
+            payload: { text: "Session two" },
+            occurredAtUnixMs: 20
+          })
+        ],
+        sessions: [
+          session({ agentSessionId: "session-1", status: "completed" }),
+          session({ agentSessionId: "session-2", status: "completed" })
+        ]
+      })
+    );
+    const next = buildWorkspaceAgentMessageCenterModel(
+      snapshot({
+        messages: [
+          message({
+            agentSessionId: "session-1",
+            messageId: "assistant-1",
+            payload: { text: "Session one" },
+            occurredAtUnixMs: 10
+          }),
+          message({
+            agentSessionId: "session-2",
+            messageId: "assistant-2",
+            payload: { text: "Session two updated" },
+            occurredAtUnixMs: 20
+          })
+        ],
+        sessions: [
+          session({ agentSessionId: "session-1", status: "completed" }),
+          session({ agentSessionId: "session-2", status: "completed" })
+        ]
+      })
+    );
+
+    const stable = stabilizeWorkspaceAgentMessageCenterModel(previous, next);
+
+    expect(itemBySessionId(stable, "session-1")).toBe(
+      itemBySessionId(previous, "session-1")
+    );
+    expect(itemBySessionId(stable, "session-2")).toBe(
+      itemBySessionId(next, "session-2")
+    );
+    expect(stable).not.toBe(previous);
+  });
+});
+
 function snapshot(input: {
   messages: AgentActivityMessage[];
   sessions: AgentActivitySession[];
@@ -819,6 +1055,13 @@ function message(
     occurredAtUnixMs: 1,
     ...overrides
   };
+}
+
+function itemBySessionId(
+  model: ReturnType<typeof buildWorkspaceAgentMessageCenterModel>,
+  agentSessionId: string
+): WorkspaceAgentMessageCenterItem | undefined {
+  return model.items.find((item) => item.agentSessionId === agentSessionId);
 }
 
 describe("message center attention deck selection", () => {

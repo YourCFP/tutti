@@ -49,6 +49,76 @@ test("popup cards render component or image preview states", () => {
   assert.doesNotMatch(source, /dockPopupFallbackPreviewImageUrl/);
 });
 
+test("popup card active outline uses the preview corner radius", () => {
+  assert.match(source, /data-desktop-dock-popup-card-active-overlay="true"/);
+  assert.match(
+    source,
+    /className="pointer-events-none absolute inset-0 z-\[3\] rounded-md shadow-\[inset_0_0_0_2px_var\(--border-focus\)\]"/
+  );
+  assert.match(
+    source,
+    /className=\{cn\(\s*"relative flex min-h-0 min-w-0 flex-1 cursor-pointer flex-col overflow-hidden rounded-md/
+  );
+});
+
+test("context menu variant renders dock command rows", () => {
+  assert.match(source, /WorkbenchHostDockContextMenu/);
+  assert.match(source, /data-desktop-dock-context-menu="true"/);
+  assert.match(source, /canCreateNew=\{showCreateNew !== false\}/);
+  assert.match(source, /onSelectNode\(item\.node\.id\)/);
+  assert.match(source, /checked=\{!item\.isMinimized\}/);
+  assert.match(source, /newWindowLabel/);
+  assert.match(
+    source,
+    /const hasNewWindowCommand = hasOpenWindows && canCreateNew;/
+  );
+  assert.match(
+    source,
+    /const hasDockActionGroup =\s*Boolean\(dockRetention\) \|\| hasNewWindowCommand \|\| hasOpenCommand;/
+  );
+  assert.match(source, /\{hasNewWindowCommand \? \(/);
+  assert.match(source, /const hasOpenWindows = items\.length > 0;/);
+  assert.match(source, /label=\{openLabel\}/);
+  assert.match(source, /disabled=\{!showOpen\}/);
+  assert.match(
+    source,
+    /dockRetention \? \([\s\S]*?onRunDockRetentionAction[\s\S]*?\) : null\}[\s\S]*?hasNewWindowCommand \? \([\s\S]*?newWindowLabel/
+  );
+  assert.match(
+    source,
+    /dockRetention \? \([\s\S]*?onRunDockRetentionAction[\s\S]*?\) : null\}[\s\S]*?hasOpenCommand \? \([\s\S]*?openLabel/
+  );
+  assert.match(source, /\{hasOpenWindows \? \(/);
+  assert.match(
+    source,
+    /\{hasOpenWindows && \(hasDockActionGroup \|\| hasWindowActionGroup\) \? \([\s\S]*?<WorkbenchHostDockContextMenuSeparator \/>/
+  );
+  assert.match(
+    source,
+    /\{hasDockActionGroup \? \([\s\S]*?<WorkbenchHostDockContextMenuSeparator \/>[\s\S]*?\) : null\}/
+  );
+  assert.match(source, /showAllWindowsLabel/);
+  assert.match(
+    source,
+    /\{canShowAllWindows && onShowAllWindows \? \([\s\S]*?showAllWindowsLabel[\s\S]*?\) : null\}/
+  );
+  assert.doesNotMatch(
+    source,
+    /disabled=\{!canShowAllWindows \|\| !onShowAllWindows\}/
+  );
+  assert.match(source, /fullscreenLabel/);
+  assert.match(source, /hideLabel/);
+  assert.match(source, /quitLabel/);
+  assert.match(source, /dockRetention\.checked/);
+  assert.match(source, /checkedIcon=\{[\s\S]*?<PinFilledIcon/);
+  assert.match(source, /checked && checkedIcon \? \(/);
+  assert.match(source, /MaximizeIcon/);
+  assert.match(source, /OverviewLayoutIcon/);
+  assert.match(source, /className="size-4 text-\[var\(--tutti-purple\)\]"/);
+  assert.match(source, /className="mx-2 my-1 h-px bg-\[var\(--border-1\)\]"/);
+  assert.match(source, /isContextMenu \? "p-1" : "p-3"/);
+});
+
 test("popup preview memory cache is scoped by dock preview cache identity", () => {
   assert.match(source, /const dockPopupPreviewByMemoryKey = new Map/);
   assert.match(source, /const pendingDockPopupPreviewMemoryKeys = new Set/);

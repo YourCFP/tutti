@@ -95,10 +95,14 @@ export const zhCN = {
       file: "文件",
       help: "帮助",
       openPerfMonitor: "打开 Perf Monitor DevTools",
+      quit: "退出 Tutti",
       upToDateDetail: "Tutti {{version}} 是当前的最新版本。",
       upToDateMessage: "您使用的就是最新版本！",
       view: "显示",
       window: "窗口"
+    },
+    quitShortcut: {
+      confirmToastTitle: "再次敲击 Command + Q 即可退出Tutti"
     }
   },
   workspace: {
@@ -161,6 +165,12 @@ export const zhCN = {
       waitingNotificationTitle: "{{title}} 需要你决策",
       runningCount: "{{count}} 个运行中",
       waitingCount: "{{count}} 个等待"
+    },
+    feedbackGroup: {
+      instruction: "请使用微信扫码",
+      qrAlt: "反馈群二维码",
+      trigger: "加入反馈群",
+      triggerAria: "加入反馈群"
     },
     externalImport: {
       back: "返回",
@@ -262,6 +272,14 @@ export const zhCN = {
         },
         dockPlacementSaveFailed: "暂时无法更新 Dock 布局。",
         dockIconStyleSaveFailed: "暂时无法更新 Dock 图标风格。",
+        minimizeAnimationDescription: "控制窗口最小化到 Dock 时使用的动画",
+        minimizeAnimationLabel: "最小化动画",
+        minimizeAnimationOptions: {
+          genie: "Genie",
+          off: "关闭",
+          scale: "缩放"
+        },
+        minimizeAnimationSaveFailed: "暂时无法更新最小化动画。",
         themeDescription: "控制窗口外观以及信息的颜色模式",
         themeLabel: "外观",
         themeOptions: {
@@ -358,6 +376,7 @@ export const zhCN = {
         apps: "应用",
         sectionsLabel: "设置分区",
         appearance: "外观",
+        agent: "Agent",
         developer: "开发者",
         general: "通用"
       },
@@ -526,9 +545,10 @@ export const zhCN = {
       agentProviders: {
         checking: "正在检测本地 CLI 状态...",
         comingSoon: "敬请期待",
-        install: "安装",
+        install: "连接",
         installFailed: "安装失败",
-        installRequired: "需要先安装本地组件才能使用这个 Agent",
+        installUnavailableInRegion: "该地区不支持 Claude 服务。",
+        installRequired: "需要先连接本地 Agent 才能继续",
         installing: "安装中...",
         login: "登录",
         loginFailed: "登录失败",
@@ -589,6 +609,7 @@ export const zhCN = {
     managed_process_stderr: "本地运行时报告了内部错误。",
     node_runtime_broken:
       "npm 使用的 Node.js 运行时已损坏。请检查终端中的 Node/npm 配置后重试。",
+    workspace_app_launch_requires_retry: "这个应用启动失败了，请先点击重试。",
     preview_file_too_large: "这个文件太大，暂时无法在这里预览。",
     service_unavailable: {
       default: "对应服务暂时不可用。",

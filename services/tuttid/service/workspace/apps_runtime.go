@@ -70,9 +70,6 @@ func (s *AppCenterService) StartEnabled(ctx context.Context, workspaceID string)
 	if _, err := s.workspaceSummary(ctx, workspaceID); err != nil {
 		return nil, err
 	}
-	if err := s.refreshBuiltinCatalogForStartEnabled(ctx, workspaceID); err != nil {
-		return nil, err
-	}
 	installations, err := s.Store.ListWorkspaceAppInstallations(ctx, workspaceID)
 	if err != nil {
 		return nil, err
@@ -84,12 +81,21 @@ func (s *AppCenterService) StartEnabled(ctx context.Context, workspaceID string)
 		}
 	}
 	var builtins []builtinapps.App
-	builtins, err = s.builtinCatalog(ctx)
-	if err != nil {
-		slog.Warn("workspace app start remote builtin sync skipped; builtin catalog unavailable", "workspaceId", workspaceID, "error", err)
+	slog.Info("workspace app start enabled started", "workspaceId", workspaceID, "enabledAppCount", len(enabledAppIDs))
+	if len(enabledAppIDs) > 0 {
+		refreshStartedAt := time.Now()
+		if err := s.refreshBuiltinCatalogForStartEnabled(ctx, workspaceID); err != nil {
+			return nil, err
+		}
+		slog.Info("workspace app start enabled remote catalog refresh completed", "workspaceId", workspaceID, "enabledAppCount", len(enabledAppIDs), "durationMs", time.Since(refreshStartedAt).Milliseconds())
+		builtins, err = s.builtinCatalog(ctx)
+		if err != nil {
+			slog.Warn("workspace app start remote builtin sync skipped; builtin catalog unavailable", "workspaceId", workspaceID, "error", err)
+		}
+	} else {
+		slog.Info("workspace app start enabled remote catalog refresh skipped", "workspaceId", workspaceID, "enabledAppCount", len(enabledAppIDs), "reason", "no-enabled-apps")
 	}
 	remoteBuiltins := remoteBuiltinByAppID(builtins)
-	slog.Info("workspace app start enabled started", "workspaceId", workspaceID, "enabledAppCount", len(enabledAppIDs))
 
 	remoteBuiltinInstallStarted := false
 	for _, installation := range installations {
@@ -148,7 +154,7 @@ func (s *AppCenterService) StartEnabled(ctx context.Context, workspaceID string)
 			return nil, err
 		}
 	}
-	slog.Info("workspace app start enabled completed", "workspaceId", workspaceID, "enabledAppCount", len(enabledAppIDs), "duration", time.Since(startedAt))
+	slog.Info("workspace app start enabled completed", "workspaceId", workspaceID, "enabledAppCount", len(enabledAppIDs), "duration", time.Since(startedAt), "durationMs", time.Since(startedAt).Milliseconds())
 	if !remoteBuiltinInstallStarted {
 		s.startRuntimePreload()
 	}

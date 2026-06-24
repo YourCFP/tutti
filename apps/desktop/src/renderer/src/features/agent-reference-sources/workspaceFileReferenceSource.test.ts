@@ -30,29 +30,60 @@ test("local source scopes search to the selected directory location", async () =
   assert.equal(observed?.within, "Documents");
 });
 
-test("local source ignores virtual locations (recent, personal root) for scoping", async () => {
-  for (const sentinel of ["__recent__", WORKSPACE_ROOT_GROUP_NODE_ID]) {
-    let observed: { within?: string } | undefined;
-    const adapter: WorkspaceFileReferenceAdapter = {
-      async searchReferences(input) {
-        observed = input;
-        return [];
-      }
-    };
-    const source = createWorkspaceFileReferenceSource({
-      adapter,
-      label: "Local"
-    });
+test("local source searches recent from the recent reference list", async () => {
+  let searchedWholeWorkspace = false;
+  let observedRecentLimit: number | undefined;
+  const adapter: WorkspaceFileReferenceAdapter = {
+    async listRecentReferences(input) {
+      observedRecentLimit = input.limit;
+      return [
+        { kind: "file", path: "/workspace/2026.md" },
+        { kind: "file", path: "/workspace/notes.txt" },
+        { kind: "folder", path: "/workspace/2026-archive" }
+      ];
+    },
+    async searchReferences() {
+      searchedWholeWorkspace = true;
+      return [{ kind: "file", path: "/workspace/global-2026.md" }];
+    }
+  };
+  const source = createWorkspaceFileReferenceSource({
+    adapter,
+    label: "Local"
+  });
 
-    await source.search?.(scope, {
-      query: "report",
-      withinNodeId: sentinel
-    });
+  const result = await source.search?.(scope, {
+    filters: ["document"],
+    limit: 1,
+    query: "2026",
+    withinNodeId: "__recent__"
+  });
 
-    assert.equal(
-      observed?.within,
-      undefined,
-      `expected no scope for sentinel ${sentinel}`
-    );
-  }
+  assert.equal(searchedWholeWorkspace, false);
+  assert.equal(observedRecentLimit, 100);
+  assert.deepEqual(
+    result?.entries.map((entry) => entry.ref.nodeId),
+    ["/workspace/2026.md"]
+  );
+});
+
+test("local source ignores personal root sentinel for scoping", async () => {
+  let observed: { within?: string } | undefined;
+  const adapter: WorkspaceFileReferenceAdapter = {
+    async searchReferences(input) {
+      observed = input;
+      return [];
+    }
+  };
+  const source = createWorkspaceFileReferenceSource({
+    adapter,
+    label: "Local"
+  });
+
+  await source.search?.(scope, {
+    query: "report",
+    withinNodeId: WORKSPACE_ROOT_GROUP_NODE_ID
+  });
+
+  assert.equal(observed?.within, undefined);
 });

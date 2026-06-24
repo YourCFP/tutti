@@ -289,6 +289,449 @@ test("workspace app external bridge invokes file open with activation", async ()
   ]);
 });
 
+test("workspace app external bridge uploads files without user activation", async () => {
+  const calls: Array<{ channel: string; payload?: unknown }> = [];
+  let fetchUrl = "";
+  let fetchInit: RequestInit | undefined;
+  const file = new Blob(["hello"], { type: "text/plain" }) as File;
+  Object.defineProperty(file, "name", { value: "note.txt" });
+  const bridge = createWorkspaceAppExternalBridge({
+    appContext: {
+      async get() {
+        return { locale: "en" };
+      },
+      subscribe() {
+        throw new Error("unexpected subscribe");
+      }
+    },
+    async fetch(input, init) {
+      fetchUrl = String(input);
+      fetchInit = init;
+      return new Response(null, { status: 204 });
+    },
+    isUserActivationActive: () => false,
+    send: unexpectedSend,
+    async invoke<TResult>(channel: string, payload?: unknown) {
+      calls.push({ channel, payload });
+      if (channel === workspaceAppExternalChannels.filesUploadPrepare) {
+        return {
+          expiresAt: "2026-06-24T12:15:00Z",
+          headers: {
+            Authorization: "Bearer app-token",
+            "Content-Type": "application/octet-stream"
+          },
+          method: "PUT",
+          uploadId: "upload-1",
+          url: "http://127.0.0.1:4545/v1/workspaces/ws-1/apps/canvas/uploads/upload-1/content"
+        } as TResult;
+      }
+      if (channel === workspaceAppExternalChannels.filesUploadComplete) {
+        return {
+          path: "/state/apps/installations/canvas/data/uploads/2c/hash.txt",
+          name: "note.md",
+          mimeType: "text/markdown",
+          sizeBytes: 5,
+          sha256: "hash"
+        } as TResult;
+      }
+      throw new Error(`unexpected channel ${channel}`);
+    }
+  });
+
+  const uploaded = await bridge.files.upload(file, {
+    name: " note.md ",
+    mimeType: " text/markdown "
+  });
+
+  assert.deepEqual(uploaded, {
+    path: "/state/apps/installations/canvas/data/uploads/2c/hash.txt",
+    name: "note.md",
+    mimeType: "text/markdown",
+    sizeBytes: 5,
+    sha256: "hash"
+  });
+  assert.equal(
+    fetchUrl,
+    "http://127.0.0.1:4545/v1/workspaces/ws-1/apps/canvas/uploads/upload-1/content"
+  );
+  assert.equal(fetchInit?.method, "PUT");
+  assert.equal(fetchInit?.body, file);
+  assert.deepEqual(fetchInit?.headers, {
+    Authorization: "Bearer app-token",
+    "Content-Type": "application/octet-stream"
+  });
+  assert.deepEqual(calls, [
+    {
+      channel: workspaceAppExternalChannels.filesUploadPrepare,
+      payload: {
+        purpose: "app-asset",
+        name: "note.md",
+        mimeType: "text/markdown",
+        sizeBytes: 5
+      }
+    },
+    {
+      channel: workspaceAppExternalChannels.filesUploadComplete,
+      payload: { uploadId: "upload-1" }
+    }
+  ]);
+});
+
+test("workspace app external bridge reports upload progress", async () => {
+  const calls: Array<{ channel: string; payload?: unknown }> = [];
+  const progress: Array<{
+    loadedBytes: number;
+    ratio: number;
+    totalBytes: number;
+  }> = [];
+  let sentBody: unknown;
+  const file = new Blob(["hello"], { type: "text/plain" }) as File;
+  Object.defineProperty(file, "name", { value: "note.txt" });
+  const bridge = createWorkspaceAppExternalBridge({
+    appContext: {
+      async get() {
+        return { locale: "en" };
+      },
+      subscribe() {
+        throw new Error("unexpected subscribe");
+      }
+    },
+    createXMLHttpRequest() {
+      return {
+        onabort: null,
+        onerror: null,
+        onload: null,
+        status: 0,
+        upload: { onprogress: null },
+        abort() {
+          this.onabort?.();
+        },
+        open() {
+          return undefined;
+        },
+        send(body: Blob | File) {
+          sentBody = body;
+          this.upload?.onprogress?.({ loaded: 2, total: 5 });
+          this.upload?.onprogress?.({ loaded: 5, total: 5 });
+          this.status = 204;
+          this.onload?.();
+        },
+        setRequestHeader() {
+          return undefined;
+        }
+      };
+    },
+    isUserActivationActive: () => false,
+    send: unexpectedSend,
+    async invoke<TResult>(channel: string, payload?: unknown) {
+      calls.push({ channel, payload });
+      if (channel === workspaceAppExternalChannels.filesUploadPrepare) {
+        return {
+          expiresAt: "2026-06-24T12:15:00Z",
+          headers: {
+            Authorization: "Bearer app-token",
+            "Content-Type": "application/octet-stream"
+          },
+          method: "PUT",
+          uploadId: "upload-1",
+          url: "http://127.0.0.1:4545/v1/workspaces/ws-1/apps/canvas/uploads/upload-1/content"
+        } as TResult;
+      }
+      if (channel === workspaceAppExternalChannels.filesUploadComplete) {
+        return {
+          path: "/state/apps/installations/canvas/data/uploads/2c/hash.txt",
+          name: "note.txt",
+          mimeType: "text/plain",
+          sizeBytes: 5,
+          sha256: "hash"
+        } as TResult;
+      }
+      throw new Error(`unexpected channel ${channel}`);
+    }
+  });
+
+  await bridge.files.upload(file, {
+    onProgress(nextProgress) {
+      progress.push(nextProgress);
+    }
+  });
+
+  assert.equal(sentBody, file);
+  assert.deepEqual(progress.slice(0, 2), [
+    { loadedBytes: 2, ratio: 0.4, totalBytes: 5 },
+    { loadedBytes: 5, ratio: 1, totalBytes: 5 }
+  ]);
+  assert.deepEqual(
+    calls.map((call) => call.channel),
+    [
+      workspaceAppExternalChannels.filesUploadPrepare,
+      workspaceAppExternalChannels.filesUploadComplete
+    ]
+  );
+});
+
+test("workspace app external bridge ignores throwing upload progress listeners", async () => {
+  const calls: Array<{ channel: string; payload?: unknown }> = [];
+  const file = new Blob(["hello"], { type: "text/plain" }) as File;
+  Object.defineProperty(file, "name", { value: "note.txt" });
+  const bridge = createWorkspaceAppExternalBridge({
+    appContext: {
+      async get() {
+        return { locale: "en" };
+      },
+      subscribe() {
+        throw new Error("unexpected subscribe");
+      }
+    },
+    createXMLHttpRequest() {
+      return {
+        onabort: null,
+        onerror: null,
+        onload: null,
+        status: 0,
+        upload: { onprogress: null },
+        abort() {
+          this.onabort?.();
+        },
+        open() {
+          return undefined;
+        },
+        send() {
+          this.upload?.onprogress?.({ loaded: 2, total: 5 });
+          this.status = 204;
+          this.onload?.();
+        },
+        setRequestHeader() {
+          return undefined;
+        }
+      };
+    },
+    isUserActivationActive: () => false,
+    send: unexpectedSend,
+    async invoke<TResult>(channel: string, payload?: unknown) {
+      calls.push({ channel, payload });
+      if (channel === workspaceAppExternalChannels.filesUploadPrepare) {
+        return {
+          expiresAt: "2026-06-24T12:15:00Z",
+          headers: {
+            Authorization: "Bearer app-token",
+            "Content-Type": "application/octet-stream"
+          },
+          method: "PUT",
+          uploadId: "upload-1",
+          url: "http://127.0.0.1:4545/v1/workspaces/ws-1/apps/canvas/uploads/upload-1/content"
+        } as TResult;
+      }
+      if (channel === workspaceAppExternalChannels.filesUploadComplete) {
+        return {
+          path: "/state/apps/installations/canvas/data/uploads/2c/hash.txt",
+          name: "note.txt",
+          mimeType: "text/plain",
+          sizeBytes: 5,
+          sha256: "hash"
+        } as TResult;
+      }
+      throw new Error(`unexpected channel ${channel}`);
+    }
+  });
+
+  await bridge.files.upload(file, {
+    onProgress() {
+      throw new Error("progress failed");
+    }
+  });
+
+  assert.deepEqual(
+    calls.map((call) => call.channel),
+    [
+      workspaceAppExternalChannels.filesUploadPrepare,
+      workspaceAppExternalChannels.filesUploadComplete
+    ]
+  );
+});
+
+test("workspace app external bridge cancels upload with abort signal", async () => {
+  const calls: Array<{ channel: string; payload?: unknown }> = [];
+  const controller = new AbortController();
+  let aborted = false;
+  let sentBody: unknown;
+  const file = new Blob(["hello"], { type: "text/plain" }) as File;
+  Object.defineProperty(file, "name", { value: "note.txt" });
+  const bridge = createWorkspaceAppExternalBridge({
+    appContext: {
+      async get() {
+        return { locale: "en" };
+      },
+      subscribe() {
+        throw new Error("unexpected subscribe");
+      }
+    },
+    createXMLHttpRequest() {
+      return {
+        onabort: null,
+        onerror: null,
+        onload: null,
+        status: 0,
+        upload: { onprogress: null },
+        abort() {
+          aborted = true;
+          this.onabort?.();
+        },
+        open() {
+          return undefined;
+        },
+        send(body: Blob | File) {
+          sentBody = body;
+        },
+        setRequestHeader() {
+          return undefined;
+        }
+      };
+    },
+    isUserActivationActive: () => false,
+    send: unexpectedSend,
+    async invoke<TResult>(channel: string, payload?: unknown) {
+      calls.push({ channel, payload });
+      if (channel === workspaceAppExternalChannels.filesUploadPrepare) {
+        return {
+          expiresAt: "2026-06-24T12:15:00Z",
+          headers: {
+            Authorization: "Bearer app-token",
+            "Content-Type": "application/octet-stream"
+          },
+          method: "PUT",
+          uploadId: "upload-1",
+          url: "http://127.0.0.1:4545/v1/workspaces/ws-1/apps/canvas/uploads/upload-1/content"
+        } as TResult;
+      }
+      if (channel === workspaceAppExternalChannels.filesUploadCancel) {
+        return undefined as TResult;
+      }
+      throw new Error(`unexpected channel ${channel}`);
+    }
+  });
+
+  const uploadPromise = bridge.files.upload(file, {
+    onProgress() {
+      return undefined;
+    },
+    signal: controller.signal
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  controller.abort();
+
+  await assert.rejects(uploadPromise, (error: unknown) => {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "name" in error &&
+      error.name === "AbortError"
+    );
+  });
+  assert.equal(sentBody, file);
+  assert.equal(aborted, true);
+  assert.deepEqual(calls, [
+    {
+      channel: workspaceAppExternalChannels.filesUploadPrepare,
+      payload: {
+        purpose: "app-asset",
+        name: "note.txt",
+        mimeType: "text/plain",
+        sizeBytes: 5
+      }
+    },
+    {
+      channel: workspaceAppExternalChannels.filesUploadCancel,
+      payload: { uploadId: "upload-1" }
+    }
+  ]);
+});
+
+test("workspace app external bridge cancels when aborted during complete", async () => {
+  const calls: Array<{ channel: string; payload?: unknown }> = [];
+  const controller = new AbortController();
+  let releaseComplete!: () => void;
+  let markCompleteStarted!: () => void;
+  const completeStarted = new Promise<void>((resolve) => {
+    markCompleteStarted = resolve;
+  });
+  const completeRelease = new Promise<void>((resolve) => {
+    releaseComplete = resolve;
+  });
+  const file = new Blob(["hello"], { type: "text/plain" }) as File;
+  Object.defineProperty(file, "name", { value: "note.txt" });
+  const bridge = createWorkspaceAppExternalBridge({
+    appContext: {
+      async get() {
+        return { locale: "en" };
+      },
+      subscribe() {
+        throw new Error("unexpected subscribe");
+      }
+    },
+    async fetch() {
+      return new Response(null, { status: 204 });
+    },
+    isUserActivationActive: () => false,
+    send: unexpectedSend,
+    async invoke<TResult>(channel: string, payload?: unknown) {
+      calls.push({ channel, payload });
+      if (channel === workspaceAppExternalChannels.filesUploadPrepare) {
+        return {
+          expiresAt: "2026-06-24T12:15:00Z",
+          headers: {
+            Authorization: "Bearer app-token",
+            "Content-Type": "application/octet-stream"
+          },
+          method: "PUT",
+          uploadId: "upload-1",
+          url: "http://127.0.0.1:4545/v1/workspaces/ws-1/apps/canvas/uploads/upload-1/content"
+        } as TResult;
+      }
+      if (channel === workspaceAppExternalChannels.filesUploadComplete) {
+        markCompleteStarted();
+        await completeRelease;
+        return {
+          path: "/state/apps/installations/canvas/data/uploads/2c/hash.txt",
+          name: "note.txt",
+          mimeType: "text/plain",
+          sizeBytes: 5,
+          sha256: "hash"
+        } as TResult;
+      }
+      if (channel === workspaceAppExternalChannels.filesUploadCancel) {
+        return undefined as TResult;
+      }
+      throw new Error(`unexpected channel ${channel}`);
+    }
+  });
+
+  const uploadPromise = bridge.files.upload(file, {
+    signal: controller.signal
+  });
+  await completeStarted;
+  controller.abort();
+  releaseComplete();
+
+  await assert.rejects(uploadPromise, (error: unknown) => {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "name" in error &&
+      error.name === "AbortError"
+    );
+  });
+  assert.deepEqual(
+    calls.map((call) => call.channel),
+    [
+      workspaceAppExternalChannels.filesUploadPrepare,
+      workspaceAppExternalChannels.filesUploadComplete,
+      workspaceAppExternalChannels.filesUploadCancel
+    ]
+  );
+});
+
 test("workspace app external bridge invokes PDF print with activation", async () => {
   const calls: Array<{ channel: string; payload?: unknown }> = [];
   const bridge = createWorkspaceAppExternalBridge({
@@ -389,7 +832,10 @@ test("workspace app external bridge invokes permission request with activation",
     send: unexpectedSend,
     async invoke<TResult>(channel: string, payload?: unknown) {
       calls.push({ channel, payload });
-      return { code: "grant-code-1" } as TResult;
+      return {
+        code: "grant-code-1",
+        contextToken: "context-token-1"
+      } as TResult;
     }
   });
 
@@ -401,7 +847,7 @@ test("workspace app external bridge invokes permission request with activation",
       scopes: ["model:invoke"],
       state: "state-1"
     }),
-    { code: "grant-code-1" }
+    { code: "grant-code-1", contextToken: "context-token-1" }
   );
   assert.deepEqual(calls, [
     {

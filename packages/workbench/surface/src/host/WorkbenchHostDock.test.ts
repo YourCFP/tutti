@@ -5,6 +5,15 @@ import test from "node:test";
 
 const source = readFileSync(resolve("src/host/WorkbenchHostDock.tsx"), "utf8");
 
+test("dock action callbacks contain synchronous and async failures", () => {
+  assert.doesNotMatch(source, /Promise\.resolve\(\s*onDockEntryAction\?\.\(/);
+  assert.doesNotMatch(source, /Promise\.resolve\(\s*onDockEntryClick\?\.\(/);
+  assert.match(
+    source,
+    /const runDockEntryAction = useCallback\([\s\S]*?try \{[\s\S]*?await onDockEntryAction\?\.\([\s\S]*?catch \{[\s\S]*?Keep dock action failures contained\.[\s\S]*?finally \{[\s\S]*?setPendingActionKeys/
+  );
+});
+
 test("dock hover labels use local non-blocking tooltips", () => {
   assert.doesNotMatch(source, /TooltipProvider/);
   assert.doesNotMatch(source, /TooltipTrigger/);
@@ -204,6 +213,133 @@ test("dock hover labels use local non-blocking tooltips", () => {
   );
 });
 
+test("pending minimized dock slots reuse minimized layout without preview capture", () => {
+  assert.match(source, /nodes: context\.minimizedNodes/);
+  assert.doesNotMatch(
+    source,
+    /resolveWorkbenchMinimizedDockSlots\(\{[\s\S]*nodes: context\.nodes/
+  );
+  assert.match(
+    source,
+    /context\.genie\.isPendingMinimizedDockNode\(node\.id\)/
+  );
+  assert.match(
+    source,
+    /if \(context\.genie\.isPendingMinimizedDockNode\(node\.id\)\) \{\s*return false;/
+  );
+  assert.match(
+    source,
+    /aria-disabled=\{isPendingMinimizedNode \? true : undefined\}/
+  );
+  assert.match(source, /tabIndex=\{isPendingMinimizedNode \? -1 : 0\}/);
+  assert.match(source, /data-pending-minimize=/);
+  assert.match(
+    source,
+    /capturePreview=\{\s*isPendingMinimizedNode\s*\?\s*undefined\s*:\s*captureMinimizedNodePreview\s*\}/
+  );
+  assert.match(source, /deferPreview=\{isPendingMinimizedNode\}/);
+  assert.match(
+    source,
+    /dockPreviewCache=\{\s*isPendingMinimizedNode \? undefined : dockPreviewCache\s*\}/
+  );
+  assert.match(
+    source,
+    /providePreview=\{\s*isPendingMinimizedNode\s*\?\s*undefined\s*:\s*provideMinimizedNodePreviewForNode\(node\)\s*\}/
+  );
+});
+
+test("component minimized dock previews freeze without snapshot capture", () => {
+  assert.match(source, /const provideMinimizedNodePreview = useCallback/);
+  assert.match(
+    source,
+    /if \(minimizedDock\?\.kind !== "component"\) \{\s*return null;\s*\}/
+  );
+  assert.match(
+    source,
+    /const provideMinimizedNodePreviewForNode = useCallback/
+  );
+  assert.match(
+    source,
+    /return minimizedDock\?\.kind === "component"\s*\?\s*provideMinimizedNodePreview\s*:\s*undefined;/
+  );
+  assert.match(
+    source,
+    /providePreview=\{provideMinimizedNodePreviewForNode\(\s*node\s*\)\}/
+  );
+  assert.match(
+    source,
+    /const \[componentPreview, setComponentPreview\] = useState<\s*WorkbenchDockPreviewContent \| null \| undefined\s*>\(undefined\);/
+  );
+  assert.match(source, /deferPreview=\{isPendingMinimizedNode\}/);
+  assert.match(
+    source,
+    /if \(deferPreview \|\| !providePreview \|\| componentPreview !== undefined\) \{\s*return undefined;\s*\}/
+  );
+  assert.match(
+    source,
+    /setComponentPreview\(providePreview\(node\) \?\? null\);/
+  );
+  assert.match(source, /requestIdleCallback/);
+  assert.match(
+    source,
+    /if \(deferPreview \|\| providePreview\) \{\s*return undefined;\s*\}/
+  );
+  assert.match(
+    source,
+    /minimizedDock\?\.kind === "snapshot" &&\s*Boolean\(minimizedDock\.capturePreview\)/
+  );
+  assert.match(
+    source,
+    /capturePreview=\{\s*isPendingMinimizedNode\s*\?\s*undefined\s*:\s*captureMinimizedNodePreview\s*\}/
+  );
+  assert.match(source, /renderMinimizedDockPreviewContent/);
+  assert.match(source, /WorkbenchHostDockFrozenComponentPreview/);
+  assert.match(source, /sourceRef\.current\?\.innerHTML/);
+  assert.match(
+    source,
+    /dangerouslySetInnerHTML=\{\{ __html: frozenMarkup \}\}/
+  );
+  assert.match(source, /desktop-dock__minimized-preview--component/);
+  assert.match(source, /minimizedDockPreviewFreezeKey\(node\)/);
+});
+
+test("minimized dock activators allow interactive preview markup", () => {
+  const stackActivatorStart = source.indexOf("const stackButton = (");
+  const stackActivatorEnd = source.indexOf(
+    "return (\n                  <span",
+    stackActivatorStart
+  );
+  const nodeActivatorStart = source.indexOf(
+    "const dockButton = (",
+    source.indexOf("const node = slot.node;")
+  );
+  const nodeActivatorEnd = source.indexOf(
+    "return (\n                <span",
+    nodeActivatorStart
+  );
+  assert.notEqual(stackActivatorStart, -1);
+  assert.notEqual(stackActivatorEnd, -1);
+  assert.notEqual(nodeActivatorStart, -1);
+  assert.notEqual(nodeActivatorEnd, -1);
+  const minimizedActivatorSource = [
+    source.slice(stackActivatorStart, stackActivatorEnd),
+    source.slice(nodeActivatorStart, nodeActivatorEnd)
+  ].join("\n");
+
+  assert.match(source, /function activateDockButtonFromKeyboard/);
+  assert.match(source, /event\.key !== "Enter" && event\.key !== " "/);
+  assert.match(source, /event\.currentTarget\.click\(\);/);
+  assert.doesNotMatch(minimizedActivatorSource, /<button/);
+  assert.match(
+    minimizedActivatorSource,
+    /className="desktop-dock__btn desktop-dock__minimized-btn"[\s\S]*?role="button"[\s\S]*?tabIndex=\{0\}[\s\S]*?onKeyDown=\{activateDockButtonFromKeyboard\}/
+  );
+  assert.match(
+    minimizedActivatorSource,
+    /className="desktop-dock__btn desktop-dock__minimized-btn"[\s\S]*?role="button"[\s\S]*?tabIndex=\{isPendingMinimizedNode \? -1 : 0\}[\s\S]*?activateDockButtonFromKeyboard\([\s\S]*?event,[\s\S]*?isPendingMinimizedNode/
+  );
+});
+
 test("dock slot refs are stable across renders", () => {
   assert.match(source, /const dockSlotRefCallbacksRef = useRef/);
   assert.match(source, /dockSlotRefCallbacksRef\.current\.get\(anchorKey\)/);
@@ -253,6 +389,84 @@ test("dock new window launch returns the created node id to the genie boundary",
   assert.match(
     source,
     /context\.genie\.launchNodeFromAnchor\(\s*anchorKeyFromPopupEntry\(popupEntry\),\s*popupEntry\.entry\.id,\s*\(\) =>\s*host\.launchNode\(\{/
+  );
+});
+
+test("dock entry context menu opens the command menu", () => {
+  assert.match(source, /onContextMenu=\{\(event\) => \{/);
+  assert.match(
+    source,
+    /clickResolution\.kind === "blocked" \|\|[\s\S]*?!dockEntryHasContextMenu\(entry, resolvedEntry\)/
+  );
+  assert.match(source, /"dock\.popup\.context_menu"/);
+  assert.match(
+    source,
+    /setActivePopup\(\{\s*anchorRect: \{\s*height: rect\.height,\s*left: rect\.left,\s*top: rect\.top,\s*width: rect\.width\s*\},\s*kind: "context-menu",\s*entryId: entry\.id\s*\}\);/
+  );
+});
+
+test("dock action-only entries do not open a context menu", () => {
+  assert.match(source, /function dockEntryHasContextMenu/);
+  assert.match(
+    source,
+    /resolvedEntry\.matchedNodes\.length > 0 \|\| entry\.dockRetention/
+  );
+  assert.match(source, /return entry\.clickActionId === undefined;/);
+});
+
+test("dock context menu exposes window and app commands", () => {
+  assert.match(source, /canShowAllWindowsFromDockContextMenu/);
+  assert.match(source, /const dockContextMenuInstanceMode =/);
+  assert.match(
+    source,
+    /canShowAllWindowsFromDockContextMenu =[\s\S]*?onMissionControlRequestOpen !== undefined &&[\s\S]*?dockContextMenuInstanceMode === "multi" &&[\s\S]*?openDockContextMenuNodeIds\.length > 1;/
+  );
+  assert.match(
+    source,
+    /for \(const node of popupEntry\.matchedNodes\) \{[\s\S]*?if \(minimizedNodeIDs\.has\(node\.id\)\) \{[\s\S]*?context\.controller\.commands\.restoreNode\(node\.id\);/
+  );
+  assert.match(
+    source,
+    /window\.requestAnimationFrame\(\(\) => \{[\s\S]*?onMissionControlRequestOpen\?\.\(\s*"activate",\s*\{[\s\S]*?nodeIds: openDockContextMenuNodeIds,[\s\S]*?trigger: "dock-context-menu"/
+  );
+  assert.match(source, /openDockContextMenuNodeIds/);
+  assert.match(
+    source,
+    /const openDockContextMenuNodeIds =\s*popupEntry\?\.matchedNodes\.map\(\(node\) => node\.id\) \?\? \[\];/
+  );
+  assert.match(source, /host\.minimizeNode\(node\.id\);/);
+  assert.match(source, /host\.requestNodeClose\(node\.id\);/);
+  assert.match(source, /resolveDockContextMenuFullscreenNode/);
+  assert.match(source, /context\.controller\.commands\.enterFullscreen/);
+  assert.match(source, /dockContextMenu\.fullscreen/);
+  assert.match(source, /canOpenFromDockContextMenu/);
+  assert.match(source, /dockContextMenu\.open/);
+  assert.match(source, /popupEntry\.entry\.dockRetention/);
+  assert.match(source, /dockContextMenu\.keepInDock/);
+  assert.match(source, /dockContextMenu\.removeFromDock/);
+});
+
+test("dock entry clicks within the bounce window are throttled like a single click", () => {
+  assert.match(source, /const DOCK_ENTRY_CLICK_THROTTLE_MS = DOCK_BOUNCE_MS;/);
+  assert.match(
+    source,
+    /const dockEntryClickThrottleUntilRef = useRef\(new Map<string, number>\(\)\);/
+  );
+  assert.match(
+    source,
+    /const isDockEntryClickThrottled = useCallback\(\s*\(anchorKey: string\): boolean => \{\s*const throttledUntil =\s*dockEntryClickThrottleUntilRef\.current\.get\(anchorKey\);\s*return throttledUntil !== undefined && Date\.now\(\) < throttledUntil;/
+  );
+  assert.match(
+    source,
+    /const claimDockEntryClick = useCallback\(\(anchorKey: string\): void => \{\s*dockEntryClickThrottleUntilRef\.current\.set\(\s*anchorKey,\s*Date\.now\(\) \+ DOCK_ENTRY_CLICK_THROTTLE_MS\s*\);/
+  );
+  assert.match(
+    source,
+    /onPointerDown=\{\(event\) => \{\s*if \(event\.button !== 0\) \{\s*return;\s*\}\s*if \(clickResolution\.kind === "blocked"\) \{\s*return;\s*\}\s*if \(isDockEntryClickThrottled\(anchorKey\)\) \{\s*return;\s*\}\s*beginDockIconInteraction\(anchorKey\);\s*\}\}/
+  );
+  assert.match(
+    source,
+    /onClick=\{\(event\) => \{\s*if \(clickResolution\.kind === "blocked"\) \{\s*return;\s*\}\s*if \(isDockEntryClickThrottled\(anchorKey\)\) \{\s*return;\s*\}\s*claimDockEntryClick\(anchorKey\);\s*logWorkbenchDockDebug\("dock\.click",/
   );
 });
 

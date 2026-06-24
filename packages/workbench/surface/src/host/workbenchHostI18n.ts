@@ -24,6 +24,15 @@ const workbenchHostEn = {
     minimize: "Minimize"
   },
   closeWindow: "Close {{title}}",
+  dockContextMenu: {
+    fullscreen: "Full Screen",
+    hide: "Minimize",
+    keepInDock: "Keep in Dock",
+    open: "Open",
+    quit: "Quit",
+    removeFromDock: "Remove from Dock",
+    showAllWindows: "Show All Similar Windows"
+  },
   dockLabel: "Workbench dock",
   launch: "Open {{title}}",
   minimizedWindows: "Minimized windows",
@@ -45,6 +54,15 @@ const workbenchHostZhCN = {
     minimize: "最小化"
   },
   closeWindow: "关闭 {{title}}",
+  dockContextMenu: {
+    fullscreen: "全屏",
+    hide: "最小化",
+    keepInDock: "在程序坞中保留",
+    open: "打开",
+    quit: "退出",
+    removeFromDock: "从程序坞中移除",
+    showAllWindows: "显示所有同类窗口"
+  },
   dockLabel: "工作台程序坞",
   launch: "打开 {{title}}",
   minimizedWindows: "已最小化窗口",
@@ -64,6 +82,13 @@ export type WorkbenchHostI18nKey =
   | "actions.close"
   | "actions.minimize"
   | "closeWindow"
+  | "dockContextMenu.fullscreen"
+  | "dockContextMenu.hide"
+  | "dockContextMenu.keepInDock"
+  | "dockContextMenu.open"
+  | "dockContextMenu.quit"
+  | "dockContextMenu.removeFromDock"
+  | "dockContextMenu.showAllWindows"
   | "dockLabel"
   | "launch"
   | "minimizedWindows"

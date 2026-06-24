@@ -73,6 +73,32 @@ describe("resolveWorkspaceFileLinkAction", () => {
     ).toBeNull();
   });
 
+  it("allows direct generated video paths under Tutti state outside the workspace root", () => {
+    expect(
+      resolveWorkspaceFileLinkAction({
+        path: "/Users/test/.tutti-dev/agent/runs/session-1/codex-home/generated_videos/dance.mp4",
+        workspaceRoot: "/Users/test/project/tutti",
+        basePath: "/Users/test/project/tutti",
+        source: "agent-markdown"
+      })
+    ).toMatchObject({
+      type: "open-workspace-file",
+      path: "/Users/test/.tutti-dev/agent/runs/session-1/codex-home/generated_videos/dance.mp4",
+      directoryPath:
+        "/Users/test/.tutti-dev/agent/runs/session-1/codex-home/generated_videos",
+      workspaceRoot: "/Users/test/project/tutti"
+    });
+
+    expect(
+      resolveWorkspaceFileLinkAction({
+        path: "/Users/test/.tutti-dev/agent/runs/session-1/codex-home/generated_videos/raw.mov",
+        workspaceRoot: "/Users/test/project/tutti",
+        basePath: "/Users/test/project/tutti",
+        source: "agent-markdown"
+      })
+    ).toBeNull();
+  });
+
   it("allows direct workspace app data paths without a selected project", () => {
     expect(
       resolveWorkspaceFileLinkAction({
@@ -209,6 +235,15 @@ describe("resolveWorkspaceMentionLinkAction", () => {
     expect(
       resolveWorkspaceMentionLinkAction({
         href: "mention://workspace-issue?workspaceId=workspace-1&id=issue-1",
+        source: "agent-markdown"
+      })
+    ).toBeNull();
+  });
+
+  it("rejects reserved mention scope keys", () => {
+    expect(
+      resolveWorkspaceMentionLinkAction({
+        href: "mention://agent-session/session-1?workspaceId=workspace-1&provider=codex",
         source: "agent-markdown"
       })
     ).toBeNull();

@@ -147,6 +147,35 @@ export type CliInvokeResponse = {
   output?: CliCommandOutput | null;
 };
 
+export type WorkspaceAppMentionCandidateSource = "workspace_app" | "cli_app";
+
+export type WorkspaceAppMentionCliMetadata = {
+  commandCount: number;
+  commandDescriptions: Array<string>;
+  commandPaths: Array<string>;
+  commandSummaries: Array<string>;
+  scopes: Array<string>;
+};
+
+export type WorkspaceAppMentionCandidate = {
+  appId: string;
+  displayName: string;
+  description: string;
+  iconUrl: string | null;
+  availableIconUrl: string | null;
+  installed: boolean;
+  enabled: boolean;
+  source: WorkspaceAppMentionCandidateSource;
+  localizations: Array<WorkspaceAppLocalization>;
+  references: WorkspaceAppReferencesState;
+  cli: WorkspaceAppMentionCliMetadata;
+};
+
+export type WorkspaceAppMentionCandidatesResponse = {
+  workspaceId: string;
+  apps: Array<WorkspaceAppMentionCandidate>;
+};
+
 export type ApiErrorDetails = {
   code:
     | "invalid_request"
@@ -211,6 +240,7 @@ export type DesktopPreferences = {
   dockPlacement: DesktopDockPlacement;
   fileDefaultOpenersByExtension: DesktopFileDefaultOpenersByExtension;
   locale: DesktopLocale;
+  minimizeAnimation: DesktopMinimizeAnimation;
   sleepPreventionMode: DesktopSleepPreventionMode;
   themeSource: DesktopThemeSource;
   updateChannel: DesktopUpdateChannel;
@@ -250,6 +280,8 @@ export type DesktopFileDefaultOpener =
 export type DesktopFileDefaultOpenersByExtension = {
   [key: string]: DesktopFileDefaultOpener;
 };
+
+export type DesktopMinimizeAnimation = "scale" | "genie" | "off";
 
 export type DesktopPreferencesStateResponse = {
   initialized: boolean;
@@ -299,7 +331,11 @@ export type WorkspaceAppRuntimeStatus =
   | "failed"
   | "stopping";
 
-export type WorkspaceAppSource = "builtin" | "generated" | "imported";
+export type WorkspaceAppSource =
+  | "builtin"
+  | "generated"
+  | "imported"
+  | "local-dev";
 
 export type WorkspaceAppCatalogLoadStatus =
   | "disabled"
@@ -469,6 +505,10 @@ export type WorkspaceApp = {
   startedAtUnixMs: number | null;
   updatedAtUnixMs: number | null;
   source: WorkspaceAppSource;
+  /**
+   * Absolute package directory for unpacked local development apps.
+   */
+  localPackageDir?: string | null;
   exportable: boolean;
   tags: Array<string>;
   localizations: Array<WorkspaceAppLocalization>;
@@ -481,12 +521,53 @@ export type WorkspaceApp = {
 
 export type WorkspaceAppMinimizeBehavior = "hibernate" | "keep-mounted";
 
+export type WorkspaceAppUploadPurpose = "app-asset";
+
+export type PrepareWorkspaceAppUploadRequest = {
+  purpose: WorkspaceAppUploadPurpose;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+export type PrepareWorkspaceAppUploadResponse = {
+  uploadId: string;
+  expiresAt: string;
+};
+
+export type CompleteWorkspaceAppUploadResponse = {
+  file: WorkspaceAppUploadedFile;
+};
+
+export type WorkspaceAppUploadedFile = {
+  path: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+};
+
 export type RollbackWorkspaceAppRequest = {
   version: string;
 };
 
 export type ImportWorkspaceAppRequest = {
   archivePath: string;
+};
+
+export type LoadLocalWorkspaceAppRequest = {
+  sourceDir: string;
+  /**
+   * Restart the app runtime if it is already running.
+   */
+  restartRunning?: boolean;
+};
+
+export type ReloadLocalWorkspaceAppRequest = {
+  /**
+   * Restart the app runtime if it is already running.
+   */
+  restartRunning?: boolean;
 };
 
 export type ExportWorkspaceAppRequest = {
@@ -724,6 +805,10 @@ export type AgentProviderComposerConfig = {
 
 export type GetAgentProviderComposerOptionsRequest = {
   cwd?: string;
+  /**
+   * Workspace used for Claude Code live model discovery.
+   */
+  workspaceId?: string;
   locale?: DesktopLocale;
   settings?: AgentSessionComposerSettings;
 };
@@ -1651,6 +1736,7 @@ export type UpdateIssueManagerTaskRequest = {
   status?: IssueManagerStatus;
   priority?: IssueManagerPriority;
   dueAtUnix?: number;
+  sortIndex?: number;
 };
 
 export type AddIssueManagerContextRefItem = {
@@ -1926,6 +2012,55 @@ export type InvokeCliCommandResponses = {
 
 export type InvokeCliCommandResponse =
   InvokeCliCommandResponses[keyof InvokeCliCommandResponses];
+
+export type ListWorkspaceAppMentionCandidatesData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agent-context/workspace-app-mentions";
+};
+
+export type ListWorkspaceAppMentionCandidatesErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type ListWorkspaceAppMentionCandidatesError =
+  ListWorkspaceAppMentionCandidatesErrors[keyof ListWorkspaceAppMentionCandidatesErrors];
+
+export type ListWorkspaceAppMentionCandidatesResponses = {
+  /**
+   * Workspace app mention candidates
+   */
+  200: WorkspaceAppMentionCandidatesResponse;
+};
+
+export type ListWorkspaceAppMentionCandidatesResponse =
+  ListWorkspaceAppMentionCandidatesResponses[keyof ListWorkspaceAppMentionCandidatesResponses];
 
 export type GetDesktopPreferencesData = {
   body?: never;
@@ -2721,6 +2856,55 @@ export type ImportWorkspaceAppResponses = {
 export type ImportWorkspaceAppResponse =
   ImportWorkspaceAppResponses[keyof ImportWorkspaceAppResponses];
 
+export type LoadLocalWorkspaceAppData = {
+  body: LoadLocalWorkspaceAppRequest;
+  path: {
+    workspaceID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/apps/load-local";
+};
+
+export type LoadLocalWorkspaceAppErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type LoadLocalWorkspaceAppError =
+  LoadLocalWorkspaceAppErrors[keyof LoadLocalWorkspaceAppErrors];
+
+export type LoadLocalWorkspaceAppResponses = {
+  /**
+   * Local workspace app loaded and installed
+   */
+  200: WorkspaceAppResponse;
+};
+
+export type LoadLocalWorkspaceAppResponse =
+  LoadLocalWorkspaceAppResponses[keyof LoadLocalWorkspaceAppResponses];
+
 export type StartEnabledWorkspaceAppsData = {
   body?: never;
   path: {
@@ -2869,6 +3053,56 @@ export type InstallWorkspaceAppResponses = {
 export type InstallWorkspaceAppResponse =
   InstallWorkspaceAppResponses[keyof InstallWorkspaceAppResponses];
 
+export type ReloadLocalWorkspaceAppData = {
+  body?: ReloadLocalWorkspaceAppRequest;
+  path: {
+    workspaceID: string;
+    appID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/apps/{appID}/reload-local";
+};
+
+export type ReloadLocalWorkspaceAppErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace app was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type ReloadLocalWorkspaceAppError =
+  ReloadLocalWorkspaceAppErrors[keyof ReloadLocalWorkspaceAppErrors];
+
+export type ReloadLocalWorkspaceAppResponses = {
+  /**
+   * Local workspace app reloaded
+   */
+  200: WorkspaceAppResponse;
+};
+
+export type ReloadLocalWorkspaceAppResponse =
+  ReloadLocalWorkspaceAppResponses[keyof ReloadLocalWorkspaceAppResponses];
+
 export type ListWorkspaceAppReferencesData = {
   body: AppReferenceListRequest;
   path: {
@@ -2968,6 +3202,209 @@ export type SearchWorkspaceAppReferencesResponses = {
 
 export type SearchWorkspaceAppReferencesResponse =
   SearchWorkspaceAppReferencesResponses[keyof SearchWorkspaceAppReferencesResponses];
+
+export type PrepareWorkspaceAppUploadData = {
+  body: PrepareWorkspaceAppUploadRequest;
+  path: {
+    workspaceID: string;
+    appID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/apps/{appID}/uploads";
+};
+
+export type PrepareWorkspaceAppUploadErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace app was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type PrepareWorkspaceAppUploadError =
+  PrepareWorkspaceAppUploadErrors[keyof PrepareWorkspaceAppUploadErrors];
+
+export type PrepareWorkspaceAppUploadResponses = {
+  /**
+   * Workspace app upload session prepared
+   */
+  201: PrepareWorkspaceAppUploadResponse;
+};
+
+export type PrepareWorkspaceAppUploadResponse2 =
+  PrepareWorkspaceAppUploadResponses[keyof PrepareWorkspaceAppUploadResponses];
+
+export type PutWorkspaceAppUploadContentData = {
+  body: Blob | File;
+  path: {
+    workspaceID: string;
+    appID: string;
+    uploadID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/apps/{appID}/uploads/{uploadID}/content";
+};
+
+export type PutWorkspaceAppUploadContentErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace app was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type PutWorkspaceAppUploadContentError =
+  PutWorkspaceAppUploadContentErrors[keyof PutWorkspaceAppUploadContentErrors];
+
+export type PutWorkspaceAppUploadContentResponses = {
+  /**
+   * Workspace app upload content accepted
+   */
+  204: void;
+};
+
+export type PutWorkspaceAppUploadContentResponse =
+  PutWorkspaceAppUploadContentResponses[keyof PutWorkspaceAppUploadContentResponses];
+
+export type CancelWorkspaceAppUploadData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+    appID: string;
+    uploadID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/apps/{appID}/uploads/{uploadID}";
+};
+
+export type CancelWorkspaceAppUploadErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace app was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type CancelWorkspaceAppUploadError =
+  CancelWorkspaceAppUploadErrors[keyof CancelWorkspaceAppUploadErrors];
+
+export type CancelWorkspaceAppUploadResponses = {
+  /**
+   * Workspace app upload session canceled
+   */
+  204: void;
+};
+
+export type CancelWorkspaceAppUploadResponse =
+  CancelWorkspaceAppUploadResponses[keyof CancelWorkspaceAppUploadResponses];
+
+export type CompleteWorkspaceAppUploadData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+    appID: string;
+    uploadID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/apps/{appID}/uploads/{uploadID}/complete";
+};
+
+export type CompleteWorkspaceAppUploadErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace app was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type CompleteWorkspaceAppUploadError =
+  CompleteWorkspaceAppUploadErrors[keyof CompleteWorkspaceAppUploadErrors];
+
+export type CompleteWorkspaceAppUploadResponses = {
+  /**
+   * Workspace app upload completed
+   */
+  200: CompleteWorkspaceAppUploadResponse;
+};
+
+export type CompleteWorkspaceAppUploadResponse2 =
+  CompleteWorkspaceAppUploadResponses[keyof CompleteWorkspaceAppUploadResponses];
 
 export type ExportWorkspaceAppData = {
   body: ExportWorkspaceAppRequest;
@@ -4053,7 +4490,7 @@ export type GetAgentProviderComposerOptionsError =
 
 export type GetAgentProviderComposerOptionsResponses = {
   /**
-   * Agent provider composer options
+   * Agent provider composer options with short-lived Claude Code discovery when needed
    */
   200: AgentProviderComposerOptionsResponse;
 };

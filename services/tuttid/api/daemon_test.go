@@ -113,12 +113,32 @@ func (s stubAppCenterService) Launch(ctx context.Context, workspaceID string, ap
 	return s.launchFn(ctx, workspaceID, appID)
 }
 
+func (stubAppCenterService) LoadLocalPackage(context.Context, string, string, workspaceservice.InstallOptions) (workspacebiz.WorkspaceApp, error) {
+	return workspacebiz.WorkspaceApp{}, nil
+}
+
 func (stubAppCenterService) ListReferences(context.Context, string, string, workspacebiz.AppReferenceListInput) (workspacebiz.AppReferenceListResult, error) {
 	return workspacebiz.AppReferenceListResult{}, nil
 }
 
 func (stubAppCenterService) SearchReferences(context.Context, string, string, workspacebiz.AppReferenceSearchInput) (workspacebiz.AppReferenceListResult, error) {
 	return workspacebiz.AppReferenceListResult{}, nil
+}
+
+func (stubAppCenterService) PrepareWorkspaceAppUpload(context.Context, string, string, workspaceservice.PrepareWorkspaceAppUploadInput) (workspaceservice.WorkspaceAppUploadSession, error) {
+	return workspaceservice.WorkspaceAppUploadSession{}, nil
+}
+
+func (stubAppCenterService) PutWorkspaceAppUploadContent(context.Context, string, string, string, workspaceservice.PutWorkspaceAppUploadContentInput) error {
+	return nil
+}
+
+func (stubAppCenterService) CompleteWorkspaceAppUpload(context.Context, string, string, string, time.Time) (workspaceservice.WorkspaceAppUploadedFile, error) {
+	return workspaceservice.WorkspaceAppUploadedFile{}, nil
+}
+
+func (stubAppCenterService) CancelWorkspaceAppUpload(context.Context, string, string, string) error {
+	return nil
 }
 
 func (stubAppCenterService) List(context.Context, string) ([]workspacebiz.WorkspaceApp, error) {
@@ -138,6 +158,10 @@ func (stubAppCenterService) Remove(context.Context, string, string) (workspacebi
 }
 
 func (stubAppCenterService) ReplaceIcon(context.Context, string, string, string) (workspacebiz.WorkspaceApp, error) {
+	return workspacebiz.WorkspaceApp{}, nil
+}
+
+func (stubAppCenterService) ReloadLocalPackage(context.Context, string, string, workspaceservice.InstallOptions) (workspacebiz.WorkspaceApp, error) {
 	return workspacebiz.WorkspaceApp{}, nil
 }
 
@@ -1293,6 +1317,7 @@ func TestDaemonAPIGeneratedRoutesGetDesktopPreferences(t *testing.T) {
 					DockPlacement:       "left",
 					Initialized:         true,
 					Locale:              "zh-CN",
+					MinimizeAnimation:   "scale",
 					SleepPreventionMode: "whileAgentRunning",
 					ThemeSource:         "dark",
 					UpdateChannel:       "rc",
@@ -1371,6 +1396,7 @@ func TestDaemonAPIGeneratedRoutesPutDesktopPreferencesPersistsAgentGUIConversati
 			"dockIconStyle":        "default",
 			"dockPlacement":        "bottom",
 			"locale":               "zh-CN",
+			"minimizeAnimation":    "scale",
 			"sleepPreventionMode":  "never",
 			"themeSource":          "dark",
 			"updateChannel":        "stable",
@@ -1422,6 +1448,7 @@ func TestDaemonAPIGeneratedRoutesPutDesktopPreferencesValidatesLocale(t *testing
 			"dockIconStyle":        "default",
 			"dockPlacement":        "bottom",
 			"locale":               "fr",
+			"minimizeAnimation":    "scale",
 			"sleepPreventionMode":  "never",
 			"themeSource":          "dark",
 			"updateChannel":        "stable",

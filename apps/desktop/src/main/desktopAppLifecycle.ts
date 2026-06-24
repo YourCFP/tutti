@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { desktopIpcChannels } from "../shared/contracts/ipc.ts";
 import type { WorkspaceLaunch } from "./host/workspaceLaunch";
 import type { DesktopLogger } from "./logging";
 import type { TuttidManager } from "./daemon/tuttidManager";
@@ -12,7 +13,13 @@ interface DesktopElectronApp {
 }
 
 interface DesktopElectronBrowserWindow {
-  getAllWindows(): Array<{ destroy(): void }>;
+  getAllWindows(): Array<{
+    destroy(): void;
+    webContents?: {
+      isDestroyed(): boolean;
+      send(channel: string): void;
+    };
+  }>;
 }
 
 interface DesktopElectronModule {
@@ -43,6 +50,34 @@ export interface DesktopAppLifecycleRuntime {
   destroyAllWindows(): void;
   getWindowCount(): number;
   quit(): void;
+  showQuitShortcutToast(): void;
+}
+
+const quitShortcutConfirmationWindowMs = 5_000;
+let quitShortcutArmedUntilMs = 0;
+
+export interface DesktopAppQuitRequestRuntime {
+  now(): number;
+  quit(): void;
+  showQuitShortcutToast(): void;
+}
+
+export function requestDesktopAppQuitFromCommandShortcut(
+  runtime: DesktopAppQuitRequestRuntime
+): void {
+  const now = runtime.now();
+  if (now <= quitShortcutArmedUntilMs) {
+    quitShortcutArmedUntilMs = 0;
+    runtime.quit();
+    return;
+  }
+
+  quitShortcutArmedUntilMs = now + quitShortcutConfirmationWindowMs;
+  runtime.showQuitShortcutToast();
+}
+
+export function resetDesktopAppQuitShortcutForTest(): void {
+  quitShortcutArmedUntilMs = 0;
 }
 
 export function registerDesktopAppLifecycle(
@@ -81,17 +116,18 @@ export function createDesktopAppLifecycleHandlers(
       isStoppingDaemon = true;
       event.preventDefault();
       deps.logger.info("desktop app before quit");
-      void deps.tuttid
-        .stop()
-        .catch((error: unknown) => {
+      void (async () => {
+        try {
+          await deps.tuttid.stop();
+        } catch (error: unknown) {
           deps.logger.error("failed to stop managed tuttid during quit", {
             error: error instanceof Error ? error.message : String(error)
           });
-        })
-        .finally(() => {
-          runtime.destroyAllWindows();
-          runtime.quit();
-        });
+        }
+
+        runtime.destroyAllWindows();
+        runtime.quit();
+      })();
     },
 
     willQuit() {
@@ -122,7 +158,16 @@ function createElectronDesktopAppLifecycleRuntime(
       }
     },
     getWindowCount: () => BrowserWindow.getAllWindows().length,
-    quit: () => app.quit()
+    quit: () => app.quit(),
+    showQuitShortcutToast: () => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (window.webContents?.isDestroyed() === false) {
+          window.webContents.send(
+            desktopIpcChannels.host.window.quitShortcutToast
+          );
+        }
+      }
+    }
   };
 }
 

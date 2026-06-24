@@ -127,6 +127,9 @@ func (r *AppRunner) PreloadRuntime(ctx context.Context) error {
 
 func (r *AppRunner) PreloadRuntimeForProfile(ctx context.Context, profile string) error {
 	r.ensure()
+	if appRuntimeProfileIsStandalone(profile) {
+		return nil
+	}
 	resolver := r.runtimeResolver()
 	if preloader, ok := resolver.(AppRuntimeProfilePreloader); ok {
 		return preloader.PreloadProfile(ctx, profile)
@@ -614,6 +617,9 @@ func (r *AppRunner) runtimeResolver() AppRuntimeResolver {
 
 func (r *AppRunner) resolveRuntime(ctx context.Context, profile string) (ResolvedAppRuntime, error) {
 	profile = strings.TrimSpace(profile)
+	if appRuntimeProfileIsStandalone(profile) {
+		return ResolvedAppRuntime{}, nil
+	}
 	resolver := r.runtimeResolver()
 	if profile != "" {
 		if profileResolver, ok := resolver.(AppRuntimeProfileResolver); ok {
@@ -687,7 +693,11 @@ func tuttiCLIShimPath() string {
 
 func appRuntimePathWithCLIShim(appRuntime ResolvedAppRuntime, cliShimPath string) string {
 	pathKey := pathEnvKey(appRuntime.EnvOverrides)
-	pathDirs := filepath.SplitList(envValue(appRuntime.EnvOverrides, pathKey))
+	pathValue := envValue(appRuntime.EnvOverrides, pathKey)
+	if strings.TrimSpace(pathValue) == "" {
+		pathValue = os.Getenv(pathKey)
+	}
+	pathDirs := filepath.SplitList(pathValue)
 	pathDirs = mergeAppPathDirs(append([]string{filepath.Dir(cliShimPath)}, pathDirs...))
 	return pathKey + "=" + strings.Join(pathDirs, string(os.PathListSeparator))
 }

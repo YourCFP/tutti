@@ -161,8 +161,13 @@ export function WorkbenchWindowFrame<TData>({
   const resolvedFullscreenHeaderMode = fullscreenHeaderMode ?? "reveal";
   const presentationMode = presentation?.mode ?? null;
   const presentationFrame = presentation?.frameByNodeId.get(node.id) ?? null;
+  const isPresentationHidden =
+    presentationMode === "mission-control" &&
+    !presentation?.visibleNodeIds.has(node.id);
   const presentationInteraction =
-    interactive && presentationMode === "mission-control"
+    interactive &&
+    presentationMode === "mission-control" &&
+    !isPresentationHidden
       ? (presentation?.interaction ?? null)
       : null;
   const isMissionControlSelected =
@@ -193,13 +198,13 @@ export function WorkbenchWindowFrame<TData>({
         node.frame.y
       : 0;
   const shellTransform =
-    presentationMode === "mission-control"
+    presentationMode === "mission-control" && presentationFrame
       ? `matrix(${presentationScale}, 0, 0, ${presentationScale}, ${presentationOffsetX}, ${presentationOffsetY})`
       : undefined;
 
   return (
     <section
-      aria-hidden={hiddenMounted ? true : undefined}
+      aria-hidden={hiddenMounted || isPresentationHidden ? true : undefined}
       className="workbench-window-shell"
       data-focused={isFocused ? "true" : "false"}
       data-display-mode={node.displayMode}
@@ -207,6 +212,7 @@ export function WorkbenchWindowFrame<TData>({
       data-launch-source={resolveWorkbenchNodeLaunchSource(node.data)}
       data-minimized-mount={hiddenMounted ? "hidden" : "visible"}
       data-presentation-mode={presentationMode ?? "default"}
+      data-presentation-visibility={isPresentationHidden ? "hidden" : "visible"}
       data-slot="viewport-menu-boundary"
       data-workbench-node-type-id={resolveWorkbenchNodeTypeId(node.data)}
       data-workbench-window-id={node.id}
@@ -222,7 +228,10 @@ export function WorkbenchWindowFrame<TData>({
         zIndex
       }}
       onPointerDown={
-        hiddenMounted || !interactive || presentationMode === "mission-control"
+        hiddenMounted ||
+        isPresentationHidden ||
+        !interactive ||
+        presentationMode === "mission-control"
           ? undefined
           : () => controller.commands.focusNode(node.id)
       }

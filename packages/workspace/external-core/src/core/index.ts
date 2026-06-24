@@ -6,6 +6,7 @@ import {
   type TuttiExternalAtQueryInput,
   type TuttiExternalFileOpenInput,
   type TuttiExternalFileSelectInput,
+  type TuttiExternalFileUploadInput,
   type TuttiExternalLogInput,
   type TuttiExternalLogLevel,
   type TuttiExternalManagedAiModelProviderId,
@@ -135,6 +136,28 @@ export function normalizeTuttiExternalFileOpenInput(
   };
 }
 
+export function normalizeTuttiExternalFileUploadInput(
+  input: unknown
+): TuttiExternalFileUploadInput & { purpose: "app-asset" } {
+  if (input === undefined || input === null) {
+    return { purpose: "app-asset" };
+  }
+  if (!isRecord(input)) {
+    throw new Error("files.upload input must be an object.");
+  }
+  return {
+    purpose: normalizeFileUploadPurpose(input.purpose),
+    ...normalizeOptionalTrimmedString(input.name, "name", "files.upload name"),
+    ...normalizeOptionalTrimmedString(
+      input.mimeType,
+      "mimeType",
+      "files.upload mimeType"
+    ),
+    ...normalizeFileUploadProgressListener(input.onProgress),
+    ...normalizeFileUploadSignal(input.signal)
+  };
+}
+
 export function normalizeTuttiExternalPermissionRequestInput(
   input: unknown
 ): TuttiExternalPermissionRequestInput {
@@ -254,6 +277,7 @@ export function normalizeTuttiExternalPdfPrintHtmlInput(
     ...(input.pageSize !== undefined && input.pageSize !== null
       ? { pageSize: normalizePdfPageSize(input.pageSize) }
       : {}),
+    ...(input.preferCSSPageSize === true ? { preferCSSPageSize: true } : {}),
     ...(input.margin !== undefined && input.margin !== null
       ? { margin: normalizePdfMargin(input.margin) }
       : {})
@@ -486,11 +510,30 @@ function normalizePdfBaseUrl(value: string): string {
   return url.toString();
 }
 
-function normalizePdfPageSize(value: unknown): "A4" | "Letter" {
+function normalizePdfPageSize(
+  value: unknown
+): TuttiExternalPdfPrintHtmlInput["pageSize"] {
   if (value === "A4" || value === "Letter") {
     return value;
   }
+  if (isRecord(value)) {
+    const width = normalizePdfPageSizeSide(value.width, "width");
+    const height = normalizePdfPageSizeSide(value.height, "height");
+    return { width, height };
+  }
   throw new Error("pdf.printHtmlToPdf pageSize is unsupported.");
+}
+
+function normalizePdfPageSizeSide(
+  value: unknown,
+  side: "height" | "width"
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    throw new Error(
+      `pdf.printHtmlToPdf pageSize ${side} must be a positive number.`
+    );
+  }
+  return value;
 }
 
 function normalizePdfMargin(value: unknown): TuttiExternalPdfMargin {
@@ -532,6 +575,69 @@ function normalizeFileOpenMode(
     return value;
   }
   throw new Error("files.open mode is unsupported.");
+}
+
+function normalizeFileUploadPurpose(value: unknown): "app-asset" {
+  if (value === undefined || value === null || value === "") {
+    return "app-asset";
+  }
+  if (value === "app-asset") {
+    return value;
+  }
+  throw new Error("files.upload purpose is unsupported.");
+}
+
+function normalizeFileUploadProgressListener(
+  value: unknown
+): Pick<TuttiExternalFileUploadInput, "onProgress"> {
+  if (value === undefined || value === null) {
+    return {};
+  }
+  if (typeof value !== "function") {
+    throw new Error("files.upload onProgress must be a function.");
+  }
+  return {
+    onProgress: value as NonNullable<TuttiExternalFileUploadInput["onProgress"]>
+  };
+}
+
+function normalizeFileUploadSignal(
+  value: unknown
+): Pick<TuttiExternalFileUploadInput, "signal"> {
+  if (value === undefined || value === null) {
+    return {};
+  }
+  if (!isFileUploadAbortSignal(value)) {
+    throw new Error("files.upload signal must be an AbortSignal.");
+  }
+  return { signal: value };
+}
+
+function isFileUploadAbortSignal(value: unknown): value is AbortSignal {
+  return (
+    isRecord(value) &&
+    typeof value.aborted === "boolean" &&
+    typeof value.addEventListener === "function" &&
+    typeof value.removeEventListener === "function"
+  );
+}
+
+function normalizeOptionalTrimmedString(
+  value: unknown,
+  key: "mimeType" | "name",
+  field: string
+): Partial<Record<"mimeType" | "name", string>> {
+  if (value === undefined || value === null) {
+    return {};
+  }
+  if (typeof value !== "string") {
+    throw new Error(`${field} must be a string.`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return {};
+  }
+  return { [key]: trimmed };
 }
 
 function normalizeRequiredString(value: unknown, field: string): string {

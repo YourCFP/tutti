@@ -8,6 +8,7 @@ import {
   type RefObject
 } from "react";
 import { createPortal } from "react-dom";
+import { useComposedInputValue } from "@tutti-os/ui-react-hooks";
 import {
   ArrowRightIcon,
   Badge,
@@ -57,6 +58,7 @@ import {
   type ReferenceNodePreviewState,
   type ReferenceGroupedSelection
 } from "../../../react/internal/reference/useReferenceSourcePickerView.ts";
+import { formatReferencePreviewDateTime } from "./referenceSourcePickerPresentation.ts";
 
 export interface ReferenceSourcePickerProps {
   aggregator: ReferenceSourceAggregator;
@@ -157,6 +159,10 @@ export function ReferenceSourcePicker({
     view.setFilters([...next]);
   };
   const clearFilters = () => view.setFilters([]);
+  const searchInput = useComposedInputValue({
+    onCommit: view.setSearchQuery,
+    value: view.searchQuery
+  });
 
   // 三栏可拖拽 + 双击自动适配:layoutRef 量整体宽度,content/panel ref 用于双击适配。
   const layoutRef = useRef<HTMLDivElement | null>(null);
@@ -263,10 +269,11 @@ export function ReferenceSourcePicker({
                         placeholder={copy.t(
                           "referencePicker.searchPlaceholder"
                         )}
-                        value={view.searchQuery}
-                        onChange={(event) =>
-                          view.setSearchQuery(event.target.value)
-                        }
+                        value={searchInput.value}
+                        onBlur={searchInput.onBlur}
+                        onChange={searchInput.onChange}
+                        onCompositionEnd={searchInput.onCompositionEnd}
+                        onCompositionStart={searchInput.onCompositionStart}
                       />
                     </div>
                     {view.capabilities?.filterable &&
@@ -320,6 +327,9 @@ export function ReferenceSourcePicker({
                               node={node}
                               selected={view.isSelected(node)}
                               onFocus={view.setFocusedNode}
+                              onSingleSelect={
+                                view.toggleSingleSelectionAndExpand
+                              }
                               onToggle={view.toggleSelection}
                             />
                           ))
@@ -579,12 +589,14 @@ function SearchResultRow({
   focused,
   selected,
   onFocus,
+  onSingleSelect,
   onToggle
 }: {
   node: ReferenceNode;
   focused: boolean;
   selected: boolean;
   onFocus: (node: ReferenceNode) => void;
+  onSingleSelect: (node: ReferenceNode) => void;
   onToggle: (node: ReferenceNode) => void;
 }): JSX.Element {
   const isFolder = node.kind === "folder";
@@ -597,7 +609,10 @@ function SearchResultRow({
           ? "border-border bg-transparency-block"
           : "border-transparent bg-transparent hover:border-border/70 hover:bg-transparency-block"
       )}
-      onClick={() => onFocus(node)}
+      onClick={() => {
+        onFocus(node);
+        onSingleSelect(node);
+      }}
     >
       <div className="flex min-w-0 items-center gap-3 text-left">
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--transparency-block)] text-[var(--text-tertiary)]">
@@ -813,7 +828,7 @@ function PreviewInfoPane({
             </InfoRow>
             {node.mtimeMs != null ? (
               <InfoRow label={copy.t("referencePicker.previewModified")}>
-                {formatDateTime(node.mtimeMs)}
+                {formatReferencePreviewDateTime(node.mtimeMs)}
               </InfoRow>
             ) : null}
             {node.sizeBytes != null ? (
@@ -1250,9 +1265,7 @@ function TreeNodeRow({
         style={{ paddingLeft: `${depth * TREE_INDENT + 8}px` }}
         onClick={() => {
           view.setFocusedNode(node);
-          if (isFolder) {
-            view.toggleNode(node);
-          }
+          view.toggleSingleSelectionAndExpand(node);
         }}
       >
         {isFolder ? (
@@ -1331,12 +1344,6 @@ function TreeNodeRow({
       ) : null}
     </div>
   );
-}
-
-function formatDateTime(ms: number): string {
-  const date = new Date(ms);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function formatBytes(bytes: number): string {

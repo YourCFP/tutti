@@ -91,6 +91,28 @@ export interface TuttiExternalFileOpenInput {
   sizeBytes?: number | null;
 }
 
+export interface TuttiExternalFileUploadInput {
+  purpose?: "app-asset";
+  name?: string;
+  mimeType?: string;
+  onProgress?: (progress: TuttiExternalFileUploadProgress) => void;
+  signal?: AbortSignal;
+}
+
+export interface TuttiExternalUploadedFile {
+  path: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+}
+
+export interface TuttiExternalFileUploadProgress {
+  loadedBytes: number;
+  ratio: number;
+  totalBytes: number;
+}
+
 export const tuttiExternalManagedAiModelProviderIds = [
   "agnes",
   "openai",
@@ -116,6 +138,7 @@ export interface TuttiExternalPermissionRequestInput {
 
 export interface TuttiExternalPermissionRequestResult {
   code: string;
+  contextToken?: string;
   expiresAt?: string;
   models?: readonly TuttiExternalManagedAiModel[];
   providers?: readonly TuttiExternalManagedAiModelProviderId[];
@@ -190,11 +213,20 @@ export interface TuttiExternalPdfMargin {
   top?: string;
 }
 
+export type TuttiExternalPdfPageSize =
+  | "A4"
+  | "Letter"
+  | {
+      height: number;
+      width: number;
+    };
+
 export interface TuttiExternalPdfPrintHtmlInput {
   baseUrl?: string;
   html: string;
   margin?: TuttiExternalPdfMargin;
-  pageSize?: "A4" | "Letter";
+  pageSize?: TuttiExternalPdfPageSize;
+  preferCSSPageSize?: boolean;
   printBackground?: boolean;
   title?: string;
 }
@@ -218,6 +250,10 @@ export interface TuttiExternalBridge {
       input?: TuttiExternalFileSelectInput
     ): Promise<TuttiExternalFileSelectResult>;
     open(input: TuttiExternalFileOpenInput): Promise<void>;
+    upload(
+      file: Blob | File,
+      input?: TuttiExternalFileUploadInput
+    ): Promise<TuttiExternalUploadedFile>;
   };
   permissions: {
     request(

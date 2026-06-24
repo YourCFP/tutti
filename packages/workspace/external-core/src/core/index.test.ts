@@ -4,6 +4,7 @@ import {
   normalizeTuttiExternalAtQueryInput,
   normalizeTuttiExternalFileOpenInput,
   normalizeTuttiExternalFileSelectInput,
+  normalizeTuttiExternalFileUploadInput,
   normalizeTuttiExternalLogInput,
   normalizeTuttiExternalPdfPrintHtmlInput,
   normalizeTuttiExternalPermissionRequestInput,
@@ -105,6 +106,60 @@ test("rejects invalid file open input", () => {
   );
 });
 
+test("normalizes file upload input defaults", () => {
+  assert.deepEqual(normalizeTuttiExternalFileUploadInput(undefined), {
+    purpose: "app-asset"
+  });
+});
+
+test("normalizes file upload input strings", () => {
+  const controller = new AbortController();
+  const onProgress = () => undefined;
+  assert.deepEqual(
+    normalizeTuttiExternalFileUploadInput({
+      purpose: "app-asset",
+      name: " Image.PNG ",
+      mimeType: " image/png ",
+      onProgress,
+      signal: controller.signal
+    }),
+    {
+      purpose: "app-asset",
+      name: "Image.PNG",
+      mimeType: "image/png",
+      onProgress,
+      signal: controller.signal
+    }
+  );
+});
+
+test("rejects invalid file upload input", () => {
+  assert.throws(
+    () => normalizeTuttiExternalFileUploadInput("bad"),
+    /input must be an object/
+  );
+  assert.throws(
+    () => normalizeTuttiExternalFileUploadInput({ purpose: "avatar" }),
+    /purpose is unsupported/
+  );
+  assert.throws(
+    () => normalizeTuttiExternalFileUploadInput({ name: 1 }),
+    /name must be a string/
+  );
+  assert.throws(
+    () => normalizeTuttiExternalFileUploadInput({ mimeType: 1 }),
+    /mimeType must be a string/
+  );
+  assert.throws(
+    () => normalizeTuttiExternalFileUploadInput({ onProgress: true }),
+    /onProgress must be a function/
+  );
+  assert.throws(
+    () => normalizeTuttiExternalFileUploadInput({ signal: {} }),
+    /signal must be an AbortSignal/
+  );
+});
+
 test("normalizes managed AI model permission requests", () => {
   assert.deepEqual(
     normalizeTuttiExternalPermissionRequestInput({
@@ -194,7 +249,8 @@ test("normalizes PDF print HTML input", () => {
         right: "10mm",
         top: "12mm"
       },
-      pageSize: "A4",
+      pageSize: { width: 13.333333, height: 7.5 },
+      preferCSSPageSize: true,
       printBackground: false,
       title: " Report "
     }),
@@ -207,7 +263,8 @@ test("normalizes PDF print HTML input", () => {
         right: "10mm",
         top: "12mm"
       },
-      pageSize: "A4",
+      pageSize: { width: 13.333333, height: 7.5 },
+      preferCSSPageSize: true,
       printBackground: false,
       title: "Report"
     }
@@ -234,6 +291,14 @@ test("rejects invalid PDF print HTML input", () => {
         margin: { top: "12pt" }
       }),
     /margin top unit is unsupported/
+  );
+  assert.throws(
+    () =>
+      normalizeTuttiExternalPdfPrintHtmlInput({
+        html: "<h1>Doc</h1>",
+        pageSize: { width: 13.333333, height: 0 }
+      }),
+    /pageSize height must be a positive number/
   );
 });
 

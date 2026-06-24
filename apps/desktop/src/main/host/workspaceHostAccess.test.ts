@@ -26,6 +26,9 @@ function createTransportClient(
     async listCliCapabilities() {
       throw new Error("not used");
     },
+    async listWorkspaceAppMentionCandidates() {
+      throw new Error("not used");
+    },
     async addWorkspaceIssueContextRefs() {
       throw new Error("not used");
     },
@@ -38,6 +41,15 @@ function createTransportClient(
     async searchWorkspaceAppReferences() {
       throw new Error("not used");
     },
+    async prepareWorkspaceAppUpload() {
+      throw new Error("not used");
+    },
+    async completeWorkspaceAppUpload() {
+      throw new Error("not used");
+    },
+    async cancelWorkspaceAppUpload() {
+      throw new Error("not used");
+    },
     async installWorkspaceApp() {
       throw new Error("not used");
     },
@@ -47,7 +59,13 @@ function createTransportClient(
     async importWorkspaceApp() {
       throw new Error("not used");
     },
+    async loadLocalWorkspaceApp() {
+      throw new Error("not used");
+    },
     async replaceWorkspaceAppIcon() {
+      throw new Error("not used");
+    },
+    async reloadLocalWorkspaceApp() {
       throw new Error("not used");
     },
     async cancelWorkspaceAppFactoryJob() {

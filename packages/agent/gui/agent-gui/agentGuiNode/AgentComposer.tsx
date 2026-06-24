@@ -30,6 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger
 } from "../../app/renderer/components/ui/tooltip";
+import { ZoomableImage } from "../../app/renderer/components/ZoomableImage";
 import type { AgentConversationPromptVM } from "../../shared/agentConversation/contracts/agentConversationVM";
 import { cn } from "../../app/renderer/lib/utils";
 import { AddIcon, Select, SelectTrigger } from "@tutti-os/ui-system";
@@ -133,6 +134,7 @@ import {
   USAGE_CRITICAL_PERCENT,
   USAGE_WARN_PERCENT
 } from "./model/agentUsageThresholds";
+import { useOptionalAgentActivityRuntime } from "../../agentActivityRuntime";
 
 export { formatSlashStatusTokenCount };
 
@@ -174,6 +176,7 @@ export interface AgentComposerProps {
   isSendingTurn: boolean;
   isSubmittingPrompt: boolean;
   isActive?: boolean;
+  previewMode?: boolean;
   promptImagesSupported?: boolean;
   composerFocusRequestSequence?: number | null;
   layoutMode?: "dock" | "hero";
@@ -261,6 +264,7 @@ export interface AgentComposerProps {
     slashStatusContextUnavailable: string;
     slashStatusLimitsUnavailable: string;
     usageChipLabel: (input: { percent: number }) => string;
+    usageTooltipLabel: string;
     usagePopoverTitle: string;
     usageContextWindowLabel: string;
     usageTokensLabel: string;
@@ -441,15 +445,18 @@ function AgentUsageChip({
   usedTokens,
   totalTokens,
   limits,
-  labels
+  labels,
+  tooltipsEnabled = true
 }: {
   percentUsed: number;
   usedTokens: number | null;
   totalTokens: number | null;
   limits: readonly AgentComposerSlashStatusLimit[];
+  tooltipsEnabled?: boolean;
   labels: Pick<
     AgentComposerProps["labels"],
     | "usageChipLabel"
+    | "usageTooltipLabel"
     | "usagePopoverTitle"
     | "usageContextWindowLabel"
     | "usageLimitsLabel"
@@ -462,27 +469,39 @@ function AgentUsageChip({
   const showTokens = usedTokens !== null && totalTokens !== null;
   const usageLevel = agentUsageChipLevel(clampedPercent);
   const ringColor = agentUsageRingColor(usageLevel);
+  const trigger = (
+    <button
+      type="button"
+      aria-label={chipLabel}
+      className="nodrag relative mr-2 inline-flex size-4 shrink-0 cursor-default items-center justify-center rounded-full p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--text-primary)_34%,transparent)] [-webkit-app-region:no-drag]"
+      data-testid="agent-gui-usage-chip"
+      data-usage-level={usageLevel}
+      title={chipLabel}
+      style={{
+        background: `conic-gradient(${ringColor} ${clampedPercent}%, color-mix(in srgb, ${ringColor} 16%, transparent) 0)`
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-0.5 rounded-full bg-[var(--agent-gui-surface-raised,var(--background-fronted))]"
+      />
+    </button>
+  );
+
+  if (!tooltipsEnabled) {
+    return trigger;
+  }
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={chipLabel}
-          className="nodrag relative mr-2 inline-flex size-4 shrink-0 cursor-default items-center justify-center rounded-full p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--text-primary)_34%,transparent)] [-webkit-app-region:no-drag]"
-          data-testid="agent-gui-usage-chip"
-          data-usage-level={usageLevel}
-          title={chipLabel}
-          style={{
-            background: `conic-gradient(${ringColor} ${clampedPercent}%, color-mix(in srgb, ${ringColor} 16%, transparent) 0)`
-          }}
-        >
-          <span
-            aria-hidden="true"
-            className="absolute inset-0.5 rounded-full bg-[var(--agent-gui-surface-raised,var(--background-fronted))]"
-          />
-        </button>
-      </PopoverTrigger>
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <PopoverTrigger asChild>
+            <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+          </PopoverTrigger>
+          <TooltipContent side="top">{labels.usageTooltipLabel}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <PopoverContent
         side="bottom"
         align="end"
@@ -673,6 +692,7 @@ export function AgentComposer({
   isSendingTurn,
   isSubmittingPrompt,
   isActive = true,
+  previewMode = false,
   promptImagesSupported = true,
   composerFocusRequestSequence = null,
   layoutMode = "dock",
@@ -699,6 +719,7 @@ export function AgentComposer({
   "use memo";
   const draftPrompt = draftContent.prompt;
   const draftImages = draftContent.images;
+  const agentActivityRuntime = useOptionalAgentActivityRuntime();
   const [isPaletteOpen, setIsPaletteOpen] = useState(true);
   const [isReviewPickerOpen, setIsReviewPickerOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -742,6 +763,7 @@ export function AgentComposer({
   const promptInputAreaRef = useRef<HTMLDivElement | null>(null);
   const paletteContentRef = useRef<HTMLDivElement | null>(null);
   const draftPromptRef = useRef(draftPrompt);
+  const draftImagesRef = useRef<AgentComposerDraftImage[]>(draftImages);
   const submittedImagePreviewObservedBusyRef = useRef(false);
   const promptTipRef = useRef<HTMLSpanElement | null>(null);
   const mentionControllerRef = useRef<AgentMentionSearchController | null>(
@@ -1005,6 +1027,10 @@ export function AgentComposer({
   }, [draftPrompt]);
 
   useEffect(() => {
+    draftImagesRef.current = draftImages;
+  }, [draftImages]);
+
+  useEffect(() => {
     if (
       previousSlashStatusAgentSessionIdRef.current === slashStatusAgentSessionId
     ) {
@@ -1214,9 +1240,13 @@ export function AgentComposer({
 
   const submitCurrentPrompt = useStableEventCallback((): void => {
     const canSubmitWhileSending = canQueueWhileBusy && isSendingTurn;
+    const hasUploadingImages = draftImages.some((image) => image.uploading);
+    const hasFailedImages = draftImages.some((image) => image.uploadError);
     if (
       isSelectedProjectMissing ||
       submitDisabled ||
+      hasUploadingImages ||
+      hasFailedImages ||
       (disabled && !canQueueWhileBusy) ||
       (isSendingTurn && !canSubmitWhileSending)
     ) {
@@ -1658,30 +1688,96 @@ export function AgentComposer({
       }
       setSubmittedImagePreview([]);
       submittedImagePreviewObservedBusyRef.current = false;
+      const currentDraftImages = draftImagesRef.current;
       const remainingSlots = Math.max(
         0,
-        MAX_AGENT_COMPOSER_DRAFT_IMAGES - draftImages.length
+        MAX_AGENT_COMPOSER_DRAFT_IMAGES - currentDraftImages.length
       );
       if (remainingSlots === 0) {
         return;
       }
+      const uploadPromptContent = agentActivityRuntime?.uploadPromptContent;
       const nextImages = images.slice(0, remainingSlots).map((image) => ({
         id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
         name: image.name,
         mimeType: image.mimeType,
         data: image.data,
-        previewUrl: `data:${image.mimeType};base64,${image.data}`
+        previewUrl: `data:${image.mimeType};base64,${image.data}`,
+        uploading: Boolean(uploadPromptContent)
       }));
+      const nextDraftImages = [...currentDraftImages, ...nextImages];
+      draftImagesRef.current = nextDraftImages;
       onDraftContentChange({
         prompt: draftPromptRef.current,
-        images: [...draftImages, ...nextImages]
+        images: nextDraftImages
       });
+      if (!uploadPromptContent) {
+        return;
+      }
+      for (const draftImage of nextImages) {
+        void uploadPromptContent({
+          workspaceId,
+          content: [
+            {
+              type: "image",
+              mimeType: draftImage.mimeType,
+              data: draftImage.data,
+              name: draftImage.name
+            }
+          ]
+        })
+          .then((result) => {
+            const uploadedImage = result.content.find(
+              (block) => block.type === "image"
+            );
+            const uploadedUrl = uploadedImage?.url?.trim() ?? "";
+            if (!uploadedUrl) {
+              throw new Error("Prompt image upload completed without url.");
+            }
+            const uploadedDraftImages = draftImagesRef.current.map((image) =>
+              image.id === draftImage.id
+                ? {
+                    id: image.id,
+                    name: image.name,
+                    mimeType: image.mimeType,
+                    url: uploadedUrl,
+                    previewUrl: uploadedUrl,
+                    uploading: false
+                  }
+                : image
+            );
+            draftImagesRef.current = uploadedDraftImages;
+            onDraftContentChange({
+              prompt: draftPromptRef.current,
+              images: uploadedDraftImages
+            });
+          })
+          .catch((error: unknown) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            const failedDraftImages = draftImagesRef.current.map((image) =>
+              image.id === draftImage.id
+                ? {
+                    ...image,
+                    uploading: false,
+                    uploadError: message
+                  }
+                : image
+            );
+            draftImagesRef.current = failedDraftImages;
+            onDraftContentChange({
+              prompt: draftPromptRef.current,
+              images: failedDraftImages
+            });
+          });
+      }
     },
     [
-      draftImages,
+      agentActivityRuntime,
       onDraftContentChange,
       onPromptImagesUnsupported,
-      promptImagesSupported
+      promptImagesSupported,
+      workspaceId
     ]
   );
 
@@ -1694,12 +1790,16 @@ export function AgentComposer({
 
   const removeDraftImage = useCallback(
     (id: string): void => {
+      const nextDraftImages = draftImagesRef.current.filter(
+        (image) => image.id !== id
+      );
+      draftImagesRef.current = nextDraftImages;
       onDraftContentChange({
         prompt: draftPromptRef.current,
-        images: draftImages.filter((image) => image.id !== id)
+        images: nextDraftImages
       });
     },
-    [draftImages, onDraftContentChange]
+    [onDraftContentChange]
   );
 
   const applyReferencePickResult = useCallback(
@@ -1980,6 +2080,10 @@ export function AgentComposer({
         } as CSSProperties)
       : undefined;
   useLayoutEffect(() => {
+    if (previewMode) {
+      setIsPromptTipOverflowing(false);
+      return;
+    }
     if (!activePromptTipId) {
       setIsPromptTipOverflowing(false);
       return;
@@ -2009,7 +2113,12 @@ export function AgentComposer({
       resizeObserver?.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [activePromptTipId, activePromptTipText, isPromptTipOverflowing]);
+  }, [
+    activePromptTipId,
+    activePromptTipText,
+    isPromptTipOverflowing,
+    previewMode
+  ]);
   const inputShellStyle = useMemo<CSSProperties | undefined>(
     () =>
       showFileMentionPalette || showFloatingCommandMenu
@@ -2018,6 +2127,8 @@ export function AgentComposer({
     [showFileMentionPalette, showFloatingCommandMenu]
   );
   const hasDraftContent = agentComposerDraftHasContent(draftContent);
+  const hasUploadingDraftImages = draftImages.some((image) => image.uploading);
+  const hasFailedDraftImages = draftImages.some((image) => image.uploadError);
   const isQueueMode = canQueueWhileBusy && hasDraftContent;
   const shouldShowStopButton = showStopButton && !isQueueMode;
   const sendButtonState = isQueueMode
@@ -2137,6 +2248,7 @@ export function AgentComposer({
             embedded={true}
             edgeGlow={true}
             keyboardShortcuts={activePromptKeyboardShortcutsEnabled}
+            previewMode={previewMode}
             isSubmitting={isSubmittingPrompt}
             onSubmit={submitInteractivePromptAndDismiss}
             labels={{
@@ -2239,14 +2351,38 @@ export function AgentComposer({
                     {visibleDraftImages.map((image) => (
                       <div
                         key={image.id}
-                        className="group relative aspect-square min-w-0 overflow-hidden rounded-[6px] border border-[var(--line-1)] bg-[var(--background-fronted)]"
+                        className={cn(
+                          "group relative aspect-square min-w-0 overflow-hidden rounded-[6px] border border-[var(--line-1)] bg-[var(--background-fronted)]",
+                          "[&>[data-rmiz]]:block [&>[data-rmiz]]:size-full",
+                          "[&>[data-rmiz]>[data-rmiz-content]]:block [&>[data-rmiz]>[data-rmiz-content]]:size-full",
+                          image.uploadError &&
+                            "border-[color:color-mix(in_srgb,var(--danger)_55%,var(--line-1))]"
+                        )}
+                        data-uploading={image.uploading ? "true" : undefined}
+                        data-upload-error={
+                          image.uploadError ? "true" : undefined
+                        }
                       >
-                        <img
+                        <ZoomableImage
                           src={image.previewUrl}
                           alt={image.name}
                           className="size-full object-cover"
                           draggable={false}
                         />
+                        {image.uploading ? (
+                          <div
+                            className="absolute inset-0 grid place-items-center bg-[color-mix(in_srgb,var(--background-fronted)_62%,transparent)]"
+                            data-testid="agent-gui-composer-image-uploading"
+                          >
+                            <Spinner
+                              className="text-[var(--text-primary)]"
+                              size={18}
+                              strokeWidth={2.4}
+                              trackColor="var(--transparency-hover)"
+                              testId="agent-gui-composer-image-upload-spinner"
+                            />
+                          </div>
+                        ) : null}
                         {showingSubmittedImagePreview ? null : (
                           <button
                             type="button"
@@ -2412,35 +2548,15 @@ export function AgentComposer({
           </Popover>
           <div className={styles.composerFooter}>
             <div className={composerStyles.footerGroup}>
-              <Select
-                open={false}
-                value={workspaceReferenceSelectValue}
-                disabled={
-                  isSelectedProjectMissing ||
-                  isSendingTurn ||
-                  isSubmittingPrompt ||
-                  !onRequestWorkspaceReferences ||
-                  (disabled && !canQueueWhileBusy)
-                }
-                onOpenChange={(isOpen) => {
-                  if (isOpen) {
-                    void handleWorkspaceReferencePicker();
-                  }
-                }}
-                onValueChange={(nextValue) => {
-                  if (nextValue === workspaceReferenceOptionValue) {
-                    void handleWorkspaceReferencePicker();
-                  }
-                }}
-              >
-                <SelectTrigger
-                  size="sm"
+              {previewMode ? (
+                <button
+                  type="button"
                   aria-label={labels.referenceWorkspaceFiles}
                   title={labels.referenceWorkspaceFiles}
                   className={cn(
                     styles.composerMenuTrigger,
                     styles.composerReferenceTrigger,
-                    "w-auto justify-center px-1 text-[var(--agent-gui-text-secondary)] [&>svg:last-child]:hidden [&_svg]:shrink-0"
+                    "w-auto justify-center px-1 text-[var(--agent-gui-text-secondary)] [&_svg]:shrink-0"
                   )}
                 >
                   <AddIcon
@@ -2448,8 +2564,47 @@ export function AgentComposer({
                     className="size-3.5"
                     data-agent-reference-add-icon="true"
                   />
-                </SelectTrigger>
-              </Select>
+                </button>
+              ) : (
+                <Select
+                  open={false}
+                  value={workspaceReferenceSelectValue}
+                  disabled={
+                    isSelectedProjectMissing ||
+                    isSendingTurn ||
+                    isSubmittingPrompt ||
+                    !onRequestWorkspaceReferences ||
+                    (disabled && !canQueueWhileBusy)
+                  }
+                  onOpenChange={(isOpen) => {
+                    if (isOpen) {
+                      void handleWorkspaceReferencePicker();
+                    }
+                  }}
+                  onValueChange={(nextValue) => {
+                    if (nextValue === workspaceReferenceOptionValue) {
+                      void handleWorkspaceReferencePicker();
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    aria-label={labels.referenceWorkspaceFiles}
+                    title={labels.referenceWorkspaceFiles}
+                    className={cn(
+                      styles.composerMenuTrigger,
+                      styles.composerReferenceTrigger,
+                      "w-auto justify-center px-1 text-[var(--agent-gui-text-secondary)] [&>svg:last-child]:hidden [&_svg]:shrink-0"
+                    )}
+                  >
+                    <AddIcon
+                      aria-hidden
+                      className="size-3.5"
+                      data-agent-reference-add-icon="true"
+                    />
+                  </SelectTrigger>
+                </Select>
+              )}
               {composerSettings.supportsPlanMode &&
               composerSettings.draftSettings.planMode ? (
                 <button
@@ -2481,8 +2636,10 @@ export function AgentComposer({
                   usedTokens={usage.usedTokens}
                   totalTokens={usage.totalTokens}
                   limits={slashStatus?.limits ?? []}
+                  tooltipsEnabled={!previewMode}
                   labels={{
                     usageChipLabel: labels.usageChipLabel,
+                    usageTooltipLabel: labels.usageTooltipLabel,
                     usagePopoverTitle: labels.usagePopoverTitle,
                     usageContextWindowLabel: labels.usageContextWindowLabel,
                     usageLimitsLabel: labels.usageLimitsLabel
@@ -2493,6 +2650,7 @@ export function AgentComposer({
                 <AgentPermissionModeDropdown
                   composerSettings={composerSettings}
                   disabled={settingsControlsDisabled}
+                  previewMode={previewMode}
                   labels={{
                     permissionLabel: labels.permissionLabel
                   }}
@@ -2504,6 +2662,7 @@ export function AgentComposer({
                 <AgentModelReasoningDropdown
                   composerSettings={composerSettings}
                   disabled={settingsControlsDisabled}
+                  previewMode={previewMode}
                   labels={{
                     modelLabel: labels.modelLabel,
                     modelSelectionLabel: labels.modelSelectionLabel,
@@ -2567,6 +2726,8 @@ export function AgentComposer({
                     isSelectedProjectMissing ||
                     submitDisabled ||
                     !hasDraftContent ||
+                    hasUploadingDraftImages ||
+                    hasFailedDraftImages ||
                     sendButtonBusy
                   }
                   aria-label={labels.send}
@@ -2598,6 +2759,7 @@ export function AgentComposer({
               <AgentProjectDropdown
                 composerSettings={composerSettings}
                 i18n={workspaceUserProjectI18n}
+                previewMode={previewMode}
                 labels={{
                   projectLocked: labels.projectLocked,
                   projectMissingDescription: labels.projectMissingDescription
@@ -2611,7 +2773,7 @@ export function AgentComposer({
                 className={styles.composerPromptTips}
                 data-testid="agent-gui-prompt-tips"
               >
-                {isPromptTipOverflowing && promptTipNode ? (
+                {!previewMode && isPromptTipOverflowing && promptTipNode ? (
                   <TooltipProvider delayDuration={0}>
                     <Tooltip>
                       <TooltipTrigger asChild>{promptTipNode}</TooltipTrigger>

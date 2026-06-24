@@ -41,32 +41,14 @@ func NewHTTPServer(spec ListenerSpec, routes Routes) *http.Server {
 }
 
 func authorizeWorkspaceAppServerToken(r *http.Request, token string, accessToken string) bool {
-	if r.Method != http.MethodGet && r.Method != http.MethodPost && r.Method != http.MethodDelete {
-		return false
-	}
 	segments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if (len(segments) != 7 && len(segments) != 8) ||
+	if len(segments) < 6 ||
 		segments[0] != "v1" ||
 		segments[1] != "workspaces" ||
-		segments[3] != "apps" ||
-		segments[5] != "managed-model-grants" {
+		segments[3] != "apps" {
 		return false
 	}
-	switch r.Method {
-	case http.MethodPost:
-		if (len(segments) != 7 || segments[6] != "exchange") &&
-			(len(segments) != 8 || segments[7] != "credentials") {
-			return false
-		}
-	case http.MethodGet:
-		if len(segments) != 8 || segments[7] != "models" {
-			return false
-		}
-	case http.MethodDelete:
-		if len(segments) != 7 || segments[6] == "exchange" {
-			return false
-		}
-	default:
+	if !isWorkspaceAppServerTokenRoute(r.Method, segments) {
 		return false
 	}
 	workspaceID, err := url.PathUnescape(segments[2])
@@ -79,6 +61,31 @@ func authorizeWorkspaceAppServerToken(r *http.Request, token string, accessToken
 	}
 	expected := workspacebiz.AppServerToken(accessToken, workspaceID, appID)
 	return expected != "" && subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
+}
+
+func isWorkspaceAppServerTokenRoute(method string, segments []string) bool {
+	if len(segments) == 8 &&
+		method == http.MethodPut &&
+		segments[5] == "uploads" &&
+		strings.TrimSpace(segments[6]) != "" &&
+		segments[7] == "content" {
+		return true
+	}
+	if (len(segments) != 7 && len(segments) != 8) ||
+		segments[5] != "managed-model-grants" {
+		return false
+	}
+	switch method {
+	case http.MethodPost:
+		return (len(segments) == 7 && segments[6] == "exchange") ||
+			(len(segments) == 8 && segments[7] == "credentials")
+	case http.MethodGet:
+		return len(segments) == 8 && segments[7] == "models"
+	case http.MethodDelete:
+		return len(segments) == 7 && segments[6] != "exchange"
+	default:
+		return false
+	}
 }
 
 func AddrFromEnv() string {

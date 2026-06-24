@@ -6,10 +6,22 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode
 } from "react";
 import { createPortal } from "react-dom";
-import { Button, CloseIcon, FileCreateIcon, cn } from "@tutti-os/ui-system";
+import {
+  Button,
+  CheckIcon,
+  CloseIcon,
+  FileCreateIcon,
+  MaximizeIcon,
+  MinimizeIcon,
+  OverviewLayoutIcon,
+  PinFilledIcon,
+  PinIcon,
+  cn
+} from "@tutti-os/ui-system";
 import type { WorkbenchNode } from "../core/types.ts";
 import {
   captureWorkbenchNodePreviewImage,
@@ -78,6 +90,7 @@ export interface WorkbenchHostDockPopupAnchorRect {
 export interface WorkbenchHostDockPopupState {
   anchorRect: WorkbenchHostDockPopupAnchorRect;
   entryId: string;
+  kind: "context-menu" | "preview";
 }
 
 export interface WorkbenchHostDockPopupItem {
@@ -93,7 +106,17 @@ export interface WorkbenchHostDockPopupItem {
   title: string | null;
 }
 
-export type WorkbenchHostDockPopupVariant = "default" | "minimized-stack";
+export type WorkbenchHostDockPopupVariant =
+  | "context-menu"
+  | "default"
+  | "minimized-stack";
+
+export interface WorkbenchHostDockPopupRetentionAction {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  pendingLabel?: string;
+}
 
 interface WorkbenchHostDockPopupCardStyle extends CSSProperties {
   "--desktop-dock-popup-card-lift"?: string;
@@ -186,9 +209,14 @@ function writeDockPopupPreviewImage(
 
 export function WorkbenchHostDockPopup({
   anchorRect,
+  canEnterFullscreen,
+  canShowAllWindows,
   capturePreview,
   debugDiagnostics,
+  dockRetention,
   dockPreviewCache,
+  fullscreenLabel,
+  hideLabel,
   items,
   label,
   labelMode,
@@ -197,13 +225,24 @@ export function WorkbenchHostDockPopup({
   onClose,
   onCloseNode,
   onCreateNew,
+  onEnterFullscreen,
+  onHide,
+  onRunDockRetentionAction,
   onSelectNode,
+  onShowAllWindows,
+  openLabel,
+  onQuit,
   placement = "bottom",
+  quitLabel,
   resolveDockPreviewCacheKey,
+  showAllWindowsLabel,
   showCreateNew,
+  showOpen,
   variant
 }: {
   anchorRect: WorkbenchHostDockPopupState["anchorRect"];
+  canEnterFullscreen?: boolean;
+  canShowAllWindows?: boolean;
   capturePreview?: (
     item: WorkbenchHostDockPopupItem
   ) =>
@@ -212,7 +251,10 @@ export function WorkbenchHostDockPopup({
     | string
     | null;
   debugDiagnostics?: WorkbenchHostProps["debugDiagnostics"];
+  dockRetention?: WorkbenchHostDockPopupRetentionAction | null;
   dockPreviewCache?: WorkbenchDockPreviewCache;
+  fullscreenLabel?: string;
+  hideLabel?: string;
   items: WorkbenchHostDockPopupItem[];
   label: string;
   labelMode?: WorkbenchHostDockPopupCardLabelMode;
@@ -221,15 +263,25 @@ export function WorkbenchHostDockPopup({
   onClose: () => void;
   onCloseNode: (nodeId: string) => void;
   onCreateNew: () => void;
+  onEnterFullscreen?: () => void;
+  onHide?: () => void;
+  onRunDockRetentionAction?: () => void;
   onSelectNode: (nodeId: string) => void;
+  onShowAllWindows?: () => void;
+  openLabel?: string;
+  onQuit?: () => void;
   placement?: WorkbenchDockPlacement;
+  quitLabel?: string;
   resolveDockPreviewCacheKey?: WorkbenchDockPreviewCacheKeyResolver<WorkbenchHostNodeData>;
+  showAllWindowsLabel?: string;
   showCreateNew?: boolean;
+  showOpen?: boolean;
   variant?: WorkbenchHostDockPopupVariant;
 }) {
   const resolvedLabelMode = labelMode ?? "hover-overlay";
   const resolvedVariant = variant ?? "default";
   const isMinimizedStack = resolvedVariant === "minimized-stack";
+  const isContextMenu = resolvedVariant === "context-menu";
   const createCardCount = showCreateNew === false ? 0 : 1;
   const cardElementsRef = useRef(new Map<string, HTMLElement>());
   const cardRefCallbacksRef = useRef(
@@ -243,12 +295,15 @@ export function WorkbenchHostDockPopup({
   const [capturedPreviewByMemoryKey, setCapturedPreviewByMemoryKey] = useState<
     Record<string, WorkbenchHostDockPopupCapturedPreview | undefined>
   >({});
-  const columnCount = Math.min(Math.max(items.length + createCardCount, 1), 3);
-  const popupWidthPx =
-    columnCount * dockPopupCardWidthPx +
-    Math.max(0, columnCount - 1) * dockPopupGridGapPx +
-    dockPopupPanelPaddingInlinePx * 2 +
-    dockPopupPanelBorderInlinePx;
+  const columnCount = isContextMenu
+    ? 1
+    : Math.min(Math.max(items.length + createCardCount, 1), 3);
+  const popupWidthPx = isContextMenu
+    ? 268
+    : columnCount * dockPopupCardWidthPx +
+      Math.max(0, columnCount - 1) * dockPopupGridGapPx +
+      dockPopupPanelPaddingInlinePx * 2 +
+      dockPopupPanelBorderInlinePx;
   const popupCenterY = anchorRect.top + anchorRect.height / 2;
   const isLeftMinimizedStack = placement === "left" && isMinimizedStack;
   const minimizedStackTrackHeightPx = resolveMinimizedStackTrackHeightPx(
@@ -473,7 +528,7 @@ export function WorkbenchHostDockPopup({
   }, [isMinimizedStack, minimizedStackMaxScrollOffset]);
 
   useEffect(() => {
-    if (!capturePreview) {
+    if (!capturePreview || isContextMenu) {
       return;
     }
     let cancelled = false;
@@ -708,6 +763,7 @@ export function WorkbenchHostDockPopup({
   }, [
     capturePreview,
     dockPreviewCache,
+    isContextMenu,
     items,
     previewCaptureKey,
     resolveDockPreviewCacheKey
@@ -725,7 +781,8 @@ export function WorkbenchHostDockPopup({
       <div
         aria-label={label}
         className={cn(
-          "desktop-dock-popup relative origin-bottom rounded-lg border border-[var(--border-1)] bg-background-fronted p-3 text-[var(--text-primary)] shadow-panel motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:slide-in-from-bottom-2 motion-safe:duration-[175ms] motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:animate-none",
+          "desktop-dock-popup relative origin-bottom rounded-lg border border-[var(--border-1)] bg-background-fronted text-[var(--text-primary)] shadow-panel motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:slide-in-from-bottom-2 motion-safe:duration-[175ms] motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:animate-none",
+          isContextMenu ? "p-1" : "p-3",
           isLeftMinimizedStack
             ? "w-full min-w-0 max-w-none"
             : "w-[min(var(--desktop-dock-popup-width,366px),calc(100vw-32px))]"
@@ -742,117 +799,143 @@ export function WorkbenchHostDockPopup({
         role="dialog"
         style={panelStyle}
       >
-        <div className="mb-2.5 flex items-center justify-between">
-          <span className="min-w-0 truncate text-sm font-semibold">
-            {label}
-          </span>
-        </div>
-        {isMinimizedStack ? (
-          <div
-            ref={minimizedStackViewportRef}
-            className="desktop-dock-popup__minimized-stack-viewport"
-            style={{
-              height: minimizedStackViewportHeightPx,
-              ...(isLeftMinimizedStack
-                ? { paddingLeft: minimizedStackLeftGutterPx }
-                : {})
-            }}
-          >
-            <div
-              className="desktop-dock-popup__minimized-stack-track"
-              style={{
-                minHeight: minimizedStackTrackHeightPx,
-                transform: `translate(${minimizedStackTrackTranslateXPx}px, ${-minimizedStackScrollOffset}px)`
-              }}
-            >
-              {items.map((item, index) => {
-                const previewMemoryKey = resolveDockPopupPreviewMemoryKey(
-                  item.node,
-                  resolveDockPreviewCacheKey?.(item.node) ?? null
-                );
-                const capturedPreview =
-                  capturedPreviewByMemoryKey[previewMemoryKey] !== undefined
-                    ? capturedPreviewByMemoryKey[previewMemoryKey]
-                    : readDockPopupPreviewImage(previewMemoryKey);
-                const previewState = resolveDockPopupItemPreviewState(
-                  item,
-                  capturedPreview,
-                  Boolean(capturePreview)
-                );
-                return (
-                  <WorkbenchHostDockPopupCard
-                    key={item.node.id}
-                    ref={registerCard(item.node.id)}
-                    closeWindowLabel={closeWindowLabel}
-                    item={item}
-                    labelMode={resolvedLabelMode}
-                    onCloseNode={onCloseNode}
-                    onSelectNode={onSelectNode}
-                    previewState={previewState}
-                    style={{
-                      ...resolvePopupFanCardStyle(
-                        index,
-                        items.length,
-                        placement
-                      ),
-                      ...resolvePopupCardMagnificationStyle(
-                        pointer,
-                        cardElementsRef.current.get(item.node.id) ?? null
-                      )
-                    }}
-                    variant={resolvedVariant}
-                  />
-                );
-              })}
-            </div>
-          </div>
+        {isContextMenu ? (
+          <WorkbenchHostDockContextMenu
+            canCreateNew={showCreateNew !== false}
+            canEnterFullscreen={canEnterFullscreen === true}
+            canShowAllWindows={canShowAllWindows === true}
+            dockRetention={dockRetention}
+            fullscreenLabel={fullscreenLabel}
+            hideLabel={hideLabel}
+            items={items}
+            newWindowLabel={newWindowLabel}
+            onCreateNew={onCreateNew}
+            onEnterFullscreen={onEnterFullscreen}
+            onHide={onHide}
+            onQuit={onQuit}
+            onRunDockRetentionAction={onRunDockRetentionAction}
+            onSelectNode={onSelectNode}
+            onShowAllWindows={onShowAllWindows}
+            openLabel={openLabel}
+            quitLabel={quitLabel}
+            showAllWindowsLabel={showAllWindowsLabel}
+            showOpen={showOpen === true}
+          />
         ) : (
-          <div className="grid max-h-[min(52vh,420px)] grid-cols-[repeat(var(--desktop-dock-popup-columns,2),165px)] gap-2 overflow-auto overscroll-contain">
-            {items.map((item) => {
-              const previewMemoryKey = resolveDockPopupPreviewMemoryKey(
-                item.node,
-                resolveDockPreviewCacheKey?.(item.node) ?? null
-              );
-              const capturedPreview =
-                capturedPreviewByMemoryKey[previewMemoryKey] !== undefined
-                  ? capturedPreviewByMemoryKey[previewMemoryKey]
-                  : readDockPopupPreviewImage(previewMemoryKey);
-              const previewState = resolveDockPopupItemPreviewState(
-                item,
-                capturedPreview,
-                Boolean(capturePreview)
-              );
-              return (
-                <WorkbenchHostDockPopupCard
-                  key={item.node.id}
-                  ref={registerCard(item.node.id)}
-                  closeWindowLabel={closeWindowLabel}
-                  item={item}
-                  labelMode={resolvedLabelMode}
-                  onCloseNode={onCloseNode}
-                  onSelectNode={onSelectNode}
-                  previewState={previewState}
-                  variant={resolvedVariant}
-                />
-              );
-            })}
-            {showCreateNew !== false ? (
-              <button
-                className="flex h-[103px] w-[165px] min-w-0 flex-col items-center justify-center gap-2 rounded-[8px] border border-dashed border-[var(--border-1)] bg-transparency-block text-center text-[var(--text-secondary)] transition-colors hover:bg-transparency-hover hover:text-[var(--text-primary)]"
-                type="button"
-                onClick={onCreateNew}
+          <>
+            <div className="mb-2.5 flex items-center justify-between">
+              <span className="min-w-0 truncate text-sm font-semibold">
+                {label}
+              </span>
+            </div>
+            {isMinimizedStack ? (
+              <div
+                ref={minimizedStackViewportRef}
+                className="desktop-dock-popup__minimized-stack-viewport"
+                style={{
+                  height: minimizedStackViewportHeightPx,
+                  ...(isLeftMinimizedStack
+                    ? { paddingLeft: minimizedStackLeftGutterPx }
+                    : {})
+                }}
               >
-                <FileCreateIcon
-                  aria-hidden="true"
-                  className="text-[var(--text-primary)]"
-                  size={28}
-                />
-                <span className="text-xs font-semibold text-[var(--text-primary)]">
-                  {newWindowLabel}
-                </span>
-              </button>
-            ) : null}
-          </div>
+                <div
+                  className="desktop-dock-popup__minimized-stack-track"
+                  style={{
+                    minHeight: minimizedStackTrackHeightPx,
+                    transform: `translate(${minimizedStackTrackTranslateXPx}px, ${-minimizedStackScrollOffset}px)`
+                  }}
+                >
+                  {items.map((item, index) => {
+                    const previewMemoryKey = resolveDockPopupPreviewMemoryKey(
+                      item.node,
+                      resolveDockPreviewCacheKey?.(item.node) ?? null
+                    );
+                    const capturedPreview =
+                      capturedPreviewByMemoryKey[previewMemoryKey] !== undefined
+                        ? capturedPreviewByMemoryKey[previewMemoryKey]
+                        : readDockPopupPreviewImage(previewMemoryKey);
+                    const previewState = resolveDockPopupItemPreviewState(
+                      item,
+                      capturedPreview,
+                      Boolean(capturePreview)
+                    );
+                    return (
+                      <WorkbenchHostDockPopupCard
+                        key={item.node.id}
+                        ref={registerCard(item.node.id)}
+                        closeWindowLabel={closeWindowLabel}
+                        item={item}
+                        labelMode={resolvedLabelMode}
+                        onCloseNode={onCloseNode}
+                        onSelectNode={onSelectNode}
+                        previewState={previewState}
+                        style={{
+                          ...resolvePopupFanCardStyle(
+                            index,
+                            items.length,
+                            placement
+                          ),
+                          ...resolvePopupCardMagnificationStyle(
+                            pointer,
+                            cardElementsRef.current.get(item.node.id) ?? null
+                          )
+                        }}
+                        variant={resolvedVariant}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="grid max-h-[min(52vh,420px)] grid-cols-[repeat(var(--desktop-dock-popup-columns,2),165px)] gap-2 overflow-auto overscroll-contain">
+                {items.map((item) => {
+                  const previewMemoryKey = resolveDockPopupPreviewMemoryKey(
+                    item.node,
+                    resolveDockPreviewCacheKey?.(item.node) ?? null
+                  );
+                  const capturedPreview =
+                    capturedPreviewByMemoryKey[previewMemoryKey] !== undefined
+                      ? capturedPreviewByMemoryKey[previewMemoryKey]
+                      : readDockPopupPreviewImage(previewMemoryKey);
+                  const previewState = resolveDockPopupItemPreviewState(
+                    item,
+                    capturedPreview,
+                    Boolean(capturePreview)
+                  );
+                  return (
+                    <WorkbenchHostDockPopupCard
+                      key={item.node.id}
+                      ref={registerCard(item.node.id)}
+                      closeWindowLabel={closeWindowLabel}
+                      item={item}
+                      labelMode={resolvedLabelMode}
+                      onCloseNode={onCloseNode}
+                      onSelectNode={onSelectNode}
+                      previewState={previewState}
+                      variant={resolvedVariant}
+                    />
+                  );
+                })}
+                {showCreateNew !== false ? (
+                  <button
+                    className="flex h-[103px] w-[165px] min-w-0 flex-col items-center justify-center gap-2 rounded-[8px] border border-dashed border-[var(--border-1)] bg-transparency-block text-center text-[var(--text-secondary)] transition-colors hover:bg-transparency-hover hover:text-[var(--text-primary)]"
+                    type="button"
+                    onClick={onCreateNew}
+                  >
+                    <FileCreateIcon
+                      aria-hidden="true"
+                      className="text-[var(--text-primary)]"
+                      size={28}
+                    />
+                    <span className="text-xs font-semibold text-[var(--text-primary)]">
+                      {newWindowLabel}
+                    </span>
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -862,6 +945,205 @@ export function WorkbenchHostDockPopup({
     return content;
   }
   return createPortal(content, document.body);
+}
+
+function WorkbenchHostDockContextMenu({
+  canCreateNew,
+  canEnterFullscreen,
+  canShowAllWindows,
+  dockRetention,
+  fullscreenLabel,
+  hideLabel,
+  items,
+  newWindowLabel,
+  onCreateNew,
+  onEnterFullscreen,
+  onHide,
+  onQuit,
+  onRunDockRetentionAction,
+  onSelectNode,
+  onShowAllWindows,
+  openLabel,
+  quitLabel,
+  showAllWindowsLabel,
+  showOpen
+}: {
+  canCreateNew: boolean;
+  canEnterFullscreen: boolean;
+  canShowAllWindows: boolean;
+  dockRetention?: WorkbenchHostDockPopupRetentionAction | null;
+  fullscreenLabel?: string;
+  hideLabel?: string;
+  items: WorkbenchHostDockPopupItem[];
+  newWindowLabel: string;
+  onCreateNew: () => void;
+  onEnterFullscreen?: () => void;
+  onHide?: () => void;
+  onQuit?: () => void;
+  onRunDockRetentionAction?: () => void;
+  onSelectNode: (nodeId: string) => void;
+  onShowAllWindows?: () => void;
+  openLabel?: string;
+  quitLabel?: string;
+  showAllWindowsLabel?: string;
+  showOpen: boolean;
+}) {
+  const hasOpenWindows = items.length > 0;
+  const hasNewWindowCommand = hasOpenWindows && canCreateNew;
+  const hasOpenCommand = !hasOpenWindows;
+  const hasDockActionGroup =
+    Boolean(dockRetention) || hasNewWindowCommand || hasOpenCommand;
+  const hasWindowActionGroup = hasOpenWindows;
+
+  return (
+    <div
+      className="flex min-w-0 flex-col gap-1"
+      data-desktop-dock-context-menu="true"
+      role="menu"
+    >
+      {hasOpenWindows ? (
+        <>
+          <div className="max-h-48 min-w-0 overflow-auto overscroll-contain">
+            {items.map((item) => (
+              <WorkbenchHostDockContextMenuItem
+                key={item.node.id}
+                checked={!item.isMinimized}
+                label={item.title?.trim() || item.node.title}
+                onSelect={() => onSelectNode(item.node.id)}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+      {hasOpenWindows && (hasDockActionGroup || hasWindowActionGroup) ? (
+        <WorkbenchHostDockContextMenuSeparator />
+      ) : null}
+      {dockRetention ? (
+        <WorkbenchHostDockContextMenuItem
+          checked={dockRetention.checked}
+          checkedIcon={
+            <PinFilledIcon
+              aria-hidden="true"
+              className="size-4 text-[var(--tutti-purple)]"
+            />
+          }
+          disabled={dockRetention.disabled}
+          icon={<PinIcon aria-hidden="true" className="size-4" />}
+          label={dockRetention.pendingLabel ?? dockRetention.label}
+          onSelect={onRunDockRetentionAction}
+        />
+      ) : null}
+      {hasNewWindowCommand ? (
+        <WorkbenchHostDockContextMenuItem
+          icon={<FileCreateIcon aria-hidden="true" className="size-4" />}
+          label={newWindowLabel}
+          onSelect={onCreateNew}
+        />
+      ) : null}
+      {hasOpenCommand ? (
+        <WorkbenchHostDockContextMenuItem
+          disabled={!showOpen}
+          icon={<FileCreateIcon aria-hidden="true" className="size-4" />}
+          label={openLabel}
+          onSelect={onCreateNew}
+        />
+      ) : null}
+      {hasOpenWindows ? (
+        <>
+          {hasDockActionGroup ? (
+            <WorkbenchHostDockContextMenuSeparator />
+          ) : null}
+          {canShowAllWindows && onShowAllWindows ? (
+            <WorkbenchHostDockContextMenuItem
+              icon={
+                <OverviewLayoutIcon aria-hidden="true" className="size-4" />
+              }
+              label={showAllWindowsLabel}
+              onSelect={onShowAllWindows}
+            />
+          ) : null}
+          <WorkbenchHostDockContextMenuItem
+            disabled={!canEnterFullscreen || !onEnterFullscreen}
+            icon={<MaximizeIcon aria-hidden="true" className="size-4" />}
+            label={fullscreenLabel}
+            onSelect={onEnterFullscreen}
+          />
+          <WorkbenchHostDockContextMenuItem
+            disabled={!onHide}
+            icon={<MinimizeIcon aria-hidden="true" className="size-4" />}
+            label={hideLabel}
+            onSelect={onHide}
+          />
+          <WorkbenchHostDockContextMenuItem
+            disabled={!onQuit}
+            icon={<CloseIcon aria-hidden="true" className="size-4" />}
+            label={quitLabel}
+            onSelect={onQuit}
+          />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function WorkbenchHostDockContextMenuItem({
+  checked,
+  checkedIcon,
+  disabled,
+  icon,
+  label,
+  onSelect
+}: {
+  checked?: boolean;
+  checkedIcon?: ReactNode;
+  disabled?: boolean;
+  icon?: ReactNode;
+  label?: string;
+  onSelect?: () => void;
+}) {
+  return (
+    <button
+      className={cn(
+        "flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-sm text-[var(--text-primary)] transition-colors",
+        disabled
+          ? "cursor-default opacity-45"
+          : "hover:bg-transparency-hover focus-visible:bg-transparency-hover focus-visible:outline-none"
+      )}
+      disabled={disabled}
+      role="menuitem"
+      type="button"
+      onClick={() => {
+        if (disabled || !onSelect) {
+          return;
+        }
+        onSelect();
+      }}
+    >
+      <span className="flex size-4 shrink-0 items-center justify-center text-[var(--text-secondary)]">
+        {checked && checkedIcon ? (
+          checkedIcon
+        ) : checked ? (
+          <CheckIcon
+            aria-hidden="true"
+            className="size-4 text-[var(--tutti-purple)]"
+          />
+        ) : (
+          (icon ?? null)
+        )}
+      </span>
+      <span className="min-w-0 truncate">{label}</span>
+    </button>
+  );
+}
+
+function WorkbenchHostDockContextMenuSeparator() {
+  return (
+    <div
+      aria-hidden="true"
+      className="mx-2 my-1 h-px bg-[var(--border-1)]"
+      role="separator"
+    />
+  );
 }
 
 function readPersistedDockPreview(
@@ -1113,7 +1395,7 @@ const WorkbenchHostDockPopupCard = forwardRef<
       {item.isFocused ? (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-[3] rounded-[8px] shadow-[inset_0_0_0_2px_var(--border-focus)]"
+          className="pointer-events-none absolute inset-0 z-[3] rounded-md shadow-[inset_0_0_0_2px_var(--border-focus)]"
           data-desktop-dock-popup-card-active-overlay="true"
         />
       ) : null}
