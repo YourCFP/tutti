@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { selectFocusedWorkbenchNode } from "../../core/selectors.ts";
+import { selectFocusedVisibleWorkbenchNode } from "../../core/selectors.ts";
 import { useWorkbenchController } from "../WorkbenchProvider.tsx";
 import {
   resolveWorkbenchShortcutIntent,
@@ -31,7 +31,9 @@ export function useWorkbenchShortcuts<TData = unknown>(
       }
 
       let handled = false;
-      const focusedNode = selectFocusedWorkbenchNode(controller.getSnapshot());
+      const focusedNode = selectFocusedVisibleWorkbenchNode(
+        controller.getSnapshot()
+      );
       if (intent.type === "exitFullscreen") {
         if (focusedNode?.displayMode === "fullscreen") {
           controller.commands.exitFullscreen(focusedNode.id);

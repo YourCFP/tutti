@@ -5,6 +5,7 @@ import {
   reduceWorkbenchState
 } from "./reducer.ts";
 import {
+  selectFocusedVisibleWorkbenchNode,
   selectFocusedWorkbenchNode,
   selectFullscreenNodeToExitBeforeDockLaunch
 } from "./selectors.ts";
@@ -41,6 +42,22 @@ test("opens, focuses, minimizes, and restores nodes", (t) => {
     state.nodes.find((node) => node.id === "a")?.minimizedAtUnixMs,
     null
   );
+});
+
+test("selects the focused visible node when the stack top is minimized", () => {
+  const state = createWorkbenchInitialState({
+    nodes: [
+      makeNode("a"),
+      {
+        ...makeNode("b"),
+        isMinimized: true
+      }
+    ],
+    nodeStack: ["a", "b"]
+  });
+
+  assert.equal(selectFocusedWorkbenchNode(state)?.id, "b");
+  assert.equal(selectFocusedVisibleWorkbenchNode(state)?.id, "a");
 });
 
 test("tracks active resize node separately from active drag node", () => {

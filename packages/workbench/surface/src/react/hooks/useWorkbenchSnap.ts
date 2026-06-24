@@ -5,6 +5,7 @@ import {
 } from "../../core/geometry.ts";
 import type { WorkbenchSnapTarget } from "../../core/types.ts";
 import { useWorkbenchController } from "../WorkbenchProvider.tsx";
+import { resolveWorkbenchActiveSnapTarget } from "./workbenchSnapTarget.ts";
 
 export function useWorkbenchSnap<TData = unknown>() {
   const controller = useWorkbenchController<TData>();
@@ -20,8 +21,7 @@ export function useWorkbenchSnap<TData = unknown>() {
         options.edgeSnapEnabled ? WORKBENCH_EDGE_SNAP_THRESHOLD_PX : 0,
         controller.getSnapshot().layoutConstraints
       );
-      const activeTarget =
-        options.edgeSnapEnabled || target === "top" ? target : null;
+      const activeTarget = resolveWorkbenchActiveSnapTarget(target, options);
       controller.commands.setActiveSnapTarget(activeTarget);
       return activeTarget;
     },
