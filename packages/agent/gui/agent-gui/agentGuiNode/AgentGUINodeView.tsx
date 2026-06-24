@@ -129,6 +129,16 @@ export type AgentMentionReferenceTargetResolver = (
   item: AgentContextMentionItem
 ) => ReferenceLocateTarget | null;
 
+export interface AgentWorkspaceReferenceInitialTargetInput {
+  activeConversation: AgentGUINodeViewModel["activeConversation"];
+  composerSelectedProjectPath: string | null;
+  userProjects: AgentGUINodeViewModel["userProjects"];
+}
+
+export type AgentWorkspaceReferenceInitialTargetResolver = (
+  input: AgentWorkspaceReferenceInitialTargetInput
+) => ReferenceLocateTarget | null;
+
 const AGENT_GUI_STICK_TO_BOTTOM_THRESHOLD_PX = 24;
 const AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE = 5;
 
@@ -462,6 +472,7 @@ interface AgentGUINodeViewProps {
   contextMentionProviders?: readonly AgentContextMentionProvider[];
   referenceSourceAggregator?: ReferenceSourceAggregator | null;
   resolveMentionReferenceTarget?: AgentMentionReferenceTargetResolver | null;
+  resolveWorkspaceReferenceInitialTarget?: AgentWorkspaceReferenceInitialTargetResolver | null;
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
 }
 
@@ -783,6 +794,7 @@ export function AgentGUINodeView({
   contextMentionProviders,
   referenceSourceAggregator = null,
   resolveMentionReferenceTarget = null,
+  resolveWorkspaceReferenceInitialTarget = null,
   workspaceAppIcons = EMPTY_WORKSPACE_APP_ICONS
 }: AgentGUINodeViewProps): React.JSX.Element {
   "use memo";
@@ -833,7 +845,14 @@ export function AgentGUINodeView({
       const target =
         entity && referenceSourceAggregator
           ? (resolveMentionReferenceTarget?.(entity) ?? null)
-          : null;
+          : referenceSourceAggregator
+            ? (resolveWorkspaceReferenceInitialTarget?.({
+                activeConversation: viewModel.activeConversation,
+                composerSelectedProjectPath:
+                  viewModel.composerSettings.selectedProjectPath ?? null,
+                userProjects: viewModel.userProjects
+              }) ?? null)
+            : null;
       setWorkspaceReferencePickerTarget(target);
       setWorkspaceReferencePickerOpen(true);
       return await new Promise<WorkspaceReferencePickResult>((resolve) => {
@@ -845,6 +864,10 @@ export function AgentGUINodeView({
       previewMode,
       referenceSourceAggregator,
       resolveMentionReferenceTarget,
+      resolveWorkspaceReferenceInitialTarget,
+      viewModel.activeConversation,
+      viewModel.composerSettings.selectedProjectPath,
+      viewModel.userProjects,
       workspaceFileReferenceAdapter,
       workspaceFileReferenceCopy
     ]

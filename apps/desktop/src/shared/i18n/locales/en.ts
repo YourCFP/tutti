@@ -138,6 +138,7 @@ export const en = {
       appSourceLabel: "Apps",
       issueSourceLabel: "Tasks",
       localSourceLabel: "Local",
+      projectSourceLabel: "Projects",
       sidebarDesktop: "Desktop",
       sidebarDocuments: "Documents",
       sidebarDownloads: "Downloads",

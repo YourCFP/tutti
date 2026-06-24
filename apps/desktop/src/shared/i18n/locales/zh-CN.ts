@@ -135,6 +135,7 @@ export const zhCN = {
       appSourceLabel: "应用",
       issueSourceLabel: "任务",
       localSourceLabel: "本地",
+      projectSourceLabel: "项目",
       sidebarDesktop: "桌面",
       sidebarDocuments: "文稿",
       sidebarDownloads: "下载",
