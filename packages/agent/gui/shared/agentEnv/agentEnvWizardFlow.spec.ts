@@ -206,13 +206,17 @@ describe("projectRevealedStages / shouldAdvanceReveal", () => {
     ];
     expect(shouldAdvanceReveal(stages, 1)).toBe(false); // running install
     // the cursor stage shows its real (running) status, not a synthetic one
-    expect(projectRevealedStages(stages, 1)[1].status).toBe("running");
+    expect(stage(projectRevealedStages(stages, 1), "install").status).toBe(
+      "running"
+    );
     const errored: AgentSetupStage[] = [
-      { ...stages[0] },
-      { ...stages[1], status: "error" }
+      { id: "detect", label: "Detect", status: "ok", detail: null },
+      { id: "install", label: "Install", status: "error", detail: null }
     ];
     expect(shouldAdvanceReveal(errored, 1)).toBe(false);
-    expect(projectRevealedStages(errored, 1)[1].status).toBe("error");
+    expect(stage(projectRevealedStages(errored, 1), "install").status).toBe(
+      "error"
+    );
   });
 });
 

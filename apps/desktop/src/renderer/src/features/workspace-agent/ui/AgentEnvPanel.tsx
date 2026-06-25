@@ -391,6 +391,9 @@ export function AgentEnvPanel({
               onRetryStage={(stageId) =>
                 runAction(stageId === "login" ? "login" : "install")
               }
+              onLogin={() => runAction("login")}
+              authActionable={authActionable}
+              loginPending={loginPending}
               error={activeAction?.error ?? null}
               t={t}
             />
@@ -474,6 +477,9 @@ function WizardBody({
   copied,
   onCopyManualCommand,
   onRetryStage,
+  onLogin,
+  authActionable,
+  loginPending,
   error,
   t
 }: {
@@ -489,6 +495,9 @@ function WizardBody({
   copied: boolean;
   onCopyManualCommand: (command: string) => void;
   onRetryStage: (stageId: AgentSetupStageId) => void;
+  onLogin: () => void;
+  authActionable: boolean;
+  loginPending: boolean;
   error: { code: string | null; message: string | null } | null;
   t: ReturnType<typeof useTranslation>["t"];
 }): JSX.Element {
@@ -550,6 +559,21 @@ function WizardBody({
                   </Button>
                 ) : null}
               </span>
+              {stage.id === "login" &&
+              authActionable &&
+              stage.status !== "ok" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={loginPending}
+                  onClick={onLogin}
+                >
+                  {loginPending ? (
+                    <LoadingIcon className="size-4 animate-spin" />
+                  ) : null}
+                  {t("workspace.agentEnv.actionLogin")}
+                </Button>
+              ) : null}
             </li>
           );
         })}
