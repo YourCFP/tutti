@@ -13,6 +13,7 @@ export {
 } from "./services/workspaceAgentGuiLaunchCoordinator";
 export { DesktopAgentGUIWorkbenchBody } from "./ui/DesktopAgentGUIWorkbenchBody";
 export { DesktopAgentGUIWorkbenchHeader } from "./ui/DesktopAgentGUIWorkbenchHeader";
+export { DesktopAgentProviderManageDialog } from "./ui/DesktopAgentProviderManageDialog";
 export {
   createDesktopAgentGUINodeStateSource,
   desktopAgentGUIOpenSessionActivationType,

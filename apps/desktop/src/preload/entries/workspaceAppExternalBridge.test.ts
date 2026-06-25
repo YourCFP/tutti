@@ -183,12 +183,15 @@ test("workspace app external bridge invokes workspace feature open", async () =>
     }
   });
 
-  await bridge.workspace.openFeature({ feature: "message-center" });
+  await bridge.workspace.openFeature({
+    feature: "agent-manage",
+    provider: "codex"
+  });
 
   assert.deepEqual(calls, [
     {
       channel: workspaceAppExternalChannels.workspaceFeatureOpen,
-      payload: { feature: "message-center" }
+      payload: { feature: "agent-manage", provider: "codex" }
     }
   ]);
 });

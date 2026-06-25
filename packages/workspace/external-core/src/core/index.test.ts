@@ -305,11 +305,11 @@ test("rejects invalid PDF print HTML input", () => {
 test("normalizes workspace feature open input", () => {
   assert.deepEqual(
     normalizeTuttiExternalWorkspaceOpenFeatureInput({
-      feature: "message-center",
+      feature: "agent-manage",
       provider: " codex "
     }),
     {
-      feature: "message-center",
+      feature: "agent-manage",
       provider: "codex"
     }
   );

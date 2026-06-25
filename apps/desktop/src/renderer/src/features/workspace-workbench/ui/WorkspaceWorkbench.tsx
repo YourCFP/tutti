@@ -1,6 +1,9 @@
 import type * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { WorkspaceSummary } from "@tutti-os/client-tuttid-ts";
+import type {
+  WorkspaceAgentProvider,
+  WorkspaceSummary
+} from "@tutti-os/client-tuttid-ts";
 import {
   defaultIssueManagerWorkbenchTypeId,
   issueManagerOpenActivationType,
@@ -29,11 +32,15 @@ import {
 } from "@renderer/features/workspace-app-center";
 import { useWorkspaceCatalogService } from "@renderer/features/workspace-catalog";
 import {
+  DesktopAgentProviderManageDialog,
   IAgentProviderStatusService,
   registerWorkspaceAgentGuiLaunchHandler,
   requestWorkspaceAgentGuiLaunch
 } from "@renderer/features/workspace-agent";
-import { normalizeDesktopAgentGUIProvider } from "@renderer/features/workspace-agent/desktopAgentGUINodeState";
+import {
+  isDesktopAgentGUIProvider,
+  normalizeDesktopAgentGUIProvider
+} from "@renderer/features/workspace-agent/desktopAgentGUINodeState";
 import { useService } from "@tutti-os/infra/di";
 import { useTranslation } from "@renderer/i18n";
 import { cn } from "@renderer/lib/format";
@@ -181,6 +188,12 @@ function ReadyWorkspaceWorkbench({
   const [launchpadOpen, setLaunchpadOpen] = useState(false);
   const [launchpadOpenTrigger, setLaunchpadOpenTrigger] =
     useState<WorkspaceLaunchpadOpenTrigger>("dock");
+  const [agentProviderManageDialogOpen, setAgentProviderManageDialogOpen] =
+    useState(false);
+  const [
+    agentProviderManageFocusedProvider,
+    setAgentProviderManageFocusedProvider
+  ] = useState<WorkspaceAgentProvider | null>(null);
   const layoutConstraints = useMemo(
     () => resolveWorkspaceWorkbenchLayoutConstraints(runtime.dockPlacement),
     [runtime.dockPlacement]
@@ -425,6 +438,8 @@ function ReadyWorkspaceWorkbench({
 
   useEffect(() => {
     setLaunchpadOpen(false);
+    setAgentProviderManageDialogOpen(false);
+    setAgentProviderManageFocusedProvider(null);
   }, [state.workspace.id]);
 
   useEffect(() => {
@@ -448,6 +463,13 @@ function ReadyWorkspaceWorkbench({
       }
       if (request.feature === "message-center") {
         requestWorkspaceMessageCenterOpen(workspaceId);
+        return;
+      }
+      if (request.feature === "agent-manage") {
+        setAgentProviderManageFocusedProvider(
+          isDesktopAgentGUIProvider(request.provider) ? request.provider : null
+        );
+        setAgentProviderManageDialogOpen(true);
         return;
       }
       if (request.feature === "agent-chat") {
@@ -657,6 +679,14 @@ function ReadyWorkspaceWorkbench({
         api={workspaceAppExternalApi}
         openFile={openWorkspaceAppExternalFile}
         workspaceId={state.workspace.id}
+      />
+      <DesktopAgentProviderManageDialog
+        agentProviderStatusService={agentProviderStatusService}
+        focusedProvider={agentProviderManageFocusedProvider}
+        open={agentProviderManageDialogOpen}
+        workbenchHost={workbenchHost}
+        workspaceId={state.workspace.id}
+        onOpenChange={setAgentProviderManageDialogOpen}
       />
       <WorkspaceLaunchpadOverlay
         dockIconStyle={runtime.dockIconStyle}

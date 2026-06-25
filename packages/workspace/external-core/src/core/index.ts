@@ -38,7 +38,8 @@ export const tuttiExternalWorkspaceFeatures = [
   "issue-manager",
   "message-center",
   "agent-connect",
-  "agent-chat"
+  "agent-chat",
+  "agent-manage"
 ] as const satisfies readonly TuttiExternalWorkspaceFeature[];
 
 export function limitDiagnosticText(

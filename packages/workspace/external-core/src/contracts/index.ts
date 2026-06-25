@@ -154,7 +154,8 @@ export type TuttiExternalWorkspaceFeature =
   | "issue-manager"
   | "message-center"
   | "agent-connect"
-  | "agent-chat";
+  | "agent-chat"
+  | "agent-manage";
 
 export const tuttiExternalWorkspaceAgentProviders = [
   "claude-code",
