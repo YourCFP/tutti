@@ -424,10 +424,12 @@ func (s Service) statusForSpec(ctx context.Context, spec ProviderSpec, now time.
 		}
 	}
 	auth := s.resolveAuth(ctx, spec, installed, runtimeResolution.CLIPath)
-	codexVersion := ""
+	cliVersion := ""
+	if installed {
+		cliVersion = s.cliVersion(ctx, runtimeResolution.CLIPath)
+	}
 	codexPlatformOK := true
 	if spec.Provider == agentprovider.Codex && installed {
-		codexVersion = s.codexCLIVersion(ctx, runtimeResolution.CLIPath)
 		codexPlatformOK = s.codexPlatformBinaryOK(runtimeResolution.CLIPath)
 	}
 	availability := Availability{
@@ -456,7 +458,7 @@ func (s Service) statusForSpec(ctx context.Context, spec ProviderSpec, now time.
 		availability.Status = AvailabilityNotInstalled
 		availability.ReasonCode = codexReasonCodeFromErrorCode(string(CodexErrPlatformPkgIncomplete))
 		actions = append(actions, daemonAction(ActionInstall))
-	} else if spec.Provider == agentprovider.Codex && !codexVersionMeetsMinimum(codexVersion) {
+	} else if spec.Provider == agentprovider.Codex && !codexVersionMeetsMinimum(cliVersion) {
 		availability.Status = AvailabilityNotInstalled
 		availability.ReasonCode = codexReasonCodeFromErrorCode(string(CodexErrVersionTooOld))
 		actions = append(actions, daemonAction(ActionInstall))
@@ -480,7 +482,7 @@ func (s Service) statusForSpec(ctx context.Context, spec ProviderSpec, now time.
 		CLI: CLIStatus{
 			Installed:  installed,
 			BinaryPath: runtimeResolution.CLIPath,
-			Version:    codexVersion,
+			Version:    cliVersion,
 		},
 		Adapter: AdapterStatus{
 			Installed:  adapterReady,

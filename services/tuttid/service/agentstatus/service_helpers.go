@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -262,7 +263,23 @@ func (s Service) runAuthStatusCommand(ctx context.Context, spec ProviderSpec, bi
 	return runAuthStatusCommand(ctx, spec, binaryPath)
 }
 
-func (s Service) codexCLIVersion(ctx context.Context, binaryPath string) string {
+// cliVersionTokenPattern matches the first semver-ish token in `--version`
+// output. This is provider-agnostic on purpose: codex prints "codex-cli
+// 0.142.1" while claude prints "2.1.191 (Claude Code)" — taking the last
+// whitespace field works for the former but yields "Code)" for the latter, so
+// we extract the version token instead.
+var cliVersionTokenPattern = regexp.MustCompile(`[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:[-+][0-9A-Za-z.-]+)?`)
+
+// parseCLIVersion extracts the version token from `<cli> --version` output.
+func parseCLIVersion(output string) string {
+	return cliVersionTokenPattern.FindString(strings.TrimSpace(output))
+}
+
+// cliVersion runs `<binary> --version` and returns the parsed version token, or
+// "" when the binary is absent, errors, or prints nothing version-like. Used for
+// every supported provider (not just codex) so the config panel can show the
+// installed CLI version.
+func (s Service) cliVersion(ctx context.Context, binaryPath string) string {
 	binaryPath = strings.TrimSpace(binaryPath)
 	if binaryPath == "" {
 		return ""
@@ -276,11 +293,7 @@ func (s Service) codexCLIVersion(ctx context.Context, binaryPath string) string 
 	if err != nil {
 		return ""
 	}
-	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) == 0 {
-		return ""
-	}
-	return fields[len(fields)-1]
+	return parseCLIVersion(string(output))
 }
 
 func (s Service) codexPlatformBinaryOK(binaryPath string) bool {
