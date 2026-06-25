@@ -59,3 +59,11 @@ func (s Service) codexPlatformBinaryComplete(codexPkgDir, goos, goarch string) (
 	}
 	return path, s.executableFile(path)
 }
+
+func codexPackageDirForBinary(binaryPath string) string {
+	packageJSONPath := findAdapterPackageJSON(binaryPath, "@openai/codex")
+	if packageJSONPath == "" {
+		return ""
+	}
+	return filepath.Dir(packageJSONPath)
+}
