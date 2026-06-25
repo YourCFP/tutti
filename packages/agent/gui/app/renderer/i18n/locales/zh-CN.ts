@@ -328,6 +328,7 @@ export const zhCN = {
       followupPlaceholder: "要求 {{provider}} 继续后续变更",
       installRequiredPlaceholder:
         "请先从 Dock 安装 {{provider}}，然后再发送消息",
+      installRequiredAction: "设置",
       collaboratorSessionReadOnlyPlaceholder: "非当前用户会话，不可直接对话",
       send: "发送",
       modelLabel: "模型",

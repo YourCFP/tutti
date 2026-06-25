@@ -355,6 +355,7 @@ export const en = {
       followupPlaceholder: "Request follow-up changes from {{provider}}",
       installRequiredPlaceholder:
         "Install {{provider}} from the dock to send messages",
+      installRequiredAction: "Set up",
       collaboratorSessionReadOnlyPlaceholder:
         "This session belongs to another user and cannot be replied to directly",
       send: "Send",

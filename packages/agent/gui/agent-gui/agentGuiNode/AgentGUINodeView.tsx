@@ -207,6 +207,7 @@ export interface AgentGUIViewLabels {
   initialPlaceholder: string;
   followupPlaceholder: string;
   installRequiredPlaceholder: string;
+  installRequiredAction: string;
   collaboratorSessionReadOnlyPlaceholder: string;
   send: string;
   modelLabel: string;
@@ -2452,6 +2453,19 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
           <span className={styles.providerSetupNoticeText}>
             {labels.installRequiredPlaceholder}
           </span>
+          <button
+            type="button"
+            className={styles.providerSetupNoticeAction}
+            data-testid="agent-gui-provider-setup-notice-action"
+            onClick={() =>
+              openAgentEnvPanel({
+                provider: viewModel.data.provider,
+                focus: "detect"
+              })
+            }
+          >
+            {labels.installRequiredAction}
+          </button>
         </div>
       ) : null}
       <ScrollArea

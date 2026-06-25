@@ -1341,6 +1341,9 @@ describe("AgentGUINodeView provider setup notice", () => {
     const notice = screen.getByTestId("agent-gui-provider-setup-notice");
     expect(notice).toHaveTextContent("installRequiredPlaceholder");
     expect(notice).toHaveAttribute("role", "status");
+    expect(
+      screen.getByTestId("agent-gui-provider-setup-notice-action")
+    ).toHaveTextContent("installRequiredAction");
   });
 
   it("keeps breathing room above the setup notice", () => {
@@ -1701,6 +1704,7 @@ function createLabels(): AgentGUIViewLabels {
     initialPlaceholder: "initialPlaceholder",
     followupPlaceholder: "followupPlaceholder",
     installRequiredPlaceholder: "installRequiredPlaceholder",
+    installRequiredAction: "installRequiredAction",
     collaboratorSessionReadOnlyPlaceholder:
       "collaboratorSessionReadOnlyPlaceholder",
     send: "send",

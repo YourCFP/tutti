@@ -729,6 +729,7 @@ export const AgentGUINode = memo(function AgentGUINode({
           provider: displayProviderLabel
         }
       ),
+      installRequiredAction: t("agentHost.agentGui.installRequiredAction"),
       collaboratorSessionReadOnlyPlaceholder: t(
         "agentHost.agentGui.collaboratorSessionReadOnlyPlaceholder"
       ),
