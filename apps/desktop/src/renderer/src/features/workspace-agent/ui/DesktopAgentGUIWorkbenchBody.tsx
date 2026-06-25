@@ -74,7 +74,6 @@ import {
   withDesktopAgentGUIProviderComposerDefaults
 } from "./desktopAgentGUIWorkbenchStateHelpers.ts";
 import { useDesktopManagedAgentsState } from "./useDesktopManagedAgentsState.ts";
-import { AgentEnvPanel } from "./AgentEnvPanel.tsx";
 
 export const DESKTOP_AGENT_GUI_CONVERSATION_RAIL_TOGGLE_EVENT =
   AGENT_GUI_WORKBENCH_CONVERSATION_RAIL_TOGGLE_EVENT;
@@ -986,13 +985,6 @@ function DesktopAgentGUIWorkbenchBodyImpl({
         workspaceId={workspaceId}
         workspacePath="/"
       />
-      {!previewMode && agentProviderStatusService && context.isFocused ? (
-        <AgentEnvPanel
-          agentProviderStatusService={agentProviderStatusService}
-          workspaceId={workspaceId}
-          workbenchHost={context.host}
-        />
-      ) : null}
     </>
   );
 }
