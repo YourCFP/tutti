@@ -6,6 +6,7 @@ import type {
 } from "../../shared/contracts/ipc";
 import type { TuttiExternalWorkspaceOpenRouteIntent } from "@tutti-os/workspace-external-core/contracts";
 import { createWorkspaceAppExternalBridge } from "./workspaceAppExternalBridge.ts";
+import { installWorkspaceAppInteractionForwarding } from "./workspaceAppInteractionForwarding.ts";
 import { installWorkspaceAppLinkInterception } from "./workspaceAppLinks.ts";
 import { createWorkspaceAppUserProjectSnapshotBridge } from "./workspaceAppUserProjectSnapshots.ts";
 
@@ -29,6 +30,12 @@ installWorkspaceAppLinkInterception({
   scope: globalThis.window,
   send(channel, payload) {
     ipcRenderer.send(channel, payload);
+  }
+});
+installWorkspaceAppInteractionForwarding({
+  scope: globalThis.window,
+  sendToHost(channel, payload) {
+    ipcRenderer.sendToHost(channel, payload);
   }
 });
 

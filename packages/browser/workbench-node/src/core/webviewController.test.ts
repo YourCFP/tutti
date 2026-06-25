@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createBrowserNodeFeature } from "./feature.ts";
+import { browserNodeGuestInteractionHostChannel } from "./guestInteraction.ts";
 import { acquireBrowserNodeWebviewController } from "./webviewController.ts";
 import type { BrowserNodeHostApi } from "./types.ts";
 import type { BrowserNodeWebviewTag } from "../react/webviewTag.ts";
@@ -337,6 +338,40 @@ test("Browser Node webview controller passes the current URL when registering gu
   controller.release();
 });
 
+test("Browser Node webview controller focuses from guest interaction messages only", () => {
+  let guestInteractionCount = 0;
+  const feature = createBrowserNodeFeature({
+    hostApi: createBrowserNodeHostApi()
+  });
+
+  const controller = acquireBrowserNodeWebviewController({
+    feature,
+    initialUrl: "https://example.com/",
+    lifecycle: "active",
+    nodeId: "browser-guest-interaction",
+    onGuestInteraction() {
+      guestInteractionCount += 1;
+    },
+    profileId: null,
+    sessionMode: "shared"
+  });
+
+  const webview = new MockBrowserNodeWebviewTag(32);
+  controller.retain();
+  controller.setWebview(webview as unknown as BrowserNodeWebviewTag);
+
+  webview.emitIpcMessage("browser:unrelated");
+  assert.equal(guestInteractionCount, 0);
+
+  webview.emitIpcMessage(browserNodeGuestInteractionHostChannel);
+  assert.equal(guestInteractionCount, 1);
+
+  webview.emit("focus");
+  assert.equal(guestInteractionCount, 2);
+
+  controller.release();
+});
+
 test("Browser Node webview controller opens a devtools context menu before opening devtools", async () => {
   const openDevToolsCalls: string[] = [];
   const feature = createBrowserNodeFeature({
@@ -506,6 +541,14 @@ class MockBrowserNodeWebviewTag extends EventTarget {
     const event = new Event("context-menu", { cancelable: true });
     Object.defineProperties(event, {
       params: { value: point }
+    });
+    this.dispatchEvent(event);
+  }
+
+  emitIpcMessage(channel: string): void {
+    const event = new Event("ipc-message");
+    Object.defineProperties(event, {
+      channel: { value: channel }
     });
     this.dispatchEvent(event);
   }

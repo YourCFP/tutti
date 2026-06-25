@@ -1,4 +1,5 @@
 import type { BrowserNodeFeature } from "./feature.ts";
+import { browserNodeGuestInteractionHostChannel } from "./guestInteraction.ts";
 import { resolveBrowserSessionPartition } from "./session.ts";
 import type {
   BrowserNodeLifecycle,
@@ -59,6 +60,10 @@ interface BrowserNodeWebviewControllerEntry {
   registeringGuestId: number | null;
   state: BrowserNodeWebviewControllerState;
   webview: BrowserNodeWebviewTag | null;
+}
+
+interface BrowserNodeGuestInteractionEvent extends Event {
+  channel?: unknown;
 }
 
 const webviewControllerRegistry = new Map<
@@ -424,6 +429,15 @@ function attachBrowserNodeWebview(
   const handleGuestInteraction: EventListener = () => {
     entry.context.onGuestInteraction?.();
   };
+  const handleGuestInteractionIpcMessage: EventListener = (event) => {
+    if (
+      (event as BrowserNodeGuestInteractionEvent).channel !==
+      browserNodeGuestInteractionHostChannel
+    ) {
+      return;
+    }
+    handleGuestInteraction(event);
+  };
   const handleDevToolsContextMenu: EventListener = (event) => {
     const hasNativeContextMenu =
       entry.context.feature.hostApi.showDevToolsContextMenu !== undefined;
@@ -464,7 +478,7 @@ function attachBrowserNodeWebview(
     { event: "context-menu", listener: handleDevToolsContextMenu },
     { event: "contextmenu", listener: handleDevToolsContextMenu },
     { event: "focus", listener: handleGuestInteraction },
-    { event: "ipc-message", listener: handleGuestInteraction }
+    { event: "ipc-message", listener: handleGuestInteractionIpcMessage }
   ];
   for (const record of records) {
     webview.addEventListener(record.event, record.listener);
