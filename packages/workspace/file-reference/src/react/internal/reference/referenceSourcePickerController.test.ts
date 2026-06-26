@@ -159,6 +159,52 @@ test("toggleNode 展开 folder 并懒加载子节点", async () => {
   );
 });
 
+test("refreshChildren reloads an already loaded app group", async () => {
+  let appGroupFiles = [file("app-artifact", "old.png")];
+  let appGroupLoadCount = 0;
+  const appGroup = folder("app-artifact", "app:vibe-design", "Vibe Design");
+  const controller = createReferenceSourcePickerController({
+    aggregator: {
+      ...fakeAggregator({
+        tabs: [tabsTwo[1]!],
+        children: {}
+      }),
+      async listChildren(_scope, ref: NodeRef): Promise<ListChildrenResult> {
+        if (ref.nodeId === SOURCE_ROOT_NODE_ID) {
+          return { entries: [appGroup], nextCursor: null };
+        }
+        if (ref.nodeId === appGroup.ref.nodeId) {
+          appGroupLoadCount += 1;
+          return { entries: appGroupFiles, nextCursor: null };
+        }
+        return { entries: [], nextCursor: null };
+      }
+    },
+    scope,
+    searchDebounceMs: 0
+  });
+
+  controller.open();
+  await flush();
+  controller.ensureChildren(appGroup);
+  await flush();
+  assert.equal(appGroupLoadCount, 1);
+
+  appGroupFiles = [file("app-artifact", "new.png")];
+  controller.refreshChildren(appGroup);
+  await flush();
+
+  const key = nodeRefKey(appGroup.ref);
+  const entries =
+    controller.getSnapshot().bySource["app-artifact"]?.childrenByKey[key]
+      ?.entries ?? [];
+  assert.equal(appGroupLoadCount, 2);
+  assert.deepEqual(
+    entries.map((node) => node.ref.nodeId),
+    ["new.png"]
+  );
+});
+
 test("toggleSingleSelectionAndExpand single-selects and expands folders", async () => {
   const controller = createReferenceSourcePickerController({
     aggregator: fakeAggregator({

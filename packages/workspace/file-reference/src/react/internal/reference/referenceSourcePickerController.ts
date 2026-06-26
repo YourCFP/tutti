@@ -108,6 +108,8 @@ export interface ReferenceSourcePickerController {
   locatePath(target: ReferenceLocateTarget): Promise<ReferenceNode[]>;
   /** 确保某节点(null=当前源根)的子节点已加载(抽屉式导航进入用,不切换展开态)。 */
   ensureChildren(node: ReferenceNode | null): void;
+  /** 重新拉取某节点(null=当前源根)的子节点第一页,用于应用/议题等动态源刷新已加载分组。 */
+  refreshChildren(node: ReferenceNode | null): void;
   /** 确保指定源的根层级已加载(左栏可同时展开多源时,为非 active 源预载分组)。 */
   ensureSourceRoot(sourceId: string): void;
   /** 幂等展开某 folder 并确保其子节点已加载(定位目标默认展开用)。 */
@@ -715,6 +717,13 @@ export function createReferenceSourcePickerController(
       if (!childState?.loaded && !childState?.loading) {
         void loadChildren(sourceId, node, { append: false });
       }
+    },
+    refreshChildren(node) {
+      const sourceId = node ? node.ref.sourceId : snapshot.activeSourceId;
+      if (!sourceId) {
+        return;
+      }
+      void loadChildren(sourceId, node, { append: false });
     },
     ensureSourceRoot(sourceId) {
       if (
