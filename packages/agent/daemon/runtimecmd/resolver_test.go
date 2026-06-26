@@ -99,6 +99,36 @@ func TestResolverPrefersExistingPathOverScannedNVMFallback(t *testing.T) {
 	}
 }
 
+func TestResolverFindsTuttiBinFallback(t *testing.T) {
+	home := t.TempDir()
+	tuttiBinDir := filepath.Join(home, ".tutti", "bin")
+	if err := os.MkdirAll(tuttiBinDir, 0o755); err != nil {
+		t.Fatalf("mkdir tutti bin dir: %v", err)
+	}
+	tuttiPath := filepath.Join(tuttiBinDir, "tutti")
+	writeExecutable(t, tuttiPath)
+
+	resolver := Resolver{
+		Environ: func() []string {
+			return []string{"PATH=/usr/bin:/bin"}
+		},
+		HomeDir: func() (string, error) {
+			return home, nil
+		},
+		LookPath: func(string) (string, error) {
+			return "", os.ErrNotExist
+		},
+	}
+
+	env := resolver.Env(nil)
+	if got := resolver.Resolve("tutti", env); got != tuttiPath {
+		t.Fatalf("Resolve() = %q, want %q", got, tuttiPath)
+	}
+	if got := resolver.ResolveBinary([]string{"tutti"}, nil); got != tuttiPath {
+		t.Fatalf("ResolveBinary() = %q, want %q", got, tuttiPath)
+	}
+}
+
 func TestResolverFindsFnmNodeBin(t *testing.T) {
 	home := t.TempDir()
 	fnmDir := filepath.Join(home, "custom-fnm")

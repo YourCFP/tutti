@@ -14,6 +14,7 @@ import type {
   TuttidClient,
   TuttidEventStreamClient
 } from "@tutti-os/client-tuttid-ts";
+import { normalizeTuttidError } from "@tutti-os/client-tuttid-ts";
 import type { DesktopHostFilesApi, DesktopRuntimeApi } from "@preload/types";
 import {
   agentActivitySessionFromTuttidSession,
@@ -38,6 +39,7 @@ import type {
   WorkspaceAgentActivityEnsureSessionSynchronizedInput,
   WorkspaceAgentActivityRetainSessionInput
 } from "../workspaceAgentActivityService.interface.ts";
+import type { IAgentProviderStatusService } from "../agentProviderStatusService.interface.ts";
 import { planDecisionOps } from "@tutti-os/agent-gui/plan-decision-ops";
 import type { IWorkspaceUserProjectService } from "../../../workspace-user-project/index.ts";
 
@@ -49,6 +51,7 @@ export interface WorkspaceAgentActivityServiceDependencies {
   >;
   tuttidClient: TuttidClient;
   runtimeApi: Pick<DesktopRuntimeApi, "logTerminalDiagnostic">;
+  agentProviderStatusService?: Pick<IAgentProviderStatusService, "refresh">;
   workspaceUserProjectService?: IWorkspaceUserProjectService;
 }
 
@@ -652,7 +655,8 @@ export class WorkspaceAgentActivityService implements IWorkspaceAgentActivitySer
 
     const adapter = createDesktopAgentActivityAdapter({
       tuttidClient: this.dependencies.tuttidClient,
-      runtimeApi: this.dependencies.runtimeApi
+      runtimeApi: this.dependencies.runtimeApi,
+      agentProviderStatusService: this.dependencies.agentProviderStatusService
     });
     const controller = createAgentActivityController({
       adapter,
@@ -924,6 +928,23 @@ export class WorkspaceAgentActivityService implements IWorkspaceAgentActivitySer
       } while (entry.pending);
     })()
       .catch((error: unknown) => {
+        if (isWorkspaceAgentSessionNotFoundError(error)) {
+          this.markSessionDeleted({
+            agentSessionId,
+            data: { reason: "workspace_agent_session_not_found" },
+            workspaceId
+          });
+          void this.dependencies.runtimeApi.logTerminalDiagnostic({
+            details: {
+              agentSessionId,
+              error: stringifyError(error)
+            },
+            event: "agent.activity.reconcile_session_missing",
+            level: "info",
+            workspaceId
+          });
+          return;
+        }
         void this.dependencies.runtimeApi.logTerminalDiagnostic({
           details: { error: stringifyError(error) },
           event: "agent.activity.reconcile_failed",
@@ -1252,6 +1273,14 @@ function shouldPreserveOptimisticWorkingAfterSend(
 
 function sessionKey(workspaceId: string, agentSessionId: string): string {
   return `${normalizeWorkspaceId(workspaceId)}\n${agentSessionId.trim()}`;
+}
+
+function isWorkspaceAgentSessionNotFoundError(error: unknown): boolean {
+  const normalized = normalizeTuttidError(error);
+  return (
+    normalized?.code === "workspace_not_found" &&
+    normalized.reason === "workspace_agent_session_not_found"
+  );
 }
 
 function deletedAtUnixMsFromData(data: unknown): number | null {

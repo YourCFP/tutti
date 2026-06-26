@@ -142,6 +142,7 @@ func (r Resolver) fallbackExecutableDirs(env []string) []string {
 	home, err := r.homeDir()
 	if err == nil && strings.TrimSpace(home) != "" {
 		homeDirs = []string{
+			filepath.Join(home, ".tutti", "bin"),
 			filepath.Join(home, ".local", "bin"),
 			filepath.Join(home, "bin"),
 			filepath.Join(home, ".npm-global", "bin"),

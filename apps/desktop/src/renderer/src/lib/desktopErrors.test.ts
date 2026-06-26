@@ -73,6 +73,22 @@ test("resolveDesktopErrorMessage falls back to grouped default translations", ()
   assert.equal(message, "That request could not be completed.");
 });
 
+test("resolveDesktopErrorMessage localizes workspace operation reason details", () => {
+  const message = resolveDesktopErrorMessage(
+    {
+      code: "workspace_operation_failed",
+      reason: "acp_adapter_version_mismatch",
+      developerMessage: "claude-code: ACP adapter not found"
+    },
+    "zh-CN"
+  );
+
+  assert.equal(
+    message,
+    "Claude Code 本地适配器不可用或版本不匹配。请先在 Dock 中重新连接 Claude Code，然后重试。"
+  );
+});
+
 test("resolveDesktopErrorMessage localizes file-manager invalid path reasons", () => {
   const message = resolveDesktopErrorMessage(
     {

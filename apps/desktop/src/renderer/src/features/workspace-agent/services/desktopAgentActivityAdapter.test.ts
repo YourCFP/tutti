@@ -6,6 +6,7 @@ import type {
   WorkspaceAgentSession,
   WorkspaceAgentSessionMessage
 } from "@tutti-os/client-tuttid-ts";
+import { TuttidProtocolError } from "@tutti-os/client-tuttid-ts";
 import { createDesktopAgentActivityAdapter } from "./desktopAgentActivityAdapter.ts";
 
 const workspaceId = "workspace-1";
@@ -228,6 +229,39 @@ test("desktop agent activity adapter forwards submit diagnostic metadata", async
       workspaceId
     }
   ]);
+});
+
+test("desktop agent activity adapter refreshes provider status and localizes adapter mismatch create failures", async () => {
+  const refreshCalls: unknown[] = [];
+  const adapter = createDesktopAgentActivityAdapter({
+    agentProviderStatusService: {
+      async refresh(providers) {
+        refreshCalls.push(providers);
+      }
+    },
+    tuttidClient: createTuttidClient({
+      async createWorkspaceAgentSession() {
+        throw new TuttidProtocolError({
+          code: "workspace_operation_failed",
+          developerMessage: "claude-code: ACP adapter not found",
+          reason: "acp_adapter_version_mismatch",
+          statusCode: 502
+        });
+      }
+    }),
+    runtimeApi: createRuntimeApi()
+  });
+
+  await assert.rejects(
+    adapter.createSession({
+      agentSessionId: "agent-session-1",
+      provider: "claude-code",
+      workspaceId
+    }),
+    /Claude Code's local adapter is unavailable or version-mismatched/
+  );
+
+  assert.deepEqual(refreshCalls, [["claude-code"]]);
 });
 
 test("desktop agent activity adapter requires an injected session event subscription", async () => {

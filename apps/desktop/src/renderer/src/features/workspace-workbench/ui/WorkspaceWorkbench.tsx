@@ -570,6 +570,27 @@ function ReadyWorkspaceWorkbench({
   }, [agentProviderStatusService, runtime.workbenchHostService]);
 
   useEffect(() => {
+    let lastRefreshAt = 0;
+    const refreshClaudeCodeStatus = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      const now = Date.now();
+      if (now - lastRefreshAt < 10_000) {
+        return;
+      }
+      lastRefreshAt = now;
+      void agentProviderStatusService.refresh(["claude-code"]);
+    };
+    window.addEventListener("focus", refreshClaudeCodeStatus);
+    document.addEventListener("visibilitychange", refreshClaudeCodeStatus);
+    return () => {
+      window.removeEventListener("focus", refreshClaudeCodeStatus);
+      document.removeEventListener("visibilitychange", refreshClaudeCodeStatus);
+    };
+  }, [agentProviderStatusService]);
+
+  useEffect(() => {
     const missionControlShortcutsEnabled =
       runtime.shortcutsEnabled || runtime.missionControl.isOpen;
     if (!missionControlShortcutsEnabled || !runtime.missionControl.canOpen) {

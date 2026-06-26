@@ -37,22 +37,6 @@ export function registerWorkspaceAgentServices(
   registry: ServiceRegistry,
   input: WorkspaceAgentServiceRegistrationInput
 ): WorkspaceAgentServiceRegistrationResult {
-  const workspaceAgentActivityService = new WorkspaceAgentActivityService(
-    input
-  );
-  registry.registerInstance(
-    IWorkspaceAgentActivityService,
-    workspaceAgentActivityService
-  );
-  registry.registerInstance(
-    IWorkspaceAgentPromptSessionService,
-    new WorkspaceAgentPromptSessionService({
-      reporterService: input.reporterService,
-      workspaceAgentActivityService,
-      workspaceUserProjectService: input.workspaceUserProjectService
-    })
-  );
-
   const agentProviderStatusService = new DesktopAgentProviderStatusService(
     {
       tuttidClient: input.tuttidClient,
@@ -64,6 +48,22 @@ export function registerWorkspaceAgentServices(
   registry.registerInstance(
     IAgentProviderStatusService,
     agentProviderStatusService
+  );
+  const workspaceAgentActivityService = new WorkspaceAgentActivityService({
+    ...input,
+    agentProviderStatusService
+  });
+  registry.registerInstance(
+    IWorkspaceAgentActivityService,
+    workspaceAgentActivityService
+  );
+  registry.registerInstance(
+    IWorkspaceAgentPromptSessionService,
+    new WorkspaceAgentPromptSessionService({
+      reporterService: input.reporterService,
+      workspaceAgentActivityService,
+      workspaceUserProjectService: input.workspaceUserProjectService
+    })
   );
   return { agentProviderStatusService };
 }

@@ -662,6 +662,10 @@ export const zhCN = {
       "发布应用前检查失败，请先修复 App Center 里的生成草稿。",
     workspace_file_not_found: "找不到这个工作区里的文件或文件夹。",
     workspace_not_found: "找不到这个工作区。",
-    workspace_operation_failed: "暂时无法完成这个工作区操作。"
+    workspace_operation_failed: {
+      default: "暂时无法完成这个工作区操作。",
+      acp_adapter_version_mismatch:
+        "Claude Code 本地适配器不可用或版本不匹配。请先在 Dock 中重新连接 Claude Code，然后重试。"
+    }
   }
 } as const satisfies TranslationDictionary;
