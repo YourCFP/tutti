@@ -205,6 +205,9 @@ type Service struct {
 	Registry                    Registry
 	ExternalAgentRegistry       externalagentregistry.Store
 	ManagedRuntime              managedruntime.Resolver
+	// RunOutcomes lets a runtime auth failure override a stale "logged in" marker
+	// so the dock/wizard surface that login dropped. Shared pointer across copies.
+	RunOutcomes *RunOutcomeStore
 }
 
 const authStatusCommandTimeout = 5 * time.Second

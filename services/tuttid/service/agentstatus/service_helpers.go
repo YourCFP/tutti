@@ -200,6 +200,12 @@ func (s Service) resolveAuth(ctx context.Context, spec ProviderSpec, installed b
 	if spec.Provider == agentprovider.ClaudeCode && strings.TrimSpace(os.Getenv("TUTTI_MOCK_AGENT_UNBOUND")) == "1" {
 		return AuthInfo{Status: AuthRequired}
 	}
+	// A runtime authentication failure (e.g. a 401 sending a message) invalidates
+	// the stale "logged in" marker/command result until the user re-authenticates
+	// or a request succeeds again.
+	if s.RunOutcomes.AuthInvalidated(spec.Provider) {
+		return AuthInfo{Status: AuthRequired}
+	}
 	if len(spec.AuthStatusCommand) > 0 && strings.TrimSpace(binaryPath) != "" {
 		if auth, ok := s.resolveAuthFromCommand(ctx, spec, binaryPath); ok {
 			return auth

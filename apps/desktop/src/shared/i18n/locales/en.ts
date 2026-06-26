@@ -453,7 +453,7 @@ export const en = {
         },
         browserUseConnectionModeSaveFailed:
           "We couldn't update the browser connection setting right now.",
-        agentDiagnosticsReportingLabel: "Agent diagnostics reporting",
+        agentDiagnosticsReportingLabel: "Targeted reporting",
         agentDiagnosticsReportingDescription:
           "When an environment problem is detected, send fuller diagnostics (CLI paths, endpoints, proxy address, error details) to help us debug. The account email is never sent.",
         languageDescription:

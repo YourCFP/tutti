@@ -432,7 +432,7 @@ export const zhCN = {
             "由 Tutti 单独启动一个浏览器供 Agent 使用，不影响你日常使用的 Chrome。更改会在下一次浏览器会话启动时生效。"
         },
         browserUseConnectionModeSaveFailed: "暂时无法更新浏览器连接设置。",
-        agentDiagnosticsReportingLabel: "Agent 诊断上报",
+        agentDiagnosticsReportingLabel: "针对上报",
         agentDiagnosticsReportingDescription:
           "检测到环境异常时，上报更完整的诊断信息（CLI 路径、端点、代理地址、错误详情）以帮助排查。账号邮箱不会上报。",
         languageDescription: "会立刻应用到所有已打开窗口，并在重启后继续生效",
