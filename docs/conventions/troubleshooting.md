@@ -966,3 +966,23 @@ information is not available yet`, but `ps` or `lsof` still shows an older
   [webviewSecurity.ts](../../packages/browser/workbench-node/src/electron-main/webviewSecurity.ts)
   [workspaceApp.ts](../../apps/desktop/src/preload/entries/workspaceApp.ts)
   [workspaceAppInteractionForwarding.ts](../../apps/desktop/src/preload/entries/workspaceAppInteractionForwarding.ts)
+
+### Agent generated files under system temp do not open
+
+- Symptom:
+  Agent GUI shows a generated or changed file under a path such as
+  `/var/folders/.../T/codex-presentations/...`, but clicking the file does not
+  reveal it in FileManager.
+- Quick checks:
+  Confirm the desktop workspace files launch coordinator accepts the path, then
+  confirm `tuttid` resolves the workspace file root for the requested absolute
+  path instead of forcing the user home root.
+- Root cause:
+  Some agent tools write durable-looking outputs to system temporary
+  directories. FileManager can reveal a precise local path, but both the
+  renderer launch filter and daemon workspace root resolution must allow that
+  external absolute path.
+- Fix:
+  Treat explicitly launched local absolute paths like direct hidden-file reveal:
+  do not add them as projects or default locations, but allow FileManager to
+  load the parent directory and apply normal local-file operations.
