@@ -76,6 +76,22 @@ function queuedPromptTexts(
   );
 }
 
+function conversationBodies(viewModel: {
+  conversationDetail?: {
+    turns: readonly {
+      agentMessages: readonly { body?: string }[];
+      userMessages: readonly { body?: string }[];
+    }[];
+  } | null;
+}): string[] {
+  return (
+    viewModel.conversationDetail?.turns.flatMap((turn) => [
+      ...turn.userMessages.map((message) => message.body ?? ""),
+      ...turn.agentMessages.map((message) => message.body ?? "")
+    ]) ?? []
+  ).filter(Boolean);
+}
+
 function promptContent(text: string): { content: AgentPromptContentBlock[] } {
   return { content: promptBlocks(text) };
 }
@@ -2053,6 +2069,101 @@ describe("useAgentGUINodeController", () => {
           ])
           .filter(Boolean)
       ).toEqual(["latest ask", "latest answer", "streamed while loading"]);
+    });
+  });
+
+  it("does not let durable history stream expand the selected detail window", async () => {
+    let activityListener:
+      | ((event: AgentHostAgentActivityStreamEvent) => void)
+      | undefined;
+    const allTimelineItems = Array.from({ length: 260 }, (_, index) => {
+      const id = index + 1;
+      return timelineMessage({
+        agentSessionId: "session-2",
+        id,
+        eventId: `message-${id}`,
+        role: id % 2 === 0 ? "assistant" : "user",
+        content: `message ${id}`,
+        turnId: `turn-${Math.ceil(id / 2)}`
+      });
+    });
+    const listSessionTimeline = vi.fn(
+      async ({
+        agentSessionId,
+        beforeVersion,
+        order
+      }: {
+        agentSessionId: string;
+        beforeVersion?: number;
+        order?: string;
+      }) => {
+        if (agentSessionId !== "session-2") {
+          return { timelineItems: [], hasMore: false };
+        }
+        if (order === "desc" && beforeVersion === undefined) {
+          return {
+            timelineItems: allTimelineItems.slice(160).reverse(),
+            latestVersion: 260,
+            hasMore: true
+          };
+        }
+        return { timelineItems: [], latestVersion: 260, hasMore: false };
+      }
+    );
+    installAgentHostApi({
+      list: vi.fn(async () => ({
+        presences: [],
+        sessions: [workspaceAgentSession("session-2")],
+        sessionMessagesById: {
+          "session-2": allTimelineItems.map(timelineItemToMessage)
+        }
+      })),
+      listSessionTimeline,
+      subscribeEvents: vi.fn((_payload, listener) => {
+        activityListener = listener;
+        return vi.fn();
+      })
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData("session-2"),
+        onDataChange: vi.fn()
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversationId).toBe("session-2");
+      expect(conversationBodies(result.current.viewModel)).toContain(
+        "message 260"
+      );
+    });
+
+    act(() => {
+      for (let id = 1; id <= 160; id += 1) {
+        activityListener?.(
+          streamMessage({
+            agentSessionId: "session-2",
+            id,
+            eventId: `message-${id}`,
+            role: id % 2 === 0 ? "assistant" : "user",
+            content: `message ${id}`,
+            turnId: `turn-${Math.ceil(id / 2)}`
+          })
+        );
+      }
+    });
+
+    await waitFor(() => {
+      const bodies = conversationBodies(result.current.viewModel);
+      expect(bodies).toContain("message 161");
+      expect(bodies).toContain("message 260");
+      expect(bodies).not.toContain("message 1");
+      expect(bodies).not.toContain("message 160");
     });
   });
 

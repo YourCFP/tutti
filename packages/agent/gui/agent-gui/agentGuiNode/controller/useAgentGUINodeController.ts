@@ -92,6 +92,7 @@ import { isWorkspaceAgentUntitledTask } from "../../../shared/workspaceAgentLate
 import { projectWorkspaceAgentMessagesToTimelineItems } from "../../../shared/agentConversation/projection/workspaceAgentMessageProjection";
 import { mergeWorkspaceAgentMessages } from "../../../host/workspaceAgentSessionMessages";
 import {
+  isWorkspaceAgentActivityOptimisticMessage,
   selectWorkspaceAgentActivityOverlayMessages,
   type WorkspaceAgentActivityMessage,
   type WorkspaceAgentActivityStatePatch,
@@ -1032,6 +1033,77 @@ function sessionHasRenderableMessages(input: {
     (sessionView?.detailMessages?.length ?? 0) > 0 ||
     (sessionView?.overlayMessages?.length ?? 0) > 0
   );
+}
+
+function filterMessagesForDetailWindowOverlay(input: {
+  detailMessages: readonly WorkspaceAgentActivityMessage[];
+  durableMessages: readonly WorkspaceAgentActivityMessage[];
+  localMessages: readonly WorkspaceAgentActivityMessage[];
+}): WorkspaceAgentActivityMessage[] {
+  if (input.localMessages.length === 0) {
+    return [];
+  }
+  if (input.detailMessages.length === 0) {
+    if (input.durableMessages.length <= AGENT_GUI_DETAIL_MESSAGES_PAGE_SIZE) {
+      return [...input.localMessages];
+    }
+    const newestDurableVersion = maxFiniteMessageVersion(input.durableMessages);
+    return input.localMessages.filter((message) => {
+      if (isWorkspaceAgentActivityOptimisticMessage(message)) {
+        return true;
+      }
+      return (
+        newestDurableVersion !== null &&
+        Number.isFinite(message.version) &&
+        message.version >= newestDurableVersion
+      );
+    });
+  }
+
+  const oldestDetailVersion = minFiniteMessageVersion(input.detailMessages);
+  const newestDetailVersion = maxFiniteMessageVersion(input.detailMessages);
+  return input.localMessages.filter((message) => {
+    if (isWorkspaceAgentActivityOptimisticMessage(message)) {
+      return true;
+    }
+    if (!Number.isFinite(message.version)) {
+      return true;
+    }
+    if (newestDetailVersion !== null && message.version > newestDetailVersion) {
+      return true;
+    }
+    return (
+      oldestDetailVersion !== null && message.version >= oldestDetailVersion
+    );
+  });
+}
+
+function minFiniteMessageVersion(
+  messages: readonly WorkspaceAgentActivityMessage[]
+): number | null {
+  let result: number | null = null;
+  for (const message of messages) {
+    if (!Number.isFinite(message.version)) {
+      continue;
+    }
+    result =
+      result === null ? message.version : Math.min(result, message.version);
+  }
+  return result;
+}
+
+function maxFiniteMessageVersion(
+  messages: readonly WorkspaceAgentActivityMessage[]
+): number | null {
+  let result: number | null = null;
+  for (const message of messages) {
+    if (!Number.isFinite(message.version)) {
+      continue;
+    }
+    result =
+      result === null ? message.version : Math.max(result, message.version);
+  }
+  return result;
 }
 
 function hasPromptConversationTitle(
@@ -3742,9 +3814,14 @@ export function useAgentGUINodeController({
           ?.detailMessages ?? [];
       const baseMessages =
         detailMessages.length > 0 ? detailMessages : durableMessages;
+      const windowLocalMessages = filterMessagesForDetailWindowOverlay({
+        detailMessages,
+        durableMessages,
+        localMessages
+      });
       const overlayMessages = selectWorkspaceAgentActivityOverlayMessages({
         durableMessages: baseMessages,
-        localMessages
+        localMessages: windowLocalMessages
       });
       const mergedMessages = mergeWorkspaceAgentMessages(
         baseMessages,
@@ -4189,9 +4266,14 @@ export function useAgentGUINodeController({
         const currentOverlayMessages =
           getAgentSessionView(sessionViewRef(normalizedAgentSessionId))
             ?.overlayMessages ?? [];
+        const windowOverlayMessages = filterMessagesForDetailWindowOverlay({
+          detailMessages,
+          durableMessages: page.messages,
+          localMessages: currentOverlayMessages
+        });
         const overlayMessages = selectWorkspaceAgentActivityOverlayMessages({
           durableMessages: detailMessages,
-          localMessages: currentOverlayMessages
+          localMessages: windowOverlayMessages
         });
         setAgentSessionViewDetailMessages(
           sessionViewRef(normalizedAgentSessionId),
@@ -4305,9 +4387,14 @@ export function useAgentGUINodeController({
         const currentOverlayMessages =
           getAgentSessionView(sessionViewRef(normalizedAgentSessionId))
             ?.overlayMessages ?? [];
+        const windowOverlayMessages = filterMessagesForDetailWindowOverlay({
+          detailMessages: nextDetailMessages,
+          durableMessages: page.messages,
+          localMessages: currentOverlayMessages
+        });
         const overlayMessages = selectWorkspaceAgentActivityOverlayMessages({
           durableMessages: nextDetailMessages,
-          localMessages: currentOverlayMessages
+          localMessages: windowOverlayMessages
         });
         mergeAgentSessionViewDetailMessages(
           sessionViewRef(normalizedAgentSessionId),
@@ -4663,28 +4750,41 @@ export function useAgentGUINodeController({
       const currentDetailMessages =
         getAgentSessionView(sessionViewRef(agentSessionId))?.detailMessages ??
         [];
-      const shouldUpdateDetailWindow =
-        currentDetailMessages.length > 0 ||
-        activeConversationIdRef.current === agentSessionId;
-      const nextDetailMessages = shouldUpdateDetailWindow
-        ? mergeWorkspaceAgentMessages(currentDetailMessages, nextMessages)
-        : currentDetailMessages;
-      if (shouldUpdateDetailWindow) {
+      const durableSnapshotMessages =
+        agentActivitySnapshot.sessionMessagesById[agentSessionId] ?? [];
+      const detailWindowMessages = filterMessagesForDetailWindowOverlay({
+        detailMessages: currentDetailMessages,
+        durableMessages: durableSnapshotMessages,
+        localMessages: nextMessages
+      });
+      const nextDetailMessages =
+        detailWindowMessages.length > 0
+          ? mergeWorkspaceAgentMessages(
+              currentDetailMessages,
+              detailWindowMessages
+            )
+          : currentDetailMessages;
+      if (detailWindowMessages.length > 0) {
         mergeAgentSessionViewDetailMessages(
           sessionViewRef(agentSessionId),
-          nextMessages
+          detailWindowMessages
         );
       }
       const durableMessages =
         nextDetailMessages.length > 0
           ? nextDetailMessages
-          : (agentActivitySnapshot.sessionMessagesById[agentSessionId] ?? []);
-      const overlayMessages = selectWorkspaceAgentActivityOverlayMessages({
-        durableMessages,
+          : durableSnapshotMessages;
+      const nextLocalMessages = filterMessagesForDetailWindowOverlay({
+        detailMessages: nextDetailMessages,
+        durableMessages: durableSnapshotMessages,
         localMessages: mergeWorkspaceAgentMessages(
           currentMessages,
           nextMessages
         )
+      });
+      const overlayMessages = selectWorkspaceAgentActivityOverlayMessages({
+        durableMessages,
+        localMessages: nextLocalMessages
       });
       const mergedMessages = mergeWorkspaceAgentMessages(
         durableMessages,
