@@ -45,7 +45,7 @@ App window opening:
 
 - `app open --app-id <app-id> --json` is allowed only when the user explicitly asks to open or show an app window, or confirms an app window should be opened.
 - Do not use `app open` as the default way to inspect, query, update, or execute app work. Prefer the app-specific CLI command for the requested operation.
-- Use `app open --app-id <app-id> --json` for any app window the user explicitly asks to open. Special built-in app ids include `agent-codex`, `agent-claude-code`, and `issue-manager`. Use `agent open --session-id <session-id> --json` when the user asks to open an existing agent session.
+- Use `app open --app-id <app-id> --json` for any app window the user explicitly asks to open. Built-in app ids include `agent-codex`, `agent-claude-code`, `issue-manager`, and `tutti-onboarding`. Use `agent open --session-id <session-id> --json` when the user asks to open an existing agent session.
 
 Output rules:
 

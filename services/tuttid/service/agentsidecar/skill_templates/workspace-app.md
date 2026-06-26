@@ -22,7 +22,7 @@ Do not infer app behavior from the mention label alone.
 
 After reading the mention query, recover the smallest useful app context through Tutti CLI:
 
-1. If the user explicitly asks to open or show the mentioned app window, or confirms the app window should be opened, use `{{CLI_COMMAND}} app open --app-id <appId> --json` for the mentioned app. Special built-in app ids include `agent-codex`, `agent-claude-code`, and `issue-manager`.
+1. If the user explicitly asks to open or show the mentioned app window, or confirms the app window should be opened, use `{{CLI_COMMAND}} app open --app-id <appId> --json` for the mentioned app. Built-in app ids include `agent-codex`, `agent-claude-code`, `issue-manager`, and `tutti-onboarding`.
 2. Do not call `app open` by default. For ordinary app work, prefer the app-specific CLI command that inspects, queries, updates, starts, or executes the requested operation.
 3. If `appId` is `agent-codex` and the user asks to start Codex work, use `{{CLI_COMMAND}} codex start --prompt <task> --show --json`. Add `--model <model>` only when the user explicitly requested a model or command output gives an exact model to reuse.
 4. If `appId` is `agent-claude-code` and the user asks to start Claude Code work, use `{{CLI_COMMAND}} claude start --prompt <task> --show --json`. Add `--model <model>` only when the user explicitly requested a model or command output gives an exact model to reuse.
