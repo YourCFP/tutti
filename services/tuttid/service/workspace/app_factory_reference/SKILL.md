@@ -128,6 +128,16 @@ The runtime must:
 - Use CSS `prefers-color-scheme` / `matchMedia("(prefers-color-scheme: dark)")` for dark/light rendering. Do not pass theme in the launch URL query.
 - When exposing app-owned files through references or generated content, return reference-list `location` objects scoped to `app-data-relative` or `app-package-relative`. Do not emit, persist, or instruct clients to open direct `.tutti` / `.tutti-dev` app state paths such as `$TUTTI_STATE_DIR/apps/...`; the daemon resolves valid locations before desktop clients open files.
 
+## Agent Runtime Integration
+
+For a full agent-enabled app repository, prefer `$tutti-agent-workspace-app` first. When this skill still needs to package or repair an app that already uses `@tutti-os/agent-acp-kit`, keep the app in control of agent policy:
+
+- Do not make `@tutti-os/agent-acp-kit` product-specific. The app should pass selected skills, MCP servers, and `systemPrompt` explicitly through `runtime.run(...)`.
+- To give the app's local Codex or Claude run access to Tutti's dynamic CLI skills, call `$TUTTI_CLI agent tutti-cli-skill-bundle --provider <provider> --agent-session-id <runId> --json` from the app host process when `$TUTTI_CLI` is available.
+- Parse the command output as the Tutti dynamic skill bundle. Pass `bundle.skills` to `runtime.run({ ..., skillManifest: bundle.skills })`.
+- Treat `bundle.recommendedSystemPrompt?.content` as advisory. The app may merge it into its own `systemPrompt`, edit it, or ignore it; do not inject it silently and do not hide this control inside a generic helper.
+- Keep run-scoped app tools and MCP credentials app-owned. Do not pass broad Tutti daemon credentials or app secrets directly to the agent process.
+
 Do not assume a Tutti API token, browser extension, daemon internals, or broad desktop APIs. The only browser-side host surface a generated app may optionally consume is the app context described in `references/runtime-env.md`.
 
 ## Dependency Rules
