@@ -7,6 +7,7 @@ export * from "./confirmation-dialog";
 export * from "./date-picker";
 export * from "./dialog";
 export * from "./drawer";
+export * from "./context-menu/context-menu";
 export * from "./dropdown-menu";
 export * from "./input";
 export * from "./mention-pill";
