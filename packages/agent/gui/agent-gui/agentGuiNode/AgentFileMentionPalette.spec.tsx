@@ -172,9 +172,23 @@ describe("AgentFileMentionPalette", () => {
     expect(screen.getByText("已完成")).toBeVisible();
     expect(screen.getAllByText("失败")).toHaveLength(1);
     expect(screen.getByText("已取消")).toBeVisible();
-    for (const statusTag of document.querySelectorAll(
-      '[data-agent-mention-status-tag="true"]'
-    )) {
+    const statusTags = Array.from(
+      document.querySelectorAll('[data-agent-mention-status-tag="true"]')
+    );
+    expect(statusTags.map((tag) => tag.getAttribute("data-tone"))).toEqual([
+      "neutral",
+      "blue",
+      "blue",
+      "purple",
+      "green",
+      "red",
+      "neutral"
+    ]);
+    expect(statusTags[1]).toHaveClass("text-[var(--status-running)]");
+    expect(statusTags[3]).toHaveClass("text-[var(--rich-text-mention-issue)]");
+    expect(statusTags[4]).toHaveClass("text-[var(--state-success)]");
+    expect(statusTags[5]).toHaveClass("text-[var(--state-danger)]");
+    for (const statusTag of statusTags) {
       expect(statusTag.className).not.toContain("border-[");
     }
     expect(screen.queryByText("空闲")).toBeNull();

@@ -30,6 +30,7 @@
   - Web check: opened `http://127.0.0.1:5173/`; page rendered Agent GUI. Existing local conversation link clicks were blocked by the current virtualized transcript/preview layer, so the browser-node behavior was verified by the targeted link action test.
 - Status: fixed locally
 - Commit: pending; final hash recorded in batch summary.
+- Feishu status update: confirmed `修复中`.
 - Feishu status update: confirmed `已修复待打包`.
 
 ## C9Ywrblb9epPvHctNLicN4Z6nJd - completed session still processing
@@ -94,3 +95,21 @@
 - Status: fixed locally
 - Fix commit: `5a64b5a3`
 - Feishu status update: confirmed `已修复待打包`.
+
+## Hi5wrn9t0eg49tcHz9fcSMrznKh - task status colors in @ panel
+
+- Link: https://ccn53rwonxso.feishu.cn/record/Hi5wrn9t0eg49tcHz9fcSMrznKh
+- Base record id: `recvnESQ7oGQYI`
+- Bug: @ 面板的任务列表里不同任务状态都显示成灰色，任务中心也需要统一颜色和文案。
+- Evidence: Feishu attachment `image.png` shows `未启动`、`执行中`、`待验收` badges all rendered as the same gray badge.
+- Cause: @ 面板和任务中心分别维护任务状态展示映射，且 `ui-rich-text` 的 issue badge 只给 completed/failed 类状态上色，running/pending 状态最终落到灰色。
+- Fix: Add a shared issue-manager status presentation helper for badge variant、mention tone and normalized `data-status`; have @ 面板 consume it, extend rich-text issue badges with running blue and pending purple, and align task-center status copy with @ 面板 (`未启动` / `To run`, `待验收` / `Pending acceptance`, `已完成` / `Completed`).
+- Verification:
+  - `corepack pnpm --filter @tutti-os/workspace-issue-manager test -- --test-name-pattern status`
+  - `corepack pnpm --filter @tutti-os/agent-gui exec vitest run --environment jsdom agent-gui/agentGuiNode/AgentFileMentionPalette.spec.tsx`
+  - `corepack pnpm --filter @tutti-os/ui-rich-text typecheck`
+  - `corepack pnpm --filter @tutti-os/workspace-issue-manager typecheck`
+  - `corepack pnpm --filter @tutti-os/agent-gui typecheck`
+  - Note: `corepack pnpm --filter @tutti-os/agent-gui test -- AgentFileMentionPalette.spec.tsx` ran the full package and hit an unrelated timeout in `agent-message-center/WorkspaceAgentMessageCenterPanel.spec.tsx`.
+- Status: fixed locally
+- Commit: pending; final hash recorded in batch summary.

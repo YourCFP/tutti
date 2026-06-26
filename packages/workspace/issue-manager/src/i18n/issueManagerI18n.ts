@@ -143,7 +143,7 @@ const issueManagerEn = {
     noOutputs: "No outputs yet",
     noRecentRuns: "No runs yet",
     taskContentEmpty: "No task description yet",
-    taskAcceptanceHint: "Accept to complete; reject to return to Todo.",
+    taskAcceptanceHint: "Accept to complete; reject to return to To run.",
     noTaskReferences: "No task references yet",
     noTasksForIssueBody:
       "Create the first subtask for this task and let an agent or yourself execute it",
@@ -243,11 +243,11 @@ const issueManagerEn = {
   },
   status: {
     canceled: "Canceled",
-    completed: "Done",
+    completed: "Completed",
     failed: "Failed",
     inProgress: "Running",
-    notStarted: "Todo",
-    pendingAcceptance: "In review",
+    notStarted: "To run",
+    pendingAcceptance: "Pending acceptance",
     running: "Running",
     unknown: "Unknown"
   },
@@ -475,7 +475,7 @@ const issueManagerZhCN = {
     completed: "已完成",
     failed: "失败",
     inProgress: "执行中",
-    notStarted: "待开始",
+    notStarted: "未启动",
     pendingAcceptance: "待验收",
     running: "执行中",
     unknown: "未知"

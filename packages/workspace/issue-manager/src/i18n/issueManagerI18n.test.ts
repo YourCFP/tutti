@@ -49,7 +49,7 @@ test("zh-CN task terminology and status labels use requested copy", () => {
   assert.equal(copy.t("labels.taskList"), "任务");
   assert.equal(copy.t("messages.noIssues"), "还没有任务");
   assert.equal(copy.t("messages.noTasks"), "还没有任务");
-  assert.equal(copy.t("status.notStarted"), "待开始");
+  assert.equal(copy.t("status.notStarted"), "未启动");
   assert.equal(copy.t("status.running"), "执行中");
   assert.equal(copy.t("status.inProgress"), "执行中");
   assert.equal(copy.t("status.pendingAcceptance"), "待验收");
@@ -104,11 +104,11 @@ test("en task terminology and status labels use requested copy", () => {
   assert.equal(copy.t("labels.taskList"), "Tasks");
   assert.equal(copy.t("messages.noIssues"), "No tasks yet");
   assert.equal(copy.t("messages.noTasks"), "No tasks yet");
-  assert.equal(copy.t("status.notStarted"), "Todo");
+  assert.equal(copy.t("status.notStarted"), "To run");
   assert.equal(copy.t("status.running"), "Running");
   assert.equal(copy.t("status.inProgress"), "Running");
-  assert.equal(copy.t("status.pendingAcceptance"), "In review");
-  assert.equal(copy.t("status.completed"), "Done");
+  assert.equal(copy.t("status.pendingAcceptance"), "Pending acceptance");
+  assert.equal(copy.t("status.completed"), "Completed");
   assert.equal(copy.t("status.failed"), "Failed");
   assert.equal(copy.t("status.canceled"), "Canceled");
 });
