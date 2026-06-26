@@ -29,6 +29,10 @@ import {
 import { translate } from "../../../../i18n/appRuntime.ts";
 import { getActiveLocale } from "../../../../i18n/runtime.ts";
 import { resolveDesktopErrorMessage } from "../../../../lib/desktopErrors.ts";
+import {
+  getAgentDiagnosticsConsent,
+  setAgentDiagnosticsConsent
+} from "../../../../lib/agentDiagnosticsConsent.ts";
 
 export interface DesktopAgentProviderStatusServiceDependencies {
   loginStatusPollDurationMs?: number;
@@ -110,7 +114,7 @@ export class DesktopAgentProviderStatusService implements IAgentProviderStatusSe
     this.dependencies = dependencies;
     this.notifications = notifications;
     this.consentStore =
-      dependencies.diagnosticsConsentStore ?? createLocalStorageConsentStore();
+      dependencies.diagnosticsConsentStore ?? createSharedConsentStore();
   }
 
   getRevision(): number {
@@ -717,29 +721,12 @@ function createOptionalReporterService(
   );
 }
 
-const DIAGNOSTICS_CONSENT_KEY = "tutti.agentDiagnosticsConsent";
-
-function createLocalStorageConsentStore(): DiagnosticsConsentStore {
+function createSharedConsentStore(): DiagnosticsConsentStore {
+  // Backed by the shared device-local store so the Settings → General toggle and
+  // the wizard's prompt always agree on the value.
   return {
-    get() {
-      try {
-        return (
-          globalThis.localStorage?.getItem(DIAGNOSTICS_CONSENT_KEY) === "true"
-        );
-      } catch {
-        return false;
-      }
-    },
-    set(value: boolean) {
-      try {
-        globalThis.localStorage?.setItem(
-          DIAGNOSTICS_CONSENT_KEY,
-          value ? "true" : "false"
-        );
-      } catch {
-        // Best-effort persistence; consent simply won't stick if unavailable.
-      }
-    }
+    get: getAgentDiagnosticsConsent,
+    set: setAgentDiagnosticsConsent
   };
 }
 

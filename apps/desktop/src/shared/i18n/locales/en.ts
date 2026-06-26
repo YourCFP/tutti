@@ -209,13 +209,11 @@ export const en = {
       stageDoUpgrade: "Upgrade",
       stageDoLogin: "Sign in",
       stageDoRedetect: "Re-check",
-      actionReportIssue: "Report problem",
       reportConsentTitle: "An environment problem was detected",
       reportConsentBody:
-        "This sends fuller diagnostics (CLI paths, endpoints, proxy address, error details) to help us debug. Send it?",
+        "This sends fuller diagnostics (CLI paths, endpoints, proxy address, error details) to help us debug. Send it? You can change this anytime in Settings → General.",
       reportConsentAgree: "Agree & send",
-      reportConsentCancel: "Cancel",
-      reportDone: "Reported — thanks"
+      reportConsentCancel: "Not now"
     },
     referenceSources: {
       appSourceLabel: "Apps",
@@ -455,6 +453,9 @@ export const en = {
         },
         browserUseConnectionModeSaveFailed:
           "We couldn't update the browser connection setting right now.",
+        agentDiagnosticsReportingLabel: "Agent diagnostics reporting",
+        agentDiagnosticsReportingDescription:
+          "When an environment problem is detected, send fuller diagnostics (CLI paths, endpoints, proxy address, error details) to help us debug. The account email is never sent.",
         languageDescription:
           "Applies to all open windows now and new windows after restart",
         languageLabel: "Language",

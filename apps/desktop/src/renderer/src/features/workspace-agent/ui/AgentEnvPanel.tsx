@@ -298,17 +298,10 @@ export function AgentEnvPanel({
     setCopied(false);
     setLogExpanded(false);
     setRevealIndex(0);
+    // A fresh detection re-arms the anomaly prompt: if the new result still has
+    // an anomaly and reporting is off, the prompt shows again.
+    setReportState("idle");
     void agentProviderStatusService.refresh([provider]);
-  }, [agentProviderStatusService, provider]);
-
-  // "上报异常": with prior consent, report immediately; otherwise ask first.
-  const handleReportIssue = useCallback(() => {
-    if (agentProviderStatusService.getDiagnosticsConsent()) {
-      void agentProviderStatusService.reportEnvIssue(provider);
-      setReportState("reported");
-    } else {
-      setReportState("confirming");
-    }
   }, [agentProviderStatusService, provider]);
 
   const handleConfirmReport = useCallback(() => {
@@ -641,35 +634,21 @@ export function AgentEnvPanel({
           </div>
         ) : null}
 
-        {/* Re-detect (rewinds the flow) and "report problem" sit on the left;
-            the right holds the single confirm/dismiss. All per-step actions —
-            install, sign in, re-login — live inline on their step. */}
+        {/* Re-detect rewinds the flow on the left; the right holds the single
+            confirm/dismiss. Per-step actions live inline on their step, and the
+            diagnostic report is offered via the on-anomaly prompt above (and the
+            Settings → General toggle), not a footer button. */}
         <DialogFooter className="flex shrink-0 items-center justify-between gap-2 border-t border-[var(--border-1)] px-5 py-4">
-          <div className="flex items-center gap-2">
-            <Button
-              size="dialog"
-              type="button"
-              variant="ghost"
-              disabled={snapshot.isLoading}
-              onClick={handleRedetect}
-            >
-              <RefreshIcon className="size-4" />
-              {t("workspace.agentEnv.actionDetect")}
-            </Button>
-            {hasAnomaly ? (
-              <Button
-                size="dialog"
-                type="button"
-                variant="ghost"
-                disabled={reportState === "reported"}
-                onClick={handleReportIssue}
-              >
-                {reportState === "reported"
-                  ? t("workspace.agentEnv.reportDone")
-                  : t("workspace.agentEnv.actionReportIssue")}
-              </Button>
-            ) : null}
-          </div>
+          <Button
+            size="dialog"
+            type="button"
+            variant="ghost"
+            disabled={snapshot.isLoading}
+            onClick={handleRedetect}
+          >
+            <RefreshIcon className="size-4" />
+            {t("workspace.agentEnv.actionDetect")}
+          </Button>
           <Button
             size="dialog"
             type="button"
