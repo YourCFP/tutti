@@ -597,7 +597,7 @@ export const en = {
       empty: "What can {{provider}} help you with?",
       conversations: "Sessions",
       newConversation: "New session",
-      agentEnvSetup: "Agent environment",
+      agentEnvSetup: "Environment check",
       noConversations: "No sessions yet",
       emptyProjectConversations: "No chats yet",
       batchRunnerStandaloneTitle: "Agent GUI batch runner",
