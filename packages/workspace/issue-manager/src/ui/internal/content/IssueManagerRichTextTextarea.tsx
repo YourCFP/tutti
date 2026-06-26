@@ -55,7 +55,7 @@ export function IssueManagerRichTextTextarea({
     <RichTextTriggerEditor
       focusSignal={focusSignal}
       maxResults={8}
-      minQueryLength={1}
+      minQueryLength={0}
       triggerProviders={providers}
       textOverrides={{
         loadingLabel: controller.copy.t("richTextAt.loading"),

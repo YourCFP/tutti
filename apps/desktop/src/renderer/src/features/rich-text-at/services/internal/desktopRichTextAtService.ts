@@ -249,6 +249,7 @@ function createWorkspaceAppAtContributor(contributorInput: {
             return workspaceAppAtItemsFromMentionCandidates({
               agentProviderStatuses: contributorInput.agentProviderStatuses?.(),
               candidates: response.apps,
+              excludedAppIds: excludedWorkspaceAppMentionIds(input.target),
               keyword: searchInput.keyword,
               locale: contributorInput.getLocale?.() ?? "",
               maxResults: searchInput.maxResults,
@@ -290,6 +291,7 @@ function createWorkspaceAppAtContributor(contributorInput: {
                 agentProviderStatuses:
                   contributorInput.agentProviderStatuses?.(),
                 candidates: response.apps,
+                excludedAppIds: excludedWorkspaceAppMentionIds(input.target),
                 keyword: "",
                 locale: contributorInput.getLocale?.() ?? "",
                 workspaceId
@@ -321,15 +323,22 @@ function workspaceAppAtItemsFromMentionCandidates(input: {
   candidates: Awaited<
     ReturnType<TuttidClient["listWorkspaceAppMentionCandidates"]>
   >["apps"];
+  excludedAppIds?: readonly string[];
   keyword: string;
   locale: string;
   maxResults?: number;
   workspaceId: string;
 }): WorkspaceAppAtItem[] {
   const apps: WorkspaceAppAtItem[] = [];
+  const excludedAppIds = new Set(
+    (input.excludedAppIds ?? []).map((appId) => appId.trim().toLowerCase())
+  );
   for (const candidate of input.candidates) {
     const appId = candidate.appId.trim();
     if (!appId) {
+      continue;
+    }
+    if (excludedAppIds.has(appId.toLowerCase())) {
       continue;
     }
     if (
@@ -388,6 +397,10 @@ function workspaceAppAtItemsFromMentionCandidates(input: {
   return input.maxResults === undefined
     ? matchedApps
     : matchedApps.slice(0, Math.max(0, input.maxResults));
+}
+
+function excludedWorkspaceAppMentionIds(target: string): readonly string[] {
+  return target === "issue-manager" ? ["issue-manager"] : [];
 }
 
 const WORKSPACE_AGENT_APP_PROVIDER_BY_ID: Readonly<
