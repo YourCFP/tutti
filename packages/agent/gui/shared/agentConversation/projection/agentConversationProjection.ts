@@ -29,6 +29,8 @@ export interface AgentConversationProjectionOptions {
 }
 
 const RENDER_IRRELEVANT_TRANSCRIPT_ROW_FIELDS = new Set(["occurredAtUnixMs"]);
+const CODEX_SKILLS_CONTEXT_BUDGET_NOTICE_FRAGMENT =
+  "skill descriptions were shortened to fit the 2% skills context budget";
 
 export function projectAgentConversationVM(
   detail: WorkspaceAgentSessionDetailViewModel,
@@ -71,9 +73,11 @@ export function projectAgentConversationVM(
   }
 
   const normalizedRows = projectMessageCopyText(
-    dropRedundantErrorWarningNotices(
-      mergeAdjacentAssistantMessageRows(
-        mergeAdjacentTransportRetryNoticeRows(rows)
+    dropCodexRuntimeDiagnosticNotices(
+      dropRedundantErrorWarningNotices(
+        mergeAdjacentAssistantMessageRows(
+          mergeAdjacentTransportRetryNoticeRows(rows)
+        )
       )
     ),
     {
@@ -250,6 +254,47 @@ function mergeAdjacentAssistantMessageRows(
     merged.push(row);
   }
   return merged;
+}
+
+function dropCodexRuntimeDiagnosticNotices(
+  rows: readonly AgentTranscriptRowVM[]
+): AgentTranscriptRowVM[] {
+  const filteredRows: AgentTranscriptRowVM[] = [];
+  for (const row of rows) {
+    if (row.kind !== "message" || row.speaker !== "assistant") {
+      filteredRows.push(row);
+      continue;
+    }
+    const messages = row.messages.filter(
+      (message) => !isCodexSkillsContextBudgetNotice(message)
+    );
+    if (messages.length === 0 && row.thinking.length === 0) {
+      continue;
+    }
+    if (messages.length === row.messages.length) {
+      filteredRows.push(row);
+      continue;
+    }
+    filteredRows.push({ ...row, messages });
+  }
+  return filteredRows;
+}
+
+function isCodexSkillsContextBudgetNotice(
+  message: AgentMessageContentVM
+): boolean {
+  const notice = message.systemNotice;
+  if (!notice || notice.noticeKind !== "warning") {
+    return false;
+  }
+  if (notice.source !== "runtime") {
+    return false;
+  }
+  const text = [notice.title, notice.detail, message.body]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+  return text.includes(CODEX_SKILLS_CONTEXT_BUDGET_NOTICE_FRAGMENT);
 }
 
 function dropRedundantErrorWarningNotices(

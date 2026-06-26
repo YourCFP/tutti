@@ -2932,7 +2932,16 @@ describe("useAgentGUINodeController", () => {
       };
     });
     const exec = vi.fn(async () => ({ turnId: "turn-1" }));
-    const list = vi.fn(async () => ({ presences: [], sessions: [] }));
+    const list = vi.fn(async () => ({
+      presences: [],
+      sessions: createdSessionId
+        ? [
+            workspaceAgentSession(createdSessionId, {
+              effectiveStatus: "working"
+            })
+          ]
+        : []
+    }));
     const listSessionTimeline = vi.fn(async () => ({
       timelineItems: createdSessionId
         ? [
@@ -5029,7 +5038,12 @@ describe("useAgentGUINodeController", () => {
 
     expect(result.current.viewModel.conversations).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "session-2", status: "ready" })
+        expect.objectContaining({
+          id: "session-2",
+          status: "ready",
+          hasUnreadCompletion: true,
+          unreadCompletionKey: "turn:session-2:turn-2:completed"
+        })
       ])
     );
 
@@ -5045,6 +5059,78 @@ describe("useAgentGUINodeController", () => {
     ).toEqual(expect.objectContaining({ isLive: true, watcherCount: 1 }));
     expect(releaseEventStream).not.toHaveBeenCalledWith({
       leaseId: "lease:session-2"
+    });
+  });
+
+  it("marks a background conversation unread when an assistant message completes", async () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({
+        presences: [],
+        sessions: [
+          workspaceAgentSession("session-1", {
+            effectiveStatus: "ready",
+            turnPhase: "idle"
+          }),
+          workspaceAgentSession("session-2", {
+            effectiveStatus: "working",
+            turnPhase: "working"
+          })
+        ]
+      })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn())
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData("session-1"),
+        onDataChange: vi.fn()
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversationId).toBe("session-1");
+      expect(
+        result.current.viewModel.conversations.some(
+          (conversation) => conversation.id === "session-2"
+        )
+      ).toBe(true);
+    });
+
+    act(() => {
+      emitRuntimeSessionEventForTests?.({
+        eventType: "message_update",
+        data: {
+          workspaceId: "room-1",
+          agentSessionId: "session-2",
+          messageId: "message-2",
+          seq: 20,
+          turnId: "turn-2",
+          role: "assistant",
+          kind: "message",
+          status: "completed",
+          payload: { text: "Done" },
+          occurredAtUnixMs: 20,
+          completedAtUnixMs: 20
+        }
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.viewModel.conversations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "session-2",
+            status: "working",
+            hasUnreadCompletion: true,
+            unreadCompletionKey: "turn:session-2:turn-2:completed"
+          })
+        ])
+      );
     });
   });
 

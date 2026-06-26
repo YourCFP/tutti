@@ -4772,7 +4772,7 @@ describe("AgentGUINode", () => {
       expect(mockListWorkspaceApps).toHaveBeenCalledWith({
         workspaceId: "room-1",
         query: "",
-        limit: 10
+        limit: undefined
       })
     );
     expect(within(palette).getByRole("tab", { name: "App" })).toHaveAttribute(

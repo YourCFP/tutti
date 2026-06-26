@@ -10,7 +10,11 @@ import type {
   AgentHostWorkspaceAgentSessionSummaryInput,
   AgentHostWorkspaceAgentProbesResult,
   AgentHostWorkspaceAgentSnapshot,
-  ReadWorkspaceFileResult as AgentHostReadWorkspaceFileResult
+  PersistWriteResult,
+  ReadWorkspaceAgentReadStateInput,
+  ReadWorkspaceFileResult as AgentHostReadWorkspaceFileResult,
+  WorkspaceAgentReadStateSnapshot,
+  WriteWorkspaceAgentReadStateInput
 } from "../shared/contracts/dto";
 import type { WorkspaceUserProjectService } from "@tutti-os/workspace-user-project/contracts";
 
@@ -71,6 +75,15 @@ export type AgentHostEnvironmentApi = AgentHostRecord & {
   warmupOpenclawGateway?: (input?: unknown) => AgentHostAsyncResult<unknown>;
 };
 
+export type AgentHostPersistenceApi = AgentHostRecord & {
+  readWorkspaceAgentReadState: (
+    input: ReadWorkspaceAgentReadStateInput
+  ) => AgentHostAsyncResult<WorkspaceAgentReadStateSnapshot>;
+  writeWorkspaceAgentReadState: (
+    input: WriteWorkspaceAgentReadStateInput
+  ) => AgentHostAsyncResult<PersistWriteResult>;
+};
+
 export interface AgentHostSelectedFile {
   name?: string;
   path: string;
@@ -107,6 +120,7 @@ export interface AgentHostInputApi {
   filesystem: AgentHostFilesystemApi;
   meta?: AgentHostMetaApi;
   onHostEvent?: (listener: (event: any) => void) => AgentHostUnsubscribe;
+  persistence?: AgentHostPersistenceApi;
   runtime?: AgentHostEnvironmentApi;
   userProjects?: AgentHostUserProjectsApi;
   workspace: AgentHostWorkspaceApi;
@@ -274,6 +288,7 @@ export interface AgentHostRuntimeApi {
   filesystem: AgentHostFilesystemApi;
   meta?: AgentHostMetaApi;
   onHostEvent?: (listener: (event: any) => void) => AgentHostUnsubscribe;
+  persistence?: AgentHostPersistenceApi;
   runtime?: AgentHostEnvironmentApi;
   userProjects?: AgentHostUserProjectsApi;
   workspace: AgentHostWorkspaceApi;
@@ -291,6 +306,7 @@ export function toAgentHostRuntimeApi(
     filesystem: hostApi.filesystem,
     meta: hostApi.meta,
     onHostEvent: hostApi.onHostEvent,
+    persistence: hostApi.persistence,
     runtime: hostApi.runtime,
     userProjects: hostApi.userProjects,
     workspace: hostApi.workspace,

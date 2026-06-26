@@ -355,6 +355,63 @@ describe("projectAgentConversationVM", () => {
     expect(assistantRows[0]?.messages[0]?.systemNotice).toBeNull();
   });
 
+  it("drops Codex skills context budget runtime warning notices", () => {
+    const conversation = projectAgentConversationVM(
+      detailViewModel({
+        turns: [
+          {
+            id: "turn-1",
+            userMessage: { id: "user-1", body: "Start" },
+            userMessages: [{ id: "user-1", body: "Start" }],
+            agentMessages: [],
+            toolCalls: [],
+            toolCallCount: 0,
+            hasFailedToolCall: false,
+            agentItems: [
+              {
+                kind: "message",
+                message: {
+                  id: "assistant-warning-1",
+                  body: "Skill descriptions were shortened to fit the 2% skills context budget. Codex can still see every skill, but some descriptions are shorter.",
+                  systemNotice: {
+                    noticeKind: "warning",
+                    severity: "warning",
+                    source: "runtime",
+                    title:
+                      "Skill descriptions were shortened to fit the 2% skills context budget. Codex can still see every skill, but some descriptions are shorter.",
+                    detail:
+                      "Skill descriptions were shortened to fit the 2% skills context budget. Codex can still see every skill, but some descriptions are shorter.",
+                    retryable: null
+                  }
+                }
+              },
+              {
+                kind: "message",
+                message: {
+                  id: "assistant-1",
+                  body: "I will inspect the logs."
+                }
+              }
+            ]
+          }
+        ],
+        showProcessingIndicator: false
+      })
+    );
+
+    const assistantRows = conversation.rows.filter(
+      (
+        row
+      ): row is Extract<
+        (typeof conversation.rows)[number],
+        { kind: "message" }
+      > => row.kind === "message" && row.speaker === "assistant"
+    );
+    expect(assistantRows).toHaveLength(1);
+    expect(assistantRows[0]?.messages[0]?.id).toBe("assistant-1");
+    expect(assistantRows[0]?.messages[0]?.systemNotice).toBeNull();
+  });
+
   it("groups bridge thinking inside completed tool disclosures", () => {
     const conversation = projectAgentConversationVM(
       detailViewModel({

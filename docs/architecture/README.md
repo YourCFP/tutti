@@ -9,6 +9,7 @@ Current documents:
 
 - [Analytics Tracking](./analytics-tracking.md)
 - [Agent Activity Packages](./agent-activity-packages.md)
+- [AgentGuiNode Architecture and Troubleshooting](./agent-gui-node.md)
 - [Business Event Stream](./business-event-stream.md)
 - [Browser Node Package](./browser-node-package.md)
 - [Desktop Backend Access](./desktop-backend-access.md)

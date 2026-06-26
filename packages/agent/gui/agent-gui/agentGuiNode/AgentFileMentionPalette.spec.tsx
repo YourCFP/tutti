@@ -32,7 +32,7 @@ vi.mock("../../i18n/index", async () => {
     "agentHost.agentGui.mentionNoMatchingFiles": "没有匹配到文件",
     "agentHost.roomIssueNode.issueStatusNotStarted": "未启动",
     "agentHost.roomIssueNode.issueStatusRunning": "执行中",
-    "agentHost.roomIssueNode.issueStatusInProgress": "已推进",
+    "agentHost.roomIssueNode.issueStatusInProgress": "执行中",
     "agentHost.roomIssueNode.issueStatusPendingAcceptance": "待验收",
     "agentHost.roomIssueNode.issueStatusCompleted": "已完成",
     "agentHost.roomIssueNode.issueStatusFailed": "失败",
@@ -167,8 +167,7 @@ describe("AgentFileMentionPalette", () => {
     );
 
     expect(screen.getByText("未启动")).toBeVisible();
-    expect(screen.getByText("执行中")).toBeVisible();
-    expect(screen.getByText("已推进")).toBeVisible();
+    expect(screen.getAllByText("执行中")).toHaveLength(2);
     expect(screen.getByText("待验收")).toBeVisible();
     expect(screen.getByText("已完成")).toBeVisible();
     expect(screen.getAllByText("失败")).toHaveLength(1);

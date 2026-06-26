@@ -1719,7 +1719,7 @@ export const en = {
       taskCompletedCount: "{{count}} completed",
       issueStatusNotStarted: "To run",
       issueStatusRunning: "Running",
-      issueStatusInProgress: "Progress started",
+      issueStatusInProgress: "Running",
       issueStatusPendingAcceptance: "Pending acceptance",
       issueStatusCompleted: "Completed",
       issueStatusFailed: "Failed",

@@ -1011,7 +1011,6 @@ export class AgentMentionSearchController {
           workspaceId: input.workspaceId,
           currentUserId: input.currentUserId,
           query: input.query,
-          limit: DEFAULT_MENTION_GROUP_PAGE_SIZE,
           sessionCwd: input.sessionCwd,
           diagnostics: providerDiagnostics
         });
@@ -1033,7 +1032,7 @@ export class AgentMentionSearchController {
     workspaceId: string;
     currentUserId: string;
     query: string;
-    limit: number;
+    limit?: number;
     sessionCwd: string;
     abortSignal: AbortSignal;
   }): Promise<AgentContextMentionItem[]> {
@@ -1192,7 +1191,7 @@ export class AgentMentionSearchController {
     workspaceId: string;
     currentUserId: string;
     query: string;
-    limit: number;
+    limit?: number;
     sessionCwd?: string;
   }): Promise<AgentContextMentionItem[]> {
     const provider = this.contextMentionProviders.get(input.providerId);
@@ -1275,10 +1274,10 @@ export class AgentMentionSearchController {
           return buildEmptyGroup(groupId, this.currentQuery);
         }
         const pageSize = mentionGroupPageSize(this.currentFilter, groupId);
-        const visibleCount = Math.min(
-          items.length,
-          this.expandedCounts[groupId] ?? pageSize
-        );
+        const visibleCount =
+          groupId === "apps"
+            ? items.length
+            : Math.min(items.length, this.expandedCounts[groupId] ?? pageSize);
         const totalCount = resolveMentionGroupTotalCount(
           groupId,
           this.totalCounts,
@@ -1290,12 +1289,13 @@ export class AgentMentionSearchController {
           totalCount,
           visibleCount,
           hasMore:
-            items.length > visibleCount ||
-            ((groupId === "opened_files" ||
-              groupId === "files" ||
-              groupId === "agent_generated_files") &&
-              items.length >= this.currentFileSearchLimit) ||
-            totalCount > visibleCount
+            groupId !== "apps" &&
+            (items.length > visibleCount ||
+              ((groupId === "opened_files" ||
+                groupId === "files" ||
+                groupId === "agent_generated_files") &&
+                items.length >= this.currentFileSearchLimit) ||
+              totalCount > visibleCount)
         } satisfies AgentMentionGroup;
       })
       .filter((group): group is AgentMentionGroup => group !== null);

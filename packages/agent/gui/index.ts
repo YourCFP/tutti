@@ -58,8 +58,12 @@ export type {
 export type {
   AgentProbeProvider,
   AgentProbeSnapshot,
+  PersistWriteResult,
+  ReadWorkspaceAgentReadStateInput,
   AgentUsageQuota,
-  AgentUsageSnapshot
+  AgentUsageSnapshot,
+  WorkspaceAgentReadStateSnapshot,
+  WriteWorkspaceAgentReadStateInput
 } from "./shared/contracts/dto";
 export {
   selectNeedsAttentionCount,

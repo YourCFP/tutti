@@ -925,6 +925,7 @@ function conversationSummariesRenderEqual(
     left.sortTimeUnixMs === right.sortTimeUnixMs &&
     left.updatedAtUnixMs === right.updatedAtUnixMs &&
     left.hasUnreadCompletion === right.hasUnreadCompletion &&
+    left.unreadCompletionKey === right.unreadCompletionKey &&
     conversationProjectsRenderEqual(left.project, right.project) &&
     conversationSyncStatesEqual(left.syncState, right.syncState)
   );
@@ -2057,6 +2058,60 @@ function conversationStatusFromStatePatch(
   }
 }
 
+function completionKeyFromStatePatch(
+  agentSessionId: string,
+  patch: WorkspaceAgentActivityStatePatch
+): string | null {
+  const turnId = patch.turn?.turnId?.trim() ?? "";
+  if (turnId && isCompletedOutcomeToken(patch.turn?.outcome)) {
+    return `turn:${agentSessionId}:${turnId}:completed`;
+  }
+  return conversationStatusFromStatePatch(patch) === "completed"
+    ? `session:${agentSessionId}:completed`
+    : null;
+}
+
+function completionKeyFromSessionState(
+  agentSessionId: string,
+  state: AgentSessionState
+): string | null {
+  return conversationStatusFromSessionState(state) === "completed"
+    ? `session:${agentSessionId}:completed`
+    : null;
+}
+
+function completionKeyFromMessage(
+  message: WorkspaceAgentActivityMessage
+): string | null {
+  const agentSessionId = message.agentSessionId.trim();
+  if (!agentSessionId) {
+    return null;
+  }
+  if ((message.role ?? "").trim().toLowerCase() !== "assistant") {
+    return null;
+  }
+  const kind = (message.kind ?? "").trim().toLowerCase();
+  if (kind !== "message" && kind !== "text") {
+    return null;
+  }
+  const payload =
+    message.payload && typeof message.payload === "object"
+      ? message.payload
+      : {};
+  const status =
+    message.status?.trim().toLowerCase() ||
+    (stringPayloadValue(payload, "status") ?? "").toLowerCase();
+  if (!isCompletedOutcomeToken(status)) {
+    return null;
+  }
+  const subject = message.turnId?.trim() || message.messageId.trim();
+  return subject ? `turn:${agentSessionId}:${subject}:completed` : null;
+}
+
+function isCompletedOutcomeToken(value: string | null | undefined): boolean {
+  return value?.trim().toLowerCase() === "completed";
+}
+
 function hasSessionControlStatePatch(
   patch: WorkspaceAgentActivityStatePatch
 ): boolean {
@@ -2253,6 +2308,9 @@ function messageFromMessageUpdate(
       : {}),
     ...(update.startedAtUnixMs !== undefined
       ? { startedAtUnixMs: update.startedAtUnixMs }
+      : {}),
+    ...(update.completedAtUnixMs !== undefined
+      ? { completedAtUnixMs: update.completedAtUnixMs }
       : {})
   };
 }
@@ -3757,6 +3815,10 @@ export function useAgentGUINodeController({
       if (!nextStatus && !title) {
         return;
       }
+      const completionKey = completionKeyFromSessionState(
+        agentSessionId,
+        snapshot
+      );
       patchConversation(agentSessionId, (conversation) => {
         const timelineItems = projectAgentGUIMessagesToTimelineItems(
           resolveSessionMessages(agentSessionId)
@@ -3797,13 +3859,18 @@ export function useAgentGUINodeController({
           hasUnreadCompletion:
             status === "completed"
               ? (conversation.hasUnreadCompletion ?? false)
-              : false
+              : false,
+          unreadCompletionKey:
+            status === "completed"
+              ? (conversation.unreadCompletionKey ?? completionKey)
+              : null
         };
       });
-      if (nextStatus === "completed" && conversationListQuery) {
+      if (completionKey && conversationListQuery) {
         markAgentGUIConversationCompletionObserved({
           query: conversationListQuery,
-          conversationId: agentSessionId
+          conversationId: agentSessionId,
+          completionKey
         });
       }
       const transient = transientConversationRef.current;
@@ -3846,7 +3913,11 @@ export function useAgentGUINodeController({
           }),
           hasUnreadCompletion:
             transientStatus === "completed" &&
-            activeConversationIdRef.current !== agentSessionId
+            activeConversationIdRef.current !== agentSessionId,
+          unreadCompletionKey:
+            transientStatus === "completed"
+              ? (transient.unreadCompletionKey ?? completionKey)
+              : null
         });
       }
     },
@@ -4503,6 +4574,7 @@ export function useAgentGUINodeController({
       }
       const normalizedLastError = patch.lastError?.trim() ?? "";
       const nextStatus = conversationStatusFromStatePatch(patch);
+      const completionKey = completionKeyFromStatePatch(agentSessionId, patch);
       const hasControlStatePatch = hasSessionControlStatePatch(patch);
       const pendingTurnId =
         pendingTurnIdBySessionIdRef.current[agentSessionId]?.trim() ?? "";
@@ -4519,6 +4591,7 @@ export function useAgentGUINodeController({
       }
       if (
         !nextStatus &&
+        !completionKey &&
         !patch.title?.trim() &&
         normalizedLastError === "" &&
         !hasControlStatePatch &&
@@ -4584,6 +4657,8 @@ export function useAgentGUINodeController({
           titleFields.titleFallback === conversation.titleFallback &&
           status === conversation.status &&
           hasUnreadCompletion === conversation.hasUnreadCompletion &&
+          (!completionKey ||
+            conversation.unreadCompletionKey === completionKey) &&
           !clearedPendingSubmittedTurn
         ) {
           return null;
@@ -4591,13 +4666,19 @@ export function useAgentGUINodeController({
         return {
           ...titleFields,
           status,
-          hasUnreadCompletion
+          hasUnreadCompletion,
+          unreadCompletionKey:
+            status === "completed" || completionKey
+              ? (conversation.unreadCompletionKey ?? completionKey)
+              : null
         };
       });
-      if (nextStatus === "completed" && conversationListQuery) {
+      if (completionKey && conversationListQuery) {
         markAgentGUIConversationCompletionObserved({
           query: conversationListQuery,
-          conversationId: agentSessionId
+          conversationId: agentSessionId,
+          completionKey,
+          allowReadyStatus: nextStatus !== "completed"
         });
       }
       const transient = transientConversationRef.current;
@@ -4618,8 +4699,12 @@ export function useAgentGUINodeController({
           ...transientTitleFields,
           status: transientStatus,
           hasUnreadCompletion:
-            transientStatus === "completed" &&
-            activeConversationIdRef.current !== agentSessionId
+            Boolean(completionKey) &&
+            activeConversationIdRef.current !== agentSessionId,
+          unreadCompletionKey:
+            transientStatus === "completed" || completionKey
+              ? (transient.unreadCompletionKey ?? completionKey)
+              : null
         });
       }
     },
@@ -4659,6 +4744,15 @@ export function useAgentGUINodeController({
           if (!agentSessionId) {
             continue;
           }
+          const completionKey = completionKeyFromMessage(message);
+          if (completionKey && conversationListQuery) {
+            markAgentGUIConversationCompletionObserved({
+              query: conversationListQuery,
+              conversationId: agentSessionId,
+              completionKey,
+              allowReadyStatus: true
+            });
+          }
           const messages = pendingMessagesBySessionId.get(agentSessionId);
           if (messages) {
             messages.push(message);
@@ -4674,7 +4768,11 @@ export function useAgentGUINodeController({
       }
       flushPendingMessages();
     },
-    [applyStatePatch, applyBackgroundTimelineStatusUpdate]
+    [
+      applyStatePatch,
+      applyBackgroundTimelineStatusUpdate,
+      conversationListQuery
+    ]
   );
   const handleBackgroundActivityStreamEvents = useCallback(
     (events: readonly AgentActivityStreamEvent[]) => {
@@ -4990,12 +5088,10 @@ export function useAgentGUINodeController({
           }
           setTransientConversation(conversation);
           if (conversationListQuery) {
-            if (hasLoadedConversations) {
-              upsertLocalCreatedAgentGUIConversation({
-                query: conversationListQuery,
-                conversation
-              });
-            }
+            upsertLocalCreatedAgentGUIConversation({
+              query: conversationListQuery,
+              conversation
+            });
             scheduleAgentGUIConversationListProjection(
               conversationListQuery,
               "local-create"

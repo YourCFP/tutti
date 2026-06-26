@@ -3293,6 +3293,7 @@ function conversationSummariesRenderEqual(
     left.sortTimeUnixMs === right.sortTimeUnixMs &&
     left.updatedAtUnixMs === right.updatedAtUnixMs &&
     left.hasUnreadCompletion === right.hasUnreadCompletion &&
+    left.unreadCompletionKey === right.unreadCompletionKey &&
     conversationProjectsRenderEqual(left.project, right.project) &&
     conversationSyncStatesRenderEqual(left.syncState, right.syncState)
   );
