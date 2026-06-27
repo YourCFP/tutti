@@ -531,6 +531,10 @@ func (s Service) runExternalAgentRegistryNPMInstaller(ctx context.Context, spec 
 		packageSpec,
 	})
 	baseEnv := managedruntime.ProcessEnv(append(appRuntime.EnvOverrides, envMapToList(npmSpec.Env)...)...)
+	// Use a dedicated, tutti-owned npm cache inside the install prefix rather than
+	// the user's global ~/.npm, which on some machines holds root-owned files that
+	// make every user-mode npm install fail with EACCES before any registry is hit.
+	baseEnv = withAgentNPMCache(baseEnv, filepath.Join(npmSpec.PrefixDir, agentNPMCacheDirName))
 
 	// Try official npm first (fastest when reachable), then fall back through the
 	// CN-available mirrors when it is slow or blocked. Each attempt is bounded so a
