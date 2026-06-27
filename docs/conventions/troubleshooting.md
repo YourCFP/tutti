@@ -1009,3 +1009,27 @@ information is not available yet`, but `ps` or `lsof` still shows an older
   Treat explicitly launched local absolute paths like direct hidden-file reveal:
   do not add them as projects or default locations, but allow FileManager to
   load the parent directory and apply normal local-file operations.
+
+### FileManager home-relative paths break only the list pane
+
+- Symptom:
+  Launching FileManager for a path such as `~/docs/spec.md` leaves the left
+  file list, selection, or reveal state wrong while a separate file preview can
+  still open the file.
+- Quick checks:
+  Trace whether the path reaches `requestWorkspaceFilesLaunch` as `~/...` or
+  was already rewritten by AgentGUI link resolution. Then compare the
+  FileManager list request with the preview-node read path.
+- Root cause:
+  FileManager list/reveal goes through workspace logical path normalization and
+  `tuttid` directory listing. Those layers treat `~/...` as a relative segment,
+  not as the user home. Preview nodes can bypass that chain by reading an
+  already absolute local file path directly.
+- Fix:
+  Expand `~` and `~/...` at the desktop launch boundary using the platform
+  home directory, and keep AgentGUI link actions from resolving home-relative
+  paths against the project root before desktop launch.
+- Validation:
+  Run the workspace files launch coordinator test and the AgentGUI workspace
+  link action test, then `pnpm check:changed` for mixed desktop and AgentGUI
+  changes.
