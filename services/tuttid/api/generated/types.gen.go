@@ -1647,8 +1647,11 @@ type AgentProviderAdapterStatus struct {
 
 // AgentProviderAuthInfo defines model for AgentProviderAuthInfo.
 type AgentProviderAuthInfo struct {
-	AccountLabel *string                 `json:"accountLabel,omitempty"`
-	Status       AgentProviderAuthStatus `json:"status"`
+	AccountLabel *string `json:"accountLabel,omitempty"`
+
+	// AuthMethod The authentication method reported by the provider CLI (e.g. oauth, apiKey).
+	AuthMethod *string                 `json:"authMethod,omitempty"`
+	Status     AgentProviderAuthStatus `json:"status"`
 }
 
 // AgentProviderAuthStatus defines model for AgentProviderAuthStatus.
