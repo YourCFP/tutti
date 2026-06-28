@@ -48,7 +48,7 @@ function scrubProxyUrl(url: string | null | undefined): string | null {
     const parsed = new URL(url);
     parsed.username = "";
     parsed.password = "";
-    return `${parsed.protocol}//${parsed.host}` || null;
+    return `${parsed.protocol}//${parsed.host}`;
   } catch {
     // Not a parseable URL — still strip a leading userinfo segment defensively.
     return url.replace(/\/\/[^/@]*@/, "//") || null;
