@@ -124,6 +124,13 @@ func (s Service) claudeSettingsHasCustomConfig() bool {
 	return false
 }
 
+// claudeCodeUsesAPIBilling reports whether Claude Code is configured to use
+// API Usage Billing (an API key, an API key helper, or a custom Anthropic API
+// endpoint) rather than an Anthropic Console login session.
+func (s Service) claudeCodeUsesAPIBilling() bool {
+	return s.providerUsesCustomConfig(agentprovider.ClaudeCode)
+}
+
 // splitTomlAssignment parses a `key = "value"` line, stripping quotes. Mirrors
 // the runtime's splitSimpleTomlAssignment.
 func splitTomlAssignment(line string) (string, string, bool) {
