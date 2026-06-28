@@ -111,6 +111,12 @@ function createHostLocalReferenceAggregator(
       return { entries: [], nextCursor: null };
     },
     async open() {},
+    async listOpenWithApplications() {
+      return [];
+    },
+    async openWithApplication() {},
+    async openWithOtherApplication() {},
+    async reveal() {},
     async readPreview() {
       return null;
     },

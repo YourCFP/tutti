@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo } from "react";
 import { createWorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
+import { createWorkspaceFileManagerI18nRuntime } from "@tutti-os/workspace-file-manager";
 import { useTranslation, type TranslateFn } from "../../i18n/index";
 import { toLocalShortDateTime } from "../../app/renderer/shell/utils/format";
 import type {
@@ -556,6 +557,13 @@ export const AgentGUINode = memo(function AgentGUINode({
   const { i18n, locale, t } = useTranslation();
   const workspaceUserProjectI18n = useMemo(
     () => createWorkspaceUserProjectI18nRuntime(i18n),
+    [i18n]
+  );
+  const workspaceFileManagerI18n = useMemo(
+    () =>
+      typeof i18n?.t === "function"
+        ? createWorkspaceFileManagerI18nRuntime(i18n)
+        : null,
     [i18n]
   );
   const handleLinkAction = useCallback(
@@ -1351,6 +1359,7 @@ export const AgentGUINode = memo(function AgentGUINode({
             onConversationRailWidthChanged={handleConversationRailWidthChanged}
             labels={labels}
             workspaceUserProjectI18n={workspaceUserProjectI18n}
+            workspaceFileManagerCopy={workspaceFileManagerI18n}
             workspaceFileReferenceAdapter={workspaceFileReferenceAdapter}
             onOpenConversationWindow={onOpenConversationWindow}
             onRequestGitBranches={onRequestGitBranches}

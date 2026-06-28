@@ -151,7 +151,10 @@ describe("buildAgentEnvWizardViewModel", () => {
       input({
         status: status({
           network: {
-            registry: { reachable: true, endpoint: "https://registry.npmjs.org" },
+            registry: {
+              reachable: true,
+              endpoint: "https://registry.npmjs.org"
+            },
             proxy: {
               configured: true,
               reachable: true,

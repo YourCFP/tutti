@@ -146,6 +146,8 @@ import { useOptionalAgentActivityRuntime } from "../../agentActivityRuntime";
 
 export { formatSlashStatusTokenCount };
 
+const USAGE_POPOVER_HOVER_DELAY_MS = 120;
+
 /**
  * 引用 picker 的确认结果:松散文件按 file mention 插入;mentionItems(如文件夹 bundle)
  * 作为整体节点插入。两者各走各的插入路径,composer 不需要理解 bundle 内部结构。
@@ -477,40 +479,94 @@ function AgentUsageChip({
 }): React.JSX.Element {
   "use memo";
 
+  const [usagePopoverOpen, setUsagePopoverOpen] = useState(false);
+  const usagePopoverHoverTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const clampedPercent = Math.max(0, Math.min(100, percentUsed));
   const chipLabel = labels.usageChipLabel({ percent: clampedPercent });
   const showTokens = usedTokens !== null && totalTokens !== null;
   const usageLevel = agentUsageChipLevel(clampedPercent);
   const ringColor = agentUsageRingColor(usageLevel);
-  const [usageOpen, setUsageOpen] = useState(false);
-  const usageCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cancelUsageClose = useCallback(() => {
-    if (usageCloseTimerRef.current) {
-      clearTimeout(usageCloseTimerRef.current);
-      usageCloseTimerRef.current = null;
+  const usagePopoverCloseTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const clearUsagePopoverHoverTimer = useCallback(() => {
+    if (usagePopoverHoverTimerRef.current) {
+      clearTimeout(usagePopoverHoverTimerRef.current);
+      usagePopoverHoverTimerRef.current = null;
     }
   }, []);
-  const openUsage = useCallback(() => {
-    cancelUsageClose();
-    setUsageOpen(true);
-  }, [cancelUsageClose]);
-  // Delay close so the pointer can travel from the chip into the popover
-  // (to reach the compact button) without it dismissing.
-  const scheduleUsageClose = useCallback(() => {
-    cancelUsageClose();
-    usageCloseTimerRef.current = setTimeout(() => setUsageOpen(false), 140);
-  }, [cancelUsageClose]);
-  useEffect(() => cancelUsageClose, [cancelUsageClose]);
+  const clearUsagePopoverCloseTimer = useCallback(() => {
+    if (usagePopoverCloseTimerRef.current) {
+      clearTimeout(usagePopoverCloseTimerRef.current);
+      usagePopoverCloseTimerRef.current = null;
+    }
+  }, []);
+  const openUsagePopover = useCallback(() => {
+    clearUsagePopoverHoverTimer();
+    clearUsagePopoverCloseTimer();
+    setUsagePopoverOpen(true);
+  }, [clearUsagePopoverCloseTimer, clearUsagePopoverHoverTimer]);
+  const openUsagePopoverAfterHoverDelay = useCallback(() => {
+    clearUsagePopoverHoverTimer();
+    clearUsagePopoverCloseTimer();
+    usagePopoverHoverTimerRef.current = setTimeout(() => {
+      usagePopoverHoverTimerRef.current = null;
+      setUsagePopoverOpen(true);
+    }, USAGE_POPOVER_HOVER_DELAY_MS);
+  }, [clearUsagePopoverCloseTimer, clearUsagePopoverHoverTimer]);
+  const closeUsagePopover = useCallback(() => {
+    clearUsagePopoverHoverTimer();
+    clearUsagePopoverCloseTimer();
+    setUsagePopoverOpen(false);
+  }, [clearUsagePopoverCloseTimer, clearUsagePopoverHoverTimer]);
+  const scheduleUsagePopoverClose = useCallback(() => {
+    clearUsagePopoverHoverTimer();
+    clearUsagePopoverCloseTimer();
+    usagePopoverCloseTimerRef.current = setTimeout(() => {
+      usagePopoverCloseTimerRef.current = null;
+      setUsagePopoverOpen(false);
+    }, 140);
+  }, [clearUsagePopoverCloseTimer, clearUsagePopoverHoverTimer]);
+  const handleUsagePopoverOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        openUsagePopover();
+        return;
+      }
+      closeUsagePopover();
+    },
+    [closeUsagePopover, openUsagePopover]
+  );
+
+  useEffect(
+    () => () => {
+      clearUsagePopoverHoverTimer();
+      clearUsagePopoverCloseTimer();
+    },
+    [clearUsagePopoverCloseTimer, clearUsagePopoverHoverTimer]
+  );
   const trigger = (
     <button
       type="button"
       aria-label={chipLabel}
-      className="nodrag relative mr-2 inline-flex size-4 shrink-0 cursor-default items-center justify-center rounded-full p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--text-primary)_34%,transparent)] [-webkit-app-region:no-drag]"
+      className={cn(
+        "nodrag relative mr-2 inline-flex size-4 shrink-0 items-center justify-center rounded-full p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--text-primary)_34%,transparent)] [-webkit-app-region:no-drag]",
+        tooltipsEnabled ? "cursor-pointer" : "cursor-default"
+      )}
       data-testid="agent-gui-usage-chip"
       data-usage-level={usageLevel}
+      onBlur={tooltipsEnabled ? closeUsagePopover : undefined}
+      onClick={tooltipsEnabled ? openUsagePopover : undefined}
+      onFocus={tooltipsEnabled ? openUsagePopoverAfterHoverDelay : undefined}
+      onPointerEnter={(event) => {
+        if (tooltipsEnabled && event.pointerType !== "touch") {
+          openUsagePopoverAfterHoverDelay();
+        }
+      }}
+      onPointerLeave={tooltipsEnabled ? scheduleUsagePopoverClose : undefined}
       title={chipLabel}
-      onMouseEnter={openUsage}
-      onMouseLeave={scheduleUsageClose}
       style={{
         background: `conic-gradient(${ringColor} ${clampedPercent}%, color-mix(in srgb, ${ringColor} 16%, transparent) 0)`
       }}
@@ -527,43 +583,48 @@ function AgentUsageChip({
   }
 
   return (
-    <Popover open={usageOpen} onOpenChange={setUsageOpen}>
+    <Popover
+      open={usagePopoverOpen}
+      onOpenChange={handleUsagePopoverOpenChange}
+    >
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent
-        side="bottom"
-        align="end"
-        className="w-[320px] max-w-[calc(100vw-32px)] gap-3 text-xs"
-        data-testid="agent-gui-usage-popover"
-        onOpenAutoFocus={(event) => event.preventDefault()}
-        onMouseEnter={openUsage}
-        onMouseLeave={scheduleUsageClose}
-      >
-        <div className="flex min-w-0 flex-col gap-3">
-          <span className="text-[13px] font-semibold leading-4">
-            {labels.usagePopoverTitle}
-          </span>
-          {showTokens ? (
-            <AgentUsageMeter
-              label={labels.usageContextWindowLabel}
-              value={`${formatSlashStatusTokenCount(usedTokens)} / ${formatSlashStatusTokenCount(totalTokens)} (${clampedPercent}%)`}
-              percent={clampedPercent}
-              barColor={agentUsageBarColor(clampedPercent)}
-              testId="agent-gui-usage-context-meter"
-            />
-          ) : null}
-          {compactSupported && onCompact ? (
-            <button
-              type="button"
-              data-testid="agent-gui-compact-button"
-              disabled={compactDisabled}
-              className="nodrag inline-flex items-center justify-center rounded-[6px] bg-[var(--transparency-block)] px-2 py-1 text-[12px] font-medium text-[var(--text-primary)] transition-colors hover:bg-background-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-[var(--transparency-block)] [-webkit-app-region:no-drag]"
-              onClick={onCompact}
-            >
-              {labels.usageCompactAction}
-            </button>
-          ) : null}
-        </div>
-      </PopoverContent>
+      {usagePopoverOpen ? (
+        <PopoverContent
+          side="bottom"
+          align="end"
+          className="w-[320px] max-w-[calc(100vw-32px)] gap-3 text-xs"
+          data-testid="agent-gui-usage-popover"
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          onPointerEnter={openUsagePopover}
+          onPointerLeave={scheduleUsagePopoverClose}
+        >
+          <div className="flex min-w-0 flex-col gap-3">
+            <span className="text-[13px] font-semibold leading-4">
+              {labels.usagePopoverTitle}
+            </span>
+            {showTokens ? (
+              <AgentUsageMeter
+                label={labels.usageContextWindowLabel}
+                value={`${formatSlashStatusTokenCount(usedTokens)} / ${formatSlashStatusTokenCount(totalTokens)} (${clampedPercent}%)`}
+                percent={clampedPercent}
+                barColor={agentUsageBarColor(clampedPercent)}
+                testId="agent-gui-usage-context-meter"
+              />
+            ) : null}
+            {compactSupported && onCompact ? (
+              <button
+                type="button"
+                data-testid="agent-gui-compact-button"
+                disabled={compactDisabled}
+                className="nodrag inline-flex items-center justify-center rounded-[6px] bg-[var(--transparency-block)] px-2 py-1 text-[12px] font-medium text-[var(--text-primary)] transition-colors hover:bg-background-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-[var(--transparency-block)] [-webkit-app-region:no-drag]"
+                onClick={onCompact}
+              >
+                {labels.usageCompactAction}
+              </button>
+            ) : null}
+          </div>
+        </PopoverContent>
+      ) : null}
     </Popover>
   );
 }
