@@ -7,7 +7,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  RefreshIcon
+  RefreshIcon,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
 } from "@tutti-os/ui-system";
 import { closeAgentEnvPanel } from "@tutti-os/agent-gui/agent-env";
 import { useTranslation } from "@renderer/i18n";
@@ -44,6 +47,40 @@ export function AgentEnvPanel({
     workbenchHost
   });
   const providerLabel = resolveProviderLabel(provider);
+
+  // Re-detect is disabled while an install runs (busy) or a detect is already in
+  // flight (redetecting). Surface WHY via a tooltip — a disabled button with no
+  // hint reads as broken.
+  const redetectDisabled = viewModel.redetecting || viewModel.busy;
+  const redetectDisabledReason = viewModel.busy
+    ? t("workspace.agentEnv.redetectDisabledInstalling")
+    : viewModel.redetecting
+      ? t("workspace.agentEnv.redetectDisabledChecking")
+      : null;
+  const redetectButton = (
+    <Button
+      size="dialog"
+      type="button"
+      variant="ghost"
+      disabled={redetectDisabled}
+      onClick={actions.redetect}
+    >
+      <RefreshIcon className="size-4" />
+      {t("workspace.agentEnv.actionDetect")}
+    </Button>
+  );
+  const redetectControl = redetectDisabledReason ? (
+    <Tooltip>
+      {/* A disabled <button> emits no hover events, so the tooltip hangs off a
+          <span> wrapper that does. */}
+      <TooltipTrigger asChild>
+        <span className="inline-flex">{redetectButton}</span>
+      </TooltipTrigger>
+      <TooltipContent>{redetectDisabledReason}</TooltipContent>
+    </Tooltip>
+  ) : (
+    redetectButton
+  );
 
   // Do NOT early-return null when closed. This <Dialog> is a controlled Radix
   // dialog with disableOutsidePointerEvents; it must observe the open→false
@@ -101,16 +138,7 @@ export function AgentEnvPanel({
         ) : null}
 
         <DialogFooter className="flex shrink-0 items-center justify-between gap-2 border-t border-[var(--border-1)] px-5 py-4">
-          <Button
-            size="dialog"
-            type="button"
-            variant="ghost"
-            disabled={viewModel.redetecting || viewModel.busy}
-            onClick={actions.redetect}
-          >
-            <RefreshIcon className="size-4" />
-            {t("workspace.agentEnv.actionDetect")}
-          </Button>
+          {redetectControl}
           <Button
             size="dialog"
             type="button"

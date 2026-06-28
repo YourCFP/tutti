@@ -148,6 +148,8 @@ export const en = {
       busyInstalling: "Setting up {{provider}}…",
       busyVerifying: "Verifying {{provider}}…",
       actionDetect: "Re-check",
+      redetectDisabledInstalling: "Can't re-check while setting up",
+      redetectDisabledChecking: "Checking…",
       actionInstall: "Set up",
       actionRepair: "Repair install",
       actionUpgrade: "Upgrade",

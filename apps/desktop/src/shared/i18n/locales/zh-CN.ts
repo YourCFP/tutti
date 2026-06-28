@@ -145,6 +145,8 @@ export const zhCN = {
       busyInstalling: "正在设置 {{provider}}…",
       busyVerifying: "正在校验 {{provider}}…",
       actionDetect: "重新检测",
+      redetectDisabledInstalling: "安装进行中，暂时无法重新检测",
+      redetectDisabledChecking: "正在检测…",
       actionInstall: "安装",
       actionRepair: "修复安装",
       actionUpgrade: "升级",
