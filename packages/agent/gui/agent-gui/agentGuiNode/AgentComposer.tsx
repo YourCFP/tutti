@@ -193,6 +193,7 @@ export interface AgentComposerProps {
     modelContextWindowSuffix: string;
     modelTooltipVersionLabel: string;
     defaultModel: string;
+    loadingOptions: string;
     inheritedUnavailable: string;
     loadingConversation: string;
     reasoningLabel: string;
@@ -2772,7 +2773,8 @@ export function AgentComposer({
                   disabled={settingsControlsDisabled}
                   previewMode={previewMode}
                   labels={{
-                    permissionLabel: labels.permissionLabel
+                    permissionLabel: labels.permissionLabel,
+                    loadingOptions: labels.loadingOptions
                   }}
                   onSettingsChange={(patch) => onSettingsChange(patch)}
                 />
@@ -2809,8 +2811,8 @@ export function AgentComposer({
                     permissionLabel: labels.permissionLabel,
                     modelDescriptions: labels.modelDescriptions,
                     defaultModel: labels.defaultModel,
-                    inheritedUnavailable: labels.inheritedUnavailable,
-                    loadingSettings: labels.loadingConversation
+                    loadingOptions: labels.loadingOptions,
+                    inheritedUnavailable: labels.inheritedUnavailable
                   }}
                   onSettingsChange={onSettingsChange}
                 />

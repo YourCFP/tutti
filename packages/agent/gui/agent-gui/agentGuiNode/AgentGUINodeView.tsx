@@ -216,6 +216,7 @@ export interface AgentGUIViewLabels {
   modelContextWindowSuffix: string;
   modelTooltipVersionLabel: string;
   defaultModel: string;
+  loadingOptions: string;
   inheritedUnavailable: string;
   reasoningLabel: string;
   reasoningDegreeLabel: string;
@@ -1811,6 +1812,7 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       modelContextWindowSuffix: labels.modelContextWindowSuffix,
       modelTooltipVersionLabel: labels.modelTooltipVersionLabel,
       defaultModel: labels.defaultModel,
+      loadingOptions: labels.loadingOptions,
       inheritedUnavailable: labels.inheritedUnavailable,
       loadingConversation: labels.loadingConversation,
       reasoningLabel: labels.reasoningLabel,
@@ -2027,8 +2029,9 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   const stableRequestWorkspaceReferences = useOptionalStableEventCallback(
     onRequestWorkspaceReferences
   );
-  const stableSelectProjectDirectory =
-    useOptionalStableEventCallback(selectProjectDirectory);
+  const stableSelectProjectDirectory = useOptionalStableEventCallback(
+    selectProjectDirectory
+  );
   const stableRequestGitBranches =
     useOptionalStableEventCallback(onRequestGitBranches);
   const authLogin = useOptionalStableEventCallback(onAgentProviderLogin);
