@@ -424,6 +424,19 @@ func (siw *ServerInterfaceWrapper) GetAgentProviderStatuses(w http.ResponseWrite
 		return
 	}
 
+	// ------------- Optional query parameter "includeNetwork" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "includeNetwork", r.URL.Query(), &params.IncludeNetwork, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "includeNetwork"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "includeNetwork", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAgentProviderStatuses(w, r, params)
 	}))

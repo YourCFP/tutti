@@ -642,6 +642,36 @@ delimited by ---`, and the composer skill picker may show partial or
   Then trigger two install actions in quick succession and confirm the second
   waits for the first instead of starting another global npm mutation.
 
+### Agent provider install looks idle while a non-Codex installer is running
+
+- Symptom:
+  Provider setup appears stuck or idle even though `tuttid.log` has an
+  `agent provider install step started` entry and no matching completed/failed
+  line yet. This is most visible for Claude Code CLI or ACP adapter installs.
+- Quick checks:
+  Compare the install start timestamp with the log export timestamp before
+  calling it hung. Also check for a later completed install log line and the
+  provider binary path in the rechecked runtime log. If `tuttid.log` shows
+  `active_action.output_appended` but desktop diagnostics keep reporting
+  `logLines=0`, check whether the status request copied `activeAction` before
+  installer output arrived, or whether the renderer stopped refreshing while
+  the install action was still pending.
+- Root cause:
+  The provider installer is daemon-owned and can legitimately run for minutes,
+  but renderer progress must come from the generic provider `activeAction`
+  status field. Do not special-case long-running install progress to Codex.
+- Fix:
+  Set, stream stdout into, expose, and clear `ActiveAction` for every provider
+  install action. Keep provider-specific installer details inside
+  `services/tuttid/service/agentstatus` and project only the transport-safe
+  active action shape through the API seam. Refresh the provider's active action
+  snapshot at the end of `List`, and short-poll provider status while a daemon
+  install action is pending so live installer output can reach the wizard.
+- Validation:
+  Run `cd services/tuttid && go test ./service/agentstatus ./api` and
+  `pnpm check:api-generated`. Trigger a Claude Code install and confirm status
+  responses include `activeAction` while the CLI or adapter step is in flight.
+
 ### ACP adapter appears stale after external registry migration
 
 - Symptom:

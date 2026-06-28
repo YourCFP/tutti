@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -56,6 +57,49 @@ func TestServiceListReportsInstallActionWhenCLIMissing(t *testing.T) {
 	}
 	if action.Command != nil {
 		t.Fatalf("install command = %#v, want nil for daemon-managed install", action.Command)
+	}
+}
+
+func TestServiceListReturnsLatestActiveActionAfterNetworkProbe(t *testing.T) {
+	service := testService(func(_ string) (string, error) {
+		return "", errors.New("not found")
+	}, map[string]bool{})
+	activeCtx := withActiveActionToken(context.Background(), nextActiveActionToken())
+	// A login (not install) active action: List skips the network probe only
+	// while a provider is installing, so a non-install action keeps the probe
+	// running — which is what this test exercises (the active action is read
+	// after the probe, so output appended during it is surfaced).
+	claimActiveAction(activeCtx, "codex", ActiveAction{
+		ID:     ActionLogin,
+		Status: "running",
+		Step:   "cli",
+	})
+	t.Cleanup(func() { clearActiveAction(activeCtx, "codex") })
+	var appended atomic.Bool
+	service.HTTPClient = &http.Client{Transport: networkRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		if appended.CompareAndSwap(false, true) {
+			appendActiveActionStdout(activeCtx, "codex", "installer output\n")
+		}
+		return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody}, nil
+	})}
+	service.ResolveProxy = func(*http.Request) (*url.URL, error) {
+		return nil, nil
+	}
+
+	snapshot, err := service.List(context.Background(), ListInput{
+		Providers:      []string{"codex"},
+		IncludeNetwork: true,
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	status := onlyStatus(t, snapshot)
+	if status.ActiveAction == nil {
+		t.Fatal("ActiveAction = nil, want running action")
+	}
+	if !strings.Contains(status.ActiveAction.Stdout, "installer output") {
+		t.Fatalf("ActiveAction.Stdout = %q, want latest output", status.ActiveAction.Stdout)
 	}
 }
 
@@ -1122,6 +1166,86 @@ func TestServiceRunCodexInstallerReportsGlobalNPMActiveAction(t *testing.T) {
 	result := <-done
 	if result.Status != RunActionCompleted {
 		t.Fatalf("Status = %q, want completed; result=%#v", result.Status, result)
+	}
+}
+
+func TestServiceRunActionReportsActiveActionForClaudeInstall(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, "bin")
+	service := probeTestService(home)
+	service.Environ = func() []string {
+		return []string{"PATH=" + binDir}
+	}
+	service.IsExecutableFile = isTestExecutableUnderHome(home)
+	service.Registry = Registry{Specs: []ProviderSpec{{
+		Provider:       "claude-code",
+		BinaryNames:    []string{"claude-test"},
+		AdapterCommand: []string{"claude-test"},
+		Install: InstallerSpec{
+			Kind:           InstallerKindShellCommand,
+			DisplayCommand: "install claude test",
+			ShellCommand:   "install claude test",
+		},
+		LoginArgs: []string{"auth", "login"},
+	}}}
+
+	installStarted := make(chan struct{})
+	releaseInstall := make(chan struct{})
+	done := make(chan RunActionResult, 1)
+	var closeStartedOnce sync.Once
+	service.InstallCommand = func(ctx context.Context, input InstallCommandInput) (InstallCommandResult, error) {
+		input.OnStdout("installing claude")
+		closeStartedOnce.Do(func() { close(installStarted) })
+		select {
+		case <-releaseInstall:
+		case <-ctx.Done():
+			return InstallCommandResult{ExitCode: 1, Stderr: ctx.Err().Error()}, ctx.Err()
+		}
+		writeExecutable(t, filepath.Join(binDir, "claude-test"), "#!/bin/sh\nexit 0\n")
+		return InstallCommandResult{ExitCode: 0, Stdout: "installed"}, nil
+	}
+	go func() {
+		result, err := service.RunAction(context.Background(), RunActionInput{
+			Provider: "claude-code",
+			ActionID: ActionInstall,
+		})
+		if err != nil {
+			t.Errorf("RunAction() error = %v", err)
+		}
+		done <- result
+	}()
+
+	select {
+	case <-installStarted:
+	case result := <-done:
+		t.Fatalf("RunAction completed before install started: %#v", result)
+	}
+	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"claude-code"}})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	status := onlyStatus(t, snapshot)
+	if status.ActiveAction == nil {
+		t.Fatal("ActiveAction = nil, want running install action")
+	}
+	if status.ActiveAction.Step != "cli" {
+		t.Fatalf("ActiveAction.Step = %q, want cli", status.ActiveAction.Step)
+	}
+	if !strings.Contains(status.ActiveAction.Stdout, "installing claude") {
+		t.Fatalf("ActiveAction.Stdout = %q, want installer stdout", status.ActiveAction.Stdout)
+	}
+
+	close(releaseInstall)
+	result := <-done
+	if result.Status != RunActionCompleted {
+		t.Fatalf("Status = %q, want completed; result=%#v", result.Status, result)
+	}
+	snapshot, err = service.List(context.Background(), ListInput{Providers: []string{"claude-code"}})
+	if err != nil {
+		t.Fatalf("List() after install error = %v", err)
+	}
+	if activeAction := onlyStatus(t, snapshot).ActiveAction; activeAction != nil {
+		t.Fatalf("ActiveAction = %#v, want cleared", activeAction)
 	}
 }
 

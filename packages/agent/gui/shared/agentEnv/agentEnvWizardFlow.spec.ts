@@ -2,12 +2,40 @@ import { describe, expect, it } from "vitest";
 import {
   deriveAgentSetupStages,
   projectRevealedStages,
+  reasonCodeIndicatesCliVersionUnsupported,
   resolveWizardAutoStartAction,
   shouldAdvanceReveal,
   stageRemediation,
   type AgentSetupStage,
   type DeriveAgentSetupStagesInput
 } from "./agentEnvWizardFlow";
+
+describe("reasonCodeIndicatesCliVersionUnsupported", () => {
+  it("does NOT flag the CLI for an adapter version mismatch", () => {
+    // acp_adapter_version_mismatch contains "version" but is an ADAPTER problem;
+    // it must not red the CLI step ("版本不受支持").
+    expect(
+      reasonCodeIndicatesCliVersionUnsupported("acp_adapter_version_mismatch")
+    ).toBe(false);
+  });
+
+  it("flags genuine CLI-version reasons", () => {
+    expect(
+      reasonCodeIndicatesCliVersionUnsupported("codex_version_too_old")
+    ).toBe(true);
+    expect(
+      reasonCodeIndicatesCliVersionUnsupported("cli_version_unsupported")
+    ).toBe(true);
+  });
+
+  it("ignores non-version and empty reasons", () => {
+    expect(
+      reasonCodeIndicatesCliVersionUnsupported("acp_adapter_not_found")
+    ).toBe(false);
+    expect(reasonCodeIndicatesCliVersionUnsupported("")).toBe(false);
+    expect(reasonCodeIndicatesCliVersionUnsupported(null)).toBe(false);
+  });
+});
 
 const labels = {
   detect: "Detect",
@@ -56,6 +84,21 @@ describe("deriveAgentSetupStages", () => {
     ]);
   });
 
+  it("carries the cli version detail token on the install stage", () => {
+    const stages = deriveAgentSetupStages({
+      ...input(),
+      detected: true,
+      cliInstalled: true,
+      cliVersionDetail: { kind: "text", text: "1.2.3 · /usr/bin/codex" }
+    });
+    const install = stages.find((s) => s.id === "install");
+    expect(install).toBeDefined();
+    expect(install?.detail).toEqual({
+      kind: "text",
+      text: "1.2.3 · /usr/bin/codex"
+    });
+  });
+
   it("shows detect running and the rest pending before status is known", () => {
     const stages = deriveAgentSetupStages(input({ detected: false }));
     expect(stages.map((s) => [s.id, s.status])).toEqual([
@@ -81,11 +124,14 @@ describe("deriveAgentSetupStages", () => {
       input({
         cliInstalled: true,
         versionTooOld: true,
-        cliVersionDetail: "0.100.0"
+        cliVersionDetail: { kind: "text", text: "0.100.0" }
       })
     );
     expect(stage(stages, "install").status).toBe("error");
-    expect(stage(stages, "install").detail).toBe("0.100.0");
+    expect(stage(stages, "install").detail).toEqual({
+      kind: "text",
+      text: "0.100.0"
+    });
   });
 
   it("marks adapter pending when CLI is installed but the adapter is missing", () => {
@@ -116,12 +162,15 @@ describe("deriveAgentSetupStages", () => {
           input({
             cliInstalled: true,
             adapterInstalled: true,
-            adapterDetail: "claude-acp"
+            adapterDetail: { kind: "text", text: "claude-acp" }
           })
         ),
         "adapter"
       )
-    ).toMatchObject({ status: "ok", detail: "claude-acp" });
+    ).toMatchObject({
+      status: "ok",
+      detail: { kind: "text", text: "claude-acp" }
+    });
     expect(
       stage(
         deriveAgentSetupStages(
@@ -143,7 +192,7 @@ describe("deriveAgentSetupStages", () => {
         adapterInstalled: true,
         authRequired: true,
         loginPending: true,
-        cliVersionDetail: "0.142.1"
+        cliVersionDetail: { kind: "text", text: "0.142.1" }
       })
     );
     expect(stage(stages, "install").status).toBe("ok");
@@ -164,8 +213,8 @@ describe("deriveAgentSetupStages", () => {
         authenticated: true,
         ready: true,
         activePhase: "done",
-        cliVersionDetail: "0.142.1",
-        accountDetail: "user@example.com"
+        cliVersionDetail: { kind: "text", text: "0.142.1" },
+        accountDetail: { kind: "text", text: "user@example.com" }
       })
     );
     expect(stages.map((s) => s.status)).toEqual([
@@ -176,7 +225,10 @@ describe("deriveAgentSetupStages", () => {
       "ok",
       "ok"
     ]);
-    expect(stage(stages, "login").detail).toBe("user@example.com");
+    expect(stage(stages, "login").detail).toEqual({
+      kind: "text",
+      text: "user@example.com"
+    });
   });
 
   it("flags the network stage as error when connectivity is unreachable", () => {
@@ -190,11 +242,14 @@ describe("deriveAgentSetupStages", () => {
 
   it("shows the network stage ok with its registry detail when reachable", () => {
     const stages = deriveAgentSetupStages(
-      input({ networkReachable: true, networkDetail: "registry.npmjs.org" })
+      input({
+        networkReachable: true,
+        networkDetail: { kind: "text", text: "registry.npmjs.org" }
+      })
     );
     expect(stage(stages, "network")).toMatchObject({
       status: "ok",
-      detail: "registry.npmjs.org"
+      detail: { kind: "text", text: "registry.npmjs.org" }
     });
   });
 

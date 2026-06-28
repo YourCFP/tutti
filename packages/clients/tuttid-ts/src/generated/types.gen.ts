@@ -896,6 +896,41 @@ export type AgentProviderProbeStatus = "ready" | "failed" | "skipped";
 
 export type AgentProviderActionRunStatus = "completed" | "failed";
 
+export type AgentProviderActiveActionPhase =
+  | "detect"
+  | "install"
+  | "repair"
+  | "verify"
+  | "done"
+  | "error";
+
+export type AgentProviderActiveActionStepStatus =
+  | "pending"
+  | "running"
+  | "ok"
+  | "error"
+  | "skipped";
+
+export type AgentProviderActiveActionStep = {
+  id: string;
+  label: string | null;
+  status: AgentProviderActiveActionStepStatus;
+  detail: string | null;
+};
+
+export type AgentProviderActiveActionError = {
+  code: string | null;
+  message: string | null;
+};
+
+export type AgentProviderActiveAction = {
+  phase: AgentProviderActiveActionPhase;
+  steps: Array<AgentProviderActiveActionStep>;
+  registry: string | null;
+  log: Array<string>;
+  error: AgentProviderActiveActionError | null;
+};
+
 export type AgentProviderProbeResponse = {
   provider: WorkspaceAgentProvider;
   status: AgentProviderProbeStatus;
@@ -951,6 +986,14 @@ export type AgentProviderAdapterStatus = {
   installed: boolean;
   binaryPath?: string | null;
   command: Array<string>;
+  /**
+   * The installed ACP adapter package version, when resolvable. Lets the UI and telemetry show the actual adapter version (not just a path).
+   */
+  version?: string | null;
+  /**
+   * The adapter package version this provider requires. With version, lets the UI show "current X, requires Y" for an adapter version mismatch and makes the drift visible in telemetry.
+   */
+  requiredVersion?: string | null;
 };
 
 export type AgentProviderAuthInfo = {
@@ -966,6 +1009,7 @@ export type AgentProviderStatus = {
   auth: AgentProviderAuthInfo;
   actions: Array<AgentProviderAction>;
   network?: AgentProviderNetworkStatus | null;
+  activeAction?: AgentProviderActiveAction | null;
 };
 
 export type AgentProviderNetworkStatus = {
@@ -4679,6 +4723,10 @@ export type GetAgentProviderStatusesData = {
   path?: never;
   query?: {
     providers?: Array<WorkspaceAgentProvider>;
+    /**
+     * Opt into the network connectivity probe (registry / provider API / proxy reachability). Off by default so the common detection path stays local and never blocks on the network; only the agent-env wizard's network diagnostic sets this.
+     */
+    includeNetwork?: boolean;
   };
   url: "/v1/agent-providers/status";
 };

@@ -65,6 +65,12 @@ const (
 
 type ListInput struct {
 	Providers []string
+	// IncludeNetwork opts into the network connectivity probe (registry / provider
+	// API / proxy reachability). It is OFF by default so the common detection path
+	// — the dock, startup, polling, provider-availability — stays purely local and
+	// never blocks on the network. Only the agent-env wizard, which renders the
+	// network diagnostic, sets this.
+	IncludeNetwork bool
 }
 
 type ProbeInput struct {
@@ -160,6 +166,12 @@ type AdapterStatus struct {
 	Installed  bool
 	BinaryPath string
 	Command    []string
+	// Version is the installed adapter package version (when resolvable);
+	// RequiredVersion is the version this provider requires. Exposed so the UI
+	// can show "current X, requires Y" on an adapter version mismatch and so
+	// telemetry can surface the drift — the same data the readiness gate uses.
+	Version         string
+	RequiredVersion string
 }
 
 type AuthInfo struct {
@@ -241,14 +253,42 @@ func (s Service) List(ctx context.Context, input ListInput) (Snapshot, error) {
 		statuses = append(statuses, s.statusForSpec(ctx, spec, now))
 	}
 
+	// The network connectivity probe is OPT-IN (input.IncludeNetwork). The dock /
+	// startup / polling / provider-availability path leaves it off so detection is
+	// purely local and never blocks on a slow or black-holed network — those
+	// callers only need local availability (CLI/adapter/auth), never Network. Only
+	// the wizard, which renders the network diagnostic, opts in.
+	//
 	// Registry reachability (install path) and proxy detection are provider-
 	// independent, so probe them once; the API endpoint (run/login path) differs
 	// per provider, so probe that per status. All are reported separately on each
 	// provider's Network.
-	if len(statuses) > 0 {
-		registry := s.probeRegistry(ctx)
-		proxy := s.probeProxy(ctx)
+	//
+	// Even when opted in, skip the probe for any provider that is mid-install: the
+	// network doesn't change during an install, and the per-second install-progress
+	// poll would otherwise re-probe it every tick, making the network step flicker.
+	// Such a provider reports no Network (the UI treats nil as "not a blocker"); a
+	// full re-detect after the install refreshes it. When every requested provider
+	// is installing, even the shared registry/proxy probes are skipped.
+	if input.IncludeNetwork && len(statuses) > 0 {
+		installing := make([]bool, len(statuses))
+		anyNeedsNetwork := false
 		for i := range statuses {
+			installing[i] = providerInstallInFlight(statuses[i].Provider)
+			if !installing[i] {
+				anyNeedsNetwork = true
+			}
+		}
+		var registry NetworkEndpointStatus
+		var proxy *NetworkProxyStatus
+		if anyNeedsNetwork {
+			registry = s.probeRegistry(ctx)
+			proxy = s.probeProxy(ctx)
+		}
+		for i := range statuses {
+			if installing[i] {
+				continue
+			}
 			api := s.probeProviderAPI(ctx, statuses[i].Provider)
 			statuses[i].Network = &NetworkStatus{
 				Registry:    registry,
@@ -257,6 +297,9 @@ func (s Service) List(ctx context.Context, input ListInput) (Snapshot, error) {
 			}
 			logNetworkProbe(statuses[i].Provider, registry, api, proxy)
 		}
+	}
+	for i := range statuses {
+		statuses[i].ActiveAction = activeActionForProvider(statuses[i].Provider)
 	}
 
 	return Snapshot{
@@ -376,11 +419,17 @@ func (s Service) runInstallAction(ctx context.Context, spec ProviderSpec, result
 	if result, ok := unsupportedProviderRunActionResult(spec, result); ok {
 		return result, nil
 	}
-	if spec.Provider == agentprovider.Codex {
-		defer clearActiveAction(spec.Provider)
-	}
+	// Tag this run's context with a unique token and claim ownership of the
+	// provider's active action, so a concurrent install of the same provider
+	// can't cross-contaminate stdout or have our deferred clear delete its entry.
+	installCtx := withActiveActionToken(baseContext(ctx), nextActiveActionToken())
+	claimActiveAction(installCtx, spec.Provider, ActiveAction{
+		ID:     ActionInstall,
+		Status: "running",
+	})
+	defer clearActiveAction(installCtx, spec.Provider)
 	runtimeResolution := s.resolveProviderRuntime(ctx, spec)
-	summary, updatedRuntime, err := s.installMissingProviderRuntime(baseContext(ctx), spec, runtimeResolution)
+	summary, updatedRuntime, err := s.installMissingProviderRuntime(installCtx, spec, runtimeResolution)
 	result.Command = strings.Join(summary.Commands, " && ")
 	result.Stdout = trimActionOutput(strings.Join(summary.Stdout, "\n"))
 	result.Stderr = trimActionOutput(strings.Join(summary.Stderr, "\n"))
@@ -519,18 +568,34 @@ func (s Service) statusForSpec(ctx context.Context, spec ProviderSpec, now time.
 			Version:    cliVersion,
 		},
 		Adapter: AdapterStatus{
-			Installed:  adapterReady,
-			BinaryPath: runtimeResolution.AdapterPath,
-			Command:    cloneStrings(runtimeResolution.AdapterCommand),
+			Installed:       adapterReady,
+			BinaryPath:      runtimeResolution.AdapterPath,
+			Command:         cloneStrings(runtimeResolution.AdapterCommand),
+			Version:         runtimeResolution.AdapterVersion,
+			RequiredVersion: spec.AdapterPackage.Version,
 		},
 		Auth:    auth,
 		Actions: actions,
+	}
+	status.ActiveAction = activeActionForProvider(spec.Provider)
+	if status.ActiveAction != nil {
+		bytes, lines := activeActionOutputStats(status.ActiveAction.Stdout)
+		slog.Info(
+			"agent provider status attached active action",
+			"event", "tutti.agent_provider.status.active_action_attached",
+			"provider", spec.Provider,
+			"availability", status.Availability.Status,
+			"reasonCode", status.Availability.ReasonCode,
+			"step", status.ActiveAction.Step,
+			"registryPresent", strings.TrimSpace(status.ActiveAction.Registry) != "",
+			"stdoutBytes", bytes,
+			"stdoutLines", lines,
+		)
 	}
 	if spec.Provider == agentprovider.Codex {
 		status.CLI.MinVersion = MinSupportedCodexVersion
 		status.Checks = codexProviderChecks(status, codexPlatformOK)
 		status.LastError = codexProviderLastError(status)
-		status.ActiveAction = activeActionForProvider(spec.Provider)
 		slog.Info(
 			"codex agent provider status checked",
 			"availability", status.Availability.Status,

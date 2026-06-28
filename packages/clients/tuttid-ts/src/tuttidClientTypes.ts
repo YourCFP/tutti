@@ -257,6 +257,12 @@ export interface TuttidClient {
   ): Promise<AgentProviderComposerOptionsResponse>;
   getAgentProviderStatuses(request?: {
     providers?: WorkspaceAgentProvider[];
+    /**
+     * Opt into the network connectivity probe. Off by default so the dock /
+     * startup detection stays local and never blocks on the network; only the
+     * agent-env wizard's network diagnostic sets this.
+     */
+    includeNetwork?: boolean;
   }): Promise<AgentProviderStatusListResponse>;
   probeAgentProvider(
     provider: WorkspaceAgentProvider
