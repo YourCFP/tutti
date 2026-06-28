@@ -77,7 +77,9 @@ type AgentStatusProviderAvailabilityChecker struct {
 }
 
 type AgentProviderStatusLister interface {
-	List(context.Context, agentstatusservice.ListInput) (agentstatusservice.Snapshot, error)
+	// Detect probes fresh — availability checks need current truth, not the
+	// cheap cached read (GetStatus).
+	Detect(context.Context, agentstatusservice.ListInput) (agentstatusservice.Snapshot, error)
 }
 
 func (s *Service) ListProviderAvailability(ctx context.Context, input ProviderAvailabilityInput) ([]ProviderAvailability, error) {
@@ -148,7 +150,7 @@ func (c AgentStatusProviderAvailabilityChecker) ListProviderAvailability(
 	if service == nil {
 		service = agentstatusservice.Service{}
 	}
-	snapshot, err := service.List(ctx, agentstatusservice.ListInput{Providers: providers})
+	snapshot, err := service.Detect(ctx, agentstatusservice.ListInput{Providers: providers})
 	if err != nil {
 		return nil, err
 	}

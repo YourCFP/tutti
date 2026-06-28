@@ -258,6 +258,9 @@ export interface TuttidClient {
   getAgentProviderStatuses(request?: {
     providers?: WorkspaceAgentProvider[];
   }): Promise<AgentProviderStatusListResponse>;
+  detectAgentProviders(request?: {
+    providers?: WorkspaceAgentProvider[];
+  }): Promise<AgentProviderStatusListResponse>;
   probeAgentProvider(
     provider: WorkspaceAgentProvider
   ): Promise<AgentProviderProbeResponse>;
