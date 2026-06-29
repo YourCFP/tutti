@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceAgentSessionDetailViewModel } from "../../shared/workspaceAgentSessionDetailViewModel";
 import type { AgentGUINodeViewModel } from "./model/agentGuiNodeTypes";
 import { AgentGUINodeView, type AgentGUIViewLabels } from "./AgentGUINodeView";
+import { createLocalAgentGUIProviderTarget } from "../../providerTargets";
 
 const conversationFlowMock = vi.hoisted(() => ({
   calls: [] as Array<{ conversation: unknown; labels: unknown }>
@@ -24,6 +25,7 @@ const conversationMetaMock = vi.hoisted(() => ({
 const composerMock = vi.hoisted(() => ({
   calls: [] as Array<{
     composerFocusRequestSequence?: number | null;
+    compactSupported?: boolean | null;
     isSendingTurn?: boolean;
     showStopButton?: boolean;
     usage?: AgentGUINodeViewModel["usage"];
@@ -49,12 +51,14 @@ vi.mock("./AgentSessionChrome", () => ({
 vi.mock("./AgentComposer", () => ({
   AgentComposer: (props: {
     composerFocusRequestSequence?: number | null;
+    compactSupported?: boolean | null;
     isSendingTurn?: boolean;
     showStopButton?: boolean;
     usage?: AgentGUINodeViewModel["usage"];
   }) => {
     composerMock.calls.push({
       composerFocusRequestSequence: props.composerFocusRequestSequence,
+      compactSupported: props.compactSupported,
       isSendingTurn: props.isSendingTurn,
       showStopButton: props.showStopButton,
       usage: props.usage
@@ -351,7 +355,8 @@ describe("AgentGUINodeView layout persistence", () => {
     fireEvent.click(screen.getByLabelText("New session"));
 
     expect(actions.createConversation).toHaveBeenCalledWith({
-      projectPath: "/workspace/app"
+      projectPath: "/workspace/app",
+      source: "project_section"
     });
     expect(composerMock.calls.at(-1)?.composerFocusRequestSequence).toBe(1);
   });
@@ -384,7 +389,8 @@ describe("AgentGUINodeView layout persistence", () => {
     );
 
     expect(actions.createConversation).toHaveBeenCalledWith({
-      projectPath: null
+      projectPath: null,
+      source: "unscoped_section"
     });
     await waitFor(() => {
       expect(composerMock.calls.at(-1)?.composerFocusRequestSequence).toBe(1);
@@ -428,7 +434,8 @@ describe("AgentGUINodeView layout persistence", () => {
     );
 
     expect(actions.createConversation).toHaveBeenCalledWith({
-      projectPath: null
+      projectPath: null,
+      source: "unscoped_section"
     });
   });
 
@@ -467,7 +474,8 @@ describe("AgentGUINodeView layout persistence", () => {
     fireEvent.click(newConversationButton);
 
     expect(actions.createConversation).toHaveBeenCalledWith({
-      projectPath: "/workspace/app"
+      projectPath: "/workspace/app",
+      source: "selected_project"
     });
     expect(composerMock.calls.at(-1)?.composerFocusRequestSequence).toBe(1);
   });
@@ -1413,6 +1421,9 @@ describe("AgentGUINodeView detail header actions", () => {
     renderAgentGUINodeView({ viewModel: headerActionViewModel() });
 
     expect(composerMock.calls.at(-1)?.usage).toMatchObject(usageWithWindow);
+    // The bottom-dock composer (active conversation) must receive
+    // compactSupported so its usage popover can render the compact button.
+    expect(composerMock.calls.at(-1)?.compactSupported).toBe(true);
     expect(screen.queryByTestId("agent-gui-compact-button")).toBeNull();
     expect(statusDotMock.calls).not.toContainEqual(
       expect.objectContaining({
@@ -1589,6 +1600,7 @@ function createViewModel(): AgentGUINodeViewModel {
       lastActiveAgentSessionId: null,
       conversationRailWidthPx: null
     },
+    selectedProviderTarget: createLocalAgentGUIProviderTarget("codex"),
     conversations: [],
     userProjects: [],
     activeConversation: null,
@@ -1734,6 +1746,7 @@ function createLabels(): AgentGUIViewLabels {
     modelContextWindowSuffix: "context window",
     modelTooltipVersionLabel: "Version",
     defaultModel: "defaultModel",
+    loadingOptions: "loadingOptions",
     inheritedUnavailable: "inheritedUnavailable",
     reasoningLabel: "reasoning",
     reasoningDegreeLabel: "reasoningDegreeLabel",
@@ -1800,6 +1813,7 @@ function createLabels(): AgentGUIViewLabels {
     empty: "empty",
     conversations: "conversations",
     newConversation: "newConversation",
+    agentConfig: "agentConfig",
     agentEnvSetup: "agentEnvSetup",
     noConversations: "noConversations",
     emptyProjectConversations: "emptyProjectConversations",

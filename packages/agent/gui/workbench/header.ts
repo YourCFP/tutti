@@ -133,9 +133,11 @@ export function AgentGuiWorkbenchHeader({
       iconUrl
         ? createElement("img", {
             alt: "",
-            "aria-hidden": "true",
+            "aria-hidden": true,
             className: "agent-gui-workbench-header__agent-icon",
+            "data-agent-gui-workbench-header-icon": "true",
             "data-testid": "agent-gui-window-title-icon",
+            draggable: false,
             src: iconUrl
           })
         : null,

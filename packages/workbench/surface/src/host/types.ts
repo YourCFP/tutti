@@ -27,6 +27,7 @@ import type {
 import type {
   WorkbenchDockPlacement,
   WorkbenchMinimizeAnimation,
+  WorkbenchWindowSurfaceLayer,
   WorkbenchWindowHeaderDragHandleProps
 } from "../react/types.ts";
 import type { WorkbenchDockPreviewCache } from "../react/dockPreviewCache.ts";
@@ -313,7 +314,13 @@ export interface WorkbenchHostNodeWindowCapabilities {
   minimizedDock?: WorkbenchHostNodeMinimizedDockCapability;
   persists?: boolean;
   restoreOnLoad?: boolean;
+  surfaceLayer?: WorkbenchHostNodeWindowSurfaceLayer;
 }
+
+export type WorkbenchHostNodeWindowSurfaceLayer = Exclude<
+  WorkbenchWindowSurfaceLayer,
+  "default"
+>;
 
 export type WorkbenchHostNodeMinimizedDockCapability =
   | {

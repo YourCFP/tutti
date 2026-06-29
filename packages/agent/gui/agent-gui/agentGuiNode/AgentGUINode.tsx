@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo } from "react";
 import { createWorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
+import { createWorkspaceFileManagerI18nRuntime } from "@tutti-os/workspace-file-manager";
 import { useTranslation, type TranslateFn } from "../../i18n/index";
 import { toLocalShortDateTime } from "../../app/renderer/shell/utils/format";
 import type {
@@ -17,7 +18,13 @@ import type {
   AgentSettings
 } from "../../contexts/settings/domain/agentSettings";
 import type { WorkspaceLinkAction } from "../../actions/workspaceLinkActions";
-import type { AgentGUINodeData, NodeFrame, Point } from "../../types";
+import type {
+  AgentGUINodeData,
+  AgentGUIProviderTarget,
+  NodeFrame,
+  Point
+} from "../../types";
+import { agentGUIProviderTargetRefsEqual } from "../../providerTargets";
 import type {
   DesktopSize,
   WorkspaceDesktopAgentProbeDemandChange,
@@ -30,7 +37,8 @@ import { CanvasNodePanelLinedIcon } from "../shared/canvasNodeChromeIcons";
 import { useAgentGUINodeController } from "./controller/useAgentGUINodeController";
 import type {
   AgentGUIOpenSessionRequest,
-  AgentGUIPrefillPromptRequest
+  AgentGUIPrefillPromptRequest,
+  AgentGUIRememberComposerDefaultsInput
 } from "./controller/useAgentGUINodeController";
 import {
   AgentGUINodeView,
@@ -74,6 +82,7 @@ import type {
   AgentComposerGitBranchLoader,
   AgentComposerSlashStatusLimit
 } from "./AgentComposer";
+import { agentGuiDockIconUrls } from "../../dockIcons";
 
 const workspaceFileReferenceLocaleKeyByPickerKey: Record<string, string> = {
   "actions.cancel": "common.cancel",
@@ -169,6 +178,8 @@ export interface AgentGUINodeProps {
     capability: AgentComposerCapabilitySettingsTarget
   ) => void;
   onAgentProviderLogin?: (provider: AgentProvider) => void;
+  providerTargets?: readonly AgentGUIProviderTarget[];
+  defaultProviderTargetId?: string | null;
   onWorkspaceFileReferencesAdded?: (input: {
     provider: AgentProvider;
     references: readonly WorkspaceFileReference[];
@@ -179,6 +190,9 @@ export interface AgentGUINodeProps {
   onUpdateNode: (
     updater: (current: AgentGUINodeData) => AgentGUINodeData
   ) => void;
+  onRememberComposerDefaults?: (
+    input: AgentGUIRememberComposerDefaultsInput
+  ) => void | Promise<void>;
   isMaximized?: boolean;
   isActive: boolean;
   composerFocusRequestSequence?: number | null;
@@ -399,6 +413,11 @@ function agentGuiStateEquals(
   return (
     left === right ||
     (left.provider === right.provider &&
+      (left.providerTargetId ?? null) === (right.providerTargetId ?? null) &&
+      agentGUIProviderTargetRefsEqual(
+        left.providerTargetRef,
+        right.providerTargetRef
+      ) &&
       left.lastActiveAgentSessionId === right.lastActiveAgentSessionId &&
       left.conversationRailWidthPx === right.conversationRailWidthPx &&
       left.conversationRailCollapsed === right.conversationRailCollapsed &&
@@ -477,9 +496,12 @@ function areAgentGUINodePropsEqual(
     previous.onLinkAction === next.onLinkAction &&
     previous.onCapabilitySettingsRequest === next.onCapabilitySettingsRequest &&
     previous.onAgentProviderLogin === next.onAgentProviderLogin &&
+    previous.providerTargets === next.providerTargets &&
+    previous.defaultProviderTargetId === next.defaultProviderTargetId &&
     previous.onClose === next.onClose &&
     previous.onResize === next.onResize &&
     previous.onUpdateNode === next.onUpdateNode &&
+    previous.onRememberComposerDefaults === next.onRememberComposerDefaults &&
     previous.onOpenConversationWindow === next.onOpenConversationWindow &&
     previous.isMaximized === next.isMaximized &&
     previous.isMuted === next.isMuted &&
@@ -529,11 +551,14 @@ export const AgentGUINode = memo(function AgentGUINode({
   capabilityMenuState,
   onCapabilitySettingsRequest,
   onAgentProviderLogin,
+  providerTargets,
+  defaultProviderTargetId = null,
   onWorkspaceFileReferencesAdded,
   onOpenConversationWindow,
   onClose,
   onResize,
   onUpdateNode,
+  onRememberComposerDefaults,
   isMaximized = false,
   isActive,
   composerFocusRequestSequence = null,
@@ -556,6 +581,13 @@ export const AgentGUINode = memo(function AgentGUINode({
   const { i18n, locale, t } = useTranslation();
   const workspaceUserProjectI18n = useMemo(
     () => createWorkspaceUserProjectI18nRuntime(i18n),
+    [i18n]
+  );
+  const workspaceFileManagerI18n = useMemo(
+    () =>
+      typeof i18n?.t === "function"
+        ? createWorkspaceFileManagerI18nRuntime(i18n)
+        : null,
     [i18n]
   );
   const handleLinkAction = useCallback(
@@ -688,8 +720,11 @@ export const AgentGUINode = memo(function AgentGUINode({
     data: state,
     openSessionRequest,
     prefillPromptRequest,
+    providerTargets,
+    defaultProviderTargetId,
     previewMode,
     onDataChange: handleDataChange,
+    onRememberComposerDefaults,
     onShowMessage
   });
   const handleCreateConversation = useCallback(
@@ -721,13 +756,16 @@ export const AgentGUINode = memo(function AgentGUINode({
   const fallbackAgentTitle = t("sidebar.fallbackAgentLabel");
   const activeProvider =
     viewModel.activeConversation?.provider ?? state.provider;
-  const displayProviderLabel = resolveAgentGUIProviderDisplayLabel(
-    activeProvider,
-    fallbackAgentTitle
-  );
-  const windowAgentTitle =
-    getAgentHostManagedToolchainAgentByName(activeProvider)?.label ??
-    displayProviderLabel;
+  const selectedProviderTargetLabel =
+    viewModel.selectedProviderTarget?.label ??
+    resolveAgentGUIProviderDisplayLabel(state.provider, fallbackAgentTitle);
+  const displayProviderLabel = viewModel.activeConversation
+    ? resolveAgentGUIProviderDisplayLabel(activeProvider, fallbackAgentTitle)
+    : selectedProviderTargetLabel;
+  const windowAgentTitle = viewModel.activeConversation
+    ? (getAgentHostManagedToolchainAgentByName(activeProvider)?.label ??
+      displayProviderLabel)
+    : displayProviderLabel;
   const activeConversationDockTitle = viewModel.activeConversation
     ? resolveAgentGUIDockConversationTitle(viewModel.activeConversation)
     : null;
@@ -768,6 +806,7 @@ export const AgentGUINode = memo(function AgentGUINode({
         "agentHost.agentGui.modelTooltipVersionLabel"
       ),
       defaultModel: t("agentHost.agentGui.defaultModel"),
+      loadingOptions: t("agentHost.agentGui.loadingOptions"),
       inheritedUnavailable: t("agentHost.agentGui.inheritedUnavailable"),
       reasoningLabel: t("agentHost.agentGui.reasoningLabel"),
       reasoningDegreeLabel: t("agentHost.agentGui.reasoningDegreeLabel"),
@@ -869,6 +908,7 @@ export const AgentGUINode = memo(function AgentGUINode({
       emptyProvider: displayProviderLabel,
       conversations: t("agentHost.agentGui.conversations"),
       newConversation: t("agentHost.agentGui.newConversation"),
+      agentConfig: t("agentHost.agentGui.agentConfig"),
       agentEnvSetup: t("agentHost.agentGui.agentEnvSetup"),
       noConversations: t("agentHost.agentGui.noConversations"),
       emptyProjectConversations: t(
@@ -1154,6 +1194,9 @@ export const AgentGUINode = memo(function AgentGUINode({
     (isConversationRailCollapsed ? activeConversationWindowTitle : null) ||
     windowAgentTitle ||
     title;
+  const windowTitleIconUrl =
+    agentGuiDockIconUrls[activeProvider as keyof typeof agentGuiDockIconUrls] ??
+    null;
   useEffect(() => {
     if (previewMode) {
       return;
@@ -1274,6 +1317,18 @@ export const AgentGUINode = memo(function AgentGUINode({
       nodeId={nodeId}
       kind="agentGui"
       title={windowTitle}
+      titleIcon={
+        windowTitleIconUrl ? (
+          <img
+            src={windowTitleIconUrl}
+            alt=""
+            draggable={false}
+            aria-hidden="true"
+            className="size-4 rounded-[4px]"
+            data-agent-gui-window-provider-icon="true"
+          />
+        ) : null
+      }
       position={position}
       width={width}
       height={height}
@@ -1375,6 +1430,7 @@ export const AgentGUINode = memo(function AgentGUINode({
             onConversationRailWidthChanged={handleConversationRailWidthChanged}
             labels={labels}
             workspaceUserProjectI18n={workspaceUserProjectI18n}
+            workspaceFileManagerCopy={workspaceFileManagerI18n}
             workspaceFileReferenceAdapter={workspaceFileReferenceAdapter}
             onOpenConversationWindow={onOpenConversationWindow}
             onRequestGitBranches={onRequestGitBranches}

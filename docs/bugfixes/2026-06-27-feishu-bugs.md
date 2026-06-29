@@ -29,3 +29,18 @@
 - Status: fixed locally
 - Commit: pending
 - Feishu status update: not updated.
+
+## Untracked - workspace app update confirmation shown for unopened app
+
+- Bug: App Center showed the strong update confirmation for a running workspace app even when no workbench app window was currently open.
+- Evidence: The shared App Center panel gated the confirmation on `app.installed && app.status === "running"`, which reflects runtime process state rather than whether a `workspace-app-webview` node is open in the workspace.
+- Cause: Runtime state and visible/open workbench state were conflated. A background running runtime can be updated without interrupting an open app window, so it should not require the restart warning prompt.
+- Fix: Desktop now provides App Center with a real-time workbench webview-open check from the current `WorkbenchHost` snapshot. The update confirmation appears only when the app runtime is running and its workspace app webview is currently open; unopened running apps go directly into the update flow.
+- Verification:
+  - `node --test --experimental-strip-types ./src/ui/AppCenterPanel.source.test.ts` from `packages/workspace/app-center`
+  - `node --import ./test/register-asset-stub.mjs --test --experimental-strip-types ./src/renderer/src/features/workspace-app-center/services/internal/workspaceAppCenterService.test.ts` from `apps/desktop`
+  - `pnpm lint:ts`
+  - `pnpm typecheck`
+  - `pnpm check:changed --tail-lines 120`
+- Status: fixed locally
+- Commit: pending
