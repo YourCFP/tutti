@@ -84,14 +84,18 @@
     var(--rich-text-at-mention-success-fg) 12%,
     transparent
   );
-  --rich-text-at-mention-warning-fg: var(--color-amber-500, #d97706);
+  --rich-text-at-mention-warning-fg: var(--state-warning, rgb(234 121 8));
   --rich-text-at-mention-warning-bg: color-mix(
     in srgb,
     var(--rich-text-at-mention-warning-fg) 12%,
     transparent
   );
-  --rich-text-at-mention-info-fg: #0369a1;
-  --rich-text-at-mention-info-bg: rgb(14 165 233 / 10%);
+  --rich-text-at-mention-info-fg: var(--status-running, rgb(65 130 245));
+  --rich-text-at-mention-info-bg: color-mix(
+    in srgb,
+    var(--rich-text-at-mention-info-fg) 12%,
+    transparent
+  );
 }
 
 .rich-text-at-mention-palette__shell {
