@@ -2428,6 +2428,12 @@ type GetAgentProviderComposerOptionsRequest struct {
 	WorkspaceId *string `json:"workspaceId,omitempty"`
 }
 
+// GetWorkspaceAppFactoryProviderComposerOptionsRequest defines model for GetWorkspaceAppFactoryProviderComposerOptionsRequest.
+type GetWorkspaceAppFactoryProviderComposerOptionsRequest struct {
+	Locale   *DesktopLocale                `json:"locale,omitempty"`
+	Settings *AgentSessionComposerSettings `json:"settings,omitempty"`
+}
+
 // HealthStatusResponse defines model for HealthStatusResponse.
 type HealthStatusResponse struct {
 	Service string                     `json:"service"`
@@ -3817,6 +3823,9 @@ type CreateWorkspaceAppFactoryJobJSONRequestBody = CreateWorkspaceAppFactoryJobR
 
 // FixWorkspaceAppFactoryJobJSONRequestBody defines body for FixWorkspaceAppFactoryJob for application/json ContentType.
 type FixWorkspaceAppFactoryJobJSONRequestBody = FixWorkspaceAppFactoryJobRequest
+
+// GetWorkspaceAppFactoryProviderComposerOptionsJSONRequestBody defines body for GetWorkspaceAppFactoryProviderComposerOptions for application/json ContentType.
+type GetWorkspaceAppFactoryProviderComposerOptionsJSONRequestBody = GetWorkspaceAppFactoryProviderComposerOptionsRequest
 
 // ImportWorkspaceAppJSONRequestBody defines body for ImportWorkspaceApp for application/json ContentType.
 type ImportWorkspaceAppJSONRequestBody = ImportWorkspaceAppRequest

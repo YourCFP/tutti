@@ -354,7 +354,8 @@ describe("AgentGUINodeView layout persistence", () => {
     fireEvent.click(screen.getByLabelText("New session"));
 
     expect(actions.createConversation).toHaveBeenCalledWith({
-      projectPath: "/workspace/app"
+      projectPath: "/workspace/app",
+      source: "project_section"
     });
     expect(composerMock.calls.at(-1)?.composerFocusRequestSequence).toBe(1);
   });
@@ -387,7 +388,8 @@ describe("AgentGUINodeView layout persistence", () => {
     );
 
     expect(actions.createConversation).toHaveBeenCalledWith({
-      projectPath: null
+      projectPath: null,
+      source: "unscoped_section"
     });
     await waitFor(() => {
       expect(composerMock.calls.at(-1)?.composerFocusRequestSequence).toBe(1);
@@ -431,7 +433,8 @@ describe("AgentGUINodeView layout persistence", () => {
     );
 
     expect(actions.createConversation).toHaveBeenCalledWith({
-      projectPath: null
+      projectPath: null,
+      source: "unscoped_section"
     });
   });
 
@@ -470,7 +473,8 @@ describe("AgentGUINodeView layout persistence", () => {
     fireEvent.click(newConversationButton);
 
     expect(actions.createConversation).toHaveBeenCalledWith({
-      projectPath: "/workspace/app"
+      projectPath: "/workspace/app",
+      source: "selected_project"
     });
     expect(composerMock.calls.at(-1)?.composerFocusRequestSequence).toBe(1);
   });

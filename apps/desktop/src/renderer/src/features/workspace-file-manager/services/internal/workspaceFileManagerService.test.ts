@@ -788,6 +788,7 @@ function createDependenciesStub(): {
       getWorkspace: fail,
       getWorkspaceAgentSession: fail,
       getWorkspaceAppFactoryJob: fail,
+      getWorkspaceAppFactoryProviderComposerOptions: fail,
       getAgentProviderComposerOptions: fail,
       getAgentProviderStatuses: fail,
       probeAgentProvider: fail,

@@ -840,6 +840,11 @@ export type GetAgentProviderComposerOptionsRequest = {
   settings?: AgentSessionComposerSettings;
 };
 
+export type GetWorkspaceAppFactoryProviderComposerOptionsRequest = {
+  locale?: DesktopLocale;
+  settings?: AgentSessionComposerSettings;
+};
+
 export type AgentProviderComposerOptionsResponse = {
   provider: WorkspaceAgentProvider;
   modelConfig: AgentProviderComposerConfig;
@@ -4000,6 +4005,56 @@ export type CreateWorkspaceAppFactoryJobResponses = {
 
 export type CreateWorkspaceAppFactoryJobResponse =
   CreateWorkspaceAppFactoryJobResponses[keyof CreateWorkspaceAppFactoryJobResponses];
+
+export type GetWorkspaceAppFactoryProviderComposerOptionsData = {
+  body?: GetWorkspaceAppFactoryProviderComposerOptionsRequest;
+  path: {
+    workspaceID: string;
+    provider: WorkspaceAgentProvider;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/app-factory/providers/{provider}/composer-options";
+};
+
+export type GetWorkspaceAppFactoryProviderComposerOptionsErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type GetWorkspaceAppFactoryProviderComposerOptionsError =
+  GetWorkspaceAppFactoryProviderComposerOptionsErrors[keyof GetWorkspaceAppFactoryProviderComposerOptionsErrors];
+
+export type GetWorkspaceAppFactoryProviderComposerOptionsResponses = {
+  /**
+   * App Factory provider composer options
+   */
+  200: AgentProviderComposerOptionsResponse;
+};
+
+export type GetWorkspaceAppFactoryProviderComposerOptionsResponse =
+  GetWorkspaceAppFactoryProviderComposerOptionsResponses[keyof GetWorkspaceAppFactoryProviderComposerOptionsResponses];
 
 export type DeleteWorkspaceAppFactoryJobData = {
   body?: never;

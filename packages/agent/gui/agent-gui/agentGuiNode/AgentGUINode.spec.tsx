@@ -1449,7 +1449,9 @@ describe("AgentGUINode", () => {
     fireEvent.click(getChromeNewConversationButton());
 
     expect(mockCreateConversation).toHaveBeenCalledTimes(1);
-    expect(mockCreateConversation).toHaveBeenCalledWith();
+    expect(mockCreateConversation).toHaveBeenCalledWith({
+      source: "rail_toolbar"
+    });
   });
 
   it("renders a single new-conversation button in the chrome", () => {

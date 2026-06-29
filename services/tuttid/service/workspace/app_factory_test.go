@@ -31,6 +31,7 @@ type workspaceAppFactoryPublisherStub struct {
 type factoryAgentSessionServiceStub struct {
 	createdWorkspaceID string
 	createInput        agentservice.CreateSessionInput
+	composerInput      agentservice.ComposerOptionsInput
 	sendInput          agentservice.SendInput
 	canceledSessionID  string
 }
@@ -129,6 +130,18 @@ func (s *factoryAgentSessionServiceStub) Create(_ context.Context, workspaceID s
 	return agentservice.Session{ID: input.AgentSessionID, Provider: input.Provider}, nil
 }
 
+func (s *factoryAgentSessionServiceStub) GetComposerOptions(_ context.Context, input agentservice.ComposerOptionsInput) (agentservice.ComposerOptions, error) {
+	s.composerInput = input
+	return agentservice.ComposerOptions{
+		Provider: input.Provider,
+		EffectiveSettings: agentservice.ComposerSettings{
+			Model:            input.Settings.Model,
+			PermissionModeID: input.Settings.PermissionModeID,
+			ReasoningEffort:  input.Settings.ReasoningEffort,
+		},
+	}, nil
+}
+
 func (s *factoryAgentSessionServiceStub) SendInput(_ context.Context, _ string, _ string, input agentservice.SendInput) (agentservice.SendInputResult, error) {
 	s.sendInput = input
 	return agentservice.SendInputResult{}, nil
@@ -145,6 +158,57 @@ func (s *factoryAgentSessionServiceStub) Cancel(_ context.Context, _ string, ses
 
 func (s workspaceRootResolverStub) ResolveWorkspaceRoot(context.Context, string) (workspacefiles.WorkspaceRoot, error) {
 	return s.root, nil
+}
+
+func TestAppFactoryServiceGetProviderComposerOptionsUsesFactoryDraftContext(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	stateDir := t.TempDir()
+	sessions := &factoryAgentSessionServiceStub{}
+	service := AppFactoryService{
+		AgentSessionService: sessions,
+		StateDir:            stateDir,
+		WorkspaceStore: &catalogStoreStub{
+			getWorkspace: workspacebiz.Summary{ID: "ws-1", Name: "Workspace"},
+		},
+	}
+
+	options, err := service.GetProviderComposerOptions(ctx, "ws-1", AppFactoryProviderComposerOptionsInput{
+		Locale:   "zh-CN",
+		Provider: "claude-code",
+		Settings: agentservice.ComposerSettings{
+			Model:            "sonnet",
+			PermissionModeID: "default",
+			ReasoningEffort:  "high",
+		},
+	})
+	if err != nil {
+		t.Fatalf("GetProviderComposerOptions() error = %v", err)
+	}
+
+	expectedCwd := filepath.Join(stateDir, "apps", "factory", "composer", "ws-1", "draft")
+	if sessions.composerInput.Cwd != expectedCwd {
+		t.Fatalf("composer cwd = %q, want %q", sessions.composerInput.Cwd, expectedCwd)
+	}
+	if _, err := os.Stat(expectedCwd); err != nil {
+		t.Fatalf("composer cwd missing: %v", err)
+	}
+	if sessions.composerInput.WorkspaceID != "ws-1" {
+		t.Fatalf("composer workspace = %q, want ws-1", sessions.composerInput.WorkspaceID)
+	}
+	if sessions.composerInput.Provider != "claude-code" {
+		t.Fatalf("composer provider = %q, want claude-code", sessions.composerInput.Provider)
+	}
+	if sessions.composerInput.Locale != "zh-CN" {
+		t.Fatalf("composer locale = %q, want zh-CN", sessions.composerInput.Locale)
+	}
+	if sessions.composerInput.IncludeCapabilityCatalog == nil || *sessions.composerInput.IncludeCapabilityCatalog {
+		t.Fatalf("composer includeCapabilityCatalog = %v, want false", sessions.composerInput.IncludeCapabilityCatalog)
+	}
+	if options.EffectiveSettings.Model != "sonnet" {
+		t.Fatalf("composer options model = %q, want sonnet", options.EffectiveSettings.Model)
+	}
 }
 
 func TestAppFactoryServiceCreateUsesDraftDirAndReferenceContext(t *testing.T) {

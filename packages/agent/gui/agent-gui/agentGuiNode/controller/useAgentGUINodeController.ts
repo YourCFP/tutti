@@ -24,6 +24,7 @@ import type {
   AgentActivityCancelSessionResult,
   AgentActivityComposerOptions,
   AgentActivityDisplayStatus,
+  AgentActivitySession,
   AgentActivitySnapshot
 } from "@tutti-os/agent-activity-core";
 import type {
@@ -338,6 +339,74 @@ function reportAgentGUIMessagePageDiagnostic(input: {
   }
 }
 
+function reportAgentGUIRenderStateDiagnostic(input: {
+  activeActivityDisplayStatus: AgentActivityDisplayStatus | null;
+  activeConversation: AgentGUIConversationSummary | null;
+  activeConversationBusy: boolean;
+  activeConversationId: string | null;
+  activeHasPendingSubmittedTurn: boolean;
+  activeLiveState: "inactive" | "activating" | "active" | "failed";
+  activeRuntimeSession: AgentActivitySession | null;
+  activeSessionState: AgentSessionState | null;
+  activeSubmitBlocked: boolean;
+  canQueueWhileBusy: boolean;
+  canSubmit: boolean;
+  conversation: AgentConversationVM | null;
+  isCreatingConversation: boolean;
+  isLoadingMessages: boolean;
+  isSubmitting: boolean;
+  pendingApproval: AgentGUIApprovalRequest | null;
+  pendingInteractivePrompt: AgentGUIInteractivePrompt | null;
+  runtime: AgentActivityRuntime;
+  workspaceId: string;
+}): void {
+  const reportDiagnostic = input.runtime.reportDiagnostic;
+  if (!reportDiagnostic) {
+    return;
+  }
+  try {
+    void Promise.resolve(
+      reportDiagnostic.call(input.runtime, {
+        details: {
+          activeActivityDisplayStatus: input.activeActivityDisplayStatus,
+          activeConversationBusy: input.activeConversationBusy,
+          activeConversationId: input.activeConversationId,
+          activeConversationStatus: input.activeConversation?.status ?? null,
+          activeHasPendingSubmittedTurn: input.activeHasPendingSubmittedTurn,
+          activeLiveState: input.activeLiveState,
+          activeSubmitBlocked: input.activeSubmitBlocked,
+          canQueueWhileBusy: input.canQueueWhileBusy,
+          canSubmit: input.canSubmit,
+          conversation: agentGUIConversationDiagnosticDetails(
+            input.conversation
+          ),
+          isCreatingConversation: input.isCreatingConversation,
+          isLoadingMessages: input.isLoadingMessages,
+          isSubmitting: input.isSubmitting,
+          pendingApprovalRequestId: input.pendingApproval?.requestId ?? null,
+          pendingInteractivePromptKind:
+            input.pendingInteractivePrompt?.kind ?? null,
+          pendingInteractivePromptRequestId: promptRequestId(
+            input.pendingInteractivePrompt
+          ),
+          runtimeSession: agentGUIRuntimeSessionDiagnosticDetails(
+            input.activeRuntimeSession
+          ),
+          sessionState: agentGUISessionStateDiagnosticDetails(
+            input.activeSessionState
+          )
+        },
+        event: "agent.gui.node.render_state_changed",
+        level: "info",
+        source: "agent-gui",
+        workspaceId: input.workspaceId
+      })
+    ).catch(() => {});
+  } catch {
+    // Diagnostic logging must never affect Agent GUI rendering.
+  }
+}
+
 function reportAgentGUIActiveConversationCleared(input: {
   details?: Record<string, unknown>;
   previousAgentSessionId: string | null;
@@ -359,6 +428,82 @@ function reportAgentGUIActiveConversationCleared(input: {
         },
         event: "agent.gui.active_conversation.cleared",
         level: "info",
+        source: "agent-gui",
+        workspaceId: input.workspaceId
+      })
+    ).catch(() => {});
+  } catch {
+    // Diagnostic logging must never affect active conversation routing.
+  }
+}
+
+function reportAgentGUIConversationListProjectionSkipped(input: {
+  activeConversationId: string | null;
+  currentUserIdPresent: boolean;
+  dataLastActiveAgentSessionId: string | null;
+  isComposerHome: boolean;
+  provider: string | null;
+  reason: string;
+  runtime: AgentActivityRuntime;
+  workspaceId: string;
+  workspaceIdPresent: boolean;
+}): void {
+  const reportDiagnostic = input.runtime.reportDiagnostic;
+  if (!reportDiagnostic) {
+    return;
+  }
+  try {
+    void Promise.resolve(
+      reportDiagnostic.call(input.runtime, {
+        details: {
+          activeConversationId: input.activeConversationId,
+          currentUserIdPresent: input.currentUserIdPresent,
+          dataLastActiveAgentSessionId: input.dataLastActiveAgentSessionId,
+          isComposerHome: input.isComposerHome,
+          provider: input.provider,
+          reason: input.reason,
+          workspaceIdPresent: input.workspaceIdPresent
+        },
+        event: "agent.gui.conversation_list_projection.skipped",
+        level: "info",
+        source: "agent-gui",
+        workspaceId: input.workspaceId
+      })
+    ).catch(() => {});
+  } catch {
+    // Diagnostic logging must never affect active conversation routing.
+  }
+}
+
+function reportAgentGUISubmitWithoutActiveConversation(input: {
+  blockCount: number;
+  conversationCount: number;
+  conversationListQueryReady: boolean;
+  dataLastActiveAgentSessionId: string | null;
+  isComposerHome: boolean;
+  promptLength: number;
+  provider: string | null;
+  runtime: AgentActivityRuntime;
+  workspaceId: string;
+}): void {
+  const reportDiagnostic = input.runtime.reportDiagnostic;
+  if (!reportDiagnostic) {
+    return;
+  }
+  try {
+    void Promise.resolve(
+      reportDiagnostic.call(input.runtime, {
+        details: {
+          blockCount: input.blockCount,
+          conversationCount: input.conversationCount,
+          conversationListQueryReady: input.conversationListQueryReady,
+          dataLastActiveAgentSessionId: input.dataLastActiveAgentSessionId,
+          isComposerHome: input.isComposerHome,
+          promptLength: input.promptLength,
+          provider: input.provider
+        },
+        event: "agent.gui.submit.without_active_conversation",
+        level: "warn",
         source: "agent-gui",
         workspaceId: input.workspaceId
       })
@@ -2301,6 +2446,105 @@ function promptRequestId(
   return requestId || null;
 }
 
+function agentGUIConversationDiagnosticDetails(
+  conversation: AgentConversationVM | null
+): Record<string, unknown> | null {
+  if (!conversation) {
+    return null;
+  }
+  const processingRows = conversation.rows.filter(
+    (row) => row.kind === "processing"
+  );
+  const toolCalls = conversation.rows.flatMap((row) =>
+    row.kind === "tool-group" ? row.calls : []
+  );
+  const waitingToolCalls = toolCalls.filter((call) =>
+    agentGUIToolCallStatusIsWaiting(call.status)
+  );
+  return {
+    activityStatus: conversation.activity.status,
+    pendingApprovalRequestId: conversation.pendingApproval?.requestId ?? null,
+    pendingInteractivePromptKind:
+      conversation.pendingInteractivePrompt?.kind ?? null,
+    pendingInteractivePromptRequestId: promptRequestId(
+      conversation.pendingInteractivePrompt
+    ),
+    processingRowCount: processingRows.length,
+    processingTurnIds: processingRows
+      .map((row) => row.turnId)
+      .filter((turnId): turnId is string => Boolean(turnId)),
+    rowCount: conversation.rows.length,
+    toolCallCount: toolCalls.length,
+    turnCount: conversation.sourceDetail.turns.length,
+    waitingToolCallCount: waitingToolCalls.length,
+    waitingToolCalls: waitingToolCalls.slice(-5).map((call) => ({
+      callType: call.callType,
+      id: call.id,
+      name: call.name,
+      rendererKind: call.rendererKind,
+      status: call.status,
+      statusKind: call.statusKind,
+      toolName: call.toolName,
+      turnId: call.turnId
+    }))
+  };
+}
+
+function agentGUIToolCallStatusIsWaiting(status: string | null): boolean {
+  return (
+    status === "waiting" ||
+    status === "waiting_approval" ||
+    status === "pending" ||
+    status === "in_progress" ||
+    status === "running"
+  );
+}
+
+function agentGUIRuntimeSessionDiagnosticDetails(
+  session: AgentActivitySession | null
+): Record<string, unknown> | null {
+  if (!session) {
+    return null;
+  }
+  return {
+    activeTurnId: session.turnLifecycle?.activeTurnId ?? null,
+    agentSessionId: session.agentSessionId,
+    currentPhase: session.currentPhase ?? null,
+    lastError: session.lastError ?? null,
+    lastEventUnixMs: session.lastEventUnixMs ?? null,
+    messageVersion: session.messageVersion ?? null,
+    outcome: session.turnLifecycle?.outcome ?? null,
+    provider: session.provider,
+    status: session.status ?? null,
+    submitAvailabilityReason: session.submitAvailability?.reason ?? null,
+    submitAvailabilityState: session.submitAvailability?.state ?? null,
+    turnPhase: session.turnLifecycle?.phase ?? null,
+    updatedAtUnixMs: session.updatedAtUnixMs ?? null
+  };
+}
+
+function agentGUISessionStateDiagnosticDetails(
+  state: AgentSessionState | null
+): Record<string, unknown> | null {
+  if (!state) {
+    return null;
+  }
+  return {
+    activeTurnId: state.turnLifecycle?.activeTurnId ?? null,
+    authState: normalizeOptionalText(state.authState),
+    pendingInteractiveKind: state.pendingInteractive?.kind ?? null,
+    pendingInteractiveRequestId: promptRequestId(state.pendingInteractive),
+    provider: state.provider,
+    resumable: state.resumable ?? null,
+    status: state.status,
+    submitAvailabilityReason: state.submitAvailability?.reason ?? null,
+    submitAvailabilityState: state.submitAvailability?.state ?? null,
+    turnOutcome: state.turnLifecycle?.outcome ?? null,
+    turnPhase: state.turnLifecycle?.phase ?? null,
+    updatedAtUnixMs: state.updatedAtUnixMs ?? null
+  };
+}
+
 function conversationBusyStatus(
   status: AgentGUIConversationSummary["status"] | null
 ): boolean {
@@ -3398,6 +3642,7 @@ export function useAgentGUINodeController({
   const lastConversationProjectionDiagnosticKeyRef = useRef<string | null>(
     null
   );
+  const lastRenderStateDiagnosticKeyRef = useRef<string | null>(null);
   const selectedConversationPendingMessageLoadIdsRef = useRef(
     new Set<string>()
   );
@@ -4062,8 +4307,45 @@ export function useAgentGUINodeController({
   const syncConversationListProjection = useCallback(
     async (_preferredSessionId?: string | null) => {
       if (!conversationListQuery) {
+        const previous = activeConversationIdRef.current;
+        const workspaceIdPresent = Boolean(workspaceId.trim());
+        const currentUserIdPresent = Boolean(currentUserId?.trim());
+        reportAgentGUIConversationListProjectionSkipped({
+          activeConversationId: previous,
+          currentUserIdPresent,
+          dataLastActiveAgentSessionId:
+            dataRef.current.lastActiveAgentSessionId ?? null,
+          isComposerHome: isComposerHomeRef.current,
+          provider: dataRef.current.provider,
+          reason: "conversation_list_query_missing",
+          runtime: agentActivityRuntime,
+          workspaceId,
+          workspaceIdPresent
+        });
+        reportAgentGUIActiveConversationCleared({
+          details: {
+            currentUserIdPresent,
+            dataLastActiveAgentSessionId:
+              dataRef.current.lastActiveAgentSessionId ?? null,
+            isComposerHome: isComposerHomeRef.current,
+            provider: dataRef.current.provider,
+            workspaceIdPresent
+          },
+          previousAgentSessionId: previous,
+          reason: "conversation_list_query_missing",
+          runtime: agentActivityRuntime,
+          workspaceId
+        });
+        if (previous) {
+          void activation.unactivate(previous);
+        }
+        setIntent({ tag: "home" });
+        isComposerHomeRef.current = true;
+        setIsComposerHome(true);
         activeConversationIdRef.current = null;
         setActiveConversationId(null);
+        setIsLoadingMessages(false);
+        setDetailError(null);
         persistActiveConversation(null);
         return;
       }
@@ -4073,7 +4355,14 @@ export function useAgentGUINodeController({
         "projection-sync"
       );
     },
-    [conversationListQuery, persistActiveConversation]
+    [
+      activation,
+      agentActivityRuntime,
+      conversationListQuery,
+      currentUserId,
+      persistActiveConversation,
+      workspaceId
+    ]
   );
 
   const scheduleSelectedConversationNotFoundRetry = useCallback(
@@ -4680,6 +4969,18 @@ export function useAgentGUINodeController({
             );
           }
           deleteAgentSessionView(sessionViewRef(agentSessionId));
+          reportAgentGUIActiveConversationCleared({
+            details: {
+              cause: cause?.source ?? null,
+              errorCode: errorCode ?? null,
+              eventType: cause?.eventType ?? null,
+              isComposerHome: isComposerHomeRef.current
+            },
+            previousAgentSessionId: activeConversationIdRef.current,
+            reason: "load_session_state_not_found",
+            runtime: agentActivityRuntime,
+            workspaceId
+          });
           setIntent({ tag: "home" });
           isComposerHomeRef.current = true;
           setIsComposerHome(true);
@@ -5971,6 +6272,10 @@ export function useAgentGUINodeController({
             activeConversationId: currentActiveConversationId,
             activeConversationKnown: currentActiveConversation !== null,
             activeConversationStatus: currentActiveConversation?.status ?? null,
+            conversationCount: conversationsRef.current.length,
+            conversationListQueryReady: conversationListQuery !== null,
+            dataLastActiveAgentSessionId:
+              dataRef.current.lastActiveAgentSessionId ?? null,
             draftAgentSessionId,
             isComposerHome: isComposerHomeRef.current,
             targetMode: "new"
@@ -6323,7 +6628,8 @@ export function useAgentGUINodeController({
   );
 
   const createConversation = useCallback(
-    (options?: { projectPath?: string | null }) => {
+    (options?: { projectPath?: string | null; source?: string }) => {
+      const source = options?.source ?? "controller";
       if (options && "projectPath" in options) {
         const projectPath = normalizeProjectDraftPath(options.projectPath);
         selectedProjectPathRef.current = projectPath;
@@ -6333,7 +6639,13 @@ export function useAgentGUINodeController({
       reportAgentGUIActiveConversationCleared({
         details: {
           hasProjectPathOption: Boolean(options && "projectPath" in options),
-          isComposerHome: isComposerHomeRef.current
+          isComposerHome: isComposerHomeRef.current,
+          projectPathPresent: Boolean(
+            options &&
+            "projectPath" in options &&
+            normalizeProjectDraftPath(options.projectPath)
+          ),
+          source
         },
         previousAgentSessionId: previous,
         reason: "create_conversation",
@@ -7001,6 +7313,21 @@ export function useAgentGUINodeController({
         return;
       }
       if (!agentSessionId) {
+        if (!isComposerHomeRef.current) {
+          reportAgentGUISubmitWithoutActiveConversation({
+            blockCount: normalizedContent.length,
+            conversationCount: conversationsRef.current.length,
+            conversationListQueryReady: conversationListQuery !== null,
+            dataLastActiveAgentSessionId:
+              dataRef.current.lastActiveAgentSessionId ?? null,
+            isComposerHome: isComposerHomeRef.current,
+            promptLength:
+              agentPromptContentDisplayText(normalizedContent).length,
+            provider: dataRef.current.provider ?? null,
+            runtime: agentActivityRuntime,
+            workspaceId
+          });
+        }
         startConversation(normalizedContent, displayPromptText);
         return;
       }
@@ -7042,12 +7369,15 @@ export function useAgentGUINodeController({
     },
     [
       activation,
+      agentActivityRuntime,
+      conversationListQuery,
       executePrompt,
       isSessionMarkedNonResumable,
       resolvedPromptImagesSupported,
       queuePromptLocally,
       shouldQueuePromptLocally,
-      startConversation
+      startConversation,
+      workspaceId
     ]
   );
 
@@ -9164,6 +9494,87 @@ export function useAgentGUINodeController({
     !isInterrupting;
   const canQueueWhileBusy =
     Boolean(activeConversationId) && (activeConversationBusy || isSubmitting);
+  useEffect(() => {
+    const firstVersion = minFiniteMessageVersion(activeMessages);
+    const lastVersion = maxFiniteMessageVersion(activeMessages);
+    const diagnosticKey = [
+      activeConversationId ?? "",
+      activeConversation?.status ?? "",
+      activeActivityDisplayStatus ?? "",
+      activeLiveState,
+      activeRuntimeSession?.status ?? "",
+      activeRuntimeSession?.turnLifecycle?.phase ?? "",
+      activeRuntimeSession?.turnLifecycle?.outcome ?? "",
+      activeRuntimeSession?.turnLifecycle?.activeTurnId ?? "",
+      activeRuntimeSession?.submitAvailability?.state ?? "",
+      activeRuntimeSession?.submitAvailability?.reason ?? "",
+      activeSessionState?.status ?? "",
+      activeSessionState?.turnLifecycle?.phase ?? "",
+      activeSessionState?.turnLifecycle?.outcome ?? "",
+      activeSessionState?.submitAvailability?.state ?? "",
+      activeSessionState?.submitAvailability?.reason ?? "",
+      activeConversationBusy ? "busy" : "ready",
+      activeHasPendingSubmittedTurn ? "pending-turn" : "no-pending-turn",
+      activeSubmitBlocked ? "submit-blocked" : "submit-open",
+      pendingApproval?.requestId ?? "",
+      promptRequestId(pendingInteractivePrompt) ?? "",
+      conversation?.rows.length ?? "",
+      conversation?.sourceDetail.turns.length ?? "",
+      firstVersion ?? "",
+      lastVersion ?? "",
+      isCreatingConversation ? "creating" : "",
+      isLoadingMessages ? "loading-messages" : "",
+      isSubmitting ? "submitting" : "",
+      canSubmit ? "can-submit" : "cannot-submit",
+      canQueueWhileBusy ? "can-queue" : "cannot-queue"
+    ].join(":");
+    if (lastRenderStateDiagnosticKeyRef.current === diagnosticKey) {
+      return;
+    }
+    lastRenderStateDiagnosticKeyRef.current = diagnosticKey;
+    reportAgentGUIRenderStateDiagnostic({
+      activeActivityDisplayStatus,
+      activeConversation,
+      activeConversationBusy,
+      activeConversationId,
+      activeHasPendingSubmittedTurn,
+      activeLiveState,
+      activeRuntimeSession,
+      activeSessionState,
+      activeSubmitBlocked,
+      canQueueWhileBusy,
+      canSubmit,
+      conversation,
+      isCreatingConversation,
+      isLoadingMessages,
+      isSubmitting,
+      pendingApproval,
+      pendingInteractivePrompt,
+      runtime: agentActivityRuntime,
+      workspaceId
+    });
+  }, [
+    activeActivityDisplayStatus,
+    activeConversation,
+    activeConversationBusy,
+    activeConversationId,
+    activeHasPendingSubmittedTurn,
+    activeLiveState,
+    activeMessages,
+    activeRuntimeSession,
+    activeSessionState,
+    activeSubmitBlocked,
+    agentActivityRuntime,
+    canQueueWhileBusy,
+    canSubmit,
+    conversation,
+    isCreatingConversation,
+    isLoadingMessages,
+    isSubmitting,
+    pendingApproval,
+    pendingInteractivePrompt,
+    workspaceId
+  ]);
   const activeSessionReasoningSelection = useMemo(
     () =>
       reasoningSelectionFromComposerOptions(

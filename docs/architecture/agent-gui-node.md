@@ -199,6 +199,12 @@ The session list is not owned by AgentGuiNode. AgentGuiNode may keep query,
 selection, pending create/delete/submit overlays, and read-state UI metadata.
 The session rows themselves come from the runtime snapshot and are refreshed
 through `load`, event reconciliation, or explicit session fetches.
+If the conversation-list query cannot be constructed because workspace,
+current-user, or provider identity is missing, clear the active conversation
+selection and persisted active hint. Do not treat that state as a runtime
+refresh gap. Temporary runtime/list catch-up should instead be represented by
+an explicit pending create, transient conversation, or detail overlay that can
+reconcile back to `AgentActivityRuntime`.
 
 ### Existing Session Detail Loading
 
