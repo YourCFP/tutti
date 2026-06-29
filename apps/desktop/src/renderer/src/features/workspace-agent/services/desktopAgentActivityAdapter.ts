@@ -1,6 +1,7 @@
 import type {
   AgentActivityAdapter,
   AgentActivityMessage,
+  AgentActivityProviderTargetRef,
   AgentActivitySession,
   AgentPromptContentBlock
 } from "@tutti-os/agent-activity-core";
@@ -81,6 +82,9 @@ export function createDesktopAgentActivityAdapter({
             permissionModeId: input.settings.permissionModeId,
             planMode: input.settings.planMode,
             provider: "claude-code",
+            ...(input.providerTargetRef
+              ? { providerTargetRef: input.providerTargetRef }
+              : {}),
             reasoningEffort: input.settings.reasoningEffort,
             speed: input.settings.speed,
             title: null,
@@ -97,6 +101,7 @@ export function createDesktopAgentActivityAdapter({
     const entry: ClaudeDraftSessionEntry = {
       cwd,
       promise,
+      providerTargetKey: providerTargetRefKey(input.providerTargetRef),
       sessionId: agentSessionId,
       settingsKey,
       status: "starting",
@@ -125,12 +130,14 @@ export function createDesktopAgentActivityAdapter({
   ): Promise<WorkspaceAgentSession> => {
     const cwd = input.cwd ?? null;
     const settingsKey = JSON.stringify(input.settings);
+    const providerTargetKey = providerTargetRefKey(input.providerTargetRef);
     const existing = claudeDrafts.get(input.workspaceId);
     if (
       existing &&
       existing.status !== "disposed" &&
       existing.status !== "failed" &&
       existing.cwd === cwd &&
+      existing.providerTargetKey === providerTargetKey &&
       (!input.agentSessionId || existing.sessionId === input.agentSessionId)
     ) {
       if (existing.settingsKey === settingsKey) {
@@ -167,10 +174,20 @@ export function createDesktopAgentActivityAdapter({
       );
       return updated;
     }
+    const shouldCreateFreshDraftSession =
+      existing &&
+      existing.providerTargetKey !== providerTargetKey &&
+      normalizeText(input.agentSessionId) === existing.sessionId;
     if (existing) {
       deleteClaudeDraft(existing);
     }
-    return createClaudeDraft(input, cwd, settingsKey);
+    return createClaudeDraft(
+      shouldCreateFreshDraftSession
+        ? { ...input, agentSessionId: null }
+        : input,
+      cwd,
+      settingsKey
+    );
   };
 
   const promoteClaudeDraft = async (
@@ -191,6 +208,8 @@ export function createDesktopAgentActivityAdapter({
     if (
       !entry ||
       entry.sessionId !== agentSessionId ||
+      entry.providerTargetKey !==
+        providerTargetRefKey(input.providerTargetRef) ||
       isDeadDraftStatus(entry.status)
     ) {
       return null;
@@ -235,23 +254,56 @@ export function createDesktopAgentActivityAdapter({
       };
     },
     async listSessionMessages(input) {
-      const response = await tuttidClient.listWorkspaceAgentSessionMessages(
-        input.workspaceId,
-        input.agentSessionId,
-        {
-          afterVersion: input.afterVersion ?? 0,
-          beforeVersion: input.beforeVersion,
-          order: input.order,
-          limit: input.limit
-        }
-      );
-      return {
-        hasMore: response.hasMore,
-        latestVersion: response.latestVersion,
-        messages: response.messages.map((message) =>
+      const startedAt = Date.now();
+      reportDesktopAgentMessageListDiagnostic(runtimeApi, input.workspaceId, {
+        afterVersion: input.afterVersion ?? 0,
+        agentSessionId: input.agentSessionId,
+        beforeVersion: input.beforeVersion ?? null,
+        event: "requested",
+        limit: input.limit ?? null,
+        order: input.order ?? null
+      });
+      try {
+        const response = await tuttidClient.listWorkspaceAgentSessionMessages(
+          input.workspaceId,
+          input.agentSessionId,
+          {
+            afterVersion: input.afterVersion ?? 0,
+            beforeVersion: input.beforeVersion,
+            order: input.order,
+            limit: input.limit
+          }
+        );
+        const messages = response.messages.map((message) =>
           agentActivityMessageFromTuttidMessage(input.workspaceId, message)
-        )
-      };
+        );
+        const versions = messages
+          .map((message) => message.version)
+          .filter((version) => Number.isFinite(version));
+        reportDesktopAgentMessageListDiagnostic(runtimeApi, input.workspaceId, {
+          agentSessionId: input.agentSessionId,
+          durationMs: Date.now() - startedAt,
+          event: "resolved",
+          firstVersion: versions.length ? Math.min(...versions) : null,
+          hasMore: response.hasMore,
+          lastVersion: versions.length ? Math.max(...versions) : null,
+          latestVersion: response.latestVersion,
+          messageCount: messages.length
+        });
+        return {
+          hasMore: response.hasMore,
+          latestVersion: response.latestVersion,
+          messages
+        };
+      } catch (error) {
+        reportDesktopAgentMessageListDiagnostic(runtimeApi, input.workspaceId, {
+          agentSessionId: input.agentSessionId,
+          durationMs: Date.now() - startedAt,
+          event: "failed",
+          ...normalizeDesktopAgentDiagnosticError(error)
+        });
+        throw error;
+      }
     },
     async loadComposerOptions(input) {
       const cwd = input.cwd?.trim();
@@ -324,6 +376,7 @@ export function createDesktopAgentActivityAdapter({
               reasoningEffort: input.reasoningEffort,
               speed: input.speed
             }),
+            providerTargetRef: input.providerTargetRef ?? null,
             signal: input.signal,
             workspaceId: input.workspaceId
           });
@@ -360,6 +413,9 @@ export function createDesktopAgentActivityAdapter({
                 planMode: input.planMode ?? null,
                 permissionModeId: input.permissionModeId ?? null,
                 provider: workspaceAgentProvider(input.provider),
+                ...(input.providerTargetRef
+                  ? { providerTargetRef: input.providerTargetRef }
+                  : {}),
                 reasoningEffort: input.reasoningEffort ?? null,
                 speed: input.speed ?? null,
                 title: input.title ?? null,
@@ -472,6 +528,53 @@ export function createDesktopAgentActivityAdapter({
   };
 }
 
+function reportDesktopAgentMessageListDiagnostic(
+  runtimeApi: Pick<DesktopRuntimeApi, "logTerminalDiagnostic">,
+  workspaceId: string,
+  details: Record<string, string | number | boolean | null>
+): void {
+  try {
+    void runtimeApi
+      .logTerminalDiagnostic({
+        details,
+        event: "agent.activity.messages.list",
+        level: details.event === "failed" ? "warn" : "info",
+        workspaceId
+      })
+      .catch(() => {});
+  } catch {
+    // Diagnostic logging must not affect message loading.
+  }
+}
+
+function normalizeDesktopAgentDiagnosticError(
+  error: unknown
+): Record<string, string | number | boolean | null> {
+  if (!(error instanceof Error)) {
+    return { errorName: typeof error };
+  }
+  const record = error as Error & {
+    code?: unknown;
+    reason?: unknown;
+    retryable?: unknown;
+    statusCode?: unknown;
+  };
+  return {
+    ...(typeof record.code === "string" ? { errorCode: record.code } : {}),
+    errorMessageLength: error.message.length,
+    errorName: error.name,
+    ...(typeof record.reason === "string"
+      ? { errorReason: record.reason }
+      : {}),
+    ...(typeof record.retryable === "boolean"
+      ? { errorRetryable: record.retryable }
+      : {}),
+    ...(typeof record.statusCode === "number"
+      ? { errorStatusCode: record.statusCode }
+      : {})
+  };
+}
+
 function reportDesktopAgentSubmitTrace(
   runtimeApi: Pick<DesktopRuntimeApi, "logTerminalDiagnostic">,
   input: {
@@ -561,6 +664,7 @@ interface ClaudeDraftSettings {
 interface ClaudeDraftInput {
   agentSessionId?: string | null;
   cwd: string | null;
+  providerTargetRef?: AgentActivityProviderTargetRef | null;
   settings: ClaudeDraftSettings;
   signal?: AbortSignal;
   workspaceId: string;
@@ -568,6 +672,7 @@ interface ClaudeDraftInput {
 
 interface ClaudeDraftSessionEntry {
   cwd: string | null;
+  providerTargetKey: string;
   settingsKey: string;
   promise: Promise<WorkspaceAgentSession>;
   sessionId: string;
@@ -603,9 +708,30 @@ function isDeadDraftStatus(status: ClaudeDraftStatus): boolean {
 function claudeDraftKey(input: ClaudeDraftInput): string {
   return JSON.stringify({
     cwd: input.cwd ?? "",
+    providerTargetRef: sortProviderTargetRefValue(input.providerTargetRef),
     settings: input.settings,
     workspaceId: input.workspaceId
   });
+}
+
+function providerTargetRefKey(
+  value: AgentActivityProviderTargetRef | null | undefined
+): string {
+  return JSON.stringify(sortProviderTargetRefValue(value ?? null));
+}
+
+function sortProviderTargetRefValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortProviderTargetRefValue);
+  }
+  if (!isRecord(value)) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entryValue]) => [key, sortProviderTargetRefValue(entryValue)])
+  );
 }
 
 function sessionWithClaudeDraftContext(

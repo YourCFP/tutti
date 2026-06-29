@@ -2134,10 +2134,13 @@ type CreateWorkspaceAgentSessionRequest struct {
 	PermissionModeId *string                 `json:"permissionModeId,omitempty"`
 	PlanMode         *bool                   `json:"planMode,omitempty"`
 	Provider         WorkspaceAgentProvider  `json:"provider"`
-	ReasoningEffort  *string                 `json:"reasoningEffort,omitempty"`
-	Speed            *string                 `json:"speed,omitempty"`
-	Title            *string                 `json:"title,omitempty"`
-	Visible          *bool                   `json:"visible,omitempty"`
+
+	// ProviderTargetRef Opaque host-owned provider target reference. It is not authority; trusted launchers must re-authenticate and resolve it before invoking a provider.
+	ProviderTargetRef *map[string]interface{} `json:"providerTargetRef,omitempty"`
+	ReasoningEffort   *string                 `json:"reasoningEffort,omitempty"`
+	Speed             *string                 `json:"speed,omitempty"`
+	Title             *string                 `json:"title,omitempty"`
+	Visible           *bool                   `json:"visible,omitempty"`
 }
 
 // CreateWorkspaceAppFactoryJobRequest defines model for CreateWorkspaceAppFactoryJobRequest.

@@ -35,6 +35,7 @@ import type {
   AgentGUINodeViewModel
 } from "./model/agentGuiNodeTypes";
 import type { AgentGUINodeData } from "../../types";
+import { createLocalAgentGUIProviderTarget } from "../../providerTargets";
 import { writeWorkspaceFileDropData } from "../terminalNode/workspaceFileDrop";
 
 const mockCreateConversation = vi.fn();
@@ -7293,6 +7294,7 @@ function createViewModel(
       lastActiveAgentSessionId: null,
       conversationRailWidthPx: null
     },
+    selectedProviderTarget: createLocalAgentGUIProviderTarget("codex"),
     conversations: [],
     userProjects: [],
     activeConversation: null,

@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceAgentSessionDetailViewModel } from "../../shared/workspaceAgentSessionDetailViewModel";
 import type { AgentGUINodeViewModel } from "./model/agentGuiNodeTypes";
 import { AgentGUINodeView, type AgentGUIViewLabels } from "./AgentGUINodeView";
+import { createLocalAgentGUIProviderTarget } from "../../providerTargets";
 
 const conversationFlowMock = vi.hoisted(() => ({
   calls: [] as Array<{ conversation: unknown; labels: unknown }>
@@ -1599,6 +1600,7 @@ function createViewModel(): AgentGUINodeViewModel {
       lastActiveAgentSessionId: null,
       conversationRailWidthPx: null
     },
+    selectedProviderTarget: createLocalAgentGUIProviderTarget("codex"),
     conversations: [],
     userProjects: [],
     activeConversation: null,

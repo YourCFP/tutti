@@ -1270,6 +1270,12 @@ export type CreateWorkspaceAgentSessionRequest = {
   metadata?: {
     [key: string]: unknown;
   };
+  /**
+   * Opaque host-owned provider target reference. It is not authority; trusted launchers must re-authenticate and resolve it before invoking a provider.
+   */
+  providerTargetRef?: {
+    [key: string]: unknown;
+  } | null;
   title?: string | null;
   cwd?: string | null;
   permissionModeId?: string | null;
