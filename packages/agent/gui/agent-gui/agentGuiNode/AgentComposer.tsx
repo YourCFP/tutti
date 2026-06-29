@@ -3105,14 +3105,24 @@ export function AgentComposer({
                   onClick={() => onSettingsChange({ planMode: false })}
                 >
                   <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-                    <ListChecks aria-hidden className="size-3.5 shrink-0" />
+                    <span className="relative flex size-3.5 shrink-0 items-center justify-center">
+                      <ListChecks
+                        aria-hidden
+                        className="size-3.5 transition-opacity duration-150 group-hover:opacity-0 group-focus-visible:opacity-0"
+                      />
+                      <span
+                        aria-hidden
+                        className="absolute inset-0 flex items-center justify-center rounded-full bg-[var(--text-secondary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 group-disabled:opacity-0"
+                      >
+                        <X
+                          className="size-2.5 text-[var(--background-fronted)]"
+                          strokeWidth={3}
+                        />
+                      </span>
+                    </span>
                     <span className="min-w-0 truncate">
                       {labels.planModeLabel}
                     </span>
-                    <X
-                      aria-hidden
-                      className="size-3 shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 group-disabled:opacity-0"
-                    />
                   </span>
                 </button>
               ) : null}
@@ -3131,12 +3141,22 @@ export function AgentComposer({
                   onClick={clearGoalModeBadge}
                 >
                   <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-                    <Target aria-hidden className="size-3.5 shrink-0" />
+                    <span className="relative flex size-3.5 shrink-0 items-center justify-center">
+                      <Target
+                        aria-hidden
+                        className="size-3.5 transition-opacity duration-150 group-hover:opacity-0 group-focus-visible:opacity-0"
+                      />
+                      <span
+                        aria-hidden
+                        className="absolute inset-0 flex items-center justify-center rounded-full bg-[var(--text-secondary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 group-disabled:opacity-0"
+                      >
+                        <X
+                          className="size-2.5 text-[var(--background-fronted)]"
+                          strokeWidth={3}
+                        />
+                      </span>
+                    </span>
                     <span className="min-w-0 truncate">{labels.goalLabel}</span>
-                    <X
-                      aria-hidden
-                      className="size-3 shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 group-disabled:opacity-0"
-                    />
                   </span>
                 </button>
               ) : null}
