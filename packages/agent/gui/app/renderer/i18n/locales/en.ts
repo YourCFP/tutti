@@ -936,6 +936,7 @@ export const en = {
       projectLocked: "Project cannot be changed after the session starts",
       projectMissingDescription:
         "This conversation's working directory no longer exists",
+      fileMentionEnterFolder: "Enter folder",
       fileMentionSwitchCategory: "Switch category",
       fileMentionNavigateHierarchy: "Enter/leave folder",
       fileMentionSwitchSelection: "Switch selection",

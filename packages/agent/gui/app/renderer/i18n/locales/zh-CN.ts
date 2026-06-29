@@ -867,6 +867,7 @@ export const zhCN = {
       },
       projectLocked: "会话开始后项目不可更改",
       projectMissingDescription: "此对话的工作目录已不存在",
+      fileMentionEnterFolder: "进入文件夹",
       fileMentionSwitchCategory: "切换分类",
       fileMentionNavigateHierarchy: "进入/返回文件夹",
       fileMentionSwitchSelection: "切换选中",

@@ -1661,6 +1661,13 @@ export function AgentComposer({
     [createFileMentionPaletteAdapter]
   );
 
+  const navigateIntoFileMentionItem = useCallback(
+    (item: AgentContextMentionItem): void => {
+      mentionControllerRef.current?.selectAgentGeneratedMentionItem(item);
+    },
+    []
+  );
+
   const handleFileMentionKeyDown = useCallback(
     (event: KeyboardEvent): boolean => {
       if (!showFileMentionPalette) {
@@ -2943,6 +2950,7 @@ export function AgentComposer({
                         mentionControllerRef.current?.expandGroup(groupId)
                       }
                       onNavigateHierarchy={navigateFileMentionHierarchy}
+                      onNavigateIntoItem={navigateIntoFileMentionItem}
                       onOpenReferences={
                         onRequestWorkspaceReferences
                           ? handleOpenReferencesForEntity
