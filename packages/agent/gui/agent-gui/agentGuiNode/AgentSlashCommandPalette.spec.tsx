@@ -167,6 +167,9 @@ describe("AgentSlashCommandPalette", () => {
       .getByRole("option", { name: /status/i })
       .querySelector("svg");
     expect(icon).toBeTruthy();
+    // The svg carries its own size class so the option's
+    // `[&_svg:not([class*='size-'])]:size-4` fallback does not override it.
+    expect(icon).toHaveClass("size-2.5");
     expect(icon?.parentElement).toHaveClass(
       "flex",
       "w-2.5",
