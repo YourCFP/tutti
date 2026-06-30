@@ -24,6 +24,42 @@ import type { IWorkspaceAgentActivityService } from "./workspaceAgentActivitySer
 
 const workspaceId = "workspace-1";
 
+function createLegacyAgentReporterService(
+  reporterCalls: ReporterEventInput[][]
+) {
+  return {
+    async trackEvents(events: ReporterEventInput[]) {
+      const legacyEvents = legacyAgentEvents(events);
+      if (legacyEvents.length > 0) {
+        reporterCalls.push(legacyEvents);
+      }
+    }
+  };
+}
+
+function legacyAgentEvents(
+  events: readonly ReporterEventInput[]
+): ReporterEventInput[] {
+  return events
+    .filter((event) => event.name !== "agent.node_result")
+    .map(stripAgentAnalyticsErrorFields);
+}
+
+function stripAgentAnalyticsErrorFields(
+  event: ReporterEventInput
+): ReporterEventInput {
+  if (!event.name.startsWith("agent.")) {
+    return event;
+  }
+  const eventParams = event.params ?? {};
+  const {
+    error_code: _errorCode,
+    error_message: _errorMessage,
+    ...params
+  } = eventParams;
+  return { ...event, params };
+}
+
 test("desktop agent GUI workbench host input reuses an injected agent host api", () => {
   const agentHostApi = {
     meta: { workspaceId }
@@ -310,11 +346,7 @@ test("desktop agent GUI workbench host input tracks runtime prompt sends", async
     tuttidClient: createTuttidClient(),
     platformApi: createPlatformApi(),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    },
+    reporterService: createLegacyAgentReporterService(reporterCalls),
     richTextAtService: createRichTextAtService(),
     runtimeApi: createRuntimeApi(),
     workspaceAgentActivityService: createWorkspaceAgentActivityService([]),
@@ -360,11 +392,7 @@ test("desktop agent GUI workbench host input tracks workspace file references", 
     tuttidClient: createTuttidClient(),
     platformApi: createPlatformApi(),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    },
+    reporterService: createLegacyAgentReporterService(reporterCalls),
     richTextAtService: createRichTextAtService(),
     runtimeApi: createRuntimeApi(),
     workspaceAgentActivityService: createWorkspaceAgentActivityService([]),
@@ -412,11 +440,7 @@ test("desktop agent GUI workbench host input tracks agent provider chat ready", 
     tuttidClient: createTuttidClient(),
     platformApi: createPlatformApi(),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    },
+    reporterService: createLegacyAgentReporterService(reporterCalls),
     richTextAtService: createRichTextAtService(),
     runtimeApi: createRuntimeApi(),
     workspaceAgentActivityService: createWorkspaceAgentActivityService([]),
@@ -448,11 +472,7 @@ test("desktop agent GUI workbench host input tracks runtime message stops", asyn
     tuttidClient: createTuttidClient(),
     platformApi: createPlatformApi(),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    },
+    reporterService: createLegacyAgentReporterService(reporterCalls),
     richTextAtService: createRichTextAtService(),
     runtimeApi: createRuntimeApi(),
     workspaceAgentActivityService: createWorkspaceAgentActivityService([]),
@@ -488,11 +508,7 @@ test("desktop agent GUI workbench host input skips stopped tracking for no-op ca
     tuttidClient: createTuttidClient(),
     platformApi: createPlatformApi(),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    },
+    reporterService: createLegacyAgentReporterService(reporterCalls),
     richTextAtService: createRichTextAtService(),
     runtimeApi: createRuntimeApi(),
     workspaceAgentActivityService: createWorkspaceAgentActivityService([], {
@@ -527,11 +543,7 @@ test("desktop agent GUI workbench host input tracks runtime new session activati
     tuttidClient: createTuttidClient(),
     platformApi: createPlatformApi(),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    },
+    reporterService: createLegacyAgentReporterService(reporterCalls),
     richTextAtService: createRichTextAtService(),
     runtimeApi: createRuntimeApi(),
     workspaceAgentActivityService: createWorkspaceAgentActivityService([]),
@@ -542,6 +554,7 @@ test("desktop agent GUI workbench host input tracks runtime new session activati
     workspaceId,
     agentSessionId: "session-runtime-start-1",
     cwd: "/workspace",
+    initialContent: [{ type: "text", text: "Track initial prompt" }],
     mode: "new",
     provider: "codex",
     settings: {
@@ -564,6 +577,20 @@ test("desktop agent GUI workbench host input tracks runtime new session activati
           source: "launchpad"
         }
       }
+    ],
+    [
+      {
+        clientTS: 1749124800000,
+        name: "agent.message_sent",
+        params: {
+          agent_session_id: "session-runtime-start-1",
+          conversation_index: 1,
+          has_file_mention: false,
+          has_slash_command: false,
+          is_queued: false,
+          provider: "codex"
+        }
+      }
     ]
   ]);
 });
@@ -578,11 +605,7 @@ test("desktop agent GUI workbench host input tracks runtime session pin changes"
     tuttidClient: createTuttidClient(),
     platformApi: createPlatformApi(),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    },
+    reporterService: createLegacyAgentReporterService(reporterCalls),
     richTextAtService: createRichTextAtService(),
     runtimeApi: createRuntimeApi(),
     workspaceAgentActivityService: createWorkspaceAgentActivityService([]),
@@ -637,11 +660,7 @@ test("desktop agent GUI workbench host input tracks runtime session settings cha
     tuttidClient: createTuttidClient(),
     platformApi: createPlatformApi(),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    },
+    reporterService: createLegacyAgentReporterService(reporterCalls),
     richTextAtService: createRichTextAtService(),
     runtimeApi: createRuntimeApi({ terminalDiagnostics }),
     workspaceAgentActivityService: createWorkspaceAgentActivityService([], {
@@ -733,11 +752,7 @@ test("desktop agent GUI workbench host input tracks runtime project setting chan
     tuttidClient: createTuttidClient(),
     platformApi: createPlatformApi(),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    },
+    reporterService: createLegacyAgentReporterService(reporterCalls),
     richTextAtService: createRichTextAtService(),
     runtimeApi: createRuntimeApi(),
     workspaceAgentActivityService: createWorkspaceAgentActivityService([]),
@@ -779,11 +794,7 @@ test("desktop agent GUI workbench host input tracks draft composer setting chang
     tuttidClient: createTuttidClient(),
     platformApi: createPlatformApi(),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    },
+    reporterService: createLegacyAgentReporterService(reporterCalls),
     richTextAtService: createRichTextAtService(),
     runtimeApi: createRuntimeApi({ terminalDiagnostics }),
     workspaceAgentActivityService: createWorkspaceAgentActivityService([]),

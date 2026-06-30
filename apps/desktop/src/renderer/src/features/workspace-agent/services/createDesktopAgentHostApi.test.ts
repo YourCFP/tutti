@@ -23,6 +23,42 @@ import type { IWorkspaceUserProjectService } from "../../workspace-user-project/
 
 const workspaceId = "workspace-1";
 
+function createLegacyAgentReporterService(
+  reporterCalls: ReporterEventInput[][]
+) {
+  return {
+    async trackEvents(events: ReporterEventInput[]) {
+      const legacyEvents = legacyAgentEvents(events);
+      if (legacyEvents.length > 0) {
+        reporterCalls.push(legacyEvents);
+      }
+    }
+  };
+}
+
+function legacyAgentEvents(
+  events: readonly ReporterEventInput[]
+): ReporterEventInput[] {
+  return events
+    .filter((event) => event.name !== "agent.node_result")
+    .map(stripAgentAnalyticsErrorFields);
+}
+
+function stripAgentAnalyticsErrorFields(
+  event: ReporterEventInput
+): ReporterEventInput {
+  if (!event.name.startsWith("agent.")) {
+    return event;
+  }
+  const eventParams = event.params ?? {};
+  const {
+    error_code: _errorCode,
+    error_message: _errorMessage,
+    ...params
+  } = eventParams;
+  return { ...event, params };
+}
+
 interface DesktopAgentHostApiUnderTest {
   clipboard: {
     writeImage(input: DesktopClipboardImagePayload): Promise<void>;
@@ -527,11 +563,7 @@ test("desktop agent host api returns no-active-turn cancel metadata", async () =
         };
       }
     }),
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    }
+    reporterService: createLegacyAgentReporterService(reporterCalls)
   });
 
   const result = await api.agentSessions.cancel({
@@ -603,11 +635,7 @@ test("desktop agent host api tracks agent session lifecycle events", async () =>
       }
     }),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    }
+    reporterService: createLegacyAgentReporterService(reporterCalls)
   });
 
   await api.agentSessions.activate({
@@ -663,6 +691,20 @@ test("desktop agent host api tracks agent session lifecycle events", async () =>
         params: {
           agent_session_id: "session-track-1",
           conversation_index: 1,
+          has_file_mention: false,
+          has_slash_command: false,
+          is_queued: false,
+          provider: "codex"
+        }
+      }
+    ],
+    [
+      {
+        clientTS: 1749124800000,
+        name: "agent.message_sent",
+        params: {
+          agent_session_id: "session-track-1",
+          conversation_index: 2,
           has_file_mention: true,
           has_slash_command: true,
           is_queued: false,
@@ -737,11 +779,7 @@ test("desktop agent host api tracks agent session settings changes", async () =>
       }
     }),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    }
+    reporterService: createLegacyAgentReporterService(reporterCalls)
   });
 
   await api.agentSessions.activate({
@@ -811,11 +849,7 @@ test("desktop agent host api tracks agent project setting changes", async () => 
   const reporterCalls: ReporterEventInput[][] = [];
   const api = createAgentHostApi({
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    }
+    reporterService: createLegacyAgentReporterService(reporterCalls)
   });
 
   await api.agentSessions.trackSettingsProjectChange?.({
@@ -1509,11 +1543,7 @@ test("desktop agent host api reports failed activation from tuttid session", asy
       }
     }),
     reporterNow: () => 1749124800000,
-    reporterService: {
-      async trackEvents(events) {
-        reporterCalls.push(events);
-      }
-    }
+    reporterService: createLegacyAgentReporterService(reporterCalls)
   });
 
   const result = await api.agentSessions.activate({
@@ -1537,7 +1567,8 @@ test("desktop agent host api reports failed activation from tuttid session", asy
         name: "error.agent_session_failed",
         params: {
           agent_session_id: "44444444-4444-4444-8444-444444444444",
-          error_code: "agent_session_start_failed",
+          error_code: "agent_session_create_failed",
+          error_message: `exec: "codex": executable file not found in $PATH`,
           is_retryable: false,
           provider: "codex"
         }
