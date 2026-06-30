@@ -3608,7 +3608,7 @@ const AgentGUIConversationRailPane = memo(
                 <button
                   type="button"
                   data-testid="agent-gui-config-env-setup"
-                  className="nodrag -mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 rounded-[6px] px-2 py-1 text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-background-hover hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [-webkit-app-region:no-drag]"
+                  className="nodrag -mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 rounded-[6px] px-2 py-1 text-[13px] text-white transition-colors hover:bg-background-hover hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:text-white/50 [-webkit-app-region:no-drag]"
                   disabled={previewMode}
                   onClick={() => onOpenAgentEnvSetup()}
                 >
