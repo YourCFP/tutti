@@ -60,11 +60,15 @@ Use this shape for new entries:
   corepack's shim, so `corepack prepare` succeeds but the script still validates
   the wrong `pnpm`. Electron's single-instance lock also follows Electron
   userData; if development and production share userData, a running production
-  app makes the dev app quit as a secondary instance.
+  app makes the dev app quit as a secondary instance. Agent shells launched from
+  the packaged app may inherit `TUTTI_ENV=production`, so `make dev-gui` must
+  force the development environment instead of preserving that inherited value.
 - Fix:
   Prefer the corepack shim directory before checking or running `pnpm`, and set
   development Electron userData to an environment-specific path before
-  requesting the single-instance lock.
+  requesting the single-instance lock. Ensure the dev-gui script exports
+  `TUTTI_ENV=development` before resolving pid files, installing the dev CLI, or
+  launching Electron.
 - Validation:
   Run `DEV_GUI_SKIP_START=1 make dev-gui`, then run full `make dev-gui` while
   the packaged app is open and confirm the renderer dev server and development

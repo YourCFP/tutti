@@ -225,6 +225,12 @@
   user-select: auto;
 }
 
+.workbench-window__header--custom:has(
+  [data-workbench-custom-header-border="none"]
+) {
+  border-bottom-color: transparent;
+}
+
 .workbench-window__header--custom:active {
   cursor: default;
 }

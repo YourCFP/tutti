@@ -112,6 +112,15 @@ test("window controls use left-aligned traffic lights", () => {
   );
 });
 
+test("custom headers can opt out of the window header divider", () => {
+  const styleSource = readFileSync(resolve("src/styles/workbench.css"), "utf8");
+
+  assert.match(
+    styleSource,
+    /\.workbench-window__header--custom:has\(\s*\[data-workbench-custom-header-border="none"\]\s*\)\s*\{[\s\S]*border-bottom-color:\s*transparent;/s
+  );
+});
+
 test("corner resize handles render outside the clipped window surface", () => {
   const frameSource = readFileSync(
     resolve("src/react/WorkbenchWindowFrame.tsx"),

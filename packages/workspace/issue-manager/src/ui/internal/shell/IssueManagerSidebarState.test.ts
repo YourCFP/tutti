@@ -33,6 +33,11 @@ test("sidebar header search and create controls use task creation chrome", () =>
     issueManagerSidebarSectionsSource,
     /issueManagerSidebarCreateButtonClassName =\s*"agent-gui-node__new-conversation-icon-button";/
   );
+  assert.match(
+    issueManagerSidebarSectionsSource,
+    /<div className="px-4 pb-4">/
+  );
+  assert.doesNotMatch(issueManagerSidebarSectionsSource, /px-4 py-4/);
   assert.match(issueManagerSidebarSectionsSource, /<Input[\s\S]*type="search"/);
   assert.match(
     issueManagerSidebarSectionsSource,
@@ -91,7 +96,7 @@ test("node header keeps task center chrome inside the sidebar header", () => {
   );
   assert.match(
     issueManagerNodeSource,
-    /<IssueManagerTrafficLightIcon[\s\S]*data-issue-manager-traffic-light-icon=\{iconName\}[\s\S]*iconName=\{iconName\}/
+    /<WindowTrafficLightIcon[\s\S]*data-issue-manager-traffic-light-icon=\{iconName\}[\s\S]*iconName=\{iconName\}/
   );
   assert.match(
     issueManagerNodeSource,
@@ -100,10 +105,6 @@ test("node header keeps task center chrome inside the sidebar header", () => {
   assert.match(
     issueManagerNodeSource,
     /width: effectiveCollapsed[\s\S]*\? "max-content"[\s\S]*var\(--issue-manager-sidebar-width, 280px\)/
-  );
-  assert.match(
-    issueManagerNodeSource,
-    /const rightHeaderDividerMaskStyle = \{[\s\S]*left: effectiveCollapsed[\s\S]*\? "0px"[\s\S]*min\(var\(--issue-manager-sidebar-width, 280px\), 100%\)[\s\S]*\} satisfies CSSProperties;/
   );
   assert.match(
     issueManagerNodeSource,
@@ -119,7 +120,11 @@ test("node header keeps task center chrome inside the sidebar header", () => {
   );
   assert.match(
     issueManagerNodeSource,
-    /className="pointer-events-none absolute right-0 bottom-0 z-\[11\] h-px bg-\[var\(--background-panel\)\]"[\s\S]*style=\{rightHeaderDividerMaskStyle\}/
+    /data-workbench-custom-header-border="none"/
+  );
+  assert.doesNotMatch(
+    issueManagerNodeSource,
+    /pointer-events-none absolute (?:inset-x-0|right-0) bottom-0 z-\[11\] h-px bg-\[var\(--background-panel\)\]/
   );
   assert.match(
     issueManagerNodeSource,
