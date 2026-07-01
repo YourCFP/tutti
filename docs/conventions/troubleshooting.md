@@ -264,6 +264,36 @@ Use this shape for new entries:
 - References:
   [resolver.go](../../packages/agent/daemon/runtimecmd/resolver.go)
 
+### Codex provider install fails with missing npm
+
+- Symptom:
+  Agent setup or the onboarding flow repeatedly reports Codex install failures,
+  and `tuttid` logs show `installerKind=codex_cli_latest`, `exitCode=127`, and
+  `stderr="zsh:1: command not found: npm"` for every npm registry attempt.
+- Quick checks:
+  Search `tuttid.log` for `agent provider install step failed` and
+  `codex_cli_latest`. If each registry fails in milliseconds with exit code
+  `127`, stop investigating registry reachability; the command never reached
+  npm networking.
+- Root cause:
+  The Codex CLI installer is daemon-owned but shells out through the daemon
+  environment. Packaged desktop launches may not expose a user-managed `npm` on
+  `PATH`, even though Tutti already has a managed Node runtime for workspace app
+  and external-agent npm work.
+- Fix:
+  Resolve user `npm` first for compatibility, then fall back to the Tutti
+  managed Node runtime's `npm` before running
+  `npm install -g --prefix <stable-user-prefix> @openai/codex --include=optional`.
+  Keep the install prefix in a resolver-searched user directory such as
+  `~/.local` so the installed `codex` remains discoverable after install.
+- Validation:
+  Add or run service coverage for a daemon environment with no user `npm` and a
+  ready managed Node runtime. Then run `pnpm lint:go` and
+  `cd services/tuttid && go test ./service/agentstatus`.
+- References:
+  [installer_codex_cli.go](../../services/tuttid/service/agentstatus/installer_codex_cli.go)
+  [runtime.go](../../services/tuttid/service/managedruntime/runtime.go)
+
 ### Malformed user skill frontmatter breaks skill discovery
 
 - Symptom:
