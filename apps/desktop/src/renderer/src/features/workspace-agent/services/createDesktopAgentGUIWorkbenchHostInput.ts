@@ -39,6 +39,7 @@ import {
 } from "../../workspace-file-manager/services/desktopWorkspaceFileLocations.ts";
 import { createDesktopAgentActivityRuntime } from "./createDesktopAgentActivityRuntime.ts";
 import { createDesktopAgentHostApi } from "./createDesktopAgentHostApi.ts";
+import { createDesktopAgentQueuedPromptDrainer } from "./internal/createDesktopAgentQueuedPromptDrainer.ts";
 import { createAgentChatReadyTracker } from "./internal/agentChatReadyAnalytics.ts";
 import { createAgentWorkspaceFileReferenceTracker } from "./internal/agentWorkspaceFileReferenceAnalytics.ts";
 import type { IWorkspaceAgentActivityService } from "./workspaceAgentActivityService.interface";
@@ -97,6 +98,16 @@ export interface CreateDesktopAgentGUIWorkbenchHostInputInput {
   workspaceId: string;
 }
 
+interface DesktopAgentGUIRuntimeServices {
+  agentActivityRuntime: AgentActivityRuntime;
+  agentQueuedPromptRuntime: AgentQueuedPromptRuntime;
+}
+
+const runtimeServicesByActivityService = new WeakMap<
+  IWorkspaceAgentActivityService,
+  Map<string, DesktopAgentGUIRuntimeServices>
+>();
+
 export function createDesktopAgentGUIWorkbenchHostInput({
   agentHostApi,
   hostFilesApi,
@@ -137,18 +148,17 @@ export function createDesktopAgentGUIWorkbenchHostInput({
           NonNullable<AgentActivityRuntime["warmupOpenclawGateway"]>
         >
     : undefined;
-  const agentActivityRuntime = createDesktopAgentActivityRuntime(
-    workspaceAgentActivityService,
-    {
+  const { agentActivityRuntime, agentQueuedPromptRuntime } =
+    getOrCreateDesktopAgentGUIRuntimeServices({
+      hostFilesApi,
       reporterNow,
       reporterService,
-      hostFilesApi,
       runtimeApi,
       warmupOpenclawGateway,
+      workspaceAgentActivityService,
+      workspaceId,
       workspaceUserProjectService
-    }
-  );
-  const agentQueuedPromptRuntime = createAgentQueuedPromptRuntime();
+    });
   const workspaceFileReferenceTracker =
     createAgentWorkspaceFileReferenceTracker({
       reporterNow,
@@ -271,6 +281,58 @@ export function createDesktopAgentGUIWorkbenchHostInput({
     resolveMentionReferenceTarget,
     resolveWorkspaceReferenceInitialTarget
   };
+}
+
+function getOrCreateDesktopAgentGUIRuntimeServices(input: {
+  hostFilesApi: DesktopHostFilesApi;
+  reporterNow?: () => number;
+  reporterService?: Pick<IReporterService, "trackEvents">;
+  runtimeApi: DesktopRuntimeApi;
+  warmupOpenclawGateway?: NonNullable<
+    AgentActivityRuntime["warmupOpenclawGateway"]
+  >;
+  workspaceAgentActivityService: IWorkspaceAgentActivityService;
+  workspaceId: string;
+  workspaceUserProjectService?: IWorkspaceUserProjectService;
+}): DesktopAgentGUIRuntimeServices {
+  const workspaceKey = input.workspaceId.trim();
+  let servicesByWorkspace = runtimeServicesByActivityService.get(
+    input.workspaceAgentActivityService
+  );
+  if (!servicesByWorkspace) {
+    servicesByWorkspace = new Map();
+    runtimeServicesByActivityService.set(
+      input.workspaceAgentActivityService,
+      servicesByWorkspace
+    );
+  }
+  const existing = servicesByWorkspace.get(workspaceKey);
+  if (existing) {
+    return existing;
+  }
+  const agentActivityRuntime = createDesktopAgentActivityRuntime(
+    input.workspaceAgentActivityService,
+    {
+      reporterNow: input.reporterNow,
+      reporterService: input.reporterService,
+      hostFilesApi: input.hostFilesApi,
+      runtimeApi: input.runtimeApi,
+      warmupOpenclawGateway: input.warmupOpenclawGateway,
+      workspaceUserProjectService: input.workspaceUserProjectService
+    }
+  );
+  const agentQueuedPromptRuntime = createAgentQueuedPromptRuntime();
+  createDesktopAgentQueuedPromptDrainer({
+    agentActivityRuntime,
+    agentQueuedPromptRuntime,
+    workspaceId: input.workspaceId
+  });
+  const services = {
+    agentActivityRuntime,
+    agentQueuedPromptRuntime
+  };
+  servicesByWorkspace.set(workspaceKey, services);
+  return services;
 }
 
 const resolveWorkspaceReferenceInitialTarget: NonNullable<
