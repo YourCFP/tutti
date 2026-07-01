@@ -62,6 +62,7 @@ import {
 } from "../../../../../shared/i18n/index.ts";
 import {
   type DesktopAgentProvider,
+  desktopAgentConversationDetailModes,
   desktopAppCatalogChannels,
   desktopBrowserUseConnectionModes,
   desktopDockPlacements,
@@ -71,6 +72,7 @@ import {
   desktopWorkbenchWindowSnappingShortcutPresets,
   normalizeDesktopFileExtension,
   type DesktopAppCatalogChannel,
+  type DesktopAgentConversationDetailMode,
   type DesktopBrowserUseConnectionMode,
   type DesktopDockPlacement,
   type DesktopFileDefaultOpener,
@@ -297,8 +299,14 @@ export function WorkspaceSettingsPanel({
               />
             ) : settingsState.activeSection === "agent" ? (
               <WorkspaceAgentSettingsSection
+                agentConversationDetailMode={
+                  desktopPreferencesState.agentConversationDetailMode
+                }
                 browserUseConnectionMode={
                   desktopPreferencesState.browserUseConnectionMode
+                }
+                changingAgentConversationDetailMode={
+                  desktopPreferencesState.changingAgentConversationDetailMode
                 }
                 changingDefaultAgentProvider={
                   desktopPreferencesState.changingDefaultAgentProvider
@@ -313,6 +321,9 @@ export function WorkspaceSettingsPanel({
                 focusRequestID={settingsState.generalFocusRequestID}
                 onBrowserUseConnectionModeChange={(mode) => {
                   void settingsService.changeBrowserUseConnectionMode(mode);
+                }}
+                onAgentConversationDetailModeChange={(mode) => {
+                  void settingsService.changeAgentConversationDetailMode(mode);
                 }}
                 onDefaultAgentProviderChange={(provider) => {
                   void settingsService.changeDefaultAgentProvider(provider);
@@ -2287,22 +2298,30 @@ function resolveComputerUseGrantTooltip(
 }
 
 function WorkspaceAgentSettingsSection({
+  agentConversationDetailMode,
   browserUseConnectionMode,
+  changingAgentConversationDetailMode,
   changingDefaultAgentProvider,
   changingBrowserUseConnectionMode,
   defaultAgentProvider,
   focusedAnchor,
   focusRequestID,
+  onAgentConversationDetailModeChange,
   onDefaultAgentProviderChange,
   onBrowserUseConnectionModeChange,
   onOpenExternalAgentImport
 }: {
+  agentConversationDetailMode: DesktopAgentConversationDetailMode;
   browserUseConnectionMode: DesktopBrowserUseConnectionMode;
+  changingAgentConversationDetailMode: DesktopAgentConversationDetailMode | null;
   changingDefaultAgentProvider: DesktopAgentProvider | null;
   changingBrowserUseConnectionMode: DesktopBrowserUseConnectionMode | null;
   defaultAgentProvider: DesktopAgentProvider;
   focusedAnchor: WorkspaceSettingsGeneralFocusAnchor | null;
   focusRequestID: number;
+  onAgentConversationDetailModeChange: (
+    mode: DesktopAgentConversationDetailMode
+  ) => void;
   onBrowserUseConnectionModeChange: (
     mode: DesktopBrowserUseConnectionMode
   ) => void;
@@ -2324,6 +2343,10 @@ function WorkspaceAgentSettingsSection({
     changingBrowserUseConnectionMode !== null;
   const pendingBrowserUseConnectionMode =
     changingBrowserUseConnectionMode ?? browserUseConnectionMode;
+  const isUpdatingAgentConversationDetailMode =
+    changingAgentConversationDetailMode !== null;
+  const pendingAgentConversationDetailMode =
+    changingAgentConversationDetailMode ?? agentConversationDetailMode;
 
   useEffect(() => {
     if (!focusedAnchor || focusRequestID === 0) {
@@ -2360,6 +2383,60 @@ function WorkspaceAgentSettingsSection({
             type="button"
             onClick={onOpenExternalAgentImport}
           />
+        </div>
+      </div>
+
+      <div className="flex w-full items-start justify-between gap-4 max-[700px]:flex-col max-[700px]:items-stretch">
+        <div className="flex min-w-0 flex-1 flex-col gap-1 max-[700px]:w-full">
+          <strong className="text-[13px] font-semibold text-[var(--text-primary)]">
+            {t("workspace.settings.general.agentConversationDetailModeLabel")}
+          </strong>
+        </div>
+        <div
+          aria-label={t(
+            "workspace.settings.general.agentConversationDetailModeLabel"
+          )}
+          className="grid w-[360px] min-w-[360px] grid-cols-2 gap-2 max-[700px]:w-full max-[700px]:min-w-0 max-[430px]:grid-cols-1"
+          role="radiogroup"
+        >
+          {desktopAgentConversationDetailModes.map((mode) => {
+            const selected = pendingAgentConversationDetailMode === mode;
+            return (
+              <button
+                key={mode}
+                aria-checked={selected}
+                className={cn(
+                  "flex min-h-[72px] min-w-0 flex-col items-start justify-center gap-1 rounded-[8px] border px-3 py-2.5 text-left transition-colors duration-150 disabled:cursor-default disabled:opacity-70",
+                  selected
+                    ? "border-[var(--border-focus)] bg-[var(--transparency-active)] text-[var(--text-primary)]"
+                    : "border-[var(--border-1)] bg-[var(--transparency-block)] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)]"
+                )}
+                disabled={isUpdatingAgentConversationDetailMode}
+                role="radio"
+                type="button"
+                onClick={() => onAgentConversationDetailModeChange(mode)}
+              >
+                <span className="text-[13px] font-semibold leading-[1.25]">
+                  {mode === "coding"
+                    ? t(
+                        "workspace.settings.general.agentConversationDetailModeOptions.codingTitle"
+                      )
+                    : t(
+                        "workspace.settings.general.agentConversationDetailModeOptions.generalTitle"
+                      )}
+                </span>
+                <span className="text-[12px] leading-[1.3] text-[var(--text-secondary)]">
+                  {mode === "coding"
+                    ? t(
+                        "workspace.settings.general.agentConversationDetailModeOptions.codingDescription"
+                      )
+                    : t(
+                        "workspace.settings.general.agentConversationDetailModeOptions.generalDescription"
+                      )}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

@@ -6,7 +6,7 @@ import "encoding/json"
 
 const (
 	BusinessEventProtocolVersion = 1
-	BusinessEventCatalogRevision = "sha256:a7c346d98bac9dfc"
+	BusinessEventCatalogRevision = "sha256:8aea696f56324a16"
 )
 
 type Topic string
@@ -99,6 +99,7 @@ type PreferencesDesktopPreferences struct {
 		Hermes     *bool `json:"hermes,omitempty"`
 		Openclaw   *bool `json:"openclaw,omitempty"`
 	} `json:"agentGuiConversationRailCollapsedByProvider"`
+	AgentConversationDetailMode   string            `json:"agentConversationDetailMode"`
 	AppCatalogChannel             string            `json:"appCatalogChannel"`
 	BrowserUseConnectionMode      *string           `json:"browserUseConnectionMode,omitempty"`
 	DefaultAgentProvider          string            `json:"defaultAgentProvider"`

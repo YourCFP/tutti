@@ -169,16 +169,17 @@ func (p Provider) runStart(ctx context.Context, invoke framework.InvokeContext, 
 		reasoningEffort = defaults.ReasoningEffort
 	}
 	session, err := p.sessions.Create(ctx, invoke.WorkspaceID, agentservice.CreateSessionInput{
-		Provider:             provider,
-		Cwd:                  optionalStringPointer(cwd),
-		InitialContent:       initialContent,
-		InitialDisplayPrompt: input.DisplayPrompt,
-		Model:                optionalStringPointer(model),
-		PermissionModeID:     optionalStringPointer(permissionModeID),
-		ReasoningEffort:      optionalStringPointer(reasoningEffort),
-		Speed:                optionalStringPointer(input.Speed),
-		Title:                optionalStringPointer(input.Title),
-		Visible:              boolPointer(visible),
+		Provider:               provider,
+		Cwd:                    optionalStringPointer(cwd),
+		InitialContent:         initialContent,
+		InitialDisplayPrompt:   input.DisplayPrompt,
+		Model:                  optionalStringPointer(model),
+		PermissionModeID:       optionalStringPointer(permissionModeID),
+		ReasoningEffort:        optionalStringPointer(reasoningEffort),
+		Speed:                  optionalStringPointer(input.Speed),
+		Title:                  optionalStringPointer(input.Title),
+		Visible:                boolPointer(visible),
+		ConversationDetailMode: defaults.ConversationDetailMode,
 	})
 	if err != nil {
 		return nil, err

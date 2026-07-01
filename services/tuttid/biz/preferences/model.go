@@ -7,25 +7,30 @@ import (
 )
 
 const (
-	DefaultDesktopAppCatalogChannel        = "production"
-	DefaultDesktopDefaultAgentProvider     = agentproviderbiz.Codex
-	DefaultDesktopDockIconStyle            = "default"
-	DefaultDesktopDockPlacement            = "bottom"
-	DefaultDesktopBrowserUseConnectionMode = "isolated"
-	DefaultDesktopLocale                   = "en"
-	DefaultDesktopMinimizeAnimation        = "scale"
-	DefaultDesktopSleepPreventionMode      = "never"
-	DefaultDesktopShowAppDeveloperSources  = false
-	DefaultDesktopThemeSource              = "dark"
-	DefaultDesktopUpdateChannel            = "rc"
-	DefaultDesktopUpdatePolicy             = "prompt"
-	DefaultDesktopWindowSnappingEnabled    = false
-	DefaultDesktopWindowSnappingShortcut   = "commandArrows"
+	DesktopAgentConversationDetailModeCoding  = "coding"
+	DesktopAgentConversationDetailModeGeneral = "general"
+
+	DefaultDesktopAppCatalogChannel           = "production"
+	DefaultDesktopAgentConversationDetailMode = DesktopAgentConversationDetailModeCoding
+	DefaultDesktopDefaultAgentProvider        = agentproviderbiz.Codex
+	DefaultDesktopDockIconStyle               = "default"
+	DefaultDesktopDockPlacement               = "bottom"
+	DefaultDesktopBrowserUseConnectionMode    = "isolated"
+	DefaultDesktopLocale                      = "en"
+	DefaultDesktopMinimizeAnimation           = "scale"
+	DefaultDesktopSleepPreventionMode         = "never"
+	DefaultDesktopShowAppDeveloperSources     = false
+	DefaultDesktopThemeSource                 = "dark"
+	DefaultDesktopUpdateChannel               = "rc"
+	DefaultDesktopUpdatePolicy                = "prompt"
+	DefaultDesktopWindowSnappingEnabled       = false
+	DefaultDesktopWindowSnappingShortcut      = "commandArrows"
 )
 
 type DesktopPreferences struct {
 	AgentComposerDefaultsByProvider             map[string]AgentComposerDefaults
 	AgentGUIConversationRailCollapsedByProvider map[string]bool
+	AgentConversationDetailMode                 string
 	AppCatalogChannel                           string
 	BrowserUseConnectionMode                    string
 	DefaultAgentProvider                        string
@@ -54,6 +59,7 @@ func DefaultDesktopPreferences() DesktopPreferences {
 	return DesktopPreferences{
 		AgentComposerDefaultsByProvider:             map[string]AgentComposerDefaults{},
 		AgentGUIConversationRailCollapsedByProvider: map[string]bool{},
+		AgentConversationDetailMode:                 DefaultDesktopAgentConversationDetailMode,
 		AppCatalogChannel:                           DefaultDesktopAppCatalogChannel,
 		BrowserUseConnectionMode:                    DefaultDesktopBrowserUseConnectionMode,
 		DefaultAgentProvider:                        DefaultDesktopDefaultAgentProvider,
@@ -75,6 +81,23 @@ func DefaultDesktopPreferences() DesktopPreferences {
 		UpdatePolicy:                 DefaultDesktopUpdatePolicy,
 		WindowSnappingEnabled:        DefaultDesktopWindowSnappingEnabled,
 		WindowSnappingShortcutPreset: DefaultDesktopWindowSnappingShortcut,
+	}
+}
+
+func NormalizeDesktopAgentConversationDetailMode(value string) string {
+	normalized := strings.TrimSpace(value)
+	if IsDesktopAgentConversationDetailMode(normalized) {
+		return normalized
+	}
+	return DefaultDesktopAgentConversationDetailMode
+}
+
+func IsDesktopAgentConversationDetailMode(value string) bool {
+	switch value {
+	case "coding", "general":
+		return true
+	default:
+		return false
 	}
 }
 

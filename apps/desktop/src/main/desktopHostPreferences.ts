@@ -7,9 +7,11 @@ import type {
 import {
   defaultDesktopBrowserUseConnectionMode,
   defaultDesktopAppCatalogChannel,
+  defaultDesktopAgentConversationDetailMode,
   desktopAgentComposerDefaultsByProviderEqual,
   desktopAgentGuiConversationRailCollapsedByProviderEqual,
   isDesktopBrowserUseConnectionMode,
+  normalizeDesktopAgentConversationDetailMode,
   normalizeDesktopAgentComposerDefaultsByProvider,
   normalizeDesktopAgentGuiConversationRailCollapsedByProvider,
   type DesktopAgentComposerDefaultsByProvider,
@@ -28,6 +30,7 @@ import {
   normalizeDesktopWorkbenchWindowSnapping,
   desktopWorkbenchWindowSnappingEqual,
   type DesktopAgentProvider,
+  type DesktopAgentConversationDetailMode,
   type DesktopAppCatalogChannel,
   type DesktopBrowserUseConnectionMode,
   type DesktopDockIconStyle,
@@ -52,6 +55,7 @@ const updateChannelDefaultMigrationID = "desktop-update-channel-default-rc-v1";
 export interface DesktopHostPreferencesState {
   getAgentComposerDefaultsByProvider(): DesktopAgentComposerDefaultsByProvider;
   getAgentGUIConversationRailCollapsedByProvider(): DesktopAgentGuiConversationRailCollapsedByProvider;
+  getAgentConversationDetailMode(): DesktopAgentConversationDetailMode;
   getAppCatalogChannel(): DesktopAppCatalogChannel;
   getBrowserUseConnectionMode(): DesktopBrowserUseConnectionMode;
   getDefaultAgentProvider(): DesktopAgentProvider;
@@ -69,6 +73,7 @@ export interface DesktopHostPreferencesState {
   sync(input: {
     agentComposerDefaultsByProvider?: DesktopAgentComposerDefaultsByProvider;
     agentGuiConversationRailCollapsedByProvider?: DesktopAgentGuiConversationRailCollapsedByProvider;
+    agentConversationDetailMode?: DesktopAgentConversationDetailMode;
     appCatalogChannel?: DesktopAppCatalogChannel;
     browserUseConnectionMode?: DesktopBrowserUseConnectionMode;
     defaultAgentProvider?: DesktopAgentProvider;
@@ -107,6 +112,9 @@ export async function createDesktopHostPreferencesState(
     normalizeDesktopAgentGuiConversationRailCollapsedByProvider(
       initialPreferences.agentGuiConversationRailCollapsedByProvider
     );
+  let agentConversationDetailMode = normalizeDesktopAgentConversationDetailMode(
+    initialPreferences.agentConversationDetailMode
+  );
   let appCatalogChannel =
     initialPreferences.appCatalogChannel ?? defaultDesktopAppCatalogChannel;
   let browserUseConnectionMode = isDesktopBrowserUseConnectionMode(
@@ -141,6 +149,9 @@ export async function createDesktopHostPreferencesState(
     },
     getAgentGUIConversationRailCollapsedByProvider() {
       return agentGUIConversationRailCollapsedByProvider;
+    },
+    getAgentConversationDetailMode() {
+      return agentConversationDetailMode;
     },
     getAppCatalogChannel() {
       return appCatalogChannel;
@@ -192,6 +203,7 @@ export async function createDesktopHostPreferencesState(
         agentComposerDefaultsByProvider;
       const previousAgentGUIConversationRailCollapsedByProvider =
         agentGUIConversationRailCollapsedByProvider;
+      const previousAgentConversationDetailMode = agentConversationDetailMode;
       const previousAppCatalogChannel = appCatalogChannel;
       const previousBrowserUseConnectionMode = browserUseConnectionMode;
       const previousDefaultAgentProvider = defaultAgentProvider;
@@ -234,6 +246,12 @@ export async function createDesktopHostPreferencesState(
           agentGUIConversationRailCollapsedByProvider =
             nextAgentGUIConversationRailCollapsedByProvider;
         }
+      }
+      if (input.agentConversationDetailMode) {
+        agentConversationDetailMode =
+          normalizeDesktopAgentConversationDetailMode(
+            input.agentConversationDetailMode
+          );
       }
       if (input.browserUseConnectionMode) {
         browserUseConnectionMode = input.browserUseConnectionMode;
@@ -299,6 +317,7 @@ export async function createDesktopHostPreferencesState(
           previousAgentComposerDefaultsByProvider ||
         agentGUIConversationRailCollapsedByProvider !==
           previousAgentGUIConversationRailCollapsedByProvider ||
+        agentConversationDetailMode !== previousAgentConversationDetailMode ||
         appCatalogChannel !== previousAppCatalogChannel ||
         browserUseConnectionMode !== previousBrowserUseConnectionMode ||
         defaultAgentProvider !== previousDefaultAgentProvider ||
@@ -342,6 +361,8 @@ async function resolveInitialDesktopPreferences(
         preferences: {
           agentComposerDefaultsByProvider: {},
           agentGuiConversationRailCollapsedByProvider: {},
+          agentConversationDetailMode:
+            defaultDesktopAgentConversationDetailMode,
           appCatalogChannel: defaultDesktopAppCatalogChannel,
           browserUseConnectionMode: defaultDesktopBrowserUseConnectionMode,
           defaultAgentProvider: defaultDesktopAgentProvider,
@@ -366,6 +387,7 @@ async function resolveInitialDesktopPreferences(
     return {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: defaultDesktopAgentConversationDetailMode,
       appCatalogChannel: defaultDesktopAppCatalogChannel,
       browserUseConnectionMode: defaultDesktopBrowserUseConnectionMode,
       defaultAgentProvider: defaultDesktopAgentProvider,
@@ -393,26 +415,40 @@ async function migrateInitializedDesktopPreferences(
   )
     ? preferences.minimizeAnimation
     : defaultDesktopMinimizeAnimation;
+  const normalizedAgentConversationDetailMode =
+    normalizeDesktopAgentConversationDetailMode(
+      preferences.agentConversationDetailMode
+    );
   if (
     preferences.updateChannel !== "stable" ||
     defaultDesktopUpdateChannel !== "rc"
   ) {
-    if (preferences.minimizeAnimation === normalizedMinimizeAnimation) {
+    if (
+      preferences.minimizeAnimation === normalizedMinimizeAnimation &&
+      preferences.agentConversationDetailMode ===
+        normalizedAgentConversationDetailMode
+    ) {
       return preferences;
     }
     return {
       ...preferences,
+      agentConversationDetailMode: normalizedAgentConversationDetailMode,
       minimizeAnimation: normalizedMinimizeAnimation
     };
   }
 
   const markerPath = resolveUpdateChannelDefaultMigrationMarkerPath(options);
   if (await hasMigrationMarker(markerPath)) {
-    if (preferences.minimizeAnimation === normalizedMinimizeAnimation) {
+    if (
+      preferences.minimizeAnimation === normalizedMinimizeAnimation &&
+      preferences.agentConversationDetailMode ===
+        normalizedAgentConversationDetailMode
+    ) {
       return preferences;
     }
     return {
       ...preferences,
+      agentConversationDetailMode: normalizedAgentConversationDetailMode,
       minimizeAnimation: normalizedMinimizeAnimation
     };
   }
@@ -421,6 +457,7 @@ async function migrateInitializedDesktopPreferences(
     const response = await options.tuttidClient.putDesktopPreferences({
       preferences: {
         ...preferences,
+        agentConversationDetailMode: normalizedAgentConversationDetailMode,
         minimizeAnimation: normalizedMinimizeAnimation,
         updateChannel: defaultDesktopUpdateChannel
       }
@@ -433,6 +470,7 @@ async function migrateInitializedDesktopPreferences(
     });
     return {
       ...preferences,
+      agentConversationDetailMode: normalizedAgentConversationDetailMode,
       minimizeAnimation: normalizedMinimizeAnimation
     };
   }

@@ -182,21 +182,22 @@ type RuntimeSession struct {
 }
 
 type RuntimeStartInput struct {
-	WorkspaceID       string
-	AgentSessionID    string
-	Provider          string
-	Cwd               string
-	Env               []string
-	Title             string
-	PermissionModeID  string
-	Model             string
-	PlanMode          bool
-	BrowserUse        *bool
-	ComputerUse       *bool
-	ProviderTargetRef map[string]any
-	ReasoningEffort   string
-	Speed             string
-	Visible           *bool
+	WorkspaceID            string
+	AgentSessionID         string
+	Provider               string
+	Cwd                    string
+	Env                    []string
+	Title                  string
+	PermissionModeID       string
+	Model                  string
+	PlanMode               bool
+	BrowserUse             *bool
+	ComputerUse            *bool
+	ProviderTargetRef      map[string]any
+	ReasoningEffort        string
+	Speed                  string
+	ConversationDetailMode string
+	Visible                *bool
 }
 
 type RuntimeResumeInput struct {
@@ -307,23 +308,24 @@ type RuntimeStreamEvent struct {
 }
 
 type CreateSessionInput struct {
-	AgentSessionID       string
-	Provider             string
-	InitialContent       []PromptContentBlock
-	InitialDisplayPrompt string
-	Metadata             map[string]any
-	Title                *string
-	Cwd                  *string
-	PermissionModeID     *string
-	Model                *string
-	PlanMode             *bool
-	BrowserUse           *bool
-	ComputerUse          *bool
-	ProviderTargetRef    map[string]any
-	ReasoningEffort      *string
-	Speed                *string
-	Visible              *bool
-	ExtraSkills          []SessionSkillBundle
+	AgentSessionID         string
+	Provider               string
+	InitialContent         []PromptContentBlock
+	InitialDisplayPrompt   string
+	Metadata               map[string]any
+	Title                  *string
+	Cwd                    *string
+	PermissionModeID       *string
+	Model                  *string
+	PlanMode               *bool
+	BrowserUse             *bool
+	ComputerUse            *bool
+	ProviderTargetRef      map[string]any
+	ReasoningEffort        *string
+	Speed                  *string
+	ConversationDetailMode string
+	Visible                *bool
+	ExtraSkills            []SessionSkillBundle
 }
 
 type SessionSkillBundle struct {

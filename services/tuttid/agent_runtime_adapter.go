@@ -33,11 +33,12 @@ func (a agentRuntimeAdapter) Cancel(ctx context.Context, input agentservice.Runt
 
 func agentRuntimeSessionSettings(settings agentservice.ComposerSettings) *agentruntime.SessionSettings {
 	result := &agentruntime.SessionSettings{
-		Model:            settings.Model,
-		ReasoningEffort:  settings.ReasoningEffort,
-		Speed:            settings.Speed,
-		PlanMode:         settings.PlanMode,
-		PermissionModeID: settings.PermissionModeID,
+		Model:                  settings.Model,
+		ReasoningEffort:        settings.ReasoningEffort,
+		Speed:                  settings.Speed,
+		PlanMode:               settings.PlanMode,
+		PermissionModeID:       settings.PermissionModeID,
+		ConversationDetailMode: settings.ConversationDetailMode,
 	}
 	if settings.BrowserUse != nil {
 		value := *settings.BrowserUse
@@ -261,12 +262,13 @@ func (a agentRuntimeAdapter) Start(ctx context.Context, input agentservice.Runti
 		ProviderTargetRef: cloneRuntimeContext(input.ProviderTargetRef),
 		PermissionModeID:  input.PermissionModeID,
 		Settings: &agentruntime.SessionSettings{
-			Model:            input.Model,
-			ReasoningEffort:  input.ReasoningEffort,
-			Speed:            input.Speed,
-			PlanMode:         input.PlanMode,
-			BrowserUse:       cloneOptionalBool(input.BrowserUse),
-			PermissionModeID: input.PermissionModeID,
+			Model:                  input.Model,
+			ReasoningEffort:        input.ReasoningEffort,
+			Speed:                  input.Speed,
+			PlanMode:               input.PlanMode,
+			BrowserUse:             cloneOptionalBool(input.BrowserUse),
+			PermissionModeID:       input.PermissionModeID,
+			ConversationDetailMode: input.ConversationDetailMode,
 		},
 		Visible: input.Visible,
 	})
@@ -364,12 +366,13 @@ func agentRuntimeComposerSettings(settings *agentruntime.SessionSettings) *agent
 		return nil
 	}
 	return &agentservice.ComposerSettings{
-		Model:            settings.Model,
-		PermissionModeID: settings.PermissionModeID,
-		PlanMode:         settings.PlanMode,
-		BrowserUse:       cloneOptionalBool(settings.BrowserUse),
-		ReasoningEffort:  settings.ReasoningEffort,
-		Speed:            settings.Speed,
+		Model:                  settings.Model,
+		PermissionModeID:       settings.PermissionModeID,
+		PlanMode:               settings.PlanMode,
+		BrowserUse:             cloneOptionalBool(settings.BrowserUse),
+		ReasoningEffort:        settings.ReasoningEffort,
+		Speed:                  settings.Speed,
+		ConversationDetailMode: settings.ConversationDetailMode,
 	}
 }
 

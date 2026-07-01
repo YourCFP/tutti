@@ -2100,7 +2100,7 @@ func TestClaudeCodeAdapterStartAppendsSessionScopedSystemPrompt(t *testing.T) {
 		t.Fatalf("systemPrompt.preset = %q, want claude_code", got)
 	}
 	if got, _ := systemPrompt["append"].(string); got != "Use Tutti CLI for issue context." {
-		t.Fatalf("systemPrompt.append = %q, want prompt file content", got)
+		t.Fatalf("systemPrompt.append = %q, want prompt file content without coding conversation detail mode override", got)
 	}
 	claudeCode, ok := meta["claudeCode"].(map[string]any)
 	if !ok {
@@ -2144,6 +2144,47 @@ func TestClaudeCodeAdapterStartAppendsSessionScopedSystemPrompt(t *testing.T) {
 	}
 	instructions, ok := options["planModeInstructions"].(string)
 	if !ok || !strings.Contains(instructions, "do not edit files") || !strings.Contains(instructions, "implementation plan") {
+		t.Fatalf("planModeInstructions = %#v, want Tutti plan workflow instructions", options["planModeInstructions"])
+	}
+}
+
+func TestClaudeCodeAdapterStartAppendsGeneralConversationDetailModeSystemPrompt(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Claude Agent", "claude-session-general-conversation-detail-mode")
+	adapter := NewClaudeCodeAdapter(transport)
+	session := standardTestSession(ProviderClaudeCode)
+	session.PermissionModeID = "default"
+	session.Settings = &SessionSettings{ConversationDetailMode: AgentConversationDetailModeGeneral}
+
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	meta, ok := transport.conn.lastNewSessionParams["_meta"].(map[string]any)
+	if !ok {
+		t.Fatalf("session/new missing _meta params snapshot")
+	}
+	systemPrompt, ok := meta["systemPrompt"].(map[string]any)
+	if !ok {
+		t.Fatalf("systemPrompt = %#v, want map", meta["systemPrompt"])
+	}
+	appendText, _ := systemPrompt["append"].(string)
+	if !strings.Contains(appendText, "### Non-technical UI") ||
+		!strings.Contains(appendText, "don't name bash commands you're running") ||
+		!strings.Contains(appendText, "focus on outputs") {
+		t.Fatalf("systemPrompt.append = %q, want non-technical UI guidance", appendText)
+	}
+	claudeCode, ok := meta["claudeCode"].(map[string]any)
+	if !ok {
+		t.Fatalf("claudeCode = %#v, want map", meta["claudeCode"])
+	}
+	options, ok := claudeCode["options"].(map[string]any)
+	if !ok {
+		t.Fatalf("claudeCode.options = %#v, want map", claudeCode["options"])
+	}
+	instructions, ok := options["planModeInstructions"].(string)
+	if !ok || !strings.Contains(instructions, "do not edit files") {
 		t.Fatalf("planModeInstructions = %#v, want Tutti plan workflow instructions", options["planModeInstructions"])
 	}
 }

@@ -401,6 +401,7 @@ export type {
   DeleteWorkspaceResponses,
   DesktopAgentComposerDefaults,
   DesktopAgentComposerDefaultsByProvider,
+  DesktopAgentConversationDetailMode,
   DesktopAgentGuiConversationRailCollapsedByProvider,
   DesktopAppCatalogChannel,
   DesktopBrowserUseConnectionMode,

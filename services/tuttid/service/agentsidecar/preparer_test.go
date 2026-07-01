@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -387,8 +388,129 @@ func TestDefaultPreparerCodexWritesProjectRootMarkersDisabledConfigWithoutUserCo
 	if err != nil {
 		t.Fatalf("codex config missing: %v", err)
 	}
-	if strings.TrimSpace(string(codexConfig)) != codexProjectRootMarkersDisabledConfig {
-		t.Fatalf("codex config = %q, want project root markers disabled", string(codexConfig))
+	config := string(codexConfig)
+	if !strings.Contains(config, codexProjectRootMarkersDisabledConfig) ||
+		!strings.Contains(config, "[tutti]") ||
+		!strings.Contains(config, `conversationDetailMode = "coding"`) ||
+		strings.Contains(config, "### Non-technical UI") {
+		t.Fatalf("codex config = %q, want project root markers disabled and Tutti coding marker only", config)
+	}
+}
+
+func TestDefaultPreparerCodexWritesGeneralConversationDetailModeToSessionConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	stateDir := t.TempDir()
+	cwd := t.TempDir()
+	prepared, err := NewDefaultPreparer(stateDir).Prepare(t.Context(), PrepareInput{
+		WorkspaceID:            "workspace-1",
+		AgentSessionID:         "session-1",
+		Provider:               "codex",
+		Cwd:                    cwd,
+		ConversationDetailMode: "general",
+	})
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+
+	codexHome := envValue(prepared.Env, "CODEX_HOME")
+	codexConfig, err := os.ReadFile(filepath.Join(codexHome, "config.toml"))
+	if err != nil {
+		t.Fatalf("codex config missing: %v", err)
+	}
+	config := string(codexConfig)
+	if !strings.Contains(config, "[tutti]") ||
+		!strings.Contains(config, `conversationDetailMode = "general"`) ||
+		!strings.Contains(config, `developer_instructions =`) ||
+		!strings.Contains(config, "### Non-technical UI") ||
+		!strings.Contains(config, "don't name bash commands you're running") ||
+		!strings.Contains(config, "focus on outputs") {
+		t.Fatalf("codex config = %q, want Tutti general marker and non-technical UI developer instructions", config)
+	}
+}
+
+func TestCodexConfigWithTuttiConversationDetailModeUpdatesExistingMarker(t *testing.T) {
+	input := strings.Join([]string{
+		`project_root_markers = []`,
+		"",
+		"[tutti]",
+		`conversationDetailMode = "coding"`,
+		"",
+		"[model_providers.proxy]",
+		`base_url = "https://openai.proxy.test/v1"`,
+	}, "\n")
+
+	next, changed := codexConfigWithTuttiConversationDetailMode(input, "general")
+	if !changed {
+		t.Fatalf("codexConfigWithTuttiConversationDetailMode changed = false, want true")
+	}
+	if !strings.Contains(next, `[tutti]`) ||
+		!strings.Contains(next, `conversationDetailMode = "general"`) ||
+		strings.Contains(next, `conversationDetailMode = "coding"`) ||
+		!strings.Contains(next, "[model_providers.proxy]") {
+		t.Fatalf("merged config = %q, want updated Tutti conversation detail mode marker", next)
+	}
+}
+
+func TestCodexConfigWithConversationDetailModeInstructionsAppendsExistingDeveloperInstructions(t *testing.T) {
+	input := strings.Join([]string{
+		`developer_instructions = "Existing guidance."`,
+		`model = "gpt-5.5"`,
+		"",
+		"[model_providers.proxy]",
+		`base_url = "https://openai.proxy.test/v1"`,
+	}, "\n")
+
+	next, changed := codexConfigWithConversationDetailModeInstructions(input, "general")
+	if !changed {
+		t.Fatalf("codexConfigWithConversationDetailModeInstructions changed = false, want true")
+	}
+	if !strings.Contains(next, "Existing guidance.") ||
+		!strings.Contains(next, "### Non-technical UI") ||
+		!strings.Contains(next, "[model_providers.proxy]") {
+		t.Fatalf("merged config = %q, want existing developer instructions plus non-technical UI", next)
+	}
+}
+
+func TestCodexConfigWithConversationDetailModeInstructionsRemovesManagedInstructionsForCoding(t *testing.T) {
+	input := strings.Join([]string{
+		`developer_instructions = ` + strconv.Quote("Existing guidance.\n\n"+nonTechnicalUIConversationDetailModeInstructions),
+		`model = "gpt-5.5"`,
+		"",
+		"[tutti]",
+		`conversationDetailMode = "general"`,
+	}, "\n")
+
+	next, changed := codexConfigWithConversationDetailModeInstructions(input, "coding")
+	if !changed {
+		t.Fatalf("codexConfigWithConversationDetailModeInstructions changed = false, want true")
+	}
+	if !strings.Contains(next, `developer_instructions = "Existing guidance."`) ||
+		strings.Contains(next, "### Non-technical UI") ||
+		!strings.Contains(next, "[tutti]") {
+		t.Fatalf("merged config = %q, want existing developer instructions without non-technical UI", next)
+	}
+}
+
+func TestCodexConfigWithConversationDetailModeInstructionsRemovesEmptyManagedKeyForCoding(t *testing.T) {
+	input := strings.Join([]string{
+		`developer_instructions = ` + strconv.Quote(nonTechnicalUIConversationDetailModeInstructions),
+		`model = "gpt-5.5"`,
+		"",
+		"[tutti]",
+		`conversationDetailMode = "general"`,
+	}, "\n")
+
+	next, changed := codexConfigWithConversationDetailModeInstructions(input, "coding")
+	if !changed {
+		t.Fatalf("codexConfigWithConversationDetailModeInstructions changed = false, want true")
+	}
+	if strings.Contains(next, `developer_instructions =`) ||
+		strings.Contains(next, "### Non-technical UI") ||
+		!strings.Contains(next, `model = "gpt-5.5"`) ||
+		!strings.Contains(next, "[tutti]") {
+		t.Fatalf("merged config = %q, want managed developer_instructions key removed", next)
 	}
 }
 
@@ -667,10 +789,11 @@ func TestDefaultPreparerClaudeCodeUsesSessionScopedSystemPrompt(t *testing.T) {
 	}
 
 	prepared, err := NewDefaultPreparer(stateDir).Prepare(t.Context(), PrepareInput{
-		WorkspaceID:    "workspace-1",
-		AgentSessionID: "session-1",
-		Provider:       "claude-code",
-		Cwd:            cwd,
+		WorkspaceID:            "workspace-1",
+		AgentSessionID:         "session-1",
+		Provider:               "claude-code",
+		Cwd:                    cwd,
+		ConversationDetailMode: "general",
 	})
 	if err != nil {
 		t.Fatalf("Prepare() error = %v", err)
@@ -715,6 +838,11 @@ func TestDefaultPreparerClaudeCodeUsesSessionScopedSystemPrompt(t *testing.T) {
 	if !strings.Contains(string(systemPrompt), "`tutti <scope> --help`") ||
 		!strings.Contains(string(systemPrompt), "App id mapping") {
 		t.Fatalf("claude system prompt content = %q", string(systemPrompt))
+	}
+	if !strings.Contains(string(systemPrompt), "### Non-technical UI") ||
+		!strings.Contains(string(systemPrompt), "don't name bash commands you're running") ||
+		!strings.Contains(string(systemPrompt), "focus on outputs") {
+		t.Fatalf("claude system prompt content = %q, want non-technical UI guidance", string(systemPrompt))
 	}
 	if !strings.Contains(string(systemPrompt), "## Mention Routing") ||
 		!strings.Contains(string(systemPrompt), "| URI") ||

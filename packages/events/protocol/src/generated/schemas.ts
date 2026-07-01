@@ -9,6 +9,7 @@ export const preferencesDesktopPreferencesSchema = {
   required: [
     "agentComposerDefaultsByProvider",
     "agentGuiConversationRailCollapsedByProvider",
+    "agentConversationDetailMode",
     "appCatalogChannel",
     "defaultAgentProvider",
     "dockIconStyle",
@@ -142,6 +143,10 @@ export const preferencesDesktopPreferencesSchema = {
           type: "boolean"
         }
       }
+    },
+    agentConversationDetailMode: {
+      type: "string",
+      enum: ["coding", "general"]
     },
     appCatalogChannel: {
       type: "string",
@@ -953,6 +958,7 @@ export const preferencesDesktopUpdateRequestedPayloadSchema = {
       required: [
         "agentComposerDefaultsByProvider",
         "agentGuiConversationRailCollapsedByProvider",
+        "agentConversationDetailMode",
         "appCatalogChannel",
         "defaultAgentProvider",
         "dockIconStyle",
@@ -1086,6 +1092,10 @@ export const preferencesDesktopUpdateRequestedPayloadSchema = {
               type: "boolean"
             }
           }
+        },
+        agentConversationDetailMode: {
+          type: "string",
+          enum: ["coding", "general"]
         },
         appCatalogChannel: {
           type: "string",
@@ -1201,6 +1211,7 @@ export const preferencesDesktopUpdatedPayloadSchema = {
       required: [
         "agentComposerDefaultsByProvider",
         "agentGuiConversationRailCollapsedByProvider",
+        "agentConversationDetailMode",
         "appCatalogChannel",
         "defaultAgentProvider",
         "dockIconStyle",
@@ -1334,6 +1345,10 @@ export const preferencesDesktopUpdatedPayloadSchema = {
               type: "boolean"
             }
           }
+        },
+        agentConversationDetailMode: {
+          type: "string",
+          enum: ["coding", "general"]
         },
         appCatalogChannel: {
           type: "string",

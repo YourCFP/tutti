@@ -7,6 +7,7 @@
   "required": [
     "agentComposerDefaultsByProvider",
     "agentGuiConversationRailCollapsedByProvider",
+    "agentConversationDetailMode",
     "appCatalogChannel",
     "defaultAgentProvider",
     "dockIconStyle",
@@ -44,6 +45,10 @@
         "hermes": { "type": "boolean" },
         "openclaw": { "type": "boolean" }
       }
+    },
+    "agentConversationDetailMode": {
+      "type": "string",
+      "enum": ["coding", "general"]
     },
     "appCatalogChannel": {
       "type": "string",

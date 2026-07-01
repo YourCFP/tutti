@@ -409,7 +409,8 @@ func permissionModeIDAllowedForProvider(provider string, mode string) bool {
 
 func normalizeSessionSettings(settings *SessionSettings, provider string, defaultPermissionModeID string) SessionSettings {
 	normalized := SessionSettings{
-		PermissionModeID: normalizePermissionModeIDWithFallback(provider, defaultPermissionModeID, ""),
+		PermissionModeID:       normalizePermissionModeIDWithFallback(provider, defaultPermissionModeID, ""),
+		ConversationDetailMode: AgentConversationDetailModeCoding,
 	}
 	if settings == nil {
 		return normalized
@@ -417,6 +418,7 @@ func normalizeSessionSettings(settings *SessionSettings, provider string, defaul
 	normalized.Model = strings.TrimSpace(settings.Model)
 	normalized.ReasoningEffort = strings.TrimSpace(settings.ReasoningEffort)
 	normalized.Speed = strings.TrimSpace(settings.Speed)
+	normalized.ConversationDetailMode = normalizeAgentConversationDetailMode(settings.ConversationDetailMode)
 	normalized.PlanMode = settings.PlanMode
 	if settings.BrowserUse != nil {
 		value := *settings.BrowserUse

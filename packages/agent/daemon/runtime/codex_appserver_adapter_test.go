@@ -14,6 +14,11 @@ import (
 	activityshared "github.com/tutti-os/tutti/packages/agentactivity/daemon/activity/events"
 )
 
+const (
+	testAppServerPlanCollaborationInstructions    = "# Plan Mode (Conversational)\n\nPlan before implementing."
+	testAppServerDefaultCollaborationInstructions = "# Collaboration Mode: Default\n\nExecute with reasonable assumptions."
+)
+
 func testAppServerSession() Session {
 	return Session{
 		RoomID:         "room-1",
@@ -200,16 +205,18 @@ func (c *scriptedAppServerConnection) Send(data []byte) error {
 				"result": map[string]any{
 					"data": []any{
 						map[string]any{
-							"name":             "Plan",
-							"mode":             "plan",
-							"model":            nil,
-							"reasoning_effort": "medium",
+							"name":                   "Plan",
+							"mode":                   "plan",
+							"model":                  nil,
+							"reasoning_effort":       "medium",
+							"developer_instructions": testAppServerPlanCollaborationInstructions,
 						},
 						map[string]any{
-							"name":             "Pair",
-							"mode":             "default",
-							"model":            nil,
-							"reasoning_effort": nil,
+							"name":                   "Pair",
+							"mode":                   "default",
+							"model":                  nil,
+							"reasoning_effort":       nil,
+							"developer_instructions": testAppServerDefaultCollaborationInstructions,
 						},
 					},
 				},
@@ -2547,8 +2554,8 @@ func TestCodexAppServerAdapterSendsCollaborationModeForPlanTurns(t *testing.T) {
 	if asString(settings["reasoning_effort"]) != "medium" {
 		t.Fatalf("collaborationMode settings = %#v, want preset reasoning effort", settings)
 	}
-	if value, ok := settings["developer_instructions"]; !ok || value != nil {
-		t.Fatalf("collaborationMode settings = %#v, want explicit null developer_instructions", settings)
+	if value := asString(settings["developer_instructions"]); value != testAppServerPlanCollaborationInstructions {
+		t.Fatalf("collaborationMode settings = %#v, want plan developer_instructions", settings)
 	}
 
 	session.Settings = &SessionSettings{PlanMode: false}
@@ -2570,6 +2577,9 @@ func TestCodexAppServerAdapterSendsCollaborationModeForPlanTurns(t *testing.T) {
 	if asString(exitSettings["model"]) != "gpt-5.1-codex" {
 		t.Fatalf("default collaborationMode settings = %#v, want default model", exitSettings)
 	}
+	if value := asString(exitSettings["developer_instructions"]); value != testAppServerDefaultCollaborationInstructions {
+		t.Fatalf("default collaborationMode settings = %#v, want default developer_instructions", exitSettings)
+	}
 
 	session.Settings = &SessionSettings{PlanMode: true, Model: "gpt-5.1-codex-mini", ReasoningEffort: "low"}
 	if _, err := adapter.Exec(context.Background(), session, []PromptContentBlock{{
@@ -2583,6 +2593,30 @@ func TestCodexAppServerAdapterSendsCollaborationModeForPlanTurns(t *testing.T) {
 	overrideSettings, _ := overrideMode["settings"].(map[string]any)
 	if asString(overrideSettings["model"]) != "gpt-5.1-codex-mini" || asString(overrideSettings["reasoning_effort"]) != "low" {
 		t.Fatalf("collaborationMode settings = %#v, want session overrides", overrideSettings)
+	}
+	if value := asString(overrideSettings["developer_instructions"]); value != testAppServerPlanCollaborationInstructions {
+		t.Fatalf("plan collaborationMode settings = %#v, want plan developer_instructions", overrideSettings)
+	}
+}
+
+func TestCodexAppServerAdapterDoesNotSendConversationDetailModeInstructionsPerTurn(t *testing.T) {
+	t.Parallel()
+
+	adapter, transport, session := startedAppServerAdapter(t)
+	session.Settings = &SessionSettings{ConversationDetailMode: AgentConversationDetailModeGeneral}
+	if _, err := adapter.Exec(context.Background(), session, []PromptContentBlock{{
+		Type: "text", Text: "summarize this",
+	}}, "", "turn-general-1", nil, nil); err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	turnStart := appServerRequestParams(t, transport.conn, appServerMethodTurnStart)
+	collaborationMode, _ := turnStart["collaborationMode"].(map[string]any)
+	if asString(collaborationMode["mode"]) != "default" {
+		t.Fatalf("turn/start collaborationMode = %#v, want default mode", turnStart["collaborationMode"])
+	}
+	settings, _ := collaborationMode["settings"].(map[string]any)
+	if value := asString(settings["developer_instructions"]); value != testAppServerDefaultCollaborationInstructions {
+		t.Fatalf("collaborationMode settings = %#v, want default collaboration mode developer_instructions", settings)
 	}
 }
 

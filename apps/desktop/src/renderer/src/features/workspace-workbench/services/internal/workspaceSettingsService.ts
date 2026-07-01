@@ -2,6 +2,7 @@ import type { DesktopDeveloperLogKind } from "@shared/contracts/ipc";
 import type { DesktopLocale } from "@shared/i18n";
 import type {
   DesktopAgentProvider,
+  DesktopAgentConversationDetailMode,
   DesktopAppCatalogChannel,
   DesktopBrowserUseConnectionMode,
   DesktopDockIconStyle,
@@ -233,6 +234,27 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       this.notifications.error({
         title: createActiveTranslator().t(
           "workspace.settings.general.defaultAgentProviderSaveFailed"
+        )
+      });
+    }
+  }
+
+  async changeAgentConversationDetailMode(
+    mode: DesktopAgentConversationDetailMode
+  ): Promise<void> {
+    if (
+      this.desktopPreferences.store.agentConversationDetailMode === mode ||
+      this.desktopPreferences.store.changingAgentConversationDetailMode === mode
+    ) {
+      return;
+    }
+
+    try {
+      await this.desktopPreferences.setAgentConversationDetailMode(mode);
+    } catch {
+      this.notifications.error({
+        title: createActiveTranslator().t(
+          "workspace.settings.general.agentConversationDetailModeSaveFailed"
         )
       });
     }
@@ -1079,8 +1101,10 @@ IWorkspaceAppCenterService(WorkspaceSettingsService, undefined, 4);
 const noopDesktopPreferencesStore: DesktopPreferencesReadableStoreState = {
   agentComposerDefaultsByProvider: {},
   agentGuiConversationRailCollapsedByProvider: {},
+  agentConversationDetailMode: "coding",
   appCatalogChannel: "production",
   browserUseConnectionMode: "isolated",
+  changingAgentConversationDetailMode: null,
   changingAppCatalogChannel: null,
   changingBrowserUseConnectionMode: null,
   changingDefaultAgentProvider: null,
@@ -1122,6 +1146,9 @@ const noopDesktopPreferences: DesktopPreferencesService = {
   },
   setDefaultAgentProvider(provider) {
     return Promise.resolve(provider);
+  },
+  setAgentConversationDetailMode(mode) {
+    return Promise.resolve(mode);
   },
   setDockPlacement(placement) {
     return Promise.resolve(placement);
