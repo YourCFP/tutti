@@ -91,8 +91,8 @@ The ACP code in `packages/agent/daemon/runtime` is a **generic multi-agent stack
 | State machine | Cluster | Owning layer / step | By-construction fix |
 |---|---|---|---|
 | **Thread identity** | B | Thread registry in typed `Client` (Step 3) | Route by `threadId` (link via parent item's `receiverThreadIds`), stamp child events with `OwnerThreadID`, suppress child lifecycle noise — instead of dropping foreign threads. (ADR 0003) |
-| **Turn + compaction lifecycle** | C | Reducer (turn events, Step 4) + facade (Step 5) | Explicit turn state machine; compact is a first-class special turn (close only on `turn/completed`; correct token accounting). |
-| **Session / live-session lifecycle** | D | Thread/Turn facade (Step 7), reconciled with `controller.go` | Facade owns idle-detection/recycling instead of it being bolted on. |
+| **Turn + compaction lifecycle** | C | Reducer-owned `turnPhase` machine (Step 5), reconciled vs snapshot | Explicit `turnPhase` enum (terminal = phase, not whitelist); terminal-error + snapshot-negative are transitions → no wedge; compact is a first-class event; projection is the source of truth, blocking await is a subscriber. (ADR 0005 A+B) |
+| **Session / live-session lifecycle** | D | Thread/Turn facade (Step 7), non-blocking `Exec` via strangler | Facade owns idle-detection/recycling; `Exec` inverted to command/observe over the unified projection → wedge/floor/single-turn gone. Gated on Step 4. (ADR 0005 C+D) |
 | **Hydration / snapshot contract** | A | Reducer output (Step 4, daemon-half) + deferred desktop (Step 9) | Daemon emits a `clientSubmitId`-keyed, gap-free, resyncable snapshot; desktop stops guessing. **`Version` = monotonic gap-free per-session cursor (not a ms timestamp); display order = `OccurredAtUnixMS`; identity = `MessageID=f(clientSubmitId)`. (ADR 0004)** |
 
 ## Reference Mapping (borrow per-concern, never mono-copy)
@@ -173,21 +173,28 @@ All four state machines are consolidated, but sequenced into independently shipp
 - Pull event handling out of the 1816-line file into a focused reducer: app-server notification → tutti typed activity event.
 - Bake in the official **lossless tier**: deltas / `item/completed` / `turn/completed` guaranteed; progress-class events may degrade.
 - **Define the daemon snapshot/hydration contract:** complete, `clientSubmitId`-keyed, gap-free, fully resyncable. **Refined (ADR 0004):** replace `Version = ms timestamp` with a **store-assigned per-session monotonic gap-free counter** (the delivery cursor; assigned at `upsertSessionMessagesLocked`, preserved on merge) so a same-ms collision can no longer let `after_version` skip the user row; **sort/display by `OccurredAtUnixMS`** (robust to out-of-order replay); identity = `MessageID=f(clientSubmitId)`. No data migration (store is in-memory, replay-rebuilt); no durable event-log (future direction). Add `OwnerThreadID` from Step 3.
-- **Exit:** reducer is a standalone, tested unit; the Cluster A snapshot contract is specified and tested at the daemon boundary (monotonic cursor + resync-at-0 + stable `MessageID`); adapter no longer parses raw notifications inline.
+- **Unified projection seam (ADR 0005 prerequisite):** the reducer's snapshot output carries **turn state alongside messages** (one cursor, one reconcile), so Step 5's `turnPhase` machine reconciles against the same authoritative snapshot and Step 7 can invert `Exec` onto it. This is the prerequisite gate for the non-blocking turn model.
+- **Exit:** reducer is a standalone, tested unit; the Cluster A snapshot contract is specified and tested at the daemon boundary (monotonic cursor + resync-at-0 + stable `MessageID`; turn state included); adapter no longer parses raw notifications inline.
 
-### Step 5 — Turn + compaction lifecycle (state machine C)
-- Make the turn lifecycle an explicit state machine spanning the reducer (turn events) and facade; **compaction is a first-class special turn** (closed only on `turn/completed`; token accounting that cannot raise false compact alerts).
-- **Exit:** Cluster C regression tests (compact-after-100%, compact-turn-close ordering, token-accounting) pass through the explicit state machine.
+### Step 5 — Turn + compaction lifecycle (state machine C) · *optimal path A+B (ADR 0005)*
+- Introduce an **explicit `turnPhase` enum + single `transition()` owned by the reducer** (`idle → running → compacting → interrupting → terminal{completed|failed|canceled}`), replacing the scattered 7-field implicit state (`activeTurn` slot + `cancelRequested`/`cancelInterruptSent`/`forceCanceled` + `done`/`terminated` + status).
+- **Terminal is a phase, not a status whitelist:** transitions fire on `turn/completed` ∪ terminal `error(willRetry=false)` ∪ interrupted ∪ **snapshot-says-not-running** — killing the 67009835 wedge (errored turn no longer parks the single slot) and letting the controller.go stuck-turn band-aid retire.
+- **The reducer/projection is the source of truth; `awaitTurnCompletion` is rewritten as a subscriber** ("block until phase==Terminal"). **compaction is a first-class event in the machine** (successful compact still terminates on `turn/completed` so the banner isn't lost; an errored compact still terminates). Token accounting (2412b08d) folds into the compacting phase.
+- **Risk control:** shadow-compare the projection's terminal classification against the old blocking model over the Step-0 corpus + golden turn tests before it becomes authoritative; transitions are single-writer under `a.mu`, turnID-guarded.
+- **Exit:** Cluster C regression tests (compact-after-100%, compact-turn-close ordering, token-accounting) pass through the explicit machine; turn state is a reconcilable projection, not a parked goroutine.
 
 ### Step 6 — Approval / Interactive Resolver (state machine E)
 - Pull server-request handling (command/file/permissions approvals, `requestUserInput`, MCP elicitation) into a resolver that projects to durable pending state + a typed responder; surface approval command detail (#418).
 - Cover the **unknown / unsupported server-request** path with an explicit reject/error surface.
 - **Exit:** approval flow is a standalone, tested unit; Cluster E cases covered.
 
-### Step 7 — Thin the Adapter into a Thread/Turn facade + session lifecycle (state machine D)
+### Step 7 — Thin the Adapter into a Thread/Turn facade + session lifecycle (state machine D) · *optimal path C+D (ADR 0005)*
 - What remains of `codex_appserver_adapter.go` collapses onto Thread/Turn lifecycle orchestration over the new layers (facade shape per `codex-sdk-go`).
+- **Invert `Exec` to non-blocking via a strangler shim (C):** introduce the async submit/observe core; keep the blocking `Exec([]activityshared.Event, error)` signature as a thin wrapper over it (block until the projection reports terminal); migrate `controller.go` and callers to the async API incrementally; delete the wrapper only when no caller needs it. The controller observes terminal outcome via the existing `EventSink` stream + projected turn state, not a blocking return — removing the wedge/liveness-floor/single-turn constraints by construction.
+- **Unify the projection (D):** turn state + messages share one per-session reconciled projection (one `Version` cursor per ADR 0004, `OwnerThreadID` lanes per ADR 0003) — matching t3code's single `sequence` log / traycer's single chat event log.
 - **The facade owns session / live-session lifecycle**, reconciled with `controller.go`'s idle-recycle path (#604) so recycling is owned, not bolted on.
-- **Exit:** adapter is orchestration only; no protocol strings or inline reduction remain; Cluster D recycling behavior owned by the facade.
+- **Risk control:** the strangler shim is reversible and opens the controller↔adapter seam ONCE (with Cluster D); **hard-gated on Step 4** (the projection can be sole source of truth only once the snapshot is gap-free/authoritative).
+- **Exit:** adapter is orchestration only; no protocol strings or inline reduction remain; `Exec` is non-blocking (blocking wrapper removed); Cluster D recycling behavior owned by the facade.
 
 ### Step 8 — Retire Codex-over-ACP
 - Delete `codex_adapter.go` (3451) and any Codex-only helpers/branches; prune Codex-only branches inside shared `acp_*` helpers in place.
@@ -233,5 +240,6 @@ Decisions refined against three real consumers (`codex-sdk-go`, `t3code`, `trayc
 - **[ADR 0002](../adr/0002-codexproto-pinning-source-drift.md)** — pin a codex **commit SHA** + stamp; **vendor the committed schema JSON** (no Rust `export` → removes Risk #1); tolerate the floating runtime binary with unknown-field decode + unknown-method fallback; `collaborationMode/list` is "used-but-unexported" → manual supplement.
 - **[ADR 0003](../adr/0003-step3-thread-registry-subagent-routing.md)** — Step 3 identity-preserving routing (traycer model): single reducer + `map[childThreadID]parent` from `receiverThreadIds` + suppress-set + **`OwnerThreadID`**; summary card unchanged; corrects D8 (no per-thread reducer) and D10 (linkage = `receiverThreadIds`, identity preservation makes nested cheap).
 - **[ADR 0004](../adr/0004-step4-hydration-monotonic-cursor.md)** — Step 4 `Version` is a **ms timestamp**, not `1,2,3`; same-ms collision is a **daemon-side** contributor to Cluster A. Fix: monotonic gap-free per-session **cursor** + `OccurredAtUnixMS` display order + `MessageID` identity. No data migration; durable event-log = future direction.
+- **[ADR 0005](../adr/0005-turn-lifecycle-optimal-projection.md)** — **commit to the optimal turn model, no compromise, risk-controlled.** Target: one unified per-session **projection** (turn state + messages + compaction + approvals) reconciled vs the Step-4 snapshot, behind a **non-blocking command/observe `Exec`**. Sequenced on the existing steps: Step 5 = explicit `turnPhase` machine as source of truth (A+B); Step 7 = invert `Exec` via a **strangler shim** + unify the projection (C+D), gated on Step 4. De-risked by shadow-compare + strangler reversibility + one controller touch. tutti's blocking `Exec` + single-slot + implicit state is the anomaly vs t3code/traycer.
 
 Glossary: `docs/adr/glossary.md`.

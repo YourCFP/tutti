@@ -44,3 +44,16 @@
 - **Load-relative counter** — the Version counter restarts and re-assigns per
   session load (store is replay-rebuilt, not durable); safe because the desktop
   resyncs at 0 and keys by MessageID. Contrast t3code/traycer durable sequences.
+- **Unified projection** — the optimal end state (ADR 0005): one per-session reducer
+  folds turn state + messages + compaction + approvals into explicit state,
+  reconciled against the Step-4 snapshot; matches t3code's single `sequence` log /
+  traycer's single chat event log. Replaces tutti's two parallel mechanisms.
+- **turnPhase** — explicit turn state enum (idle/running/compacting/interrupting/
+  terminal{completed|failed|canceled}) owned by the reducer; terminal is a phase,
+  not a status whitelist. Replaces the scattered 7-field implicit state.
+- **Command/observe split** — non-blocking `Exec` (submit → handle; observe via
+  event stream + projected state), reached via a strangler shim over the blocking
+  signature. Removes the wedge/floor/single-turn constraints by construction.
+- **Strangler shim (Exec inversion)** — the risk control for ADR 0005 Step 7: keep
+  the blocking `Exec([]events,error)` as a thin wrapper over the async core; migrate
+  callers incrementally; delete the wrapper last. Reversible, no big-bang.
