@@ -3,7 +3,7 @@ import type { DesktopLocale } from "@shared/i18n";
 import type {
   DesktopAgentComposerDefaults,
   DesktopAgentProvider,
-  DesktopAgentWorkMode,
+  DesktopAgentConversationDetailMode,
   DesktopAppCatalogChannel,
   DesktopBrowserUseConnectionMode,
   DesktopDockIconStyle,
@@ -25,7 +25,9 @@ export interface IDesktopPreferencesService {
   setDefaultAgentProvider(
     provider: DesktopAgentProvider
   ): Promise<DesktopAgentProvider>;
-  setAgentWorkMode(mode: DesktopAgentWorkMode): Promise<DesktopAgentWorkMode>;
+  setAgentConversationDetailMode(
+    mode: DesktopAgentConversationDetailMode
+  ): Promise<DesktopAgentConversationDetailMode>;
   setAppCatalogChannel(
     channel: DesktopAppCatalogChannel
   ): Promise<DesktopAppCatalogChannel>;

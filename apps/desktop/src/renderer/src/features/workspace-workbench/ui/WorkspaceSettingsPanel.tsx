@@ -62,7 +62,7 @@ import {
 } from "../../../../../shared/i18n/index.ts";
 import {
   type DesktopAgentProvider,
-  desktopAgentWorkModes,
+  desktopAgentConversationDetailModes,
   desktopAppCatalogChannels,
   desktopBrowserUseConnectionModes,
   desktopDockPlacements,
@@ -72,7 +72,7 @@ import {
   desktopWorkbenchWindowSnappingShortcutPresets,
   normalizeDesktopFileExtension,
   type DesktopAppCatalogChannel,
-  type DesktopAgentWorkMode,
+  type DesktopAgentConversationDetailMode,
   type DesktopBrowserUseConnectionMode,
   type DesktopDockPlacement,
   type DesktopFileDefaultOpener,
@@ -299,12 +299,14 @@ export function WorkspaceSettingsPanel({
               />
             ) : settingsState.activeSection === "agent" ? (
               <WorkspaceAgentSettingsSection
-                agentWorkMode={desktopPreferencesState.agentWorkMode}
+                agentConversationDetailMode={
+                  desktopPreferencesState.agentConversationDetailMode
+                }
                 browserUseConnectionMode={
                   desktopPreferencesState.browserUseConnectionMode
                 }
-                changingAgentWorkMode={
-                  desktopPreferencesState.changingAgentWorkMode
+                changingAgentConversationDetailMode={
+                  desktopPreferencesState.changingAgentConversationDetailMode
                 }
                 changingDefaultAgentProvider={
                   desktopPreferencesState.changingDefaultAgentProvider
@@ -320,8 +322,8 @@ export function WorkspaceSettingsPanel({
                 onBrowserUseConnectionModeChange={(mode) => {
                   void settingsService.changeBrowserUseConnectionMode(mode);
                 }}
-                onAgentWorkModeChange={(mode) => {
-                  void settingsService.changeAgentWorkMode(mode);
+                onAgentConversationDetailModeChange={(mode) => {
+                  void settingsService.changeAgentConversationDetailMode(mode);
                 }}
                 onDefaultAgentProviderChange={(provider) => {
                   void settingsService.changeDefaultAgentProvider(provider);
@@ -2296,28 +2298,30 @@ function resolveComputerUseGrantTooltip(
 }
 
 function WorkspaceAgentSettingsSection({
-  agentWorkMode,
+  agentConversationDetailMode,
   browserUseConnectionMode,
-  changingAgentWorkMode,
+  changingAgentConversationDetailMode,
   changingDefaultAgentProvider,
   changingBrowserUseConnectionMode,
   defaultAgentProvider,
   focusedAnchor,
   focusRequestID,
-  onAgentWorkModeChange,
+  onAgentConversationDetailModeChange,
   onDefaultAgentProviderChange,
   onBrowserUseConnectionModeChange,
   onOpenExternalAgentImport
 }: {
-  agentWorkMode: DesktopAgentWorkMode;
+  agentConversationDetailMode: DesktopAgentConversationDetailMode;
   browserUseConnectionMode: DesktopBrowserUseConnectionMode;
-  changingAgentWorkMode: DesktopAgentWorkMode | null;
+  changingAgentConversationDetailMode: DesktopAgentConversationDetailMode | null;
   changingDefaultAgentProvider: DesktopAgentProvider | null;
   changingBrowserUseConnectionMode: DesktopBrowserUseConnectionMode | null;
   defaultAgentProvider: DesktopAgentProvider;
   focusedAnchor: WorkspaceSettingsGeneralFocusAnchor | null;
   focusRequestID: number;
-  onAgentWorkModeChange: (mode: DesktopAgentWorkMode) => void;
+  onAgentConversationDetailModeChange: (
+    mode: DesktopAgentConversationDetailMode
+  ) => void;
   onBrowserUseConnectionModeChange: (
     mode: DesktopBrowserUseConnectionMode
   ) => void;
@@ -2339,8 +2343,10 @@ function WorkspaceAgentSettingsSection({
     changingBrowserUseConnectionMode !== null;
   const pendingBrowserUseConnectionMode =
     changingBrowserUseConnectionMode ?? browserUseConnectionMode;
-  const isUpdatingAgentWorkMode = changingAgentWorkMode !== null;
-  const pendingAgentWorkMode = changingAgentWorkMode ?? agentWorkMode;
+  const isUpdatingAgentConversationDetailMode =
+    changingAgentConversationDetailMode !== null;
+  const pendingAgentConversationDetailMode =
+    changingAgentConversationDetailMode ?? agentConversationDetailMode;
 
   useEffect(() => {
     if (!focusedAnchor || focusRequestID === 0) {
@@ -2383,16 +2389,18 @@ function WorkspaceAgentSettingsSection({
       <div className="flex w-full items-start justify-between gap-4 max-[700px]:flex-col max-[700px]:items-stretch">
         <div className="flex min-w-0 flex-1 flex-col gap-1 max-[700px]:w-full">
           <strong className="text-[13px] font-semibold text-[var(--text-primary)]">
-            {t("workspace.settings.general.agentWorkModeLabel")}
+            {t("workspace.settings.general.agentConversationDetailModeLabel")}
           </strong>
         </div>
         <div
-          aria-label={t("workspace.settings.general.agentWorkModeLabel")}
+          aria-label={t(
+            "workspace.settings.general.agentConversationDetailModeLabel"
+          )}
           className="grid w-[360px] min-w-[360px] grid-cols-2 gap-2 max-[700px]:w-full max-[700px]:min-w-0 max-[430px]:grid-cols-1"
           role="radiogroup"
         >
-          {desktopAgentWorkModes.map((mode) => {
-            const selected = pendingAgentWorkMode === mode;
+          {desktopAgentConversationDetailModes.map((mode) => {
+            const selected = pendingAgentConversationDetailMode === mode;
             return (
               <button
                 key={mode}
@@ -2403,27 +2411,27 @@ function WorkspaceAgentSettingsSection({
                     ? "border-[var(--border-focus)] bg-[var(--transparency-active)] text-[var(--text-primary)]"
                     : "border-[var(--border-1)] bg-[var(--transparency-block)] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)]"
                 )}
-                disabled={isUpdatingAgentWorkMode}
+                disabled={isUpdatingAgentConversationDetailMode}
                 role="radio"
                 type="button"
-                onClick={() => onAgentWorkModeChange(mode)}
+                onClick={() => onAgentConversationDetailModeChange(mode)}
               >
                 <span className="text-[13px] font-semibold leading-[1.25]">
                   {mode === "coding"
                     ? t(
-                        "workspace.settings.general.agentWorkModeOptions.codingTitle"
+                        "workspace.settings.general.agentConversationDetailModeOptions.codingTitle"
                       )
                     : t(
-                        "workspace.settings.general.agentWorkModeOptions.generalTitle"
+                        "workspace.settings.general.agentConversationDetailModeOptions.generalTitle"
                       )}
                 </span>
                 <span className="text-[12px] leading-[1.3] text-[var(--text-secondary)]">
                   {mode === "coding"
                     ? t(
-                        "workspace.settings.general.agentWorkModeOptions.codingDescription"
+                        "workspace.settings.general.agentConversationDetailModeOptions.codingDescription"
                       )
                     : t(
-                        "workspace.settings.general.agentWorkModeOptions.generalDescription"
+                        "workspace.settings.general.agentConversationDetailModeOptions.generalDescription"
                       )}
                 </span>
               </button>

@@ -7,30 +7,30 @@ import (
 )
 
 const (
-	DesktopAgentWorkModeCoding  = "coding"
-	DesktopAgentWorkModeGeneral = "general"
+	DesktopAgentConversationDetailModeCoding  = "coding"
+	DesktopAgentConversationDetailModeGeneral = "general"
 
-	DefaultDesktopAppCatalogChannel        = "production"
-	DefaultDesktopAgentWorkMode            = DesktopAgentWorkModeCoding
-	DefaultDesktopDefaultAgentProvider     = agentproviderbiz.Codex
-	DefaultDesktopDockIconStyle            = "default"
-	DefaultDesktopDockPlacement            = "bottom"
-	DefaultDesktopBrowserUseConnectionMode = "isolated"
-	DefaultDesktopLocale                   = "en"
-	DefaultDesktopMinimizeAnimation        = "scale"
-	DefaultDesktopSleepPreventionMode      = "never"
-	DefaultDesktopShowAppDeveloperSources  = false
-	DefaultDesktopThemeSource              = "dark"
-	DefaultDesktopUpdateChannel            = "rc"
-	DefaultDesktopUpdatePolicy             = "prompt"
-	DefaultDesktopWindowSnappingEnabled    = false
-	DefaultDesktopWindowSnappingShortcut   = "commandArrows"
+	DefaultDesktopAppCatalogChannel           = "production"
+	DefaultDesktopAgentConversationDetailMode = DesktopAgentConversationDetailModeCoding
+	DefaultDesktopDefaultAgentProvider        = agentproviderbiz.Codex
+	DefaultDesktopDockIconStyle               = "default"
+	DefaultDesktopDockPlacement               = "bottom"
+	DefaultDesktopBrowserUseConnectionMode    = "isolated"
+	DefaultDesktopLocale                      = "en"
+	DefaultDesktopMinimizeAnimation           = "scale"
+	DefaultDesktopSleepPreventionMode         = "never"
+	DefaultDesktopShowAppDeveloperSources     = false
+	DefaultDesktopThemeSource                 = "dark"
+	DefaultDesktopUpdateChannel               = "rc"
+	DefaultDesktopUpdatePolicy                = "prompt"
+	DefaultDesktopWindowSnappingEnabled       = false
+	DefaultDesktopWindowSnappingShortcut      = "commandArrows"
 )
 
 type DesktopPreferences struct {
 	AgentComposerDefaultsByProvider             map[string]AgentComposerDefaults
 	AgentGUIConversationRailCollapsedByProvider map[string]bool
-	AgentWorkMode                               string
+	AgentConversationDetailMode                 string
 	AppCatalogChannel                           string
 	BrowserUseConnectionMode                    string
 	DefaultAgentProvider                        string
@@ -59,12 +59,12 @@ func DefaultDesktopPreferences() DesktopPreferences {
 	return DesktopPreferences{
 		AgentComposerDefaultsByProvider:             map[string]AgentComposerDefaults{},
 		AgentGUIConversationRailCollapsedByProvider: map[string]bool{},
-		AgentWorkMode:            DefaultDesktopAgentWorkMode,
-		AppCatalogChannel:        DefaultDesktopAppCatalogChannel,
-		BrowserUseConnectionMode: DefaultDesktopBrowserUseConnectionMode,
-		DefaultAgentProvider:     DefaultDesktopDefaultAgentProvider,
-		DockIconStyle:            DefaultDesktopDockIconStyle,
-		DockPlacement:            DefaultDesktopDockPlacement,
+		AgentConversationDetailMode:                 DefaultDesktopAgentConversationDetailMode,
+		AppCatalogChannel:                           DefaultDesktopAppCatalogChannel,
+		BrowserUseConnectionMode:                    DefaultDesktopBrowserUseConnectionMode,
+		DefaultAgentProvider:                        DefaultDesktopDefaultAgentProvider,
+		DockIconStyle:                               DefaultDesktopDockIconStyle,
+		DockPlacement:                               DefaultDesktopDockPlacement,
 		FileDefaultOpenersByExtension: map[string]string{
 			"htm":   "appBrowser",
 			"html":  "appBrowser",
@@ -84,15 +84,15 @@ func DefaultDesktopPreferences() DesktopPreferences {
 	}
 }
 
-func NormalizeDesktopAgentWorkMode(value string) string {
+func NormalizeDesktopAgentConversationDetailMode(value string) string {
 	normalized := strings.TrimSpace(value)
-	if IsDesktopAgentWorkMode(normalized) {
+	if IsDesktopAgentConversationDetailMode(normalized) {
 		return normalized
 	}
-	return DefaultDesktopAgentWorkMode
+	return DefaultDesktopAgentConversationDetailMode
 }
 
-func IsDesktopAgentWorkMode(value string) bool {
+func IsDesktopAgentConversationDetailMode(value string) bool {
 	switch value {
 	case "coding", "general":
 		return true

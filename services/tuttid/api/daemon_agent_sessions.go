@@ -526,15 +526,15 @@ func (api DaemonAPI) composerDefaultLocale(ctx context.Context) string {
 	return preferences.Locale
 }
 
-func (api DaemonAPI) agentWorkMode(ctx context.Context) string {
+func (api DaemonAPI) agentConversationDetailMode(ctx context.Context) string {
 	if api.PreferencesService == nil {
-		return preferencesbiz.DefaultDesktopAgentWorkMode
+		return preferencesbiz.DefaultDesktopAgentConversationDetailMode
 	}
 	preferences, err := api.PreferencesService.Get(ctx)
 	if err != nil {
-		return preferencesbiz.DefaultDesktopAgentWorkMode
+		return preferencesbiz.DefaultDesktopAgentConversationDetailMode
 	}
-	return preferencesbiz.NormalizeDesktopAgentWorkMode(preferences.AgentWorkMode)
+	return preferencesbiz.NormalizeDesktopAgentConversationDetailMode(preferences.AgentConversationDetailMode)
 }
 
 func mergeComposerSettings(base agentservice.ComposerSettings, override agentservice.ComposerSettings) agentservice.ComposerSettings {

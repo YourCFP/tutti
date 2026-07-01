@@ -7,7 +7,7 @@ import type {
 import type { DesktopLocale } from "@shared/i18n";
 import type {
   DesktopAgentProvider,
-  DesktopAgentWorkMode,
+  DesktopAgentConversationDetailMode,
   DesktopAppCatalogChannel,
   DesktopBrowserUseConnectionMode,
   DesktopDockIconStyle,
@@ -68,7 +68,9 @@ export interface IWorkspaceSettingsService {
     enabled: boolean
   ): Promise<void>;
   changeDefaultAgentProvider(provider: DesktopAgentProvider): Promise<void>;
-  changeAgentWorkMode(mode: DesktopAgentWorkMode): Promise<void>;
+  changeAgentConversationDetailMode(
+    mode: DesktopAgentConversationDetailMode
+  ): Promise<void>;
   changeAppCatalogChannel(channel: DesktopAppCatalogChannel): Promise<void>;
   changeBrowserUseConnectionMode(
     mode: DesktopBrowserUseConnectionMode

@@ -36,8 +36,8 @@ func composerSettingsToPayload(settings ComposerSettings) map[string]any {
 	if speed := strings.TrimSpace(settings.Speed); speed != "" {
 		payload["speed"] = speed
 	}
-	if strings.TrimSpace(settings.WorkMode) != "" {
-		payload["workMode"] = preferencesbiz.NormalizeDesktopAgentWorkMode(settings.WorkMode)
+	if strings.TrimSpace(settings.ConversationDetailMode) != "" {
+		payload["conversationDetailMode"] = preferencesbiz.NormalizeDesktopAgentConversationDetailMode(settings.ConversationDetailMode)
 	}
 	if len(payload) == 0 {
 		return nil
@@ -55,8 +55,8 @@ func composerSettingsFromPayload(payload map[string]any) ComposerSettings {
 		ComputerUse:      payloadBoolPointer(payload, "computerUse"),
 		Speed:            payloadString(payload, "speed"),
 	}
-	if _, ok := payload["workMode"]; ok {
-		settings.WorkMode = preferencesbiz.NormalizeDesktopAgentWorkMode(payloadString(payload, "workMode"))
+	if _, ok := payload["conversationDetailMode"]; ok {
+		settings.ConversationDetailMode = preferencesbiz.NormalizeDesktopAgentConversationDetailMode(payloadString(payload, "conversationDetailMode"))
 	}
 	return settings
 }
@@ -66,7 +66,7 @@ func composerSettingsIsEmpty(settings ComposerSettings) bool {
 		strings.TrimSpace(settings.PermissionModeID) == "" &&
 		strings.TrimSpace(settings.ReasoningEffort) == "" &&
 		strings.TrimSpace(settings.Speed) == "" &&
-		strings.TrimSpace(settings.WorkMode) == "" &&
+		strings.TrimSpace(settings.ConversationDetailMode) == "" &&
 		!settings.PlanMode &&
 		settings.BrowserUse == nil &&
 		settings.ComputerUse == nil
@@ -124,6 +124,6 @@ func createSessionInputFromPersisted(session PersistedSession) CreateSessionInpu
 		)
 		input.Speed = &normalizedSpeed
 	}
-	input.WorkMode = preferencesbiz.NormalizeDesktopAgentWorkMode(settings.WorkMode)
+	input.ConversationDetailMode = preferencesbiz.NormalizeDesktopAgentConversationDetailMode(settings.ConversationDetailMode)
 	return input
 }

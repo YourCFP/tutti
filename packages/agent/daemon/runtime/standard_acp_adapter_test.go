@@ -2099,9 +2099,8 @@ func TestClaudeCodeAdapterStartAppendsSessionScopedSystemPrompt(t *testing.T) {
 	if got, _ := systemPrompt["preset"].(string); got != "claude_code" {
 		t.Fatalf("systemPrompt.preset = %q, want claude_code", got)
 	}
-	if got, _ := systemPrompt["append"].(string); !strings.Contains(got, "Use Tutti CLI for issue context.") ||
-		!strings.Contains(got, "strongly prefer making reasonable assumptions and executing") {
-		t.Fatalf("systemPrompt.append = %q, want prompt file content and coding work mode guidance", got)
+	if got, _ := systemPrompt["append"].(string); got != "Use Tutti CLI for issue context." {
+		t.Fatalf("systemPrompt.append = %q, want prompt file content without coding conversation detail mode override", got)
 	}
 	claudeCode, ok := meta["claudeCode"].(map[string]any)
 	if !ok {
@@ -2149,14 +2148,14 @@ func TestClaudeCodeAdapterStartAppendsSessionScopedSystemPrompt(t *testing.T) {
 	}
 }
 
-func TestClaudeCodeAdapterStartAppendsGeneralWorkModeSystemPrompt(t *testing.T) {
+func TestClaudeCodeAdapterStartAppendsGeneralConversationDetailModeSystemPrompt(t *testing.T) {
 	t.Parallel()
 
-	transport := newStandardACPTransport("Claude Agent", "claude-session-general-work-mode")
+	transport := newStandardACPTransport("Claude Agent", "claude-session-general-conversation-detail-mode")
 	adapter := NewClaudeCodeAdapter(transport)
 	session := standardTestSession(ProviderClaudeCode)
 	session.PermissionModeID = "default"
-	session.Settings = &SessionSettings{WorkMode: AgentWorkModeGeneral}
+	session.Settings = &SessionSettings{ConversationDetailMode: AgentConversationDetailModeGeneral}
 
 	if _, err := adapter.Start(context.Background(), session); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -2171,9 +2170,10 @@ func TestClaudeCodeAdapterStartAppendsGeneralWorkModeSystemPrompt(t *testing.T) 
 		t.Fatalf("systemPrompt = %#v, want map", meta["systemPrompt"])
 	}
 	appendText, _ := systemPrompt["append"].(string)
-	if !strings.Contains(appendText, "everyday work mode") ||
-		!strings.Contains(appendText, "less technical detail") {
-		t.Fatalf("systemPrompt.append = %q, want general work mode guidance", appendText)
+	if !strings.Contains(appendText, "### Non-technical UI") ||
+		!strings.Contains(appendText, "don't name bash commands you're running") ||
+		!strings.Contains(appendText, "focus on outputs") {
+		t.Fatalf("systemPrompt.append = %q, want non-technical UI guidance", appendText)
 	}
 	claudeCode, ok := meta["claudeCode"].(map[string]any)
 	if !ok {

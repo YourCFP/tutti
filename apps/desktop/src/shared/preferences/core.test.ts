@@ -1,27 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  defaultDesktopAgentWorkMode,
-  desktopAgentWorkModes,
-  isDesktopAgentWorkMode,
-  normalizeDesktopAgentWorkMode
+  defaultDesktopAgentConversationDetailMode,
+  desktopAgentConversationDetailModes,
+  isDesktopAgentConversationDetailMode,
+  normalizeDesktopAgentConversationDetailMode
 } from "./core.ts";
 
-test("desktop agent work mode defaults to coding", () => {
-  assert.equal(defaultDesktopAgentWorkMode, "coding");
-  assert.deepEqual(desktopAgentWorkModes, ["coding", "general"]);
+test("desktop agent conversation detail mode defaults to coding", () => {
+  assert.equal(defaultDesktopAgentConversationDetailMode, "coding");
+  assert.deepEqual(desktopAgentConversationDetailModes, ["coding", "general"]);
 });
 
-test("desktop agent work mode normalization preserves known values", () => {
-  assert.equal(normalizeDesktopAgentWorkMode("coding"), "coding");
-  assert.equal(normalizeDesktopAgentWorkMode("general"), "general");
-  assert.equal(isDesktopAgentWorkMode("coding"), true);
-  assert.equal(isDesktopAgentWorkMode("general"), true);
+test("desktop agent conversation detail mode normalization preserves known values", () => {
+  assert.equal(normalizeDesktopAgentConversationDetailMode("coding"), "coding");
+  assert.equal(
+    normalizeDesktopAgentConversationDetailMode("general"),
+    "general"
+  );
+  assert.equal(isDesktopAgentConversationDetailMode("coding"), true);
+  assert.equal(isDesktopAgentConversationDetailMode("general"), true);
 });
 
-test("desktop agent work mode normalization falls back to coding", () => {
-  assert.equal(normalizeDesktopAgentWorkMode(""), "coding");
-  assert.equal(normalizeDesktopAgentWorkMode("daily"), "coding");
-  assert.equal(normalizeDesktopAgentWorkMode(undefined), "coding");
-  assert.equal(isDesktopAgentWorkMode("daily"), false);
+test("desktop agent conversation detail mode normalization falls back to coding", () => {
+  assert.equal(normalizeDesktopAgentConversationDetailMode(""), "coding");
+  assert.equal(normalizeDesktopAgentConversationDetailMode("daily"), "coding");
+  assert.equal(
+    normalizeDesktopAgentConversationDetailMode(undefined),
+    "coding"
+  );
+  assert.equal(isDesktopAgentConversationDetailMode("daily"), false);
 });

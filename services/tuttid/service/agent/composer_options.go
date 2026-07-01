@@ -56,10 +56,10 @@ type ComposerSettings struct {
 	BrowserUse *bool
 	// ComputerUse is tri-state: nil means "use the default" (on), so the
 	// composer can distinguish an explicit opt-out from an unset value.
-	ComputerUse     *bool
-	ReasoningEffort string
-	Speed           string
-	WorkMode        string
+	ComputerUse            *bool
+	ReasoningEffort        string
+	Speed                  string
+	ConversationDetailMode string
 }
 
 type ComposerOptionsInput struct {
@@ -114,13 +114,14 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		return ComposerOptions{}, ErrInvalidArgument
 	}
 	settings := normalizeComposerSettingsForProvider(provider, ComposerSettings{
-		Model:            strings.TrimSpace(input.Settings.Model),
-		PermissionModeID: strings.TrimSpace(input.Settings.PermissionModeID),
-		PlanMode:         input.Settings.PlanMode,
-		BrowserUse:       input.Settings.BrowserUse,
-		ComputerUse:      input.Settings.ComputerUse,
-		ReasoningEffort:  strings.TrimSpace(input.Settings.ReasoningEffort),
-		Speed:            strings.TrimSpace(input.Settings.Speed),
+		Model:                  strings.TrimSpace(input.Settings.Model),
+		PermissionModeID:       strings.TrimSpace(input.Settings.PermissionModeID),
+		PlanMode:               input.Settings.PlanMode,
+		BrowserUse:             input.Settings.BrowserUse,
+		ComputerUse:            input.Settings.ComputerUse,
+		ReasoningEffort:        strings.TrimSpace(input.Settings.ReasoningEffort),
+		Speed:                  strings.TrimSpace(input.Settings.Speed),
+		ConversationDetailMode: strings.TrimSpace(input.Settings.ConversationDetailMode),
 	})
 	effectiveSettings := resolveComposerEffectiveSettings(
 		ctx,
@@ -225,10 +226,11 @@ func resolveComposerEffectiveSettings(
 	catalog AgentModelCatalog,
 ) ComposerSettings {
 	effective := ComposerSettings{
-		Model:            composerDefaultModel(ctx, provider, catalog),
-		PermissionModeID: defaultPermissionModeIDForProvider(provider),
-		ReasoningEffort:  composerDefaultReasoningEffort(provider),
-		Speed:            composerDefaultSpeed(provider),
+		Model:                  composerDefaultModel(ctx, provider, catalog),
+		PermissionModeID:       defaultPermissionModeIDForProvider(provider),
+		ReasoningEffort:        composerDefaultReasoningEffort(provider),
+		Speed:                  composerDefaultSpeed(provider),
+		ConversationDetailMode: requested.ConversationDetailMode,
 	}
 	if requested.Model != "" {
 		effective.Model = requested.Model
@@ -362,7 +364,7 @@ func normalizeComposerSettingsForProvider(provider string, settings ComposerSett
 	settings.PermissionModeID = normalizePermissionModeIDForProvider(provider, settings.PermissionModeID)
 	settings.ReasoningEffort = normalizeReasoningEffortForProvider(provider, settings.ReasoningEffort)
 	settings.Speed = normalizeSpeedForProvider(provider, settings.Speed)
-	settings.WorkMode = preferencesbiz.NormalizeDesktopAgentWorkMode(settings.WorkMode)
+	settings.ConversationDetailMode = preferencesbiz.NormalizeDesktopAgentConversationDetailMode(settings.ConversationDetailMode)
 	settings.Model = clampComposerModelForProvider(provider, settings.Model)
 	settings.Model = normalizeComposerModelForProvider(provider, settings.Model)
 	settings.PlanMode = clampComposerPlanModeForProvider(provider, settings.PlanMode)

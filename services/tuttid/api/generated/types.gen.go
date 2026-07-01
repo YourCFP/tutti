@@ -520,14 +520,14 @@ func (e CliOutputMode) Valid() bool {
 	}
 }
 
-// Defines values for DesktopAgentWorkMode.
+// Defines values for DesktopAgentConversationDetailMode.
 const (
-	Coding  DesktopAgentWorkMode = "coding"
-	General DesktopAgentWorkMode = "general"
+	Coding  DesktopAgentConversationDetailMode = "coding"
+	General DesktopAgentConversationDetailMode = "general"
 )
 
-// Valid indicates whether the value is a known member of the DesktopAgentWorkMode enum.
-func (e DesktopAgentWorkMode) Valid() bool {
+// Valid indicates whether the value is a known member of the DesktopAgentConversationDetailMode enum.
+func (e DesktopAgentConversationDetailMode) Valid() bool {
 	switch e {
 	case Coding:
 		return true
@@ -2336,6 +2336,9 @@ type DesktopAgentComposerDefaultsByProvider struct {
 	Openclaw   *DesktopAgentComposerDefaults `json:"openclaw,omitempty"`
 }
 
+// DesktopAgentConversationDetailMode defines model for DesktopAgentConversationDetailMode.
+type DesktopAgentConversationDetailMode string
+
 // DesktopAgentGuiConversationRailCollapsedByProvider defines model for DesktopAgentGuiConversationRailCollapsedByProvider.
 type DesktopAgentGuiConversationRailCollapsedByProvider struct {
 	ClaudeCode *bool `json:"claude-code,omitempty"`
@@ -2345,9 +2348,6 @@ type DesktopAgentGuiConversationRailCollapsedByProvider struct {
 	Nexight    *bool `json:"nexight,omitempty"`
 	Openclaw   *bool `json:"openclaw,omitempty"`
 }
-
-// DesktopAgentWorkMode defines model for DesktopAgentWorkMode.
-type DesktopAgentWorkMode string
 
 // DesktopAppCatalogChannel defines model for DesktopAppCatalogChannel.
 type DesktopAppCatalogChannel string
@@ -2376,8 +2376,8 @@ type DesktopMinimizeAnimation string
 // DesktopPreferences defines model for DesktopPreferences.
 type DesktopPreferences struct {
 	AgentComposerDefaultsByProvider             DesktopAgentComposerDefaultsByProvider             `json:"agentComposerDefaultsByProvider"`
+	AgentConversationDetailMode                 DesktopAgentConversationDetailMode                 `json:"agentConversationDetailMode"`
 	AgentGuiConversationRailCollapsedByProvider DesktopAgentGuiConversationRailCollapsedByProvider `json:"agentGuiConversationRailCollapsedByProvider"`
-	AgentWorkMode                               DesktopAgentWorkMode                               `json:"agentWorkMode"`
 	AppCatalogChannel                           DesktopAppCatalogChannel                           `json:"appCatalogChannel"`
 	BrowserUseConnectionMode                    *DesktopBrowserUseConnectionMode                   `json:"browserUseConnectionMode,omitempty"`
 	DefaultAgentProvider                        WorkspaceAgentProvider                             `json:"defaultAgentProvider"`

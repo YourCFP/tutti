@@ -95,7 +95,7 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 		return Session{}, ErrInvalidArgument
 	}
 	input.Provider = provider
-	input.WorkMode = preferencesbiz.NormalizeDesktopAgentWorkMode(input.WorkMode)
+	input.ConversationDetailMode = preferencesbiz.NormalizeDesktopAgentConversationDetailMode(input.ConversationDetailMode)
 	if normalizedPermissionModeID := normalizePermissionModeIDForProvider(
 		provider,
 		value(input.PermissionModeID),
@@ -190,8 +190,8 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 			provider,
 			value(input.Speed),
 		),
-		WorkMode: input.WorkMode,
-		Visible:  input.Visible,
+		ConversationDetailMode: input.ConversationDetailMode,
+		Visible:                input.Visible,
 	})
 	if err != nil {
 		normalizedErr := normalizeRuntimeError(err)
@@ -312,8 +312,9 @@ func (s *Service) prepareRuntime(ctx context.Context, workspaceID string, cwd st
 			provider,
 			value(input.ReasoningEffort),
 		),
-		ExtraSkills: sessionSkillBundlesToProviderSkillBundles(input.ExtraSkills),
-		Metadata:    input.Metadata,
+		ConversationDetailMode: input.ConversationDetailMode,
+		ExtraSkills:            sessionSkillBundlesToProviderSkillBundles(input.ExtraSkills),
+		Metadata:               input.Metadata,
 	})
 	if err != nil {
 		return preparedRuntime{}, err

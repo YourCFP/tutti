@@ -137,19 +137,26 @@ Rules:
 while response `effectiveSettings` is the only contract for resolved homepage
 composer defaults.
 
-## Desktop Agent Work Mode
+## Desktop Agent Conversation Detail Mode
 
-`agentWorkMode` is a global desktop preference, not a provider-specific
+`agentConversationDetailMode` is a global desktop preference, not a provider-specific
 composer default. Keep it on the top-level desktop preferences contract and the
 matching desktop preferences event payload; do not place it under
 `agentComposerDefaultsByProvider`.
 
 The stored value is the enum `coding | general`. Daemon and desktop shared
 normalizers must treat missing, empty, or unknown values as `coding` so migrated
-profiles keep the engineering-oriented default. Runtime prompt adapters own the
-mapping from this enum to provider-specific prompt instructions for new agent
-sessions. Plan Mode and explicit planning-only flows remain higher priority than
-the work mode prompt guidance.
+profiles keep the engineering-oriented default. `coding` does not inject extra
+prompt guidance; it leaves provider defaults intact. `general` injects the
+Codex-style `Non-technical UI` developer instruction section for new agent
+sessions. For Codex app-server sessions, inject this through the session-scoped
+Codex config before thread creation, not as a repeated per-turn
+`turn/start.collaborationMode.settings.developer_instructions` override. The
+same Codex session config should also include a Tutti-owned diagnostic marker
+under `[tutti] conversationDetailMode = "coding" | "general"` so runtime
+inspection can distinguish the global Tutti setting from Codex's own desktop
+preferences. Plan Mode and explicit planning-only flows remain higher priority
+than conversation detail mode prompt guidance.
 
 ## Runtime Validation
 

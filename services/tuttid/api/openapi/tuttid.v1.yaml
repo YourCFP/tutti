@@ -3811,7 +3811,7 @@ components:
       required:
         - agentComposerDefaultsByProvider
         - agentGuiConversationRailCollapsedByProvider
-        - agentWorkMode
+        - agentConversationDetailMode
         - appCatalogChannel
         - defaultAgentProvider
         - dockIconStyle
@@ -3829,8 +3829,8 @@ components:
           $ref: "#/components/schemas/DesktopAgentComposerDefaultsByProvider"
         agentGuiConversationRailCollapsedByProvider:
           $ref: "#/components/schemas/DesktopAgentGuiConversationRailCollapsedByProvider"
-        agentWorkMode:
-          $ref: "#/components/schemas/DesktopAgentWorkMode"
+        agentConversationDetailMode:
+          $ref: "#/components/schemas/DesktopAgentConversationDetailMode"
         appCatalogChannel:
           $ref: "#/components/schemas/DesktopAppCatalogChannel"
         browserUseConnectionMode:
@@ -3885,7 +3885,7 @@ components:
           type: string
         reasoningEffort:
           type: string
-    DesktopAgentWorkMode:
+    DesktopAgentConversationDetailMode:
       type: string
       enum:
         - coding

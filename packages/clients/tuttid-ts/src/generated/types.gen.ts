@@ -242,7 +242,7 @@ export type DesktopAppCatalogChannel = "production" | "staging";
 export type DesktopPreferences = {
   agentComposerDefaultsByProvider: DesktopAgentComposerDefaultsByProvider;
   agentGuiConversationRailCollapsedByProvider: DesktopAgentGuiConversationRailCollapsedByProvider;
-  agentWorkMode: DesktopAgentWorkMode;
+  agentConversationDetailMode: DesktopAgentConversationDetailMode;
   appCatalogChannel: DesktopAppCatalogChannel;
   browserUseConnectionMode?: DesktopBrowserUseConnectionMode;
   defaultAgentProvider: WorkspaceAgentProvider;
@@ -274,7 +274,7 @@ export type DesktopAgentComposerDefaults = {
   reasoningEffort?: string;
 };
 
-export type DesktopAgentWorkMode = "coding" | "general";
+export type DesktopAgentConversationDetailMode = "coding" | "general";
 
 export type DesktopAgentComposerDefaultsByProvider = {
   "claude-code"?: DesktopAgentComposerDefaults;

@@ -352,12 +352,12 @@ func (api DaemonAPI) PutDesktopPreferences(ctx context.Context, request tuttigen
 		AgentGUIConversationRailCollapsedByProvider: agentGUIConversationRailCollapsedByProviderFromGenerated(
 			request.Body.Preferences.AgentGuiConversationRailCollapsedByProvider,
 		),
-		AgentWorkMode:            strings.TrimSpace(string(request.Body.Preferences.AgentWorkMode)),
-		AppCatalogChannel:        appCatalogChannel,
-		BrowserUseConnectionMode: browserUseConnectionMode,
-		DefaultAgentProvider:     defaultAgentProvider,
-		DockIconStyle:            dockIconStyle,
-		DockPlacement:            dockPlacement,
+		AgentConversationDetailMode: strings.TrimSpace(string(request.Body.Preferences.AgentConversationDetailMode)),
+		AppCatalogChannel:           appCatalogChannel,
+		BrowserUseConnectionMode:    browserUseConnectionMode,
+		DefaultAgentProvider:        defaultAgentProvider,
+		DockIconStyle:               dockIconStyle,
+		DockPlacement:               dockPlacement,
 		FileDefaultOpenersByExtension: fileDefaultOpenersByExtensionFromGenerated(
 			request.Body.Preferences.FileDefaultOpenersByExtension,
 		),

@@ -31,8 +31,8 @@ func TestSQLiteStoreGetDesktopPreferencesDefaultsWhenUnset(t *testing.T) {
 	if preferences.DefaultAgentProvider != "codex" {
 		t.Fatalf("GetDesktopPreferences() defaultAgentProvider = %q, want codex", preferences.DefaultAgentProvider)
 	}
-	if preferences.AgentWorkMode != "coding" {
-		t.Fatalf("GetDesktopPreferences() agentWorkMode = %q, want coding", preferences.AgentWorkMode)
+	if preferences.AgentConversationDetailMode != "coding" {
+		t.Fatalf("GetDesktopPreferences() agentConversationDetailMode = %q, want coding", preferences.AgentConversationDetailMode)
 	}
 	if preferences.ThemeSource != "dark" {
 		t.Fatalf("GetDesktopPreferences() themeSource = %q, want dark", preferences.ThemeSource)
@@ -78,8 +78,8 @@ func TestSQLiteStorePutDesktopPreferencesPersistsValue(t *testing.T) {
 			"codex":       true,
 			"claude-code": false,
 		},
-		AgentWorkMode:        "general",
-		DefaultAgentProvider: "claude-code",
+		AgentConversationDetailMode: "general",
+		DefaultAgentProvider:        "claude-code",
 
 		BrowserUseConnectionMode: "autoConnect",
 		AppCatalogChannel:        "staging",
@@ -120,8 +120,8 @@ func TestSQLiteStorePutDesktopPreferencesPersistsValue(t *testing.T) {
 	if reloaded.DefaultAgentProvider != "claude-code" {
 		t.Fatalf("GetDesktopPreferences() defaultAgentProvider = %q, want claude-code", reloaded.DefaultAgentProvider)
 	}
-	if reloaded.AgentWorkMode != "general" {
-		t.Fatalf("GetDesktopPreferences() agentWorkMode = %q, want general", reloaded.AgentWorkMode)
+	if reloaded.AgentConversationDetailMode != "general" {
+		t.Fatalf("GetDesktopPreferences() agentConversationDetailMode = %q, want general", reloaded.AgentConversationDetailMode)
 	}
 	if reloaded.ThemeSource != "dark" {
 		t.Fatalf("GetDesktopPreferences() themeSource = %q, want dark", reloaded.ThemeSource)
@@ -158,25 +158,25 @@ func TestSQLiteStorePutDesktopPreferencesPersistsValue(t *testing.T) {
 	}
 }
 
-func TestSQLiteStoreDesktopPreferencesAgentWorkModeMigrationAndNormalize(t *testing.T) {
+func TestSQLiteStoreDesktopPreferencesAgentConversationDetailModeMigrationAndNormalize(t *testing.T) {
 	t.Parallel()
 
 	store := openTestSQLiteStore(t)
 	ctx := context.Background()
 
-	hasAgentWorkMode, err := store.hasColumn(ctx, "desktop_preferences", "agent_work_mode")
+	hasAgentConversationDetailMode, err := store.hasColumn(ctx, "desktop_preferences", "agent_conversation_detail_mode")
 	if err != nil {
 		t.Fatalf("hasColumn() error = %v", err)
 	}
-	if !hasAgentWorkMode {
-		t.Fatal("desktop_preferences.agent_work_mode column missing after migration")
+	if !hasAgentConversationDetailMode {
+		t.Fatal("desktop_preferences.agent_conversation_detail_mode column missing after migration")
 	}
 
 	_, err = store.db.ExecContext(ctx, `
 INSERT INTO desktop_preferences (
   id,
   default_agent_provider,
-  agent_work_mode,
+  agent_conversation_detail_mode,
   dock_icon_style,
   dock_placement,
   locale,
@@ -217,14 +217,14 @@ INSERT INTO desktop_preferences (
   1
 )`)
 	if err != nil {
-		t.Fatalf("insert desktop preferences with invalid work mode: %v", err)
+		t.Fatalf("insert desktop preferences with invalid conversation detail mode: %v", err)
 	}
 
 	preferences, err := store.GetDesktopPreferences(ctx)
 	if err != nil {
 		t.Fatalf("GetDesktopPreferences() error = %v", err)
 	}
-	if preferences.AgentWorkMode != "coding" {
-		t.Fatalf("GetDesktopPreferences() agentWorkMode = %q, want coding", preferences.AgentWorkMode)
+	if preferences.AgentConversationDetailMode != "coding" {
+		t.Fatalf("GetDesktopPreferences() agentConversationDetailMode = %q, want coding", preferences.AgentConversationDetailMode)
 	}
 }

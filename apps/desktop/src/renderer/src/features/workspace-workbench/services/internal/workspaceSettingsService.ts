@@ -2,7 +2,7 @@ import type { DesktopDeveloperLogKind } from "@shared/contracts/ipc";
 import type { DesktopLocale } from "@shared/i18n";
 import type {
   DesktopAgentProvider,
-  DesktopAgentWorkMode,
+  DesktopAgentConversationDetailMode,
   DesktopAppCatalogChannel,
   DesktopBrowserUseConnectionMode,
   DesktopDockIconStyle,
@@ -239,20 +239,22 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     }
   }
 
-  async changeAgentWorkMode(mode: DesktopAgentWorkMode): Promise<void> {
+  async changeAgentConversationDetailMode(
+    mode: DesktopAgentConversationDetailMode
+  ): Promise<void> {
     if (
-      this.desktopPreferences.store.agentWorkMode === mode ||
-      this.desktopPreferences.store.changingAgentWorkMode === mode
+      this.desktopPreferences.store.agentConversationDetailMode === mode ||
+      this.desktopPreferences.store.changingAgentConversationDetailMode === mode
     ) {
       return;
     }
 
     try {
-      await this.desktopPreferences.setAgentWorkMode(mode);
+      await this.desktopPreferences.setAgentConversationDetailMode(mode);
     } catch {
       this.notifications.error({
         title: createActiveTranslator().t(
-          "workspace.settings.general.agentWorkModeSaveFailed"
+          "workspace.settings.general.agentConversationDetailModeSaveFailed"
         )
       });
     }
@@ -1099,10 +1101,10 @@ IWorkspaceAppCenterService(WorkspaceSettingsService, undefined, 4);
 const noopDesktopPreferencesStore: DesktopPreferencesReadableStoreState = {
   agentComposerDefaultsByProvider: {},
   agentGuiConversationRailCollapsedByProvider: {},
-  agentWorkMode: "coding",
+  agentConversationDetailMode: "coding",
   appCatalogChannel: "production",
   browserUseConnectionMode: "isolated",
-  changingAgentWorkMode: null,
+  changingAgentConversationDetailMode: null,
   changingAppCatalogChannel: null,
   changingBrowserUseConnectionMode: null,
   changingDefaultAgentProvider: null,
@@ -1145,7 +1147,7 @@ const noopDesktopPreferences: DesktopPreferencesService = {
   setDefaultAgentProvider(provider) {
     return Promise.resolve(provider);
   },
-  setAgentWorkMode(mode) {
+  setAgentConversationDetailMode(mode) {
     return Promise.resolve(mode);
   },
   setDockPlacement(placement) {

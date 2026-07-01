@@ -4,7 +4,7 @@ type desktopPreferencesMutationPayload struct {
 	Preferences struct {
 		AgentComposerDefaultsByProvider             desktopAgentComposerDefaultsByProviderPayload             `json:"agentComposerDefaultsByProvider"`
 		AgentGUIConversationRailCollapsedByProvider desktopAgentGUIConversationRailCollapsedByProviderPayload `json:"agentGuiConversationRailCollapsedByProvider"`
-		AgentWorkMode                               string                                                    `json:"agentWorkMode"`
+		AgentConversationDetailMode                 string                                                    `json:"agentConversationDetailMode"`
 		AppCatalogChannel                           string                                                    `json:"appCatalogChannel"`
 		BrowserUseConnectionMode                    string                                                    `json:"browserUseConnectionMode,omitempty"`
 		DefaultAgentProvider                        string                                                    `json:"defaultAgentProvider"`
@@ -30,7 +30,7 @@ type desktopPreferencesUpdatedPayload struct {
 type desktopPreferencesSettingsPayload struct {
 	AgentComposerDefaultsByProvider             desktopAgentComposerDefaultsByProviderPayload             `json:"agentComposerDefaultsByProvider"`
 	AgentGUIConversationRailCollapsedByProvider desktopAgentGUIConversationRailCollapsedByProviderPayload `json:"agentGuiConversationRailCollapsedByProvider"`
-	AgentWorkMode                               string                                                    `json:"agentWorkMode"`
+	AgentConversationDetailMode                 string                                                    `json:"agentConversationDetailMode"`
 	AppCatalogChannel                           string                                                    `json:"appCatalogChannel"`
 	BrowserUseConnectionMode                    string                                                    `json:"browserUseConnectionMode,omitempty"`
 	DefaultAgentProvider                        string                                                    `json:"defaultAgentProvider"`

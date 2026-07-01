@@ -208,7 +208,9 @@ func (a *standardACPAdapter) applyProviderSessionMeta(params map[string]any, ses
 			)
 			return err
 		}
-		systemPrompt = joinPromptSections(systemPrompt, agentWorkModePromptAppend(session.SettingsValue()))
+		if !promptHasAgentConversationDetailMode(systemPrompt) {
+			systemPrompt = joinPromptSections(systemPrompt, agentConversationDetailModePromptAppend(session.SettingsValue()))
+		}
 		pluginDir, err := claudePluginDir(session.Env)
 		if err != nil {
 			slog.Warn("agent session ACP claude provider meta plugin dir failed",

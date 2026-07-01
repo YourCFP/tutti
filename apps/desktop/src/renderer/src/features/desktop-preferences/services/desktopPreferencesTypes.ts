@@ -3,7 +3,7 @@ import type {
   DesktopAgentComposerDefaultsByProvider,
   DesktopAgentGuiConversationRailCollapsedByProvider,
   DesktopAgentProvider,
-  DesktopAgentWorkMode,
+  DesktopAgentConversationDetailMode,
   DesktopAppCatalogChannel,
   DesktopBrowserUseConnectionMode,
   DesktopDockIconStyle,
@@ -19,7 +19,7 @@ import type { DesktopThemeSource, DesktopThemeState } from "@shared/theme";
 
 export interface DesktopPreferencesStoreState {
   changingDefaultAgentProvider: DesktopAgentProvider | null;
-  changingAgentWorkMode: DesktopAgentWorkMode | null;
+  changingAgentConversationDetailMode: DesktopAgentConversationDetailMode | null;
   changingAppCatalogChannel: DesktopAppCatalogChannel | null;
   changingBrowserUseConnectionMode: DesktopBrowserUseConnectionMode | null;
   changingDockIconStyle: DesktopDockIconStyle | null;
@@ -34,7 +34,7 @@ export interface DesktopPreferencesStoreState {
   changingWorkbenchWindowSnapping: DesktopWorkbenchWindowSnapping | null;
   agentComposerDefaultsByProvider: DesktopAgentComposerDefaultsByProvider;
   agentGuiConversationRailCollapsedByProvider: DesktopAgentGuiConversationRailCollapsedByProvider;
-  agentWorkMode: DesktopAgentWorkMode;
+  agentConversationDetailMode: DesktopAgentConversationDetailMode;
   appCatalogChannel: DesktopAppCatalogChannel;
   browserUseConnectionMode: DesktopBrowserUseConnectionMode;
   defaultAgentProvider: DesktopAgentProvider;
@@ -53,7 +53,7 @@ export interface DesktopPreferencesStoreState {
 
 export interface DesktopPreferencesReadableStoreState {
   readonly changingDefaultAgentProvider: DesktopAgentProvider | null;
-  readonly changingAgentWorkMode: DesktopAgentWorkMode | null;
+  readonly changingAgentConversationDetailMode: DesktopAgentConversationDetailMode | null;
   readonly changingAppCatalogChannel: DesktopAppCatalogChannel | null;
   readonly changingBrowserUseConnectionMode: DesktopBrowserUseConnectionMode | null;
   readonly changingDockIconStyle: DesktopDockIconStyle | null;
@@ -68,7 +68,7 @@ export interface DesktopPreferencesReadableStoreState {
   readonly changingWorkbenchWindowSnapping: DesktopWorkbenchWindowSnapping | null;
   readonly agentComposerDefaultsByProvider: DesktopAgentComposerDefaultsByProvider;
   readonly agentGuiConversationRailCollapsedByProvider: DesktopAgentGuiConversationRailCollapsedByProvider;
-  readonly agentWorkMode: DesktopAgentWorkMode;
+  readonly agentConversationDetailMode: DesktopAgentConversationDetailMode;
   readonly appCatalogChannel: DesktopAppCatalogChannel;
   readonly browserUseConnectionMode: DesktopBrowserUseConnectionMode;
   readonly defaultAgentProvider: DesktopAgentProvider;

@@ -1122,8 +1122,6 @@ func appServerPlanCollaborationMode(settings SessionSettings, planModeMask map[s
 	mode := "default"
 	if settings.PlanMode {
 		mode = strings.ToLower(strings.TrimSpace(firstNonEmpty(asString(planModeMask["mode"]), "plan")))
-	} else {
-		collaborationSettings["developer_instructions"] = agentWorkModeDeveloperInstructions(settings.WorkMode)
 	}
 	return map[string]any{
 		"mode":     mode,

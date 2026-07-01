@@ -58,11 +58,16 @@ export const defaultDesktopAppCatalogChannel: DesktopAppCatalogChannel =
 
 export const defaultDesktopShowAppDeveloperSources = false;
 
-export const desktopAgentWorkModes = ["coding", "general"] as const;
+export const desktopAgentConversationDetailModes = [
+  "coding",
+  "general"
+] as const;
 
-export type DesktopAgentWorkMode = (typeof desktopAgentWorkModes)[number];
+export type DesktopAgentConversationDetailMode =
+  (typeof desktopAgentConversationDetailModes)[number];
 
-export const defaultDesktopAgentWorkMode: DesktopAgentWorkMode = "coding";
+export const defaultDesktopAgentConversationDetailMode: DesktopAgentConversationDetailMode =
+  "coding";
 
 export function readInitialDockPlacementFromLocation(
   locationSearch?: string
@@ -135,19 +140,23 @@ export function isDesktopAppCatalogChannel(
   );
 }
 
-export function isDesktopAgentWorkMode(
+export function isDesktopAgentConversationDetailMode(
   value: unknown
-): value is DesktopAgentWorkMode {
+): value is DesktopAgentConversationDetailMode {
   return (
     typeof value === "string" &&
-    desktopAgentWorkModes.includes(value as DesktopAgentWorkMode)
+    desktopAgentConversationDetailModes.includes(
+      value as DesktopAgentConversationDetailMode
+    )
   );
 }
 
-export function normalizeDesktopAgentWorkMode(
+export function normalizeDesktopAgentConversationDetailMode(
   value: unknown
-): DesktopAgentWorkMode {
-  return isDesktopAgentWorkMode(value) ? value : defaultDesktopAgentWorkMode;
+): DesktopAgentConversationDetailMode {
+  return isDesktopAgentConversationDetailMode(value)
+    ? value
+    : defaultDesktopAgentConversationDetailMode;
 }
 
 export const desktopAgentProviders = [

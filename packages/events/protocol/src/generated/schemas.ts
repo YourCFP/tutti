@@ -9,7 +9,7 @@ export const preferencesDesktopPreferencesSchema = {
   required: [
     "agentComposerDefaultsByProvider",
     "agentGuiConversationRailCollapsedByProvider",
-    "agentWorkMode",
+    "agentConversationDetailMode",
     "appCatalogChannel",
     "defaultAgentProvider",
     "dockIconStyle",
@@ -144,7 +144,7 @@ export const preferencesDesktopPreferencesSchema = {
         }
       }
     },
-    agentWorkMode: {
+    agentConversationDetailMode: {
       type: "string",
       enum: ["coding", "general"]
     },
@@ -958,7 +958,7 @@ export const preferencesDesktopUpdateRequestedPayloadSchema = {
       required: [
         "agentComposerDefaultsByProvider",
         "agentGuiConversationRailCollapsedByProvider",
-        "agentWorkMode",
+        "agentConversationDetailMode",
         "appCatalogChannel",
         "defaultAgentProvider",
         "dockIconStyle",
@@ -1093,7 +1093,7 @@ export const preferencesDesktopUpdateRequestedPayloadSchema = {
             }
           }
         },
-        agentWorkMode: {
+        agentConversationDetailMode: {
           type: "string",
           enum: ["coding", "general"]
         },
@@ -1211,7 +1211,7 @@ export const preferencesDesktopUpdatedPayloadSchema = {
       required: [
         "agentComposerDefaultsByProvider",
         "agentGuiConversationRailCollapsedByProvider",
-        "agentWorkMode",
+        "agentConversationDetailMode",
         "appCatalogChannel",
         "defaultAgentProvider",
         "dockIconStyle",
@@ -1346,7 +1346,7 @@ export const preferencesDesktopUpdatedPayloadSchema = {
             }
           }
         },
-        agentWorkMode: {
+        agentConversationDetailMode: {
           type: "string",
           enum: ["coding", "general"]
         },

@@ -7,7 +7,7 @@
   "required": [
     "agentComposerDefaultsByProvider",
     "agentGuiConversationRailCollapsedByProvider",
-    "agentWorkMode",
+    "agentConversationDetailMode",
     "appCatalogChannel",
     "defaultAgentProvider",
     "dockIconStyle",
@@ -46,7 +46,7 @@
         "openclaw": { "type": "boolean" }
       }
     },
-    "agentWorkMode": {
+    "agentConversationDetailMode": {
       "type": "string",
       "enum": ["coding", "general"]
     },

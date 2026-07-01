@@ -2570,8 +2570,8 @@ func TestCodexAppServerAdapterSendsCollaborationModeForPlanTurns(t *testing.T) {
 	if asString(exitSettings["model"]) != "gpt-5.1-codex" {
 		t.Fatalf("default collaborationMode settings = %#v, want default model", exitSettings)
 	}
-	if instructions := asString(exitSettings["developer_instructions"]); !strings.Contains(instructions, "strongly prefer making reasonable assumptions and executing") {
-		t.Fatalf("default collaborationMode developer_instructions = %q, want coding work mode guidance", instructions)
+	if value, ok := exitSettings["developer_instructions"]; !ok || value != nil {
+		t.Fatalf("default collaborationMode settings = %#v, want no conversation detail mode override for coding", exitSettings)
 	}
 
 	session.Settings = &SessionSettings{PlanMode: true, Model: "gpt-5.1-codex-mini", ReasoningEffort: "low"}
@@ -2592,11 +2592,11 @@ func TestCodexAppServerAdapterSendsCollaborationModeForPlanTurns(t *testing.T) {
 	}
 }
 
-func TestCodexAppServerAdapterSendsGeneralWorkModeInstructions(t *testing.T) {
+func TestCodexAppServerAdapterDoesNotSendConversationDetailModeInstructionsPerTurn(t *testing.T) {
 	t.Parallel()
 
 	adapter, transport, session := startedAppServerAdapter(t)
-	session.Settings = &SessionSettings{WorkMode: AgentWorkModeGeneral}
+	session.Settings = &SessionSettings{ConversationDetailMode: AgentConversationDetailModeGeneral}
 	if _, err := adapter.Exec(context.Background(), session, []PromptContentBlock{{
 		Type: "text", Text: "summarize this",
 	}}, "", "turn-general-1", nil, nil); err != nil {
@@ -2608,10 +2608,8 @@ func TestCodexAppServerAdapterSendsGeneralWorkModeInstructions(t *testing.T) {
 		t.Fatalf("turn/start collaborationMode = %#v, want default mode", turnStart["collaborationMode"])
 	}
 	settings, _ := collaborationMode["settings"].(map[string]any)
-	instructions := asString(settings["developer_instructions"])
-	if !strings.Contains(instructions, "everyday work mode") ||
-		!strings.Contains(instructions, "less technical detail") {
-		t.Fatalf("developer_instructions = %q, want general work mode guidance", instructions)
+	if value, ok := settings["developer_instructions"]; !ok || value != nil {
+		t.Fatalf("collaborationMode settings = %#v, want no per-turn conversation detail mode developer_instructions", settings)
 	}
 }
 

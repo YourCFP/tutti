@@ -441,15 +441,15 @@ export const en = {
         defaultAgentProviderLabel: "Default provider",
         defaultAgentProviderSaveFailed:
           "We couldn't update the default provider right now.",
-        agentWorkModeLabel: "Work mode",
-        agentWorkModeOptions: {
+        agentConversationDetailModeLabel: "Conversation detail mode",
+        agentConversationDetailModeOptions: {
           codingTitle: "For coding",
           codingDescription: "More technical responses and control.",
           generalTitle: "For everyday work",
           generalDescription: "Just as powerful, with less technical detail."
         },
-        agentWorkModeSaveFailed:
-          "We couldn't update the agent work mode right now.",
+        agentConversationDetailModeSaveFailed:
+          "We couldn't update the agent conversation detail mode right now.",
         computerUseLabel: "Computer use",
         computerUseDescription:
           "Allows the agent to control your Mac desktop — take screenshots, click, type, and more.",

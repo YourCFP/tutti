@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS desktop_preferences (
   dock_icon_style TEXT NOT NULL DEFAULT 'flat',
   dock_placement TEXT NOT NULL DEFAULT 'bottom',
   default_agent_provider TEXT NOT NULL DEFAULT 'codex',
-  agent_work_mode TEXT NOT NULL DEFAULT 'coding',
+  agent_conversation_detail_mode TEXT NOT NULL DEFAULT 'coding',
   agent_composer_defaults_by_provider_json TEXT NOT NULL DEFAULT '{}',
   agent_gui_conversation_rail_collapsed_by_provider_json TEXT NOT NULL DEFAULT '{}',
   file_default_openers_by_extension_json TEXT NOT NULL DEFAULT '{"htm":"appBrowser","html":"appBrowser","shtml":"appBrowser","xhtml":"appBrowser"}',
@@ -49,8 +49,8 @@ INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms)
 	return nil
 }
 
-func (s *SQLiteStore) applyDesktopPreferencesAgentWorkModeV1(ctx context.Context) error {
-	applied, err := s.hasMigration(ctx, schemaMigrationDesktopPreferencesAgentWorkModeV1)
+func (s *SQLiteStore) applyDesktopPreferencesAgentConversationDetailModeV1(ctx context.Context) error {
+	applied, err := s.hasMigration(ctx, schemaMigrationDesktopPreferencesAgentConversationDetailModeV1)
 	if err != nil {
 		return err
 	}
@@ -59,23 +59,23 @@ func (s *SQLiteStore) applyDesktopPreferencesAgentWorkModeV1(ctx context.Context
 	}
 
 	now := unixMs(time.Now().UTC())
-	hasAgentWorkMode, err := s.hasColumn(ctx, "desktop_preferences", "agent_work_mode")
+	hasAgentConversationDetailMode, err := s.hasColumn(ctx, "desktop_preferences", "agent_conversation_detail_mode")
 	if err != nil {
 		return err
 	}
-	if !hasAgentWorkMode {
+	if !hasAgentConversationDetailMode {
 		if _, err := s.db.ExecContext(ctx, `
 ALTER TABLE desktop_preferences
-  ADD COLUMN agent_work_mode TEXT NOT NULL DEFAULT 'coding';`); err != nil {
-			return fmt.Errorf("migrate workspace database for desktop agent work mode: %w", err)
+  ADD COLUMN agent_conversation_detail_mode TEXT NOT NULL DEFAULT 'coding';`); err != nil {
+			return fmt.Errorf("migrate workspace database for desktop agent conversation detail mode: %w", err)
 		}
 	}
 	_, err = s.db.ExecContext(ctx, `
 INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms)
   VALUES (?, ?);
-`, schemaMigrationDesktopPreferencesAgentWorkModeV1, now)
+`, schemaMigrationDesktopPreferencesAgentConversationDetailModeV1, now)
 	if err != nil {
-		return fmt.Errorf("record desktop agent work mode migration: %w", err)
+		return fmt.Errorf("record desktop agent conversation detail mode migration: %w", err)
 	}
 
 	return nil

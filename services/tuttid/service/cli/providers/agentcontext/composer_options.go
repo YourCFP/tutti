@@ -70,10 +70,10 @@ func (p Provider) runComposerOptions(ctx context.Context, invoke framework.Invok
 		WorkspaceID:              invoke.WorkspaceID,
 		IncludeCapabilityCatalog: input.IncludeCapabilityCatalog,
 		Settings: agentservice.ComposerSettings{
-			Model:            model,
-			PermissionModeID: permissionModeID,
-			ReasoningEffort:  reasoningEffort,
-			WorkMode:         defaults.WorkMode,
+			Model:                  model,
+			PermissionModeID:       permissionModeID,
+			ReasoningEffort:        reasoningEffort,
+			ConversationDetailMode: defaults.ConversationDetailMode,
 		},
 	})
 }
@@ -99,10 +99,10 @@ func (p Provider) composerDefaultsForProvider(ctx context.Context, provider stri
 	}
 	defaults := preferences.AgentComposerDefaultsByProvider[agentproviderbiz.Normalize(provider)]
 	return agentservice.ComposerSettings{
-		Model:            defaults.Model,
-		PermissionModeID: defaults.PermissionModeID,
-		ReasoningEffort:  defaults.ReasoningEffort,
-		WorkMode:         preferences.AgentWorkMode,
+		Model:                  defaults.Model,
+		PermissionModeID:       defaults.PermissionModeID,
+		ReasoningEffort:        defaults.ReasoningEffort,
+		ConversationDetailMode: preferences.AgentConversationDetailMode,
 	}
 }
 

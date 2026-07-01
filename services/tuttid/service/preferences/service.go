@@ -22,7 +22,7 @@ type Service struct {
 type PutInput struct {
 	AgentComposerDefaultsByProvider             map[string]preferencesbiz.AgentComposerDefaults
 	AgentGUIConversationRailCollapsedByProvider map[string]bool
-	AgentWorkMode                               string
+	AgentConversationDetailMode                 string
 	AppCatalogChannel                           string
 	BrowserUseConnectionMode                    string
 	DefaultAgentProvider                        string
@@ -65,23 +65,23 @@ func (s Service) Put(ctx context.Context, input PutInput) (preferencesbiz.Deskto
 	preferences, err := s.Store.PutDesktopPreferences(ctx, preferencesbiz.DesktopPreferences{
 		AgentComposerDefaultsByProvider:             normalizeAgentComposerDefaultsByProvider(input.AgentComposerDefaultsByProvider),
 		AgentGUIConversationRailCollapsedByProvider: normalizeAgentGUIConversationRailCollapsedByProvider(input.AgentGUIConversationRailCollapsedByProvider),
-		AgentWorkMode:                 preferencesbiz.NormalizeDesktopAgentWorkMode(input.AgentWorkMode),
-		AppCatalogChannel:             normalizeAppCatalogChannel(input.AppCatalogChannel),
-		BrowserUseConnectionMode:      normalizeBrowserUseConnectionMode(input.BrowserUseConnectionMode),
-		DefaultAgentProvider:          agentproviderbiz.Normalize(input.DefaultAgentProvider),
-		DockIconStyle:                 strings.TrimSpace(input.DockIconStyle),
-		DockPlacement:                 strings.TrimSpace(input.DockPlacement),
-		FileDefaultOpenersByExtension: normalizeFileDefaultOpenersByExtension(input.FileDefaultOpenersByExtension),
-		Initialized:                   true,
-		Locale:                        strings.TrimSpace(input.Locale),
-		MinimizeAnimation:             normalizeMinimizeAnimation(input.MinimizeAnimation),
-		SleepPreventionMode:           strings.TrimSpace(input.SleepPreventionMode),
-		ShowAppDeveloperSources:       input.ShowAppDeveloperSources,
-		ThemeSource:                   strings.TrimSpace(input.ThemeSource),
-		UpdateChannel:                 strings.TrimSpace(input.UpdateChannel),
-		UpdatePolicy:                  strings.TrimSpace(input.UpdatePolicy),
-		WindowSnappingEnabled:         windowSnapping.Enabled,
-		WindowSnappingShortcutPreset:  windowSnapping.ShortcutPreset,
+		AgentConversationDetailMode:                 preferencesbiz.NormalizeDesktopAgentConversationDetailMode(input.AgentConversationDetailMode),
+		AppCatalogChannel:                           normalizeAppCatalogChannel(input.AppCatalogChannel),
+		BrowserUseConnectionMode:                    normalizeBrowserUseConnectionMode(input.BrowserUseConnectionMode),
+		DefaultAgentProvider:                        agentproviderbiz.Normalize(input.DefaultAgentProvider),
+		DockIconStyle:                               strings.TrimSpace(input.DockIconStyle),
+		DockPlacement:                               strings.TrimSpace(input.DockPlacement),
+		FileDefaultOpenersByExtension:               normalizeFileDefaultOpenersByExtension(input.FileDefaultOpenersByExtension),
+		Initialized:                                 true,
+		Locale:                                      strings.TrimSpace(input.Locale),
+		MinimizeAnimation:                           normalizeMinimizeAnimation(input.MinimizeAnimation),
+		SleepPreventionMode:                         strings.TrimSpace(input.SleepPreventionMode),
+		ShowAppDeveloperSources:                     input.ShowAppDeveloperSources,
+		ThemeSource:                                 strings.TrimSpace(input.ThemeSource),
+		UpdateChannel:                               strings.TrimSpace(input.UpdateChannel),
+		UpdatePolicy:                                strings.TrimSpace(input.UpdatePolicy),
+		WindowSnappingEnabled:                       windowSnapping.Enabled,
+		WindowSnappingShortcutPreset:                windowSnapping.ShortcutPreset,
 	})
 	if err != nil {
 		return preferencesbiz.DesktopPreferences{}, err

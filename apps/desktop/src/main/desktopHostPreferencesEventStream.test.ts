@@ -35,7 +35,7 @@ test("desktop host preferences follows authoritative preference events", async (
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
-      agentWorkMode: "coding",
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -73,7 +73,7 @@ test("desktop host preferences follows authoritative preference events", async (
       agentGuiConversationRailCollapsedByProvider: {
         codex: true
       },
-      agentWorkMode: "coding",
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -109,7 +109,7 @@ test("desktop host preferences follows authoritative preference events", async (
 function createHostPreferencesState(): DesktopHostPreferencesState {
   let agentGUIConversationRailCollapsedByProvider: DesktopPreferencesStateResponse["preferences"]["agentGuiConversationRailCollapsedByProvider"] =
     {};
-  let agentWorkMode: DesktopPreferencesStateResponse["preferences"]["agentWorkMode"] =
+  let agentConversationDetailMode: DesktopPreferencesStateResponse["preferences"]["agentConversationDetailMode"] =
     "coding";
   let appCatalogChannel: DesktopPreferencesStateResponse["preferences"]["appCatalogChannel"] =
     "production";
@@ -146,8 +146,8 @@ function createHostPreferencesState(): DesktopHostPreferencesState {
     getAgentGUIConversationRailCollapsedByProvider() {
       return agentGUIConversationRailCollapsedByProvider;
     },
-    getAgentWorkMode() {
-      return agentWorkMode;
+    getAgentConversationDetailMode() {
+      return agentConversationDetailMode;
     },
     getAppCatalogChannel() {
       return appCatalogChannel;
@@ -196,8 +196,8 @@ function createHostPreferencesState(): DesktopHostPreferencesState {
         agentGUIConversationRailCollapsedByProvider =
           input.agentGuiConversationRailCollapsedByProvider;
       }
-      if (input.agentWorkMode) {
-        agentWorkMode = input.agentWorkMode;
+      if (input.agentConversationDetailMode) {
+        agentConversationDetailMode = input.agentConversationDetailMode;
       }
       if (input.appCatalogChannel) {
         appCatalogChannel = input.appCatalogChannel;
