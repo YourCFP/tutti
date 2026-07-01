@@ -19,6 +19,7 @@ test("createDesktopHostPreferencesState initializes missing preferences with dar
           preferences: {
             agentComposerDefaultsByProvider: {},
             agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
             appCatalogChannel: "production",
             browserUseConnectionMode: "isolated",
             defaultAgentProvider: "codex",
@@ -51,6 +52,7 @@ test("createDesktopHostPreferencesState initializes missing preferences with dar
       preferences: {
         agentComposerDefaultsByProvider: {},
         agentGuiConversationRailCollapsedByProvider: {},
+        agentConversationDetailMode: "coding",
         appCatalogChannel: "production",
         browserUseConnectionMode: "isolated",
         defaultAgentProvider: "codex",
@@ -95,6 +97,7 @@ test("createDesktopHostPreferencesState keeps initialized theme preferences", as
           preferences: {
             agentComposerDefaultsByProvider: {},
             agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
             appCatalogChannel: "production",
             browserUseConnectionMode: "isolated",
             defaultAgentProvider: "codex",
@@ -145,6 +148,7 @@ test("createDesktopHostPreferencesState migrates the old stable default update c
           preferences: {
             agentComposerDefaultsByProvider: {},
             agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
             appCatalogChannel: "production",
             defaultAgentProvider: "codex",
 
@@ -213,6 +217,7 @@ test("createDesktopHostPreferencesState preserves stable after the update channe
           preferences: {
             agentComposerDefaultsByProvider: {},
             agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
             appCatalogChannel: "production",
             defaultAgentProvider: "codex",
 
@@ -251,6 +256,7 @@ test("createDesktopHostPreferencesState notifies subscribers after sync changes"
           preferences: {
             agentComposerDefaultsByProvider: {},
             agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
             appCatalogChannel: "production",
             browserUseConnectionMode: "isolated",
             defaultAgentProvider: "codex",

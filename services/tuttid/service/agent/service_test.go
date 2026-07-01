@@ -62,6 +62,39 @@ func TestServiceCreatesAndListsSessions(t *testing.T) {
 	}
 }
 
+func TestServiceCreatePassesNormalizedConversationDetailModeToRuntime(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mode string
+		want string
+	}{
+		{name: "empty defaults to coding", mode: "", want: "coding"},
+		{name: "general is preserved", mode: "general", want: "general"},
+		{name: "invalid defaults to coding", mode: "daily", want: "coding"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runtime := newFakeRuntime()
+			service := NewService(runtime)
+
+			_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
+				AgentSessionID:         "session-" + strings.ReplaceAll(tc.name, " ", "-"),
+				Provider:               "codex",
+				ConversationDetailMode: tc.mode,
+				InitialContent:         TextPromptContent("hello"),
+			})
+			if err != nil {
+				t.Fatalf("Create returned error: %v", err)
+			}
+			if len(runtime.startCalls) != 1 {
+				t.Fatalf("start calls = %d, want 1", len(runtime.startCalls))
+			}
+			if got := runtime.startCalls[0].ConversationDetailMode; got != tc.want {
+				t.Fatalf("runtime conversationDetailMode = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestServiceCreateReportsNodeResults(t *testing.T) {
 	runtime := newFakeRuntime()
 	reporter := &recordingAgentAnalyticsReporter{}
@@ -727,19 +760,22 @@ func TestServiceImportsExternalAgentSessionsByProject(t *testing.T) {
 func TestServiceCreateUsesRuntimePreparerResult(t *testing.T) {
 	runtime := newFakeRuntime()
 	service := NewService(runtime)
+	var prepareInput agentsidecarservice.PrepareInput
 	service.RuntimePreparer = fakeRuntimePreparer{
 		result: agentsidecarservice.PreparedRuntime{
 			Cwd: "/prepared/workdir",
 			Env: []string{"CODEX_HOME=/prepared/codex-home"},
 		},
+		input: &prepareInput,
 	}
 	cwd := "/user/workdir"
 
 	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
-		AgentSessionID: "11111111-1111-4111-8111-111111111111",
-		Cwd:            &cwd,
-		Provider:       "codex",
-		InitialContent: TextPromptContent("hello"),
+		AgentSessionID:         "11111111-1111-4111-8111-111111111111",
+		Cwd:                    &cwd,
+		Provider:               "codex",
+		ConversationDetailMode: "general",
+		InitialContent:         TextPromptContent("hello"),
 	})
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
@@ -756,6 +792,9 @@ func TestServiceCreateUsesRuntimePreparerResult(t *testing.T) {
 	}
 	if len(start.Env) != 1 || start.Env[0] != "CODEX_HOME=/prepared/codex-home" {
 		t.Fatalf("runtime env = %#v, want prepared env", start.Env)
+	}
+	if prepareInput.ConversationDetailMode != "general" {
+		t.Fatalf("prepare conversationDetailMode = %q, want general", prepareInput.ConversationDetailMode)
 	}
 }
 
@@ -1638,6 +1677,28 @@ func TestServiceGetsComposerOptionsWithoutStartingRuntime(t *testing.T) {
 	capabilities, ok := options.RuntimeContext["capabilities"].([]string)
 	if !ok || !slices.Contains(capabilities, "imageInput") {
 		t.Fatalf("capabilities = %#v, want imageInput", options.RuntimeContext["capabilities"])
+	}
+}
+
+func TestServiceGetComposerOptionsDoesNotCarryConversationDetailMode(t *testing.T) {
+	runtime := newFakeRuntime()
+	service := NewService(runtime)
+
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		Provider: "codex",
+		Settings: ComposerSettings{
+			ConversationDetailMode: "general",
+		},
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if got := options.EffectiveSettings.ConversationDetailMode; got != "" {
+		t.Fatalf("effectiveSettings.conversationDetailMode = %q, want empty", got)
+	}
+	payload := ComposerSettingsToMap(options.EffectiveSettings)
+	if _, ok := payload["conversationDetailMode"]; ok {
+		t.Fatalf("effectiveSettings payload includes conversationDetailMode: %#v", payload)
 	}
 }
 
@@ -4187,10 +4248,11 @@ func (f *fakeRuntime) Start(_ context.Context, input RuntimeStartInput) (Runtime
 		Provider: input.Provider,
 		Cwd:      input.Cwd,
 		Settings: &ComposerSettings{
-			Model:            input.Model,
-			PermissionModeID: input.PermissionModeID,
-			PlanMode:         input.PlanMode,
-			ReasoningEffort:  input.ReasoningEffort,
+			Model:                  input.Model,
+			PermissionModeID:       input.PermissionModeID,
+			PlanMode:               input.PlanMode,
+			ReasoningEffort:        input.ReasoningEffort,
+			ConversationDetailMode: input.ConversationDetailMode,
 		},
 		Status:          "ready",
 		Title:           input.Title,

@@ -105,11 +105,12 @@ func TestTuttidBlackBoxEventStreamWebSocketReadyAndValidation(t *testing.T) {
 			Version: 1,
 			Payload: mustMarshalRawJSON(t, eventprotocol.PreferencesDesktopUpdateRequestedPayload{
 				Preferences: eventprotocol.PreferencesDesktopPreferences{
-					DockPlacement:       "bottom",
-					Locale:              "fr",
-					MinimizeAnimation:   "scale",
-					SleepPreventionMode: "never",
-					ThemeSource:         "dark",
+					AgentConversationDetailMode: "coding",
+					DockPlacement:               "bottom",
+					Locale:                      "fr",
+					MinimizeAnimation:           "scale",
+					SleepPreventionMode:         "never",
+					ThemeSource:                 "dark",
 				},
 			}),
 		},
@@ -195,8 +196,9 @@ func TestTuttidBlackBoxEventStreamPreferenceIntentPublishesUpdatedEvent(t *testi
 			EmittedAt: time.Now().UTC().Format(time.RFC3339Nano),
 			Payload: mustMarshalRawJSON(t, eventprotocol.PreferencesDesktopUpdateRequestedPayload{
 				Preferences: eventprotocol.PreferencesDesktopPreferences{
-					AppCatalogChannel:    "staging",
-					DefaultAgentProvider: "codex",
+					AgentConversationDetailMode: "general",
+					AppCatalogChannel:           "staging",
+					DefaultAgentProvider:        "codex",
 
 					DockIconStyle:       "default",
 					DockPlacement:       "bottom",
@@ -245,13 +247,14 @@ func TestTuttidBlackBoxEventStreamPreferenceIntentPublishesUpdatedEvent(t *testi
 		t.Fatal("updated initialized = false, want true")
 	}
 	if updated.Preferences.DefaultAgentProvider != "codex" ||
+		updated.Preferences.AgentConversationDetailMode != "general" ||
 		updated.Preferences.AppCatalogChannel != "staging" ||
 		updated.Preferences.DockPlacement != "bottom" ||
 		updated.Preferences.Locale != "zh-CN" ||
 		updated.Preferences.ThemeSource != "dark" ||
 		updated.Preferences.UpdateChannel != "stable" ||
 		updated.Preferences.UpdatePolicy != "prompt" {
-		t.Fatalf("updated payload = %#v, want staging/codex/bottom/zh-CN/dark/stable/prompt", updated)
+		t.Fatalf("updated payload = %#v, want staging/codex/general/bottom/zh-CN/dark/stable/prompt", updated)
 	}
 
 	after := mustRequestJSON[tuttigenerated.DesktopPreferencesStateResponse](
@@ -270,6 +273,9 @@ func TestTuttidBlackBoxEventStreamPreferenceIntentPublishesUpdatedEvent(t *testi
 	}
 	if after.Preferences.DefaultAgentProvider != tuttigenerated.Codex {
 		t.Fatalf("stored defaultAgentProvider = %q, want %q", after.Preferences.DefaultAgentProvider, tuttigenerated.Codex)
+	}
+	if after.Preferences.AgentConversationDetailMode != tuttigenerated.General {
+		t.Fatalf("stored agentConversationDetailMode = %q, want %q", after.Preferences.AgentConversationDetailMode, tuttigenerated.General)
 	}
 	if after.Preferences.AppCatalogChannel != tuttigenerated.Staging {
 		t.Fatalf("stored appCatalogChannel = %q, want %q", after.Preferences.AppCatalogChannel, tuttigenerated.Staging)

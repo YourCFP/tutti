@@ -455,6 +455,12 @@ func validateDesktopPreferencesUpdatedPayload(payload []byte) error {
 	if !preferencesbiz.IsDesktopDockPlacement(decoded.Preferences.DockPlacement) {
 		return fmt.Errorf("preferences.dockPlacement is unsupported")
 	}
+	if decoded.Preferences.AgentConversationDetailMode == "" {
+		return fmt.Errorf("preferences.agentConversationDetailMode is required")
+	}
+	if !preferencesbiz.IsDesktopAgentConversationDetailMode(decoded.Preferences.AgentConversationDetailMode) {
+		return fmt.Errorf("preferences.agentConversationDetailMode is unsupported")
+	}
 	if decoded.Preferences.AppCatalogChannel == "" {
 		return fmt.Errorf("preferences.appCatalogChannel is required")
 	}

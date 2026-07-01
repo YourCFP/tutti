@@ -520,6 +520,24 @@ func (e CliOutputMode) Valid() bool {
 	}
 }
 
+// Defines values for DesktopAgentConversationDetailMode.
+const (
+	Coding  DesktopAgentConversationDetailMode = "coding"
+	General DesktopAgentConversationDetailMode = "general"
+)
+
+// Valid indicates whether the value is a known member of the DesktopAgentConversationDetailMode enum.
+func (e DesktopAgentConversationDetailMode) Valid() bool {
+	switch e {
+	case Coding:
+		return true
+	case General:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DesktopAppCatalogChannel.
 const (
 	Production DesktopAppCatalogChannel = "production"
@@ -2318,6 +2336,9 @@ type DesktopAgentComposerDefaultsByProvider struct {
 	Openclaw   *DesktopAgentComposerDefaults `json:"openclaw,omitempty"`
 }
 
+// DesktopAgentConversationDetailMode defines model for DesktopAgentConversationDetailMode.
+type DesktopAgentConversationDetailMode string
+
 // DesktopAgentGuiConversationRailCollapsedByProvider defines model for DesktopAgentGuiConversationRailCollapsedByProvider.
 type DesktopAgentGuiConversationRailCollapsedByProvider struct {
 	ClaudeCode *bool `json:"claude-code,omitempty"`
@@ -2355,6 +2376,7 @@ type DesktopMinimizeAnimation string
 // DesktopPreferences defines model for DesktopPreferences.
 type DesktopPreferences struct {
 	AgentComposerDefaultsByProvider             DesktopAgentComposerDefaultsByProvider             `json:"agentComposerDefaultsByProvider"`
+	AgentConversationDetailMode                 DesktopAgentConversationDetailMode                 `json:"agentConversationDetailMode"`
 	AgentGuiConversationRailCollapsedByProvider DesktopAgentGuiConversationRailCollapsedByProvider `json:"agentGuiConversationRailCollapsedByProvider"`
 	AppCatalogChannel                           DesktopAppCatalogChannel                           `json:"appCatalogChannel"`
 	BrowserUseConnectionMode                    *DesktopBrowserUseConnectionMode                   `json:"browserUseConnectionMode,omitempty"`

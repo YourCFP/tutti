@@ -56,9 +56,10 @@ type ComposerSettings struct {
 	BrowserUse *bool
 	// ComputerUse is tri-state: nil means "use the default" (on), so the
 	// composer can distinguish an explicit opt-out from an unset value.
-	ComputerUse     *bool
-	ReasoningEffort string
-	Speed           string
+	ComputerUse            *bool
+	ReasoningEffort        string
+	Speed                  string
+	ConversationDetailMode string
 }
 
 type ComposerOptionsInput struct {
@@ -361,10 +362,18 @@ func normalizeComposerSettingsForProvider(provider string, settings ComposerSett
 	settings.PermissionModeID = normalizePermissionModeIDForProvider(provider, settings.PermissionModeID)
 	settings.ReasoningEffort = normalizeReasoningEffortForProvider(provider, settings.ReasoningEffort)
 	settings.Speed = normalizeSpeedForProvider(provider, settings.Speed)
+	settings.ConversationDetailMode = normalizeComposerConversationDetailMode(settings.ConversationDetailMode)
 	settings.Model = clampComposerModelForProvider(provider, settings.Model)
 	settings.Model = normalizeComposerModelForProvider(provider, settings.Model)
 	settings.PlanMode = clampComposerPlanModeForProvider(provider, settings.PlanMode)
 	return settings
+}
+
+func normalizeComposerConversationDetailMode(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	return preferencesbiz.NormalizeDesktopAgentConversationDetailMode(value)
 }
 
 func normalizeComposerModelForProvider(provider string, model string) string {

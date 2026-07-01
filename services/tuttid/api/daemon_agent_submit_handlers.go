@@ -31,21 +31,22 @@ func (api DaemonAPI) CreateWorkspaceAgentSession(ctx context.Context, request tu
 	metadata := mapValue(request.Body.Metadata)
 	logCreateAgentSubmitTrace("api.create.received", string(request.WorkspaceID), agentSessionID, metadata, string(request.Body.Provider), "", nil)
 	session, err := api.AgentSessionService.Create(ctx, string(request.WorkspaceID), agentservice.CreateSessionInput{
-		AgentSessionID:       agentSessionID,
-		Cwd:                  request.Body.Cwd,
-		InitialContent:       agentPromptContentFromGenerated(request.Body.InitialContent),
-		InitialDisplayPrompt: stringPtrValue(request.Body.InitialDisplayPrompt),
-		Metadata:             metadata,
-		Model:                request.Body.Model,
-		PermissionModeID:     request.Body.PermissionModeId,
-		PlanMode:             request.Body.PlanMode,
-		BrowserUse:           request.Body.BrowserUse,
-		ProviderTargetRef:    mapValue(request.Body.ProviderTargetRef),
-		Provider:             string(request.Body.Provider),
-		ReasoningEffort:      request.Body.ReasoningEffort,
-		Speed:                request.Body.Speed,
-		Title:                request.Body.Title,
-		Visible:              request.Body.Visible,
+		AgentSessionID:         agentSessionID,
+		Cwd:                    request.Body.Cwd,
+		InitialContent:         agentPromptContentFromGenerated(request.Body.InitialContent),
+		InitialDisplayPrompt:   stringPtrValue(request.Body.InitialDisplayPrompt),
+		Metadata:               metadata,
+		Model:                  request.Body.Model,
+		PermissionModeID:       request.Body.PermissionModeId,
+		PlanMode:               request.Body.PlanMode,
+		BrowserUse:             request.Body.BrowserUse,
+		ProviderTargetRef:      mapValue(request.Body.ProviderTargetRef),
+		Provider:               string(request.Body.Provider),
+		ReasoningEffort:        request.Body.ReasoningEffort,
+		Speed:                  request.Body.Speed,
+		Title:                  request.Body.Title,
+		Visible:                request.Body.Visible,
+		ConversationDetailMode: api.agentConversationDetailMode(ctx),
 	})
 	if err != nil {
 		logCreateAgentSubmitTrace("api.create.failed", string(request.WorkspaceID), agentSessionID, metadata, "", "", err)

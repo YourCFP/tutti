@@ -22,6 +22,7 @@ type Service struct {
 type PutInput struct {
 	AgentComposerDefaultsByProvider             map[string]preferencesbiz.AgentComposerDefaults
 	AgentGUIConversationRailCollapsedByProvider map[string]bool
+	AgentConversationDetailMode                 string
 	AppCatalogChannel                           string
 	BrowserUseConnectionMode                    string
 	DefaultAgentProvider                        string
@@ -64,6 +65,7 @@ func (s Service) Put(ctx context.Context, input PutInput) (preferencesbiz.Deskto
 	preferences, err := s.Store.PutDesktopPreferences(ctx, preferencesbiz.DesktopPreferences{
 		AgentComposerDefaultsByProvider:             normalizeAgentComposerDefaultsByProvider(input.AgentComposerDefaultsByProvider),
 		AgentGUIConversationRailCollapsedByProvider: normalizeAgentGUIConversationRailCollapsedByProvider(input.AgentGUIConversationRailCollapsedByProvider),
+		AgentConversationDetailMode:                 preferencesbiz.NormalizeDesktopAgentConversationDetailMode(input.AgentConversationDetailMode),
 		AppCatalogChannel:                           normalizeAppCatalogChannel(input.AppCatalogChannel),
 		BrowserUseConnectionMode:                    normalizeBrowserUseConnectionMode(input.BrowserUseConnectionMode),
 		DefaultAgentProvider:                        agentproviderbiz.Normalize(input.DefaultAgentProvider),

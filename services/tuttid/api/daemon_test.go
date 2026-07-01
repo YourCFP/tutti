@@ -543,7 +543,8 @@ func (s stubPreferencesService) Get(ctx context.Context) (preferencesbiz.Desktop
 func (s stubPreferencesService) Put(ctx context.Context, input preferencesservice.PutInput) (preferencesbiz.DesktopPreferences, error) {
 	if s.putFn == nil {
 		return preferencesbiz.DesktopPreferences{
-			DefaultAgentProvider: input.DefaultAgentProvider,
+			AgentConversationDetailMode: input.AgentConversationDetailMode,
+			DefaultAgentProvider:        input.DefaultAgentProvider,
 
 			DockIconStyle:       "default",
 			DockPlacement:       input.DockPlacement,
@@ -950,6 +951,9 @@ func TestDaemonAPIGeneratedRoutesCreateAgentSession(t *testing.T) {
 				if input.AgentSessionID != "11111111-1111-4111-8111-111111111111" {
 					t.Fatalf("agent session id = %q", input.AgentSessionID)
 				}
+				if input.ConversationDetailMode != preferencesbiz.DesktopAgentConversationDetailModeGeneral {
+					t.Fatalf("conversation detail mode = %q, want %q", input.ConversationDetailMode, preferencesbiz.DesktopAgentConversationDetailModeGeneral)
+				}
 				if input.ProviderTargetRef["kind"] != "sharedAgent" || input.ProviderTargetRef["sharedAgentId"] != "agent-1" {
 					t.Fatalf("provider target ref = %#v, want shared agent ref", input.ProviderTargetRef)
 				}
@@ -958,6 +962,14 @@ func TestDaemonAPIGeneratedRoutesCreateAgentSession(t *testing.T) {
 					Provider:  "codex",
 					Status:    "created",
 					CreatedAt: createdAt,
+				}, nil
+			},
+		},
+		PreferencesService: stubPreferencesService{
+			getFn: func(context.Context) (preferencesbiz.DesktopPreferences, error) {
+				return preferencesbiz.DesktopPreferences{
+					AgentConversationDetailMode: preferencesbiz.DesktopAgentConversationDetailModeGeneral,
+					Initialized:                 true,
 				}, nil
 			},
 		},
@@ -1509,7 +1521,8 @@ func TestDaemonAPIGeneratedRoutesGetDesktopPreferences(t *testing.T) {
 		PreferencesService: stubPreferencesService{
 			getFn: func(context.Context) (preferencesbiz.DesktopPreferences, error) {
 				return preferencesbiz.DesktopPreferences{
-					DefaultAgentProvider: "claude-code",
+					AgentConversationDetailMode: "general",
+					DefaultAgentProvider:        "claude-code",
 
 					DockIconStyle:       "default",
 					DockPlacement:       "left",
@@ -1544,6 +1557,9 @@ func TestDaemonAPIGeneratedRoutesGetDesktopPreferences(t *testing.T) {
 	if response.Preferences.DefaultAgentProvider != tuttigenerated.ClaudeCode {
 		t.Fatalf("defaultAgentProvider = %q, want %q", response.Preferences.DefaultAgentProvider, tuttigenerated.ClaudeCode)
 	}
+	if response.Preferences.AgentConversationDetailMode != tuttigenerated.General {
+		t.Fatalf("agentConversationDetailMode = %q, want %q", response.Preferences.AgentConversationDetailMode, tuttigenerated.General)
+	}
 	if response.Preferences.ThemeSource != tuttigenerated.Dark {
 		t.Fatalf("themeSource = %q, want %q", response.Preferences.ThemeSource, tuttigenerated.Dark)
 	}
@@ -1567,16 +1583,17 @@ func TestDaemonAPIGeneratedRoutesPutDesktopPreferencesPersistsAgentGUIConversati
 				captured = input
 				return preferencesbiz.DesktopPreferences{
 					AgentGUIConversationRailCollapsedByProvider: input.AgentGUIConversationRailCollapsedByProvider,
-					AppCatalogChannel:    input.AppCatalogChannel,
-					DefaultAgentProvider: input.DefaultAgentProvider,
-					DockIconStyle:        input.DockIconStyle,
-					DockPlacement:        input.DockPlacement,
-					Initialized:          true,
-					Locale:               input.Locale,
-					SleepPreventionMode:  input.SleepPreventionMode,
-					ThemeSource:          input.ThemeSource,
-					UpdateChannel:        input.UpdateChannel,
-					UpdatePolicy:         input.UpdatePolicy,
+					AgentConversationDetailMode:                 input.AgentConversationDetailMode,
+					AppCatalogChannel:                           input.AppCatalogChannel,
+					DefaultAgentProvider:                        input.DefaultAgentProvider,
+					DockIconStyle:                               input.DockIconStyle,
+					DockPlacement:                               input.DockPlacement,
+					Initialized:                                 true,
+					Locale:                                      input.Locale,
+					SleepPreventionMode:                         input.SleepPreventionMode,
+					ThemeSource:                                 input.ThemeSource,
+					UpdateChannel:                               input.UpdateChannel,
+					UpdatePolicy:                                input.UpdatePolicy,
 				}, nil
 			},
 		},
@@ -1589,16 +1606,17 @@ func TestDaemonAPIGeneratedRoutesPutDesktopPreferencesPersistsAgentGUIConversati
 				"claude-code": false,
 				"codex":       true,
 			},
-			"defaultAgentProvider": "codex",
-			"appCatalogChannel":    "staging",
-			"dockIconStyle":        "default",
-			"dockPlacement":        "bottom",
-			"locale":               "zh-CN",
-			"minimizeAnimation":    "scale",
-			"sleepPreventionMode":  "never",
-			"themeSource":          "dark",
-			"updateChannel":        "stable",
-			"updatePolicy":         "prompt",
+			"agentConversationDetailMode": "general",
+			"defaultAgentProvider":        "codex",
+			"appCatalogChannel":           "staging",
+			"dockIconStyle":               "default",
+			"dockPlacement":               "bottom",
+			"locale":                      "zh-CN",
+			"minimizeAnimation":           "scale",
+			"sleepPreventionMode":         "never",
+			"themeSource":                 "dark",
+			"updateChannel":               "stable",
+			"updatePolicy":                "prompt",
 		},
 	})
 	if recorder.Code != http.StatusOK {
@@ -1613,6 +1631,9 @@ func TestDaemonAPIGeneratedRoutesPutDesktopPreferencesPersistsAgentGUIConversati
 	if captured.AppCatalogChannel != "staging" {
 		t.Fatalf("captured appCatalogChannel = %q, want staging", captured.AppCatalogChannel)
 	}
+	if captured.AgentConversationDetailMode != "general" {
+		t.Fatalf("captured agentConversationDetailMode = %q, want general", captured.AgentConversationDetailMode)
+	}
 	var response tuttigenerated.DesktopPreferencesStateResponse
 	decodeGeneratedRouteResponse(t, recorder, &response)
 	if response.Preferences.AgentGuiConversationRailCollapsedByProvider.Codex == nil ||
@@ -1623,9 +1644,89 @@ func TestDaemonAPIGeneratedRoutesPutDesktopPreferencesPersistsAgentGUIConversati
 		*response.Preferences.AgentGuiConversationRailCollapsedByProvider.ClaudeCode {
 		t.Fatalf("response rail claude-code = %#v, want false", response.Preferences.AgentGuiConversationRailCollapsedByProvider.ClaudeCode)
 	}
+	if response.Preferences.AgentConversationDetailMode != tuttigenerated.General {
+		t.Fatalf("response agentConversationDetailMode = %q, want general", response.Preferences.AgentConversationDetailMode)
+	}
 	if response.Preferences.AppCatalogChannel != tuttigenerated.Staging {
 		t.Fatalf("response appCatalogChannel = %q, want staging", response.Preferences.AppCatalogChannel)
 	}
+}
+
+func TestDaemonAPIGeneratedRoutesPutDesktopPreferencesRequiresAgentConversationDetailMode(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, NewRoutes(DaemonAPI{
+		PreferencesService: stubPreferencesService{
+			putFn: func(context.Context, preferencesservice.PutInput) (preferencesbiz.DesktopPreferences, error) {
+				t.Fatal("Put should not be called when agent conversation detail mode is missing")
+				return preferencesbiz.DesktopPreferences{}, nil
+			},
+		},
+	}))
+
+	recorder := performGeneratedRouteRequest(t, mux, http.MethodPut, "/v1/preferences/desktop", map[string]any{
+		"preferences": map[string]any{
+			"defaultAgentProvider": "codex",
+			"appCatalogChannel":    "production",
+			"dockIconStyle":        "default",
+			"dockPlacement":        "bottom",
+			"locale":               "en",
+			"minimizeAnimation":    "scale",
+			"sleepPreventionMode":  "never",
+			"themeSource":          "dark",
+			"updateChannel":        "stable",
+			"updatePolicy":         "prompt",
+		},
+	})
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+
+	assertGeneratedRouteError(
+		t,
+		recorder,
+		tuttigenerated.InvalidRequest,
+		"missing_desktop_agent_conversation_detail_mode",
+		"desktop agent conversation detail mode is required",
+	)
+}
+
+func TestDaemonAPIGeneratedRoutesPutDesktopPreferencesValidatesAgentConversationDetailMode(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, NewRoutes(DaemonAPI{
+		PreferencesService: stubPreferencesService{
+			putFn: func(context.Context, preferencesservice.PutInput) (preferencesbiz.DesktopPreferences, error) {
+				t.Fatal("Put should not be called when agent conversation detail mode is invalid")
+				return preferencesbiz.DesktopPreferences{}, nil
+			},
+		},
+	}))
+
+	recorder := performGeneratedRouteRequest(t, mux, http.MethodPut, "/v1/preferences/desktop", map[string]any{
+		"preferences": map[string]any{
+			"agentConversationDetailMode": "daily",
+			"defaultAgentProvider":        "codex",
+			"appCatalogChannel":           "production",
+			"dockIconStyle":               "default",
+			"dockPlacement":               "bottom",
+			"locale":                      "en",
+			"minimizeAnimation":           "scale",
+			"sleepPreventionMode":         "never",
+			"themeSource":                 "dark",
+			"updateChannel":               "stable",
+			"updatePolicy":                "prompt",
+		},
+	})
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+
+	assertGeneratedRouteError(
+		t,
+		recorder,
+		tuttigenerated.InvalidRequest,
+		"unsupported_desktop_agent_conversation_detail_mode",
+		"desktop agent conversation detail mode is unsupported",
+	)
 }
 
 func TestDaemonAPIGeneratedRoutesPutDesktopPreferencesValidatesLocale(t *testing.T) {

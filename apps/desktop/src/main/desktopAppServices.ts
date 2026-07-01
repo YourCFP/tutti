@@ -52,7 +52,10 @@ export async function createDesktopAppServices(
   factories?: Partial<DesktopAppServiceFactories>
 ): Promise<DesktopAppServices> {
   const daemonRuntime = await resolveDaemonRuntime(factories);
-  const updateService = await resolveUpdateService(factories);
+  const updateService = await resolveUpdateService(factories, {
+    prepareQuitAndInstall: () => daemonRuntime.tuttid.stop(),
+    recoverAfterQuitAndInstallFailure: () => daemonRuntime.tuttid.start()
+  });
 
   try {
     await daemonRuntime.tuttid.start();
@@ -137,7 +140,11 @@ async function resolveHostServices(
 }
 
 async function resolveUpdateService(
-  factories?: Partial<DesktopAppServiceFactories>
+  factories?: Partial<DesktopAppServiceFactories>,
+  options: {
+    prepareQuitAndInstall?: () => Promise<void>;
+    recoverAfterQuitAndInstallFailure?: () => Promise<void>;
+  } = {}
 ): Promise<AppUpdateService> {
   if (factories?.createUpdateService) {
     return factories.createUpdateService();
@@ -145,7 +152,10 @@ async function resolveUpdateService(
 
   const { createAppUpdateService } =
     await import("./update/appUpdateService.ts");
-  return createAppUpdateService();
+  return createAppUpdateService(undefined, {
+    prepareQuitAndInstall: options.prepareQuitAndInstall,
+    recoverAfterQuitAndInstallFailure: options.recoverAfterQuitAndInstallFailure
+  });
 }
 
 async function resolveCliShim(

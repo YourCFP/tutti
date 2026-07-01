@@ -19,6 +19,7 @@ test("desktop preferences client resolves writes from the authoritative event", 
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -42,6 +43,7 @@ test("desktop preferences client resolves writes from the authoritative event", 
         preferences: {
           agentComposerDefaultsByProvider: {},
           agentGuiConversationRailCollapsedByProvider: {},
+          agentConversationDetailMode: "coding",
           appCatalogChannel: "production",
           browserUseConnectionMode: "isolated",
           defaultAgentProvider: "codex",
@@ -67,6 +69,7 @@ test("desktop preferences client resolves writes from the authoritative event", 
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -87,6 +90,7 @@ test("desktop preferences client resolves writes from the authoritative event", 
   assert.deepEqual(await completion, {
     agentComposerDefaultsByProvider: {},
     agentGuiConversationRailCollapsedByProvider: {},
+    agentConversationDetailMode: "coding",
     appCatalogChannel: "production",
     browserUseConnectionMode: "isolated",
     defaultAgentProvider: "codex",
@@ -119,6 +123,7 @@ test("desktop preferences client distinguishes agent GUI conversation rail prefe
       agentGuiConversationRailCollapsedByProvider: {
         codex: true
       },
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -147,6 +152,7 @@ test("desktop preferences client distinguishes agent GUI conversation rail prefe
       agentGuiConversationRailCollapsedByProvider: {
         codex: false
       },
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -173,6 +179,7 @@ test("desktop preferences client distinguishes agent GUI conversation rail prefe
       agentGuiConversationRailCollapsedByProvider: {
         codex: true
       },
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -195,6 +202,7 @@ test("desktop preferences client distinguishes agent GUI conversation rail prefe
     agentGuiConversationRailCollapsedByProvider: {
       codex: true
     },
+    agentConversationDetailMode: "coding",
     appCatalogChannel: "production",
     browserUseConnectionMode: "isolated",
     defaultAgentProvider: "codex",
@@ -233,6 +241,7 @@ test("desktop preferences client fans out authoritative preference updates", asy
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -254,6 +263,7 @@ test("desktop preferences client fans out authoritative preference updates", asy
     {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -286,6 +296,7 @@ test("desktop preferences client rejects pending writes when disposed", async ()
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -315,6 +326,7 @@ test("desktop preferences client confirms writes from HTTP when the event does n
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -344,6 +356,7 @@ test("desktop preferences client confirms writes from HTTP when the event does n
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -364,6 +377,7 @@ test("desktop preferences client confirms writes from HTTP when the event does n
   assert.deepEqual(await completion, {
     agentComposerDefaultsByProvider: {},
     agentGuiConversationRailCollapsedByProvider: {},
+    agentConversationDetailMode: "coding",
     appCatalogChannel: "production",
     browserUseConnectionMode: "isolated",
     defaultAgentProvider: "codex",
@@ -390,6 +404,7 @@ test("desktop preferences client notifies subscribers when HTTP confirmation suc
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -424,6 +439,7 @@ test("desktop preferences client notifies subscribers when HTTP confirmation suc
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -445,6 +461,7 @@ test("desktop preferences client notifies subscribers when HTTP confirmation suc
     {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -471,6 +488,7 @@ test("desktop preferences client rejects writes when the authoritative state can
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -500,6 +518,7 @@ test("desktop preferences client rejects writes when the authoritative state can
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -538,6 +557,7 @@ test("desktop preferences client coalesces concurrent identical writes", async (
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -558,6 +578,7 @@ test("desktop preferences client coalesces concurrent identical writes", async (
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -582,6 +603,7 @@ test("desktop preferences client coalesces concurrent identical writes", async (
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",
@@ -614,6 +636,7 @@ function createFakeTuttidClient(
     preferences: {
       agentComposerDefaultsByProvider: {},
       agentGuiConversationRailCollapsedByProvider: {},
+      agentConversationDetailMode: "coding",
       appCatalogChannel: "production",
       browserUseConnectionMode: "isolated",
       defaultAgentProvider: "codex",

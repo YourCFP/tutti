@@ -19,12 +19,13 @@ func (s *SQLiteStore) GetDesktopPreferences(ctx context.Context) (preferencesbiz
 	}
 
 	row := s.db.QueryRowContext(ctx, `
-SELECT default_agent_provider, dock_icon_style, dock_placement, locale, theme_source, sleep_prevention_mode, update_channel, update_policy, agent_composer_defaults_by_provider_json, agent_gui_conversation_rail_collapsed_by_provider_json, browser_use_connection_mode, file_default_openers_by_extension_json, app_catalog_channel, minimize_animation, show_app_developer_sources, workbench_window_snapping_enabled, workbench_window_snapping_shortcut_preset
+SELECT default_agent_provider, agent_conversation_detail_mode, dock_icon_style, dock_placement, locale, theme_source, sleep_prevention_mode, update_channel, update_policy, agent_composer_defaults_by_provider_json, agent_gui_conversation_rail_collapsed_by_provider_json, browser_use_connection_mode, file_default_openers_by_extension_json, app_catalog_channel, minimize_animation, show_app_developer_sources, workbench_window_snapping_enabled, workbench_window_snapping_shortcut_preset
 FROM desktop_preferences
 WHERE id = ?
 `, desktopPreferencesRowID)
 
 	var defaultAgentProvider string
+	var agentConversationDetailMode string
 	var appCatalogChannel string
 	var browserUseConnectionMode string
 	var dockIconStyle string
@@ -41,7 +42,7 @@ WHERE id = ?
 	var agentComposerDefaultsJSON string
 	var agentGUIConversationRailCollapsedJSON string
 	var fileDefaultOpenersJSON string
-	if err := row.Scan(&defaultAgentProvider, &dockIconStyle, &dockPlacement, &locale, &themeSource, &sleepPreventionMode, &updateChannel, &updatePolicy, &agentComposerDefaultsJSON, &agentGUIConversationRailCollapsedJSON, &browserUseConnectionMode, &fileDefaultOpenersJSON, &appCatalogChannel, &minimizeAnimation, &showAppDeveloperSources, &windowSnappingEnabled, &windowSnappingShortcutPreset); err != nil {
+	if err := row.Scan(&defaultAgentProvider, &agentConversationDetailMode, &dockIconStyle, &dockPlacement, &locale, &themeSource, &sleepPreventionMode, &updateChannel, &updatePolicy, &agentComposerDefaultsJSON, &agentGUIConversationRailCollapsedJSON, &browserUseConnectionMode, &fileDefaultOpenersJSON, &appCatalogChannel, &minimizeAnimation, &showAppDeveloperSources, &windowSnappingEnabled, &windowSnappingShortcutPreset); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return preferencesbiz.DefaultDesktopPreferences(), nil
 		}
@@ -63,6 +64,7 @@ WHERE id = ?
 	return preferencesbiz.DesktopPreferences{
 		AgentComposerDefaultsByProvider:             agentComposerDefaults,
 		AgentGUIConversationRailCollapsedByProvider: agentGUIConversationRailCollapsed,
+		AgentConversationDetailMode:                 preferencesbiz.NormalizeDesktopAgentConversationDetailMode(agentConversationDetailMode),
 		AppCatalogChannel:                           appCatalogChannel,
 		BrowserUseConnectionMode:                    browserUseConnectionMode,
 		DefaultAgentProvider:                        defaultAgentProvider,
@@ -104,6 +106,7 @@ func (s *SQLiteStore) PutDesktopPreferences(ctx context.Context, preferences pre
 INSERT INTO desktop_preferences (
   id,
   default_agent_provider,
+  agent_conversation_detail_mode,
   dock_icon_style,
   dock_placement,
   locale,
@@ -122,9 +125,10 @@ INSERT INTO desktop_preferences (
   workbench_window_snapping_shortcut_preset,
   updated_at_unix_ms
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
   default_agent_provider = excluded.default_agent_provider,
+  agent_conversation_detail_mode = excluded.agent_conversation_detail_mode,
   dock_icon_style = excluded.dock_icon_style,
   dock_placement = excluded.dock_placement,
   locale = excluded.locale,
@@ -142,7 +146,7 @@ ON CONFLICT(id) DO UPDATE SET
   workbench_window_snapping_enabled = excluded.workbench_window_snapping_enabled,
   workbench_window_snapping_shortcut_preset = excluded.workbench_window_snapping_shortcut_preset,
   updated_at_unix_ms = excluded.updated_at_unix_ms
-`, desktopPreferencesRowID, preferences.DefaultAgentProvider, preferences.DockIconStyle, preferences.DockPlacement, preferences.Locale, preferences.ThemeSource, preferences.SleepPreventionMode, preferences.UpdateChannel, preferences.UpdatePolicy, agentComposerDefaultsJSON, agentGUIConversationRailCollapsedJSON, fileDefaultOpenersJSON, preferences.AppCatalogChannel, preferences.BrowserUseConnectionMode, preferences.MinimizeAnimation, preferences.ShowAppDeveloperSources, preferences.WindowSnappingEnabled, preferences.WindowSnappingShortcutPreset, now)
+`, desktopPreferencesRowID, preferences.DefaultAgentProvider, preferencesbiz.NormalizeDesktopAgentConversationDetailMode(preferences.AgentConversationDetailMode), preferences.DockIconStyle, preferences.DockPlacement, preferences.Locale, preferences.ThemeSource, preferences.SleepPreventionMode, preferences.UpdateChannel, preferences.UpdatePolicy, agentComposerDefaultsJSON, agentGUIConversationRailCollapsedJSON, fileDefaultOpenersJSON, preferences.AppCatalogChannel, preferences.BrowserUseConnectionMode, preferences.MinimizeAnimation, preferences.ShowAppDeveloperSources, preferences.WindowSnappingEnabled, preferences.WindowSnappingShortcutPreset, now)
 	if err != nil {
 		return preferencesbiz.DesktopPreferences{}, fmt.Errorf("put desktop preferences: %w", err)
 	}
@@ -150,6 +154,7 @@ ON CONFLICT(id) DO UPDATE SET
 	return preferencesbiz.DesktopPreferences{
 		AgentComposerDefaultsByProvider:             preferences.AgentComposerDefaultsByProvider,
 		AgentGUIConversationRailCollapsedByProvider: preferences.AgentGUIConversationRailCollapsedByProvider,
+		AgentConversationDetailMode:                 preferencesbiz.NormalizeDesktopAgentConversationDetailMode(preferences.AgentConversationDetailMode),
 		AppCatalogChannel:                           preferences.AppCatalogChannel,
 		BrowserUseConnectionMode:                    preferences.BrowserUseConnectionMode,
 		DefaultAgentProvider:                        preferences.DefaultAgentProvider,
