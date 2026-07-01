@@ -2566,6 +2566,42 @@ func TestClaudeCodeAdapterStartAppliesModelAndReasoningConfigOptions(t *testing.
 	}
 }
 
+func TestClaudeCodeAdapterStartMapsNativeFastConfigOption(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Claude Agent", "claude-session-native-fast")
+	transport.conn.configOptions = []map[string]any{
+		{"id": "model"},
+		{"id": "effort"},
+		{
+			"id":           "fast",
+			"currentValue": "off",
+			"options": []any{
+				map[string]any{"value": "off", "name": "Standard"},
+				map[string]any{"value": "on", "name": "Fast"},
+			},
+		},
+	}
+	adapter := NewClaudeCodeAdapter(transport)
+	session := standardTestSession(ProviderClaudeCode)
+	session.Settings = &SessionSettings{Speed: "standard"}
+
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	calls := transport.conn.setConfigOptionCalls()
+	if len(calls) != 1 {
+		t.Fatalf("config option calls = %#v, want native fast update", calls)
+	}
+	if got, _ := calls[0]["configId"].(string); got != "fast" {
+		t.Fatalf("config id = %q, want fast", got)
+	}
+	if got, _ := calls[0]["value"].(string); got != "off" {
+		t.Fatalf("config value = %q, want off", got)
+	}
+}
+
 func TestClaudeCodeAdapterResumeAppliesModelAndReasoningConfigOptions(t *testing.T) {
 	t.Parallel()
 
@@ -2704,10 +2740,10 @@ func TestClaudeCodeAdapterApplySessionSettingsSkipsUnsupportedLiveSpeedConfig(t 
 	}
 }
 
-func TestClaudeCodeAdapterApplySessionSettingsSendsAdvertisedLiveSpeedConfig(t *testing.T) {
+func TestClaudeCodeAdapterApplySessionSettingsSkipsLegacyLiveSpeedConfig(t *testing.T) {
 	t.Parallel()
 
-	transport := newStandardACPTransport("Claude Agent", "claude-session-live-speed-supported")
+	transport := newStandardACPTransport("Claude Agent", "claude-session-live-speed-legacy")
 	adapter := NewClaudeCodeAdapter(transport)
 	session := standardTestSession(ProviderClaudeCode)
 
@@ -2740,15 +2776,64 @@ func TestClaudeCodeAdapterApplySessionSettingsSendsAdvertisedLiveSpeedConfig(t *
 		t.Fatalf("ApplySessionSettings: %v", err)
 	}
 
+	if calls := transport.conn.setConfigOptionCalls(); len(calls) != 0 {
+		t.Fatalf("config option calls = %#v, want legacy speed no-op", calls)
+	}
+}
+
+func TestClaudeCodeAdapterApplySessionSettingsMapsNativeLiveSpeedConfig(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Claude Agent", "claude-session-live-native-speed")
+	adapter := NewClaudeCodeAdapter(transport)
+	session := standardTestSession(ProviderClaudeCode)
+
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	adapter.applyACPUpdate(session.AgentSessionID, json.RawMessage(`{
+		"update": {
+			"sessionUpdate": "config_option_update",
+			"key": "fast",
+			"value": "off",
+			"configOptions": [
+				{
+					"id": "fast",
+					"currentValue": "off",
+					"options": [
+						{"value": "off", "name": "Standard"},
+						{"value": "on", "name": "Fast"}
+					]
+				}
+			]
+		}
+	}`))
+
+	session.Settings = &SessionSettings{Speed: "fast"}
+	if err := adapter.ApplySessionSettings(context.Background(), session, SessionSettingsPatch{
+		Speed: stringPtr("fast"),
+	}); err != nil {
+		t.Fatalf("ApplySessionSettings: %v", err)
+	}
+
 	calls := transport.conn.setConfigOptionCalls()
 	if len(calls) != 1 {
-		t.Fatalf("config option calls = %#v, want advertised live speed update", calls)
+		t.Fatalf("config option calls = %#v, want native live speed update", calls)
 	}
 	if got, _ := calls[0]["configId"].(string); got != "fast" {
 		t.Fatalf("config id = %q, want fast", got)
 	}
-	if got, _ := calls[0]["value"].(string); got != "fast" {
-		t.Fatalf("config value = %q, want fast", got)
+	if got, _ := calls[0]["value"].(string); got != "on" {
+		t.Fatalf("config value = %q, want on", got)
+	}
+
+	snapshot := adapter.SessionState(session)
+	if snapshot.Settings == nil {
+		t.Fatal("snapshot settings = nil, want live ACP settings")
+	}
+	if snapshot.Settings.Speed != "fast" {
+		t.Fatalf("snapshot settings speed = %q, want fast", snapshot.Settings.Speed)
 	}
 }
 
@@ -3615,6 +3700,7 @@ type standardACPConnection struct {
 	lastCloseSessionParams        map[string]any
 	lastPromptParamsSnapshot      map[string]any
 	setConfigOptionSnapshots      []map[string]any
+	configOptions                 []map[string]any
 }
 
 func (c *standardACPConnection) Send(data []byte) error {
@@ -4037,6 +4123,13 @@ func (c *standardACPConnection) sendConfigOptionsUpdate(key string, value string
 }
 
 func (c *standardACPConnection) defaultConfigOptions() []map[string]any {
+	if len(c.configOptions) > 0 {
+		out := make([]map[string]any, 0, len(c.configOptions))
+		for _, option := range c.configOptions {
+			out = append(out, clonePayloadDeep(option))
+		}
+		return out
+	}
 	title := strings.TrimSpace(c.agentTitle)
 	if strings.EqualFold(title, "Claude Agent") || strings.EqualFold(title, "Gemini CLI") {
 		return []map[string]any{

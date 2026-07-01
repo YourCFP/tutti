@@ -5289,6 +5289,69 @@ describe("useAgentGUINodeController", () => {
     });
   });
 
+  describe("computer use contract", () => {
+    it("sends an explicit computer-use opt-out through to the daemon", async () => {
+      const updateSettings = vi.fn(async () => ({
+        settings: { computerUse: false, permissionModeId: "auto" }
+      }));
+      installAgentHostApi({
+        list: vi.fn(async () => ({
+          presences: [],
+          sessions: [
+            workspaceAgentSession("session-1", {
+              provider: "codex",
+              title: "Codex"
+            })
+          ]
+        })),
+        listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+        subscribeEvents: vi.fn(() => vi.fn()),
+        updateSettings,
+        getComposerOptions: vi.fn(async () => ({
+          provider: "codex",
+          modelConfig: { configurable: true, options: [] },
+          reasoningConfig: { configurable: true, options: [] },
+          runtimeContext: { capabilities: ["computerUse"] }
+        })),
+        getState: vi.fn(async () =>
+          agentSessionState("session-1", {
+            provider: "codex",
+            settings: { permissionModeId: "auto" },
+            runtimeContext: { capabilities: ["computerUse"] }
+          })
+        )
+      });
+      const { result } = renderHook(() =>
+        useAgentGUINodeController({
+          workspaceId: "room-1",
+          currentUserId: "user-1",
+          workspacePath: "/workspace",
+          avoidGroupingEdits: false,
+          data: agentGuiData("session-1", "codex"),
+          onDataChange: vi.fn()
+        })
+      );
+      await waitFor(() => {
+        expect(
+          result.current.viewModel.composerSettings.supportsComputerUse
+        ).toBe(true);
+      });
+
+      act(() => {
+        result.current.actions.updateComposerSettings({ computerUse: false });
+      });
+
+      await waitFor(() => {
+        expect(updateSettings).toHaveBeenCalledTimes(1);
+      });
+      expect(updateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          settings: expect.objectContaining({ computerUse: false })
+        })
+      );
+    });
+  });
+
   it("maps waiting aliases from streamed state patches to waiting conversations", async () => {
     let activityListener:
       | ((event: AgentHostAgentActivityStreamEvent) => void)
@@ -8907,6 +8970,9 @@ describe("useAgentGUINodeController", () => {
             // Browser use defaults to true for a new session (draftSettings
             // browserUse ?? true); the daemon clamps it to provider support.
             browserUse: true,
+            // Computer use defaults to true in the GUI contract; the daemon
+            // clamps it to provider support and local cua-driver availability.
+            computerUse: true,
             permissionModeId: "full-access"
           }
         })

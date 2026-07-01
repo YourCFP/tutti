@@ -651,6 +651,10 @@ User-visible rules:
 - Model, permission, plan mode, reasoning, speed, project, branch, prompt image,
   file mention, and skill/capability controls must read from composer settings
   and provider options. They should not be reconstructed from transcript rows.
+- Browser/computer capability controls come from daemon composer options and
+  live runtime capabilities. `computerUse` must not be advertised or injected
+  unless the daemon can reach the local `cua-driver`; installed/authorization UI
+  is only the setup surface, not the runtime capability source.
 - User composer defaults are owned by desktop preferences. AgentGUI may request
   a defaults write only from the home/new composer path, through an explicit host
   callback.

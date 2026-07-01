@@ -12,10 +12,10 @@ import (
 var ErrNotInstalled = errors.New(
 	"cua-driver is not installed; install it from https://github.com/trycua/cua or set TUTTI_COMPUTER_MCP_ENTRY_PATH")
 
-// validateComputerReady checks that cua-driver is reachable before starting a
-// session. Actual macOS permission errors (Screen Recording, Accessibility) are
-// reported by cua-driver itself at MCP initialize time.
-func validateComputerReady() error {
+// CheckReady checks that cua-driver is reachable before advertising or starting
+// computer-use. Actual macOS permission errors (Screen Recording,
+// Accessibility) are reported by cua-driver itself at MCP initialize time.
+func CheckReady() error {
 	if runtime.GOOS != "darwin" {
 		return errors.New("computer use requires macOS")
 	}
@@ -27,4 +27,8 @@ func validateComputerReady() error {
 		return ErrNotInstalled
 	}
 	return nil
+}
+
+func validateComputerReady() error {
+	return CheckReady()
 }

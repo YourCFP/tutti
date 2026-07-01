@@ -212,8 +212,9 @@ export function resolveEffectiveComposerSettings(input: {
         input.settings.speed
       ) as AgentSessionSpeed | null) ?? null,
     planMode: Boolean(input.settings.planMode),
-    // Browser use defaults on; preserve an explicit opt-out, default unset to on.
+    // Browser/computer use default on; preserve explicit opt-outs.
     browserUse: input.settings.browserUse ?? true,
+    computerUse: input.settings.computerUse ?? true,
     permissionModeId: normalizePermissionModeId(input.settings.permissionModeId)
   };
 }
@@ -354,6 +355,7 @@ export function sameComposerSettings(
     (left?.speed ?? null) === (right?.speed ?? null) &&
     Boolean(left?.planMode) === Boolean(right?.planMode) &&
     (left?.browserUse ?? true) === (right?.browserUse ?? true) &&
+    (left?.computerUse ?? true) === (right?.computerUse ?? true) &&
     (left?.permissionModeId ?? null) === (right?.permissionModeId ?? null)
   );
 }
@@ -384,6 +386,7 @@ export function buildNodeDefaultComposerSettings(
       null,
     planMode: Boolean(composerOverrides.planMode),
     browserUse: composerOverrides.browserUse ?? true,
+    computerUse: composerOverrides.computerUse ?? true,
     permissionModeId: normalizePermissionModeId(
       composerOverrides.permissionModeId
     )
@@ -458,6 +461,7 @@ export function nodeDataFromComposerSettings(
     // Raw passthrough (no Boolean coercion): undefined means "default on", so
     // only an explicit false persists as an opt-out.
     browserUse: settings.browserUse,
+    computerUse: settings.computerUse,
     permissionModeId: normalizePermissionModeId(settings.permissionModeId)
   };
   return {

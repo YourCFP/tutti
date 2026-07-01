@@ -71,6 +71,14 @@ const claudePluginDirEnv = "TUTTI_CLAUDE_PLUGIN_DIR"
 const claudeSDKMessageMethod = "_claude/sdkMessage"
 const claudePlanModeInstructions = "You are in plan mode. Inspect files and gather context as needed, but do not edit files, run mutation commands, or make external changes. Produce a concrete implementation plan first. If the user gives feedback, refine the plan. Only after the user approves leaving plan mode may you implement changes."
 
+const (
+	sessionSpeedStandard = "standard"
+	sessionSpeedFast     = "fast"
+
+	claudeCodeACPFastOff = "off"
+	claudeCodeACPFastOn  = "on"
+)
+
 var claudeCodeACPModelAliases = map[string]bool{
 	"default":    true,
 	"sonnet":     true,
@@ -734,6 +742,7 @@ func (a *standardACPAdapter) logACPCloseDiagnostics(stage string, session Sessio
 		"room_id", session.RoomID,
 		"agent_session_id", session.AgentSessionID,
 		"provider_session_id", firstNonEmptyString(acpSession.providerSessionID, session.ProviderSessionID),
+		"stdout_tail", truncateACPLogValue(diag.StdoutTail, 1200),
 		"stderr_tail", truncateACPLogValue(diag.StderrTail, 1200),
 	}
 	if diag.ExitCode != nil {
@@ -1405,10 +1414,14 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 		}
 	}
 	if speed := strings.TrimSpace(settings.Speed); speed != "" && supported["fast"] {
-		if err := a.setSessionConfigOption(ctx, client, session, "fast", speed); err != nil {
-			return fmt.Errorf("agent session ACP fast configuration failed: %w", err)
+		var ok bool
+		speed, ok = a.resolveClaudeCodeACPFastValue(session.AgentSessionID, speed)
+		if ok {
+			if err := a.setSessionConfigOption(ctx, client, session, "fast", speed); err != nil {
+				return fmt.Errorf("agent session ACP fast configuration failed: %w", err)
+			}
+			a.updateSessionConfigOption(session.AgentSessionID, "fast", speed)
 		}
-		a.updateSessionConfigOption(session.AgentSessionID, "fast", speed)
 	}
 	a.logHermesStartupDiagnostics("config_options.succeeded", map[string]any{
 		"room_id":             session.RoomID,
@@ -1586,7 +1599,9 @@ func (a *standardACPAdapter) ApplySessionSettings(
 	if patch.Speed != nil {
 		speed := strings.TrimSpace(*patch.Speed)
 		if speed != "" {
-			if !a.sessionConfigOptionAdvertisesValue(session.AgentSessionID, "fast", speed) {
+			var ok bool
+			speed, ok = a.resolveClaudeCodeACPFastValue(session.AgentSessionID, speed)
+			if !ok {
 				return nil
 			}
 			if !a.sessionConfigOptionMatches(session.AgentSessionID, "fast", speed) {
@@ -2528,6 +2543,52 @@ func (a *standardACPAdapter) resolveClaudeCodeACPModelValue(agentSessionID strin
 		}
 	}
 	return model
+}
+
+func (a *standardACPAdapter) resolveClaudeCodeACPFastValue(agentSessionID string, speed string) (string, bool) {
+	speed = strings.TrimSpace(speed)
+	if speed == "" {
+		return "", false
+	}
+	if a == nil || a.config.provider != ProviderClaudeCode {
+		return speed, true
+	}
+	candidates, known := claudeCodeACPFastConfigValueCandidates(speed)
+	if !known {
+		return "", false
+	}
+	for _, candidate := range candidates {
+		if a.sessionConfigOptionAdvertisesValue(agentSessionID, "fast", candidate) {
+			return candidate, true
+		}
+	}
+	return "", false
+}
+
+func claudeCodeACPFastConfigValueCandidates(speed string) ([]string, bool) {
+	switch strings.TrimSpace(speed) {
+	case sessionSpeedStandard:
+		return []string{claudeCodeACPFastOff}, true
+	case sessionSpeedFast:
+		return []string{claudeCodeACPFastOn}, true
+	case claudeCodeACPFastOff:
+		return []string{claudeCodeACPFastOff}, true
+	case claudeCodeACPFastOn:
+		return []string{claudeCodeACPFastOn}, true
+	default:
+		return nil, false
+	}
+}
+
+func claudeCodeSpeedFromACPFastConfigValue(speed string) string {
+	switch strings.TrimSpace(speed) {
+	case claudeCodeACPFastOff:
+		return sessionSpeedStandard
+	case claudeCodeACPFastOn:
+		return sessionSpeedFast
+	default:
+		return strings.TrimSpace(speed)
+	}
 }
 
 func (a *standardACPAdapter) removeSession(agentSessionID string) {

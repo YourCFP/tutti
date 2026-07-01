@@ -43,6 +43,32 @@ Use this shape for new entries:
 
 ## Current Entries
 
+### Dynamic CLI input rejects plausible flags
+
+- Symptom:
+  A dynamic `tutti-dev` command prints normal-looking help, but invocation fails
+  with `invalid input "<flag>"` or an app-level invalid-argument error even
+  though the flag name and shell syntax are correct.
+- Quick checks:
+  Inspect the command input struct tags under `services/tuttid/service/cli/providers`.
+  Confirm `validate:"min=...,max=..."` bounds and any finite string values such
+  as status, priority, or source are represented in the framework input schema.
+- Root cause:
+  Dynamic CLI help and agent command guides are generated from daemon capability
+  schema, while actual invocation is bound and validated later by the daemon.
+  If the schema omits enum/range metadata, agents may guess plausible but
+  invalid values such as `--status open` or an out-of-range page size.
+- Fix:
+  Keep finite string sets in `enum:"..."` tags and numeric bounds in
+  `validate:"min=...,max=..."`. The framework should reject invalid enum/range
+  input with a reason before provider code sees the request.
+- Validation:
+  Add provider tests that assert both advertised schema metadata and invalid
+  input errors for the affected command.
+- References:
+  [input.go](../../services/tuttid/service/cli/framework/input.go)
+  [issues.go](../../services/tuttid/service/cli/providers/issuemanager/issues.go)
+
 ### Desktop dev GUI exits before opening
 
 - Symptom:
@@ -228,6 +254,39 @@ Use this shape for new entries:
   [client.go](../../apps/cli/internal/daemon/client.go)
   [session.go](../../services/tuttid/service/browser/session.go)
   [command.go](../../services/tuttid/service/browser/command.go)
+
+### Agent sandbox cannot reach local daemon
+
+- Symptom:
+  An AgentGUI-backed Codex turn runs a dynamic Tutti CLI command such as
+  `tutti-dev automation --help` and gets `daemon is not reachable`, while
+  `~/.tutti-dev/run/tuttid.listener.json` exists and the desktop daemon is
+  running.
+- Quick checks:
+  Inspect the turn context in the provider session JSONL. If
+  `network_access=false`, a plain `exec_command` cannot reach localhost/IPC.
+  For Codex sessions, also confirm the command was not rerun with
+  `sandbox_permissions=require_escalated`. Other providers need their own
+  local-daemon-capable shell/runtime path, not Codex-specific sandbox syntax.
+- Root cause:
+  Dynamic CLI scopes fetch command capabilities from the local daemon before
+  printing scope help. In a sandboxed provider command environment, localhost
+  access can be blocked even though the daemon is reachable from the host.
+- Fix:
+  In agent environments, keep the CLI's transport failure message explicit
+  about the sandbox but provider-neutral. Put provider-specific recovery steps
+  in the injected runtime policy: Codex can use
+  `sandbox_permissions=require_escalated`, while ACP providers should be told to
+  use an execution environment with localhost/IPC access and not to invent Codex
+  flags.
+- Validation:
+  Add CLI daemon-client coverage that non-agent failures keep the plain
+  `daemon is not reachable` message, while agent failures include the
+  localhost/IPC execution-environment hint. Add provider policy coverage so only
+  Codex receives `sandbox_permissions=require_escalated`.
+- References:
+  [client.go](../../apps/cli/internal/daemon/client.go)
+  [run.go](../../apps/cli/internal/app/run.go)
 
 ### macOS Gatekeeper dialogs appear during Codex provider probing
 
@@ -717,7 +776,8 @@ delimited by ---`, and the composer skill picker may show partial or
   the package version advertised by the ACP External Agent Registry. Another
   form is Claude Code context usage briefly showing `0%` during a running
   session or around compaction, then returning to the prior nonzero value on
-  the next usage update.
+  the next usage update. A third form is new Claude Code sessions failing
+  during startup with `Invalid value for config option fast: standard`.
 - Quick checks:
   Inspect `<state-dir>/agent-providers/external-agent-registry/cache/registry.json`
   and the package manifest under
@@ -726,7 +786,10 @@ delimited by ---`, and the composer skill picker may show partial or
   the Tutti-owned Claude adapter source. For usage flicker, inspect that
   package's `dist/acp-agent.js` for `sessionUpdate: "usage_update"` near
   `compact_boundary`; it must not publish `used: 0` when the SDK
-  `getContextUsage()` probe fails.
+  `getContextUsage()` probe fails. For speed failures, inspect the live
+  `fast` config option values advertised by the managed package; supported
+  native Claude ACP packages that fall back to select options use `off` and
+  `on`.
 - Root cause:
   Tutti resolves Claude ACP from the external agent registry and installs the
   npm adapter into a daemon-owned prefix with managed npm. A stale or missing
@@ -734,14 +797,20 @@ delimited by ---`, and the composer skill picker may show partial or
   make the adapter unavailable even when a global `claude-agent-acp` exists.
   Usage flicker can also come from the managed bridge bundle itself publishing
   an invalid zero context usage after a failed compact-boundary usage probe;
-  AgentGUI only displays the normalized runtime context it receives.
+  AgentGUI only displays the normalized runtime context it receives. Speed
+  failures come from treating Tutti's internal `standard` / `fast` speed tier
+  values as ACP wire values; supported Claude ACP packages advertise native
+  `fast` config values as `off` / `on`.
 - Fix:
   Run the provider install action so tuttid refreshes the registry, resolves the
   managed Node runtime, and installs the npm package into the per-agent prefix.
   Do not compensate by changing static model catalogs for behavior that should
   come from the live ACP package. Keep the Tutti claude-agent-acp patch script
   authoritative for bridge behavior and apply it to the managed package; do not
-  mask invalid usage in AgentGUI.
+  mask invalid usage in AgentGUI. Keep Tutti's internal speed tiers stable, but
+  translate Claude ACP `fast` config values at the adapter boundary according
+  to the live advertised options, and normalize the live value back before
+  projecting runtime settings.
 - Validation:
   Run `go test ./services/tuttid/service/agentstatus`, then confirm a stale
   global adapter is ignored and the install action uses managed npm with
@@ -749,7 +818,10 @@ delimited by ---`, and the composer skill picker may show partial or
   For usage flicker, run
   `node services/tuttid/service/agentstatus/assets/patch-claude-agent-acp.mjs --dist <managed-acp-dist>`
   twice and confirm the second run reports no changes, then inspect the bundle
-  and confirm `lastAssistantTotalUsage = usedTokens ?? 0` is absent.
+  and confirm `lastAssistantTotalUsage = usedTokens ?? 0` is absent. For speed
+  compatibility, run the Claude ACP adapter tests that cover native `off` /
+  `on` advertised values and confirm legacy `standard` / `fast` advertised
+  values are ignored.
 - References:
   [service.go](../../services/tuttid/service/agentstatus/service.go)
   [store.go](../../services/tuttid/service/externalagentregistry/store.go)

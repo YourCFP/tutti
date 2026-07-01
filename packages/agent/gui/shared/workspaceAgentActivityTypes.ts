@@ -17,6 +17,7 @@ export interface WorkspaceAgentActivityComposerSettings {
   speed?: string | null;
   planMode?: boolean;
   browserUse?: boolean;
+  computerUse?: boolean;
   permissionModeId?: string | null;
 }
 
