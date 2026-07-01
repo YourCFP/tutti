@@ -1084,6 +1084,44 @@ func (a *CodexAppServerAdapter) Exec(
 	emit EventSink,
 	emitCommands CommandSnapshotSink,
 ) ([]activityshared.Event, error) {
+	return a.execBlocking(ctx, session, content, displayPrompt, turnID, emit, emitCommands)
+}
+
+func (a *CodexAppServerAdapter) ExecAsync(
+	ctx context.Context,
+	session Session,
+	content []PromptContentBlock,
+	displayPrompt string,
+	turnID string,
+	emit EventSink,
+	emitCommands CommandSnapshotSink,
+) error {
+	go func() {
+		if _, err := a.execBlocking(ctx, session, content, displayPrompt, turnID, emit, emitCommands); err != nil {
+			if emit == nil {
+				return
+			}
+			if errors.Is(err, context.Canceled) {
+				emit([]activityshared.Event{newTurnActivityEvent(session, EventTurnCanceled, turnID, SessionStatusCanceled, "", "", map[string]any{
+					"error": err.Error(),
+				})})
+				return
+			}
+			emit([]activityshared.Event{newTurnActivityEvent(session, EventTurnFailed, turnID, SessionStatusFailed, "", "", acpFailureMetadata(err))})
+		}
+	}()
+	return nil
+}
+
+func (a *CodexAppServerAdapter) execBlocking(
+	ctx context.Context,
+	session Session,
+	content []PromptContentBlock,
+	displayPrompt string,
+	turnID string,
+	emit EventSink,
+	emitCommands CommandSnapshotSink,
+) ([]activityshared.Event, error) {
 	appSession := a.getSession(session.AgentSessionID)
 	if appSession == nil || appSession.client == nil {
 		return nil, ErrSessionDisconnected

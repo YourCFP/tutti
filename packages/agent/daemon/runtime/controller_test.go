@@ -2140,6 +2140,69 @@ func (workingOnlyAdapter) Cancel(context.Context, Session, string) ([]activitysh
 	return nil, nil
 }
 
+type asyncExecTestAdapter struct {
+	mu          sync.Mutex
+	execCalled  bool
+	asyncCalled bool
+	started     chan struct{}
+	release     chan struct{}
+}
+
+func newAsyncExecTestAdapter() *asyncExecTestAdapter {
+	return &asyncExecTestAdapter{
+		started: make(chan struct{}, 1),
+		release: make(chan struct{}),
+	}
+}
+
+func (*asyncExecTestAdapter) Provider() string { return ProviderCodex }
+
+func (*asyncExecTestAdapter) Start(context.Context, Session) ([]activityshared.Event, error) {
+	return nil, nil
+}
+
+func (*asyncExecTestAdapter) Resume(context.Context, Session) error { return nil }
+
+func (*asyncExecTestAdapter) Close(context.Context, Session) error { return nil }
+
+func (a *asyncExecTestAdapter) Exec(context.Context, Session, []PromptContentBlock, string, string, EventSink, CommandSnapshotSink) ([]activityshared.Event, error) {
+	a.mu.Lock()
+	a.execCalled = true
+	a.mu.Unlock()
+	return nil, nil
+}
+
+func (a *asyncExecTestAdapter) ExecAsync(_ context.Context, session Session, _ []PromptContentBlock, _ string, turnID string, emit EventSink, _ CommandSnapshotSink) error {
+	a.mu.Lock()
+	a.asyncCalled = true
+	a.mu.Unlock()
+	if emit != nil {
+		emit([]activityshared.Event{
+			newTurnActivityEventWithID(session, "turn-start-async", EventTurnStarted, turnID, SessionStatusWorking, "", "", nil),
+		})
+	}
+	a.started <- struct{}{}
+	go func() {
+		<-a.release
+		if emit != nil {
+			emit([]activityshared.Event{
+				newTurnActivityEventWithID(session, "turn-complete-async", EventTurnCompleted, turnID, SessionStatusReady, "", "", nil),
+			})
+		}
+	}()
+	return nil
+}
+
+func (*asyncExecTestAdapter) Cancel(context.Context, Session, string) ([]activityshared.Event, error) {
+	return nil, nil
+}
+
+func (a *asyncExecTestAdapter) calls() (bool, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.execCalled, a.asyncCalled
+}
+
 type blockingExecAdapter struct {
 	mu       sync.Mutex
 	seen     []string
@@ -2345,6 +2408,53 @@ func TestControllerExecReconcilesWorkingStatusAfterTurnFinishesWithoutTerminalEv
 	}
 	if session.Status != SessionStatusReady {
 		t.Fatalf("session status = %q, want %q", session.Status, SessionStatusReady)
+	}
+}
+
+func TestControllerExecUsesAsyncAdapterAndFinalizesFromTerminalEvent(t *testing.T) {
+	t.Parallel()
+
+	adapter := newAsyncExecTestAdapter()
+	controller := NewController([]Adapter{adapter}, nil)
+	started, err := controller.Start(context.Background(), StartInput{
+		RoomID:         "room-1",
+		AgentSessionID: "agent-session-1",
+		Provider:       ProviderCodex,
+		Title:          "Test",
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if _, err := controller.Exec(context.Background(), ExecInput{
+		RoomID:         "room-1",
+		AgentSessionID: started.Session.AgentSessionID,
+		Content:        textPrompt("run"),
+	}); err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	select {
+	case <-adapter.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for async Exec")
+	}
+	execCalled, asyncCalled := adapter.calls()
+	if execCalled {
+		t.Fatal("blocking Exec was called for async adapter")
+	}
+	if !asyncCalled {
+		t.Fatal("ExecAsync was not called")
+	}
+	if !controller.HasActiveTurn("room-1", started.Session.AgentSessionID) {
+		t.Fatal("HasActiveTurn = false before async terminal event")
+	}
+
+	close(adapter.release)
+	session := waitForSessionStatus(t, controller, "room-1", started.Session.AgentSessionID, SessionStatusReady)
+	if controller.HasActiveTurn("room-1", started.Session.AgentSessionID) {
+		t.Fatal("HasActiveTurn = true after async terminal event")
+	}
+	if session.TurnLifecycle == nil || session.TurnLifecycle.Phase != "settled" {
+		t.Fatalf("turn lifecycle = %#v, want settled", session.TurnLifecycle)
 	}
 }
 
