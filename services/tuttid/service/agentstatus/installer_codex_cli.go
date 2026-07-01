@@ -131,7 +131,7 @@ func (s Service) resolveCodexInstallerNodeRuntime(
 			nodeTarget := firstNonBlank(resolveBinaryWithResolver(resolver, []string{nodeBinaryName()}, nil), nodeBinaryName())
 			return npmPath, nodeTarget, resolver.Env(nil), nil
 		}
-		return "", "", nil, fmt.Errorf("Tutti managed Node runtime is unavailable and npm was not found on PATH: %w", err)
+		return "", "", nil, fmt.Errorf("tutti managed Node runtime is unavailable and npm was not found on PATH: %w", err)
 	}
 	npmPath := strings.TrimSpace(appRuntime.NPM)
 	if npmPath == "" {
@@ -139,7 +139,7 @@ func (s Service) resolveCodexInstallerNodeRuntime(
 			nodeTarget := firstNonBlank(resolveBinaryWithResolver(resolver, []string{nodeBinaryName()}, nil), nodeBinaryName())
 			return fallbackNPM, nodeTarget, resolver.Env(nil), nil
 		}
-		return "", "", nil, fmt.Errorf("Tutti managed Node runtime did not provide npm and npm was not found on PATH")
+		return "", "", nil, fmt.Errorf("tutti managed Node runtime did not provide npm and npm was not found on PATH")
 	}
 	return npmPath, firstNonBlank(appRuntime.Node, nodeBinaryName()), managedruntime.ProcessEnv(appRuntime.EnvOverrides...), nil
 }
