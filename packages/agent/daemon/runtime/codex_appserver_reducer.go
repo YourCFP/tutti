@@ -122,7 +122,7 @@ func (r codexAppServerReducer) ReduceNotification(
 			detail := asString(turnError["message"])
 			return emit([]activityshared.Event{appServerSystemNoticeEvent(session, turnID, "transport_retry", "", detail)})
 		}
-		// Terminal turn failures already surface as agent_visible_error in the GUI.
+		a.failActiveTurnFromAppServerError(session.AgentSessionID, params)
 		return codexAppServerReduction{}
 	case appServerNotifyWarning:
 		return emit([]activityshared.Event{appServerSystemNoticeEvent(session, turnID, "warning", "", asString(params["message"]))})

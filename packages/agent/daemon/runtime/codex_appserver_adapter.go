@@ -143,7 +143,7 @@ type codexAppServerThreadContext struct {
 // session-level message handler resolves this context to keep translating
 // notifications into activity events after the RPC has returned. The turn
 // finishes when the `turn/completed` notification delivers the final turn
-// payload through done.
+// payload through the reducer-owned terminal projection.
 type codexAppServerActiveTurn struct {
 	turnID       string
 	session      Session
@@ -151,7 +151,9 @@ type codexAppServerActiveTurn struct {
 	normalizer   *acpTurnNormalizer
 	emit         func([]activityshared.Event)
 	emitCommands CommandSnapshotSink
-	done         chan map[string]any
+	kind         codexAppServerTurnKind
+	phase        codexAppServerTurnPhase
+	terminal     chan codexAppServerTurnTerminal
 	// terminated is closed exactly once when the Exec goroutine for this turn
 	// returns (turn fully finalized). Cancel waits on it so it only responds
 	// after the turn has actually stopped.
@@ -1153,7 +1155,9 @@ func (a *CodexAppServerAdapter) Exec(
 		normalizer:   normalizer,
 		emit:         emitEvents,
 		emitCommands: emitCommands,
-		done:         make(chan map[string]any, 1),
+		kind:         codexAppServerTurnKindNormal,
+		phase:        codexAppServerTurnPhaseRunning,
+		terminal:     make(chan codexAppServerTurnTerminal, 1),
 		terminated:   make(chan struct{}),
 	}
 	// Signal turn termination once this goroutine returns (after terminal events
@@ -1275,11 +1279,11 @@ func (a *CodexAppServerAdapter) awaitTurnCompletion(
 	initialTurn map[string]any,
 ) (map[string]any, error) {
 	if appServerTurnStatusTerminal(initialTurn) {
-		return initialTurn, nil
+		a.completeActiveTurn(appTurn.session.AgentSessionID, initialTurn)
 	}
 	select {
-	case finalTurn := <-appTurn.done:
-		return finalTurn, nil
+	case terminal := <-appTurn.terminal:
+		return terminal.turn, terminal.err
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-appSession.client.Done():
@@ -1293,7 +1297,7 @@ func (a *CodexAppServerAdapter) awaitTurnCompletion(
 
 func appServerTurnStatusTerminal(turn map[string]any) bool {
 	switch asString(turn["status"]) {
-	case "completed", "failed", "interrupted":
+	case "completed", "failed", "interrupted", "canceled":
 		return true
 	default:
 		return false
@@ -1345,6 +1349,7 @@ func (a *CodexAppServerAdapter) execSlashCommand(
 	command, args := splitSlashCommand(displayPrompt)
 	switch command {
 	case appServerSlashCompact:
+		a.transitionActiveTurnPhase(session.AgentSessionID, appTurn, codexAppServerTurnPhaseCompacting)
 		_, err := appSession.client.ThreadCompactStart(ctx, map[string]any{
 			"threadId": appSession.threadID,
 		}, a.appServerMessageHandler(appSession, session, turnID, normalizer, emitEvents, emitCommands))
@@ -1516,8 +1521,8 @@ func (a *CodexAppServerAdapter) waitForAutomaticGoalContinuation(
 	timer := time.NewTimer(defaultCodexAppServerGoalContinuationGraceWindow)
 	defer timer.Stop()
 	select {
-	case finalTurn := <-appTurn.done:
-		return finalTurn, true, nil
+	case terminal := <-appTurn.terminal:
+		return terminal.turn, true, terminal.err
 	case <-ctx.Done():
 		return nil, false, ctx.Err()
 	case <-timer.C:
@@ -1694,7 +1699,12 @@ func (a *CodexAppServerAdapter) markTurnForceCanceled(turn *codexAppServerActive
 	}
 	a.mu.Lock()
 	turn.forceCanceled = true
+	turn.phase = codexAppServerTurnPhaseCanceled
 	a.mu.Unlock()
+	select {
+	case turn.terminal <- codexAppServerTurnTerminal{err: errPermissionRequestCanceled, phase: codexAppServerTurnPhaseCanceled}:
+	default:
+	}
 }
 
 func (a *CodexAppServerAdapter) turnForceCanceled(turn *codexAppServerActiveTurn) bool {
@@ -2069,29 +2079,6 @@ func (a *CodexAppServerAdapter) sessionActiveTurn(agentSessionID string) *codexA
 	return appSession.activeTurn
 }
 
-// completeActiveTurn delivers the final turn payload from the
-// `turn/completed` notification to the goroutine waiting in Exec.
-func (a *CodexAppServerAdapter) completeActiveTurn(agentSessionID string, turn map[string]any) {
-	if a == nil {
-		return
-	}
-	a.mu.Lock()
-	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
-	var activeTurn *codexAppServerActiveTurn
-	if appSession != nil {
-		activeTurn = appSession.activeTurn
-		appSession.activeTurnID = ""
-	}
-	a.mu.Unlock()
-	if activeTurn == nil {
-		return
-	}
-	select {
-	case activeTurn.done <- turn:
-	default:
-	}
-}
-
 func (a *CodexAppServerAdapter) sessionActiveTurnID(agentSessionID string) string {
 	if a == nil {
 		return ""
@@ -2116,6 +2103,9 @@ func (a *CodexAppServerAdapter) requestActiveTurnCancel(agentSessionID string) (
 		return "", false
 	}
 	if activeTurnID := strings.TrimSpace(appSession.activeTurnID); activeTurnID != "" {
+		if appSession.activeTurn != nil {
+			appSession.activeTurn.phase = codexAppServerTurnPhaseInterrupting
+		}
 		return activeTurnID, false
 	}
 	if appSession.activeTurn == nil {
@@ -2125,6 +2115,7 @@ func (a *CodexAppServerAdapter) requestActiveTurnCancel(agentSessionID string) (
 		return "", false
 	}
 	appSession.activeTurn.cancelRequested = true
+	appSession.activeTurn.phase = codexAppServerTurnPhaseInterrupting
 	return "", true
 }
 

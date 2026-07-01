@@ -1761,13 +1761,22 @@ func TestCodexAppServerAdapterSlashCompact(t *testing.T) {
 	// "Context compacted." must arrive via item/completed through the
 	// session-level handler — not as a locally-emitted terminal message.
 	var gotCompactedBanner bool
-	for _, event := range events {
+	bannerIndex := -1
+	terminalIndex := -1
+	for index, event := range events {
 		if event.Payload.Content == "Context compacted." {
 			gotCompactedBanner = true
+			bannerIndex = index
+		}
+		if event.Type == activityshared.EventTurnCompleted && terminalIndex == -1 {
+			terminalIndex = index
 		}
 	}
 	if !gotCompactedBanner {
 		t.Fatalf("expected 'Context compacted.' banner in compact events; got %#v", events)
+	}
+	if terminalIndex == -1 || bannerIndex == -1 || bannerIndex > terminalIndex {
+		t.Fatalf("compact banner index = %d, terminal index = %d, events = %#v", bannerIndex, terminalIndex, events)
 	}
 	if completed := eventsOfType(events, activityshared.EventTurnCompleted); len(completed) != 1 {
 		t.Fatalf("compact turn completed events = %d, want 1", len(completed))
@@ -2611,6 +2620,49 @@ func TestCodexAppServerAdapterWarningNotificationsBecomeSystemNotices(t *testing
 
 	transport.conn.completePendingTurn()
 	<-execDone
+}
+
+func TestCodexAppServerAdapterTerminalErrorNotificationFailsTurn(t *testing.T) {
+	t.Parallel()
+
+	adapter, transport, session := startedAppServerAdapter(t)
+	transport.conn.holdTurn = true
+
+	var events []activityshared.Event
+	var execErr error
+	execDone := make(chan struct{})
+	go func() {
+		events, execErr = adapter.Exec(context.Background(), session, []PromptContentBlock{{
+			Type: "text", Text: "go",
+		}}, "", "turn-local-1", nil, nil)
+		close(execDone)
+	}()
+	waitForCondition(t, func() bool {
+		return adapter.sessionActiveTurnID(session.AgentSessionID) == "turn-1"
+	})
+
+	transport.conn.notify(appServerNotifyError, map[string]any{
+		"threadId":  "codex-thread-1",
+		"turnId":    "turn-1",
+		"willRetry": false,
+		"error":     map[string]any{"message": "model overloaded"},
+	})
+
+	select {
+	case <-execDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Exec did not unblock after terminal error notification")
+	}
+	if execErr != nil {
+		t.Fatalf("Exec: %v", execErr)
+	}
+	failed := eventsOfType(events, activityshared.EventTurnFailed)
+	if len(failed) != 1 {
+		t.Fatalf("turn failed events = %d, want 1; events = %#v", len(failed), events)
+	}
+	if got := asString(failed[0].Payload.Metadata["error"]); got != "model overloaded" {
+		t.Fatalf("turn failure error = %q, want model overloaded", got)
+	}
 }
 
 func TestCodexAppServerAdapterDefaultControllerUsesAppServerForCodex(t *testing.T) {
