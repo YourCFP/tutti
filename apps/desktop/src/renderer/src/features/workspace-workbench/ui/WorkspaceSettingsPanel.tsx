@@ -2958,7 +2958,7 @@ function WorkspaceAppearanceSettingsSection({
         </div>
       </div>
 
-      <div className="flex w-full items-start justify-between gap-4 max-[560px]:flex-col max-[560px]:items-stretch">
+      <div className="flex w-full items-center justify-between gap-4 max-[560px]:flex-col max-[560px]:items-stretch">
         <div className="flex min-w-0 flex-1 flex-col gap-1 max-[560px]:w-full">
           <strong className="text-[13px] font-semibold text-[var(--text-primary)]">
             {t("workspace.settings.appearance.workbenchWindowSnappingLabel")}
