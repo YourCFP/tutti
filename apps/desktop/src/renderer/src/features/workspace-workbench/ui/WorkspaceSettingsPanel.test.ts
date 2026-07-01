@@ -52,6 +52,13 @@ test("workspace settings agent panel lists agent controls", () => {
   assert.match(source, /onAgentConversationDetailModeChange\(mode\)/);
 });
 
+test("workspace settings work mode selected state uses a tutti purple border", () => {
+  assert.match(
+    source,
+    /selected\s*\?\s*"border border-\[var\(--tutti-purple\)\] bg-\[var\(--background-fronted\)\]/
+  );
+});
+
 test("workspace settings general panel lists system controls", () => {
   assert.match(
     source,

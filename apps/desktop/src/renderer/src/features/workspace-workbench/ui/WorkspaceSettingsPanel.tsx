@@ -2382,10 +2382,10 @@ function WorkspaceAgentSettingsSection({
                 key={mode}
                 aria-checked={selected}
                 className={cn(
-                  "flex min-h-[72px] min-w-0 flex-col items-start justify-center gap-1 rounded-[8px] border px-3 py-2.5 text-left transition-colors duration-150 disabled:cursor-default disabled:opacity-70",
+                  "flex min-h-[72px] min-w-0 flex-col items-start justify-center gap-1 rounded-[8px] border-solid px-3 py-2.5 text-left transition-colors duration-150 disabled:cursor-default disabled:opacity-70",
                   selected
-                    ? "border-[var(--border-focus)] bg-[var(--transparency-active)] text-[var(--text-primary)]"
-                    : "border-[var(--border-1)] bg-[var(--transparency-block)] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)]"
+                    ? "border border-[var(--tutti-purple)] bg-[var(--background-fronted)] text-[var(--text-primary)]"
+                    : "border border-[var(--border-1)] bg-[var(--transparency-block)] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)]"
                 )}
                 disabled={isUpdatingAgentConversationDetailMode}
                 role="radio"
