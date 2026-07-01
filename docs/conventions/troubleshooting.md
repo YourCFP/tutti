@@ -208,7 +208,9 @@ Use this shape for new entries:
   whether the first browser command is lazily starting `chrome-devtools-mcp` or
   another browser backend. For browser backend overrides, inspect
   `TUTTI_BROWSER_MCP_COMMAND`, `TUTTI_BROWSER_MCP_ARGS`, and the packaged
-  desktop's internal `TUTTI_BROWSER_MCP_ENTRY_PATH` handoff.
+  desktop's internal `TUTTI_BROWSER_MCP_ENTRY_PATH` handoff. Packaged desktop
+  handoffs should launch that vendored entry with the daemon's managed
+  `node-static` runtime, not a bare `node` from the user's `PATH`.
 - Root cause:
   Browser commands can do a cold start on first use. The daemon may launch the
   browser backend while the CLI HTTP request is still waiting for the daemon to
