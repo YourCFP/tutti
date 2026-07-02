@@ -28,6 +28,7 @@ import type {
 import type {
   DesktopSize,
   WorkspaceDesktopAgentProbeDemandChange,
+  WorkspaceDesktopAgentProbeRefreshRequest,
   WorkspaceDesktopAgentProbesState
 } from "../workspaceDesktop/types";
 import { resolveCanonicalNodeMinSize } from "../../utils/workspaceNodeSizing";
@@ -215,6 +216,7 @@ export interface AgentGUINodeProps {
   ) => void;
   workspaceAgentProbes?: WorkspaceDesktopAgentProbesState | null;
   onAgentProbeDemandChange?: WorkspaceDesktopAgentProbeDemandChange;
+  onAgentProbeRefreshRequest?: WorkspaceDesktopAgentProbeRefreshRequest;
   managedAgentsState?: AgentHostManagedAgentsState | null;
   contextMentionProviders?: readonly AgentContextMentionProvider[];
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
@@ -552,6 +554,7 @@ function areAgentGUINodePropsEqual(
       previous.state.provider
     ) &&
     previous.onAgentProbeDemandChange === next.onAgentProbeDemandChange &&
+    previous.onAgentProbeRefreshRequest === next.onAgentProbeRefreshRequest &&
     previous.managedAgentsState === next.managedAgentsState &&
     previous.contextMentionProviders === next.contextMentionProviders &&
     previous.workspaceAppIcons === next.workspaceAppIcons &&
@@ -613,6 +616,7 @@ export const AgentGUINode = memo(function AgentGUINode({
   onShowMessage,
   workspaceAgentProbes,
   onAgentProbeDemandChange,
+  onAgentProbeRefreshRequest,
   managedAgentsState,
   contextMentionProviders,
   workspaceAppIcons,
@@ -828,6 +832,12 @@ export const AgentGUINode = memo(function AgentGUINode({
       return;
     }
     const conversationId = viewModel.activeConversation.id;
+    if (
+      state.lastActiveAgentSessionId === conversationId &&
+      state.lastActiveConversationTitle === conversationTitle
+    ) {
+      return;
+    }
     onUpdateNode((current) => {
       if (
         current.lastActiveAgentSessionId === conversationId &&
@@ -845,6 +855,8 @@ export const AgentGUINode = memo(function AgentGUINode({
     activeConversationDockTitle,
     onUpdateNode,
     previewMode,
+    state.lastActiveAgentSessionId,
+    state.lastActiveConversationTitle,
     viewModel.activeConversation
   ]);
   const labels = useMemo<AgentGUIViewLabels>(
@@ -1412,6 +1424,12 @@ export const AgentGUINode = memo(function AgentGUINode({
       onAgentProbeDemandChange(null, probeSourceId);
     };
   }, [activeProbeProvider, nodeId, onAgentProbeDemandChange, previewMode]);
+  const handleAgentProbeInfoOpen = useCallback(() => {
+    if (previewMode || !onAgentProbeRefreshRequest) {
+      return;
+    }
+    onAgentProbeRefreshRequest(activeProbeProvider, `agent-gui:${nodeId}`);
+  }, [activeProbeProvider, nodeId, onAgentProbeRefreshRequest, previewMode]);
 
   return (
     <WorkspaceNodeWindow
@@ -1445,6 +1463,7 @@ export const AgentGUINode = memo(function AgentGUINode({
             lines={agentProbeLines}
             testId="agent-gui-window-agent-info"
             className={styles.windowAgentInfo}
+            onOpen={handleAgentProbeInfoOpen}
           />
           <CanvasNodeGhostIconButton
             aria-label={

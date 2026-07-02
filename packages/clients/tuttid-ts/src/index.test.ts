@@ -307,6 +307,7 @@ test("shared tuttid client creates workspace agent sessions with bearer auth", a
     "ws-1",
     {
       agentSessionId: "11111111-1111-4111-8111-111111111111",
+      agentTargetId: "local:codex",
       initialContent: [{ type: "text", text: "hello" }],
       planMode: true,
       provider: "codex"
@@ -321,6 +322,7 @@ test("shared tuttid client creates workspace agent sessions with bearer auth", a
   assert.equal(capturedRequest.signal?.aborted, true);
   assert.deepEqual(requestBody, {
     agentSessionId: "11111111-1111-4111-8111-111111111111",
+    agentTargetId: "local:codex",
     initialContent: [{ type: "text", text: "hello" }],
     planMode: true,
     provider: "codex"

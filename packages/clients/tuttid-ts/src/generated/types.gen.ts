@@ -1354,7 +1354,7 @@ export type CreateWorkspaceAgentSessionRequest = {
   /**
    * Required target-first session launch authority. The daemon derives provider and providerTargetRef from the stored agent target launchRef and rejects mismatched provider values.
    */
-  agentTargetId?: string | null;
+  agentTargetId: string;
   provider?: WorkspaceAgentProvider;
   initialContent: Array<AgentPromptContentBlock>;
   /**

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"strings"
 
 	"github.com/google/uuid"
 	tuttigenerated "github.com/tutti-os/tutti/services/tuttid/api/generated"
@@ -28,7 +29,8 @@ func (api DaemonAPI) CreateWorkspaceAgentSession(ctx context.Context, request tu
 		}, nil
 	}
 	agentSessionID := request.Body.AgentSessionId.String()
-	if stringPtrValue(request.Body.AgentTargetId) == "" {
+	agentTargetID := strings.TrimSpace(request.Body.AgentTargetId)
+	if agentTargetID == "" {
 		return tuttigenerated.CreateWorkspaceAgentSession400JSONResponse{
 			InvalidRequestErrorJSONResponse: invalidRequestError(
 				apierrors.MalformedRequest(apierrors.WithDeveloperMessage("agentTargetId is required")),
@@ -40,7 +42,7 @@ func (api DaemonAPI) CreateWorkspaceAgentSession(ctx context.Context, request tu
 	logCreateAgentSubmitTrace("api.create.received", string(request.WorkspaceID), agentSessionID, metadata, provider, "", nil)
 	session, err := api.AgentSessionService.Create(ctx, string(request.WorkspaceID), agentservice.CreateSessionInput{
 		AgentSessionID:         agentSessionID,
-		AgentTargetID:          stringPtrValue(request.Body.AgentTargetId),
+		AgentTargetID:          agentTargetID,
 		Cwd:                    request.Body.Cwd,
 		InitialContent:         agentPromptContentFromGenerated(request.Body.InitialContent),
 		InitialDisplayPrompt:   stringPtrValue(request.Body.InitialDisplayPrompt),

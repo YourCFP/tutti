@@ -6709,6 +6709,7 @@ components:
       additionalProperties: false
       required:
         - agentSessionId
+        - agentTargetId
         - initialContent
       properties:
         agentSessionId:
@@ -6717,7 +6718,7 @@ components:
           minLength: 1
         agentTargetId:
           type: string
-          nullable: true
+          minLength: 1
           description: Required target-first session launch authority. The daemon derives provider and providerTargetRef from the stored agent target launchRef and rejects mismatched provider values.
         provider:
           $ref: "#/components/schemas/WorkspaceAgentProvider"

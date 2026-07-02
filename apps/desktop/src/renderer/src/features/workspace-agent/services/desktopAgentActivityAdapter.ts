@@ -71,24 +71,20 @@ export function createDesktopAgentActivityAdapter({
     const agentSessionId =
       normalizeText(input.agentSessionId) ??
       createDesktopAgentActivitySessionId();
+    const agentTargetId = requiredAgentTargetId(input.agentTargetId);
     const promise = withAbortableRequestTimeout(
       (signal) =>
         tuttidClient.createWorkspaceAgentSession(
           input.workspaceId,
           {
             agentSessionId,
-            ...(input.agentTargetId
-              ? { agentTargetId: input.agentTargetId }
-              : {}),
+            agentTargetId,
             cwd,
             initialContent: [],
             model: input.settings.model,
             permissionModeId: input.settings.permissionModeId,
             planMode: input.settings.planMode,
             provider: "claude-code",
-            ...(!input.agentTargetId && input.providerTargetRef
-              ? { providerTargetRef: input.providerTargetRef }
-              : {}),
             reasoningEffort: input.settings.reasoningEffort,
             speed: input.settings.speed,
             title: null,
@@ -420,15 +416,14 @@ export function createDesktopAgentActivityAdapter({
           provider: input.provider,
           workspaceId: input.workspaceId
         });
+        const agentTargetId = requiredAgentTargetId(input.agentTargetId);
         const session = await withAbortableRequestTimeout(
           (signal) =>
             tuttidClient.createWorkspaceAgentSession(
               input.workspaceId,
               {
                 agentSessionId,
-                ...(input.agentTargetId
-                  ? { agentTargetId: input.agentTargetId }
-                  : {}),
+                agentTargetId,
                 cwd: input.cwd ?? null,
                 initialContent: toTuttidPromptContentBlocks(
                   input.initialContent ?? []
@@ -439,9 +434,6 @@ export function createDesktopAgentActivityAdapter({
                 planMode: input.planMode ?? null,
                 permissionModeId: input.permissionModeId ?? null,
                 provider: workspaceAgentProvider(input.provider),
-                ...(!input.agentTargetId && input.providerTargetRef
-                  ? { providerTargetRef: input.providerTargetRef }
-                  : {}),
                 reasoningEffort: input.reasoningEffort ?? null,
                 speed: input.speed ?? null,
                 title: input.title ?? null,
@@ -760,6 +752,14 @@ function claudeDraftTargetKey(
     return `agentTarget:${agentTargetId}`;
   }
   return `providerTarget:${providerTargetRefKey(input.providerTargetRef)}`;
+}
+
+function requiredAgentTargetId(value: string | null | undefined): string {
+  const agentTargetId = normalizeText(value);
+  if (!agentTargetId) {
+    throw new Error("Agent target id is required to create an agent session.");
+  }
+  return agentTargetId;
 }
 
 function providerTargetRefKey(

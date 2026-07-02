@@ -2364,7 +2364,7 @@ type CreateWorkspaceAgentSessionRequest struct {
 	AgentSessionId openapi_types.UUID `json:"agentSessionId"`
 
 	// AgentTargetId Required target-first session launch authority. The daemon derives provider and providerTargetRef from the stored agent target launchRef and rejects mismatched provider values.
-	AgentTargetId  *string                   `json:"agentTargetId,omitempty"`
+	AgentTargetId  string                    `json:"agentTargetId"`
 	BrowserUse     *bool                     `json:"browserUse,omitempty"`
 	Cwd            *string                   `json:"cwd,omitempty"`
 	InitialContent []AgentPromptContentBlock `json:"initialContent"`
