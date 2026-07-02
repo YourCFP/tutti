@@ -2,11 +2,12 @@ import {
   fireEvent,
   render,
   screen,
+  act,
   waitFor,
   within
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { StrictMode, act } from "react";
+import { StrictMode } from "react";
 import type { WorkspaceAgentSessionDetailViewModel } from "../../shared/workspaceAgentSessionDetailViewModel";
 import type { AgentHostManagedAgentsState } from "../../shared/contracts/dto";
 import type { WorkspaceFileReferenceAdapter } from "@tutti-os/workspace-file-reference/contracts";
@@ -1691,10 +1692,12 @@ describe("AgentGUINode", () => {
     });
     expect(railResizeHandle).not.toHaveAttribute("aria-hidden", "true");
 
-    fireEvent.pointerDown(screen.getByTestId("agentGui-node-resizer-right"), {
-      clientX: 720,
-      clientY: 0,
-      pointerId: 1
+    await act(async () => {
+      fireEvent.pointerDown(screen.getByTestId("agentGui-node-resizer-right"), {
+        clientX: 720,
+        clientY: 0,
+        pointerId: 1
+      });
     });
     await act(async () => {
       window.dispatchEvent(
@@ -2343,7 +2346,7 @@ describe("AgentGUINode", () => {
     vi.useRealTimers();
   });
 
-  it("refreshes relative time labels every minute while the session list stays open", () => {
+  it("refreshes relative time labels every minute while the session list stays open", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-18T17:20:00Z"));
     mockViewModel = createViewModel({
@@ -2364,7 +2367,7 @@ describe("AgentGUINode", () => {
 
     expect(screen.getByText("刚刚")).toBeTruthy();
 
-    act(() => {
+    await act(async () => {
       vi.advanceTimersByTime(60_000);
     });
 
