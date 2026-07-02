@@ -302,6 +302,52 @@ func TestCodexAppServerUnhandledServerRequestCardOnlyForUnknownMethods(t *testin
 	}
 }
 
+// ADR 0003 open question: can child-thread events arrive before the parent
+// collabAgentToolCall announces receiverThreadIds? This detector makes real
+// deployments answer it permanently: unknown-thread drops are remembered, and
+// registration reports how many events were lost to the ordering gap.
+func TestCodexAppServerChildRegistrationReportsEarlyDrops(t *testing.T) {
+	t.Parallel()
+
+	adapter := NewCodexAppServerAdapter(nil)
+	session := Session{
+		AgentSessionID:    "agent-session-1",
+		Provider:          ProviderCodex,
+		ProviderSessionID: "parent-thread-1",
+	}
+	adapter.storeSession(session.AgentSessionID, &codexAppServerSession{threadID: session.ProviderSessionID})
+
+	// Two child events arrive before anything registered the child: both drop.
+	for range 2 {
+		route := adapter.appServerNotificationRoute(session, appServerNotifyAgentMessageDelta, map[string]any{
+			"threadId": "child-early-1",
+			"turnId":   "child-turn-1",
+			"delta":    "early output",
+		})
+		if !route.drop || route.ownerThreadID != "" {
+			t.Fatalf("unknown thread event should drop: %#v", route)
+		}
+	}
+
+	added := adapter.rememberAppServerChildThreads(session.AgentSessionID, session.ProviderSessionID, map[string]any{
+		"type":              "collabAgentToolCall",
+		"id":                "spawn-1",
+		"receiverThreadIds": []any{"child-early-1", "child-clean-2"},
+	})
+	if len(added) != 2 {
+		t.Fatalf("added = %#v, want both children", added)
+	}
+
+	early, ok := adapter.appServerChildThread(session.AgentSessionID, "child-early-1")
+	if !ok || early.droppedBeforeRegistration != 2 {
+		t.Fatalf("child-early-1 droppedBeforeRegistration = %#v (ok=%v), want 2", early, ok)
+	}
+	clean, ok := adapter.appServerChildThread(session.AgentSessionID, "child-clean-2")
+	if !ok || clean.droppedBeforeRegistration != 0 {
+		t.Fatalf("child-clean-2 droppedBeforeRegistration = %#v (ok=%v), want 0", clean, ok)
+	}
+}
+
 func TestCodexAppServerChildThreadNameUpdateEmitsNameMarker(t *testing.T) {
 	t.Parallel()
 

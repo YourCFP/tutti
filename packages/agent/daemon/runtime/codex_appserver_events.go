@@ -430,6 +430,7 @@ func (a *CodexAppServerAdapter) appServerNotificationRoute(
 
 	child, ok := a.appServerChildThread(session.AgentSessionID, eventThreadID)
 	if !ok {
+		a.recordForeignThreadDrop(session.AgentSessionID, eventThreadID)
 		a.logAppServerForeignThreadDrop(session, method, params, eventThreadID)
 		return appServerNotificationRoute{drop: true}
 	}
@@ -453,6 +454,33 @@ func (a *CodexAppServerAdapter) appServerNotificationRoute(
 		turnID:        firstNonEmpty(asString(params["turnId"]), asString(payloadObject(params["turn"])["id"])),
 		normalizer:    child.normalizer,
 	}
+}
+
+const appServerForeignDropTrackerCap = 64
+
+// recordForeignThreadDrop remembers an unknown-thread drop so a later child
+// registration can report events lost to the announce/stream ordering gap
+// (ADR 0003 verification telemetry). Bounded; unrelated foreign threads age
+// out by never being registered.
+func (a *CodexAppServerAdapter) recordForeignThreadDrop(agentSessionID string, threadID string) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
+	if appSession == nil {
+		return
+	}
+	if appSession.recentForeignDrops == nil {
+		appSession.recentForeignDrops = make(map[string]int)
+	}
+	if len(appSession.recentForeignDrops) >= appServerForeignDropTrackerCap {
+		if _, tracked := appSession.recentForeignDrops[threadID]; !tracked {
+			return
+		}
+	}
+	appSession.recentForeignDrops[threadID]++
 }
 
 func (a *CodexAppServerAdapter) rememberAppServerChildThreads(agentSessionID string, parentThreadID string, item map[string]any) []string {
@@ -488,11 +516,22 @@ func (a *CodexAppServerAdapter) rememberAppServerChildThreads(agentSessionID str
 			}
 			continue
 		}
-		appSession.childThreads[childThreadID] = &codexAppServerThreadContext{
+		context := &codexAppServerThreadContext{
 			parentThreadID: parentThreadID,
 			parentItemID:   parentItemID,
 			normalizer:     newACPTurnNormalizer(),
 		}
+		if dropped := appSession.recentForeignDrops[childThreadID]; dropped > 0 {
+			context.droppedBeforeRegistration = dropped
+			delete(appSession.recentForeignDrops, childThreadID)
+			slog.Warn(
+				"agent session app-server child events arrived before registration",
+				"agent_session_id", agentSessionID,
+				"child_thread_id", childThreadID,
+				"dropped_events", dropped,
+			)
+		}
+		appSession.childThreads[childThreadID] = context
 		added = append(added, childThreadID)
 	}
 	return added
@@ -510,9 +549,10 @@ func (a *CodexAppServerAdapter) appServerChildThread(agentSessionID string, chil
 		return nil, false
 	}
 	return &codexAppServerThreadContext{
-		parentThreadID: child.parentThreadID,
-		parentItemID:   child.parentItemID,
-		normalizer:     child.normalizer,
+		parentThreadID:            child.parentThreadID,
+		parentItemID:              child.parentItemID,
+		normalizer:                child.normalizer,
+		droppedBeforeRegistration: child.droppedBeforeRegistration,
 	}, true
 }
 

@@ -75,3 +75,23 @@ parent turn (t3code's re-tag path, rejected — see Concurrency).
   required on item/started). Early child event before the announce → unknown-fallback
   (log+drop), validate against real logs. Registry map is owned by the single
   sequential reducer (or mutex-guarded).
+
+## Ordering verification (2026-07-02, Phase 0)
+
+ADR question: can child-thread events arrive before the parent
+`collabAgentToolCall` announces `receiverThreadIds`?
+
+- **Transport analysis:** notifications share one stdio NDJSON connection, so
+  delivery is strictly serialized; the only theoretical gap is the app-server
+  internally enqueueing child output between the spawn item's `started` (which
+  already carries the required `receiverThreadIds`) and the registration being
+  processed - a sub-millisecond window on the same pipe.
+- **Empirical:** across all four exported log bundles (2026-07-02 sessions with
+  4-5 concurrent children each), every declared receiver had a complete row
+  set; no early-drop evidence.
+- **Permanent telemetry:** the daemon now tracks unknown-thread drops per
+  session (bounded) and, when a child registers late, logs
+  `child events arrived before registration` with the lost-event count and
+  records it on the thread context (`droppedBeforeRegistration`, pinned by
+  `TestCodexAppServerChildRegistrationReportsEarlyDrops`). If real deployments
+  ever hit the window, the log answers it; no speculative buffer added.

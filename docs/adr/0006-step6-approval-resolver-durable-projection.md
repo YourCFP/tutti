@@ -82,3 +82,20 @@ durable state honest regardless.
   carries turn state + messages; `SubmitInteractive` is a responder like the turn
   command; both reconcile against the Step-4 snapshot.
 - #418 detail is largely handled today; this ADR targets the pending STATE + resolution.
+
+## Live verification (2026-07-02, Phase 0)
+
+Ran against the real binary (`codex-cli 0.142.5`) via the env-gated test
+`TestLiveProtocolResumeServerRequestReissue`
+(`packages/agent/daemon/runtime/liveprotocol_verify_test.go`,
+`TUTTI_LIVE_PROTOCOL_VERIFY=1`): provoke `item/commandExecution/requestApproval`
+(read-only sandbox + untrusted policy), leave it unanswered, kill the client
+process, resume the thread from a fresh process.
+
+**Verdict: codex does NOT re-issue the pending server-request after
+`thread/resume`.** Additionally: the interrupted-mid-approval turn does not
+resume (thread status returns `idle`), and the unanswered approval item is NOT
+replayed by resume — so a daemon restart leaves no zombie `waiting_input` row
+in the rebuilt store either. The conservative reconnect policy stands
+confirmed: no RPC revival is possible; pending approvals die with their turn
+and the user re-drives. No code change required.

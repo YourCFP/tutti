@@ -144,6 +144,9 @@ type codexAppServerSession struct {
 	lastTurnID   string
 	activeTurn   *codexAppServerActiveTurn
 	childThreads map[string]*codexAppServerThreadContext
+	// recentForeignDrops remembers recently dropped unknown thread ids so a
+	// late registration can report how many events the ordering gap lost.
+	recentForeignDrops map[string]int
 	acpLiveState
 	pendingRequests map[string]*pendingACPRequest
 }
@@ -152,6 +155,10 @@ type codexAppServerThreadContext struct {
 	parentThreadID string
 	parentItemID   string
 	normalizer     *acpTurnNormalizer
+	// droppedBeforeRegistration counts events for this thread that arrived
+	// (and were dropped as unknown) before its receiverThreadIds registration
+	// - permanent telemetry for ADR 0003's ordering question.
+	droppedBeforeRegistration int
 }
 
 // codexAppServerActiveTurn carries the streaming context of an in-flight

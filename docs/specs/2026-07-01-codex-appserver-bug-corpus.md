@@ -22,3 +22,34 @@ diff to these tests is a regression.
 | **D — session / live-session lifecycle** | `TestCodexAppServerAdapterReleaseLiveSessionClosesClientAndKeepsProviderSession`, `TestCodexAppServerAdapterReleaseLiveSessionSkipsPendingRequests` | #604 | Step 7 (facade owns lifecycle; outcomes stay) |
 | **E — approval / interactive** | `TestCodexAppServerAdapterCommandApprovalApprove`, `TestCodexAppServerAdapterCommandApprovalDecisionMapping`, `TestCodexAppServerAdapterRequestUserInput`, `TestAppServerUserInputAnswers` | #418 | Step 6 (resolver extraction; outcomes stay) |
 | **A — daemon↔desktop hydration** (desktop-half; out of daemon scope) | GUI: `useAgentGUINodeController.spec.tsx` (#608) | sessions `7633ebb9`/`2d73bad7`/`08920807`; #608; #585 | **Step 9** (deferred desktop rewrite). Daemon-half contract is authored in **Step 4**. |
+
+## Corpus expansion (2026-07-02, refactor + live-testing regressions)
+
+The refactor round proved "all green ≠ bug-free": ten review findings and four
+live log-bundle bugs all landed in corpus gaps. Their regression tests are now
+part of the contract. Baseline re-check: `codex-cli 0.142.5` (unchanged), source
+SHA `6d2168f06ae275d5e1f73cabf935d2bcc8549998` (unchanged) — no drift, no bump.
+
+Run commands (work area `packages/agent/daemon`):
+
+```bash
+# runtime additions
+go test ./runtime/ -count=1 -run \
+  'TestCodexAppServerChildThreadErrorDoesNotFailParentTurn|TestCodexAppServerStrayTurnStartedDoesNotHijackActiveTurn|TestControllerExecSteerSettlesTurnRecordWithoutTerminalEvent|TestCodexAppServerAdapterCancelInterruptsLinkedChildThreads|TestCodexAppServerAdapterCancelAfterTurnCompletedStillMarksChildrenCanceled|TestCodexAppServerAdapterConcurrentStartsLeaveSingleLiveProcess|TestCodexAppServerAdapterStartOverLiveSessionStopsPreviousProcess|TestCodexAppServerAdapterResumeOverLiveSessionClosesPreviousProcess|TestCodexAppServerAdapterResumeSpawnFailureKeepsPreviousSessionLive|TestCodexAppServerAdapterResumeThreadFailureKeepsPreviousSessionLive|TestCodexAppServerAdapterStartReleaseRaceLeavesNoOrphanProcess|TestCodexAppServerClientCloseIsIdempotent|TestCodexAppServerAdapterRoutesLinkedChildThreadEvents|TestCodexAppServerChildThreadNameUpdateEmitsNameMarker|TestCodexAppServerAdapterFetchesChildThreadNickname|TestAppServerCollabAgentRawInputCarriesReceiverThreadIDs|TestCodexAppServerChildRegistrationReportsEarlyDrops|TestReportActivityInputForwardsSubAgentMarkerFieldsToPayload'
+
+# activity store additions (hydration cursor contract)
+go test ./activity/ -count=1 -run \
+  'TestStoreListSessionMessagesPagesByVersionDespiteOccurredAtOrder|TestStoreSortsSessionMessagesByOccurredAtNotVersion|TestStoreZeroOccurredAtLegacyRowSortsByFallbackTimestamp'
+```
+
+| Cluster | Added pinning test(s) | Origin |
+|---|---|---|
+| **C — turn lifecycle** | `ChildThreadErrorDoesNotFailParentTurn`, `StrayTurnStartedDoesNotHijackActiveTurn`, `ExecSteerSettlesTurnRecordWithoutTerminalEvent` | review round 2 (branch-introduced regressions) |
+| **B/C — cancel propagation** | `CancelInterruptsLinkedChildThreads`, `CancelAfterTurnCompletedStillMarksChildrenCanceled` | log bundle 20260702-145427 (`missing turnId` rejection) |
+| **D — single live process** | `ConcurrentStartsLeaveSingleLiveProcess`, `StartOverLiveSession…`, `ResumeOverLiveSession…`, `ResumeSpawnFailure…`, `ResumeThreadFailure…`, `StartReleaseRace…`, `ClientCloseIsIdempotent` | duplicate app-server processes (live) |
+| **A — hydration cursor** | `PagesByVersionDespiteOccurredAtOrder`, `SortsSessionMessagesByOccurredAtNotVersion`, `ZeroOccurredAtLegacyRowSortsByFallbackTimestamp` | ADR 0004 + review round 1 |
+| **B — child routing / identity** | `RoutesLinkedChildThreadEvents`, `ChildThreadNameUpdateEmitsNameMarker`, `FetchesChildThreadNickname`, `CollabAgentRawInputCarriesReceiverThreadIDs`, `ChildRegistrationReportsEarlyDrops`, `ForwardsSubAgentMarkerFieldsToPayload` | ADR 0003 + log bundles 153958/165411 |
+
+Live-gated protocol verification (not part of CI; run manually when protocol
+behavior is in question): `TUTTI_LIVE_PROTOCOL_VERIFY=1 go test ./runtime/ -run
+TestLiveProtocol -v` — see ADR 0006 "Live verification".
