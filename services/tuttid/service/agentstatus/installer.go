@@ -308,6 +308,14 @@ func (s Service) nextMissingInstaller(spec ProviderSpec, runtime providerRuntime
 		}
 		return spec.Install, true, "cli"
 	}
+	if strings.TrimSpace(runtime.ReasonCode) == "acp_adapter_launch_failed" {
+		if spec.AdapterInstall.Kind != "" {
+			return spec.AdapterInstall, true, "adapter"
+		}
+		if spec.Install.Kind != "" {
+			return spec.Install, true, "cli"
+		}
+	}
 	if strings.TrimSpace(runtime.AdapterPath) == "" {
 		if spec.AdapterInstall.Kind != "" {
 			return spec.AdapterInstall, true, "adapter"

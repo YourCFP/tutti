@@ -76,7 +76,10 @@ Use this shape for new entries:
   lightweight package metadata probe before attempting the install. Preserve
   `TUTTI_AGENT_NPM_REGISTRY` as an explicit single-registry pin with no mirror
   fallback. Also pass the same managed Node `PATH` through provider command
-  resolution, version checks, auth-status checks, and adapter probes.
+  resolution, version checks, auth-status checks, and adapter probes. If the
+  CLI path exists but `codex app-server` cannot launch, treat the failed probe
+  as a repair trigger so the install action does not clear immediately without
+  running an installer.
 - Validation:
   Reproduce in a temporary prefix/cache using the Tutti-managed npm. Confirm
   `codex --version`, the platform package metadata and vendor binary, and a
