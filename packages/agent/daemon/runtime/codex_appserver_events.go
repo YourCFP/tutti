@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	activityshared "github.com/tutti-os/tutti/packages/agentactivity/daemon/activity/events"
+	"github.com/tutti-os/tutti/packages/agentactivity/daemon/runtime/codexproto"
 )
 
 // handleAppServerMessage routes codex app-server server->client traffic.
@@ -41,7 +42,17 @@ func (a *CodexAppServerAdapter) handleAppServerMessage(
 			return a.appServerServerRequest(ctx, client, session, turnID, message, emit)
 		default:
 			err := fmt.Errorf("server request method %q is not supported", message.Method)
-			if emit != nil {
+			if codexproto.IsKnownServerRequestMethod(message.Method) {
+				// Schema-known background requests the daemon deliberately
+				// declines (auth token refresh, attestation, sandbox setup)
+				// get a silent -32601; a transcript failure card would show
+				// users spurious red cards for background operations.
+				slog.Debug(
+					"agent session app-server declined known server request",
+					"agent_session_id", session.AgentSessionID,
+					"method", message.Method,
+				)
+			} else if emit != nil {
 				emit(appServerUnsupportedServerRequestEvents(session, turnID, message, err))
 			}
 			_ = client.Respond(ctx, message.ID, nil, &acpError{Code: -32601, Message: err.Error()})

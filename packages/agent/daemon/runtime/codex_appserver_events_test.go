@@ -1,12 +1,63 @@
 package agentruntime
 
 import (
+	"context"
 	"encoding/json"
+	"io"
 	"reflect"
+	"sync"
 	"testing"
 
 	activityshared "github.com/tutti-os/tutti/packages/agentactivity/daemon/activity/events"
 )
+
+type appServerCaptureConn struct {
+	mu     sync.Mutex
+	sent   [][]byte
+	closed chan struct{}
+}
+
+func newAppServerCaptureConn() *appServerCaptureConn {
+	return &appServerCaptureConn{closed: make(chan struct{})}
+}
+
+func (c *appServerCaptureConn) Send(data []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.sent = append(c.sent, append([]byte(nil), data...))
+	return nil
+}
+
+func (c *appServerCaptureConn) Recv() (ProcessFrame, error) {
+	<-c.closed
+	return ProcessFrame{}, io.EOF
+}
+
+func (c *appServerCaptureConn) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	select {
+	case <-c.closed:
+	default:
+		close(c.closed)
+	}
+	return nil
+}
+
+func (c *appServerCaptureConn) responses(t *testing.T) []acpMessage {
+	t.Helper()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]acpMessage, 0, len(c.sent))
+	for _, data := range c.sent {
+		var message acpMessage
+		if err := json.Unmarshal(data, &message); err != nil {
+			t.Fatalf("unmarshal sent frame %q: %v", data, err)
+		}
+		out = append(out, message)
+	}
+	return out
+}
 
 func mustJSONRawMessage(t *testing.T, value any) json.RawMessage {
 	t.Helper()
@@ -182,6 +233,65 @@ func TestCodexAppServerAdapterRoutesLinkedChildThreadEvents(t *testing.T) {
 	parentAfterChild := normalizer.AppendAssistantChunk(session, "parent-turn-1", "parent output")
 	if len(parentAfterChild) != 1 || parentAfterChild[0].Payload.Content != "parent output" {
 		t.Fatalf("parent normalizer was corrupted by child lane: %#v", parentAfterChild)
+	}
+}
+
+func TestCodexAppServerUnhandledServerRequestCardOnlyForUnknownMethods(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		method   string
+		wantCard bool
+	}{
+		// Schema-known background request the daemon deliberately declines:
+		// respond -32601 silently, no transcript failure card.
+		{name: "known background request stays silent", method: "account/chatgptAuthTokens/refresh", wantCard: false},
+		{name: "unknown request renders failure card", method: "definitely/notInSchema", wantCard: true},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			conn := newAppServerCaptureConn()
+			client := newCodexAppServerClient(conn)
+			defer func() { _ = client.Close() }()
+
+			adapter := NewCodexAppServerAdapter(nil)
+			session := Session{
+				AgentSessionID:    "agent-session-1",
+				Provider:          ProviderCodex,
+				ProviderSessionID: "thread-1",
+				CWD:               "/workspace",
+			}
+			var emitted []activityshared.Event
+			events, err := adapter.handleAppServerMessage(context.Background(), client, session, "turn-1", acpMessage{
+				ID:     json.RawMessage(`41`),
+				Method: tc.method,
+				Params: json.RawMessage(`{}`),
+			}, newACPTurnNormalizer(), func(events []activityshared.Event) {
+				emitted = append(emitted, events...)
+			}, nil)
+			if err != nil || len(events) != 0 {
+				t.Fatalf("handleAppServerMessage = %#v, %v", events, err)
+			}
+
+			responses := conn.responses(t)
+			if len(responses) != 1 || responses[0].Error == nil || responses[0].Error.Code != -32601 {
+				t.Fatalf("responses = %#v, want one -32601 error response", responses)
+			}
+			if !tc.wantCard {
+				if len(emitted) != 0 {
+					t.Fatalf("emitted = %#v, want no transcript card for known method", emitted)
+				}
+				return
+			}
+			if len(emitted) != 1 || emitted[0].Type != activityshared.EventCallFailed {
+				t.Fatalf("emitted = %#v, want one call.failed card", emitted)
+			}
+		})
 	}
 }
 
