@@ -1,5 +1,6 @@
 import { useState, type JSX } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
+import { ToolActivityKindIcon } from "../../toolActivityKindIcons";
 import { translate } from "../../../i18n/index";
 import type { AgentTaskSubAgentVM } from "../contracts/agentTaskItemVM";
 import type { AgentToolCallVM } from "../contracts/agentToolCallVM";
@@ -47,54 +48,38 @@ export function AgentSubAgentCard({
   onLinkClick?: (href: string) => void;
 }): JSX.Element {
   "use memo";
-  const running = subAgent.status === "running";
-  // Mirror AgentTaskCallCard: pinned open while running, collapsible after.
-  const pinned = running;
-  const [expanded, setExpanded] = useState(false);
-  const isExpanded = pinned || expanded;
-  const header = (
-    <SubAgentHeader subAgent={subAgent} expanded={isExpanded} pinned={pinned} />
-  );
+  // Expanded by default while running; always collapsible via the header.
+  const [expanded, setExpanded] = useState(subAgent.status === "running");
 
   return (
     <div
       className="workspace-agents-status-panel__detail-tool-row workspace-agents-status-panel__detail-tool-row--subagent"
       data-status={subAgent.status}
     >
-      {pinned ? (
-        <div className="workspace-agents-status-panel__detail-tool-row-head">
-          {header}
-        </div>
-      ) : (
-        <button
-          type="button"
-          className="workspace-agents-status-panel__detail-tool-row-head workspace-agents-status-panel__detail-tool-row-head--button"
-          aria-expanded={isExpanded}
-          aria-label={subAgentAriaLabel(subAgent)}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {header}
-        </button>
-      )}
-      {pinned ? (
-        <SubAgentBody subAgent={subAgent} onLinkClick={onLinkClick} />
-      ) : (
-        <CollapsibleReveal expanded={isExpanded}>
+      <button
+        type="button"
+        className="workspace-agents-status-panel__detail-tool-row-head workspace-agents-status-panel__detail-tool-row-head--button"
+        aria-expanded={expanded}
+        aria-label={subAgentAriaLabel(subAgent)}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <SubAgentHeader subAgent={subAgent} expanded={expanded} />
+      </button>
+      <CollapsibleReveal expanded={expanded}>
+        <div className="workspace-agents-status-panel__detail-subagent-reveal">
           <SubAgentBody subAgent={subAgent} onLinkClick={onLinkClick} />
-        </CollapsibleReveal>
-      )}
+        </div>
+      </CollapsibleReveal>
     </div>
   );
 }
 
 function SubAgentHeader({
   subAgent,
-  expanded,
-  pinned
+  expanded
 }: {
   subAgent: AgentTaskSubAgentVM;
   expanded: boolean;
-  pinned: boolean;
 }): JSX.Element {
   "use memo";
   const running = subAgent.status === "running";
@@ -112,11 +97,16 @@ function SubAgentHeader({
         .join(" ")}
     >
       <div className="workspace-agents-status-panel__detail-tool-row-icon tsh-inline-scanlight-icon">
-        <span
-          className={`workspace-agents-status-panel__detail-subagent-status workspace-agents-status-panel__detail-subagent-status--${subAgent.status}`}
-          role="img"
-          aria-label={statusLabel}
-        />
+        {subAgent.status === "failed" ? (
+          <AlertCircle size={16} strokeWidth={2} aria-hidden="true" />
+        ) : (
+          <ToolActivityKindIcon
+            kind="delegate_agent"
+            width={16}
+            height={16}
+            aria-hidden="true"
+          />
+        )}
       </div>
       <div className="workspace-agents-status-panel__detail-tool-row-text">
         <strong className="workspace-agents-status-panel__detail-tool-row-title">
@@ -132,7 +122,7 @@ function SubAgentHeader({
           {statusLabel}
         </span>
       </div>
-      {pinned ? null : expanded ? (
+      {expanded ? (
         <ChevronDown
           size={12}
           strokeWidth={2.2}

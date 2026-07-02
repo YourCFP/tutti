@@ -8192,3 +8192,9 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   height: 8px;
   border-radius: 50%;
 }
+
+/* Sub-agent body indents like an expanded tool (24px under the icon column) */
+.workspace-agents-status-panel__detail-subagent-reveal {
+  box-sizing: border-box;
+  padding-left: 24px;
+}
