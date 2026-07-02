@@ -1,5 +1,20 @@
 import type { AgentToolCallVM } from "./agentToolCallVM";
 
+export type AgentTaskSubAgentStatus = "running" | "completed" | "failed";
+
+// Live view of one delegated sub-agent thread (Codex collab child thread).
+// The child thread's transcript rows are segregated out of the parent
+// conversation; this VM is the parent-side surface that keeps the sub-agent
+// perceivable while it runs.
+export interface AgentTaskSubAgentVM {
+  ownerThreadId: string;
+  status: AgentTaskSubAgentStatus;
+  latestActivity: string | null;
+  latestActivityKind: "message" | "reasoning" | "tool" | null;
+  startedAtUnixMs: number | null;
+  latestActivityAtUnixMs: number | null;
+}
+
 export interface AgentTaskStepVM {
   id: string;
   turnId: string;
@@ -21,6 +36,7 @@ export interface AgentTaskItemVM {
   prompt?: string | null;
   delegateSessionId?: string | null;
   steps: AgentTaskStepVM[];
+  subAgents?: AgentTaskSubAgentVM[];
   result?: string | null;
   resultMarkdown?: string | null;
   durationMs?: number | null;

@@ -1210,6 +1210,87 @@ describe("AgentExpandedToolContent", () => {
     expect(screen.getByText("MCP")).toBeTruthy();
     expect(screen.getByText("Found issue TSH-456")).toBeTruthy();
   });
+
+  it("renders live sub-agent lanes on a running task card", async () => {
+    setAgentGuiI18nTestLocale("en");
+
+    const call = projectAgentToolCall(
+      toolCall({
+        name: "spawnAgent",
+        toolName: "Agent",
+        status: "running",
+        statusKind: "working",
+        payload: {
+          input: { task: "inspect the repository", agentName: "spawnAgent" }
+        }
+      })
+    );
+    expect(call.task).not.toBeNull();
+
+    render(
+      <AgentExpandedToolContent
+        call={{
+          ...call,
+          task: {
+            ...call.task!,
+            subAgents: [
+              {
+                ownerThreadId: "child-thread-1",
+                status: "running",
+                latestActivity: "Run command",
+                latestActivityKind: "tool",
+                startedAtUnixMs: 1_000,
+                latestActivityAtUnixMs: 101_000
+              }
+            ]
+          }
+        }}
+      />
+    );
+
+    expect(screen.getByText("Sub-agents")).toBeTruthy();
+    expect(screen.getByText(/Running · 1m 40s/)).toBeTruthy();
+    expect(screen.getByText("Run command")).toBeTruthy();
+  });
+
+  it("falls back to a starting label when a sub-agent lane has no activity yet", async () => {
+    setAgentGuiI18nTestLocale("en");
+
+    const call = projectAgentToolCall(
+      toolCall({
+        name: "spawnAgent",
+        toolName: "Agent",
+        status: "running",
+        statusKind: "working",
+        payload: {
+          input: { task: "inspect the repository", agentName: "spawnAgent" }
+        }
+      })
+    );
+
+    render(
+      <AgentExpandedToolContent
+        call={{
+          ...call,
+          task: {
+            ...call.task!,
+            subAgents: [
+              {
+                ownerThreadId: "child-thread-1",
+                status: "running",
+                latestActivity: null,
+                latestActivityKind: null,
+                startedAtUnixMs: 1_000,
+                latestActivityAtUnixMs: 1_000
+              }
+            ]
+          }
+        }}
+      />
+    );
+
+    expect(screen.getByText("Starting…")).toBeTruthy();
+  });
 });
 
 async function flushCollapsibleRevealFrames(): Promise<void> {

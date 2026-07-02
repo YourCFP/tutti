@@ -1991,6 +1991,71 @@ aside.workspace-agents-status-panel
   color: var(--text-tertiary);
 }
 
+.workspace-agents-status-panel__detail-subagents {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+}
+
+.workspace-agents-status-panel__detail-subagent-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.workspace-agents-status-panel__detail-subagent-status {
+  flex: none;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.workspace-agents-status-panel__detail-subagent-status--running {
+  background: var(--state-success, #22c55e);
+  animation: workspace-agents-subagent-pulse 1.6s ease-in-out infinite;
+}
+
+.workspace-agents-status-panel__detail-subagent-status--completed {
+  background: var(--state-success, #22c55e);
+}
+
+.workspace-agents-status-panel__detail-subagent-status--failed {
+  background: var(--state-danger);
+}
+
+.workspace-agents-status-panel__detail-subagent-meta {
+  flex: none;
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.workspace-agents-status-panel__detail-subagent-activity {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@keyframes workspace-agents-subagent-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .workspace-agents-status-panel__detail-tool-bullets {
   display: flex;
   flex-direction: column;

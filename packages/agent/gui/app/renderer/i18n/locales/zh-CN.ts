@@ -1272,6 +1272,8 @@ export const zhCN = {
         waitingForAnswer: "等待用户回答…",
         questionFallback: "问题",
         delegateSession: "委托会话",
+        subAgents: "子智能体",
+        subAgentStarting: "正在启动…",
         missingFailureDetails: "Provider 报告失败，但没有返回失败详情。",
         noMatches: "没有匹配结果",
         noMatchingTools: "没有匹配的工具",

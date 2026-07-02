@@ -1,12 +1,16 @@
 import type { JSX } from "react";
 import { translate } from "../../../../i18n/index";
+import type { AgentTaskSubAgentVM } from "../../contracts/agentTaskItemVM";
 import {
   ToolMarkdownBlock,
   ToolSection,
   type AgentToolRendererProps
 } from "./agentToolContentShared";
 import { AgentTaskStepList } from "../AgentTaskStepList";
-import { getTaskRenderData } from "./render-data/agentToolRenderData";
+import {
+  formatAgentToolDurationMs,
+  getTaskRenderData
+} from "./render-data/agentToolRenderData";
 
 export function AgentTaskContent({
   call,
@@ -14,6 +18,7 @@ export function AgentTaskContent({
 }: AgentToolRendererProps): JSX.Element {
   "use memo";
   const task = getTaskRenderData(call);
+  const subAgents = call.task?.subAgents ?? [];
   const failureMarkdown =
     task.errorMarkdown ??
     (isFailedTaskStatus(call.statusKind, task.status, call.status)
@@ -41,6 +46,18 @@ export function AgentTaskContent({
         <ToolSection title={translate("agentHost.agentTool.details.summary")}>
           <div className="workspace-agents-status-panel__detail-tool-answer workspace-agents-status-panel__detail-tool-answer--muted">
             {task.latestStepSummary}
+          </div>
+        </ToolSection>
+      ) : null}
+      {subAgents.length > 0 ? (
+        <ToolSection title={translate("agentHost.agentTool.details.subAgents")}>
+          <div className="workspace-agents-status-panel__detail-subagents">
+            {subAgents.map((subAgent) => (
+              <AgentTaskSubAgentRow
+                key={subAgent.ownerThreadId}
+                subAgent={subAgent}
+              />
+            ))}
           </div>
         </ToolSection>
       ) : null}
@@ -83,6 +100,61 @@ export function AgentTaskContent({
       ) : null}
     </div>
   );
+}
+
+function AgentTaskSubAgentRow({
+  subAgent
+}: {
+  subAgent: AgentTaskSubAgentVM;
+}): JSX.Element {
+  "use memo";
+  const statusLabel = subAgentStatusLabel(subAgent.status);
+  const elapsedText = subAgentElapsedText(subAgent);
+  return (
+    <div
+      className="workspace-agents-status-panel__detail-subagent-row"
+      data-status={subAgent.status}
+    >
+      <span
+        className={`workspace-agents-status-panel__detail-subagent-status workspace-agents-status-panel__detail-subagent-status--${subAgent.status}`}
+        role="img"
+        aria-label={statusLabel}
+      />
+      <span className="workspace-agents-status-panel__detail-subagent-meta">
+        {statusLabel}
+        {elapsedText ? ` · ${elapsedText}` : ""}
+      </span>
+      <span className="workspace-agents-status-panel__detail-subagent-activity">
+        {subAgent.latestActivity ??
+          translate("agentHost.agentTool.details.subAgentStarting")}
+      </span>
+    </div>
+  );
+}
+
+function subAgentStatusLabel(status: AgentTaskSubAgentVM["status"]): string {
+  switch (status) {
+    case "completed":
+      return translate("agentHost.agentTool.statusCompleted");
+    case "failed":
+      return translate("agentHost.agentTool.statusFailed");
+    case "running":
+    default:
+      return translate("agentHost.agentTool.statusWorking");
+  }
+}
+
+function subAgentElapsedText(subAgent: AgentTaskSubAgentVM): string | null {
+  const started = subAgent.startedAtUnixMs;
+  const latest = subAgent.latestActivityAtUnixMs;
+  if (
+    typeof started !== "number" ||
+    typeof latest !== "number" ||
+    latest <= started
+  ) {
+    return null;
+  }
+  return formatAgentToolDurationMs(latest - started);
 }
 
 function isFailedTaskStatus(

@@ -1357,6 +1357,8 @@ export const en = {
         waitingForAnswer: "Waiting for answer…",
         questionFallback: "Question",
         delegateSession: "Delegate session",
+        subAgents: "Sub-agents",
+        subAgentStarting: "Starting…",
         missingFailureDetails: "The provider reported failure without details.",
         noMatches: "No matches",
         noMatchingTools: "No matching tools",
