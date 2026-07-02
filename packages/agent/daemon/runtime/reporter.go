@@ -357,6 +357,7 @@ func textMessageUpdateFromSessionEvent(
 	payload := map[string]any{
 		"source": "runtime",
 	}
+	payload = withOwnerThreadID(payload, event)
 	if event.Payload.Content != "" {
 		payload["content"] = event.Payload.Content
 		payload["text"] = event.Payload.Content
@@ -388,6 +389,15 @@ func textMessageUpdateFromSessionEvent(
 	// GUI can render dedicated treatments instead of a plain assistant bubble.
 	if messageKind := stringFromPayload(event.Payload.Metadata, "messageKind"); messageKind != "" {
 		update.Payload["messageKind"] = messageKind
+		// Sub-agent lane markers ride hidden ownerThreadId rows; the GUI
+		// settles lane status/identity from these fields.
+		if messageKind == "subAgentLifecycle" || messageKind == "subAgentName" {
+			for _, key := range []string{"subAgentLifecycleStatus", "subAgentName", "detail"} {
+				if value := stringFromPayload(event.Payload.Metadata, key); value != "" {
+					update.Payload[key] = value
+				}
+			}
+		}
 	}
 	update.Semantics = messageSemanticsFromMetadata(event.Payload.Metadata)
 	forwardSystemNoticeMessageMetadata(update.Payload, event.Payload.Metadata)
@@ -463,6 +473,7 @@ func callMessageUpdateFromSessionEvent(
 	payload := map[string]any{
 		"source": "runtime",
 	}
+	payload = withOwnerThreadID(payload, event)
 	rawName := callMessageUpdateDisplayName(event, callID)
 	toolName := callMessageUpdateToolName(event, callID, rawName)
 	name := firstNonEmptyString(toolName, rawName)
@@ -1068,6 +1079,7 @@ func timelineItemFromSessionEvent(
 		if item.Payload == nil {
 			item.Payload = map[string]any{}
 		}
+		item.Payload = withOwnerThreadID(item.Payload, event)
 		if event.Payload.Content != "" {
 			if _, exists := item.Payload["content"]; !exists {
 				item.Payload["content"] = event.Payload.Content
@@ -1086,6 +1098,7 @@ func timelineItemFromSessionEvent(
 		item.Name = strings.TrimSpace(event.Payload.Name)
 		item.Status = firstNonEmptyString(stringFromPayload(event.Payload.Metadata, "status"), event.Payload.Status, string(activityshared.ActivityStatusRunning), "running")
 		item.Payload = payloadWithCallBody("input", event.Payload.Input, event.Payload.Metadata)
+		item.Payload = withOwnerThreadID(item.Payload, event)
 		return item, entityPatchFromSessionEvent(source, event, sessionID, timestamp, item), true
 	case activityshared.EventCallCompleted:
 		item.ItemType = "call.completed"
@@ -1095,6 +1108,7 @@ func timelineItemFromSessionEvent(
 		item.Name = strings.TrimSpace(event.Payload.Name)
 		item.Status = firstNonEmptyString(stringFromPayload(event.Payload.Metadata, "status"), event.Payload.Status, string(activityshared.ActivityStatusCompleted), "completed")
 		item.Payload = payloadWithCallBody("output", event.Payload.Output, event.Payload.Metadata)
+		item.Payload = withOwnerThreadID(item.Payload, event)
 		return item, entityPatchFromSessionEvent(source, event, sessionID, timestamp, item), true
 	case activityshared.EventCallFailed:
 		item.ItemType = "call.errored"
@@ -1104,6 +1118,7 @@ func timelineItemFromSessionEvent(
 		item.Name = strings.TrimSpace(event.Payload.Name)
 		item.Status = firstNonEmptyString(stringFromPayload(event.Payload.Metadata, "status"), event.Payload.Status, string(activityshared.ActivityStatusFailed), "failed")
 		item.Payload = payloadWithCallBody("error", event.Payload.Error, event.Payload.Metadata)
+		item.Payload = withOwnerThreadID(item.Payload, event)
 		return item, entityPatchFromSessionEvent(source, event, sessionID, timestamp, item), true
 	case activityshared.EventActivityStarted,
 		activityshared.EventActivityUpdated,
@@ -1226,6 +1241,18 @@ func payloadWithCallBody(key string, payload map[string]any, metadata map[string
 		return nil
 	}
 	return out
+}
+
+func withOwnerThreadID(payload map[string]any, event activityshared.Event) map[string]any {
+	ownerThreadID := strings.TrimSpace(event.OwnerThreadID)
+	if ownerThreadID == "" {
+		return payload
+	}
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	payload["ownerThreadId"] = ownerThreadID
+	return payload
 }
 
 func collapseReportTimelineItems(items []agentsessionstore.WorkspaceAgentTimelineItem) []agentsessionstore.WorkspaceAgentTimelineItem {

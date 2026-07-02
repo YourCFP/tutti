@@ -77,6 +77,43 @@ test("workspace file manager service does not refresh unchanged locations during
   assert.deepEqual(notifications, []);
 });
 
+test("workspace file manager service caches reference aggregators by locale", async () => {
+  const dependencies = createDependenciesStub();
+  dependencies.tuttidClient.listWorkspaceApps = async () => ({
+    apps: [],
+    catalogStatus: {
+      lastError: null,
+      status: "ready",
+      updatedAtUnixMs: null
+    },
+    workspaceId: "workspace-1"
+  });
+  const service = new WorkspaceFileManagerService(dependencies);
+
+  const enAggregator = service.getReferenceSourceAggregator(
+    "workspace-1",
+    "en"
+  );
+  const zhAggregator = service.getReferenceSourceAggregator(
+    "workspace-1",
+    "zh-CN"
+  );
+
+  assert.equal(
+    service.getReferenceSourceAggregator("workspace-1", "en"),
+    enAggregator
+  );
+  assert.notEqual(enAggregator, zhAggregator);
+  assert.equal(
+    (await enAggregator.listSources({ workspaceId: "workspace-1" }))[0]?.label,
+    "Tasks"
+  );
+  assert.equal(
+    (await zhAggregator.listSources({ workspaceId: "workspace-1" }))[0]?.label,
+    "任务"
+  );
+});
+
 test("workspace file manager service defaults new sessions to the user home directory", () => {
   const service = new WorkspaceFileManagerService(createDependenciesStub());
   const copy = createWorkspaceFileManagerI18nRuntime(
@@ -747,6 +784,10 @@ function createDependenciesStub(): {
       copyFilesToClipboard: fail
     },
     tuttidClient: {
+      startAccountLogin: fail,
+      getAccountLoginStatus: fail,
+      getAccountUserInfo: fail,
+      logoutAccount: fail,
       applyWorkspaceGitPatch: fail,
       listCliCapabilities: fail,
       listWorkspaceAppMentionCandidates: fail,
@@ -811,6 +852,7 @@ function createDependenciesStub(): {
       listWorkspaceAgentGeneratedFiles: fail,
       scanWorkspaceExternalAgentSessionImports: fail,
       importWorkspaceExternalAgentSessions: fail,
+      listWorkspaceAgentSessionGroups: fail,
       listUserProjects: fail,
       deleteUserProject: fail,
       checkUserProjectPath: fail,

@@ -333,7 +333,13 @@ func (a *ClaudeCodeSDKAdapter) Cancel(_ context.Context, session Session, turnID
 			"agentSessionId": session.AgentSessionID,
 		},
 	})
-	return a.claudeSDKPendingRequestFailureEvents(adapterSession, session, turnID, errPermissionRequestCanceled), nil
+	events := a.claudeSDKPendingRequestFailureEvents(adapterSession, session, turnID, errPermissionRequestCanceled)
+	if strings.TrimSpace(turnID) != "" {
+		events = append(events, newTurnActivityEvent(session, EventTurnCanceled, turnID, SessionStatusCanceled, "", "", map[string]any{
+			"reason": "user",
+		}))
+	}
+	return events, nil
 }
 
 func (a *ClaudeCodeSDKAdapter) ApplySessionSettings(

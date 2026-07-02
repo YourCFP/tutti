@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	activityshared "github.com/tutti-os/tutti/packages/agentactivity/daemon/activity/events"
@@ -35,6 +36,7 @@ const (
 	appServerMethodThreadResume          = "thread/resume"
 	appServerMethodThreadFork            = "thread/fork"
 	appServerMethodThreadRollback        = "thread/rollback"
+	appServerMethodThreadRead            = "thread/read"
 	appServerMethodThreadCompact         = "thread/compact/start"
 	appServerMethodThreadGoalSet         = "thread/goal/set"
 	appServerMethodThreadGoalGet         = "thread/goal/get"
@@ -75,6 +77,7 @@ const (
 	appServerNotifyDeprecation           = "deprecationNotice"
 	appServerNotifyModelRerouted         = "model/rerouted"
 	appServerNotifyThreadCompacted       = "thread/compacted"
+	appServerNotifyServerRequestResolved = "serverRequest/resolved"
 	appServerNotifyThreadGoalUpdated     = "thread/goal/updated"
 	appServerNotifyThreadGoalCleared     = "thread/goal/cleared"
 )
@@ -102,13 +105,24 @@ type CodexAppServerAdapter struct {
 	commandSink CommandSnapshotSink
 	eventSink   SessionEventSink
 	configSink  ConfigOptionsUpdateSink
+	// lifecycleMu guards lifecycleLocks; the per-session locks serialize
+	// Start/Resume/Close/ReleaseLiveSession per agent session so concurrent
+	// lifecycle calls can never leave two live app-server processes for the
+	// same session. Different sessions never contend.
+	lifecycleMu    sync.Mutex
+	lifecycleLocks map[string]*codexAppServerSessionLock
 	// cancelGraceWindow bounds the graceful-interrupt wait in Cancel before the
 	// process is force-closed. Zero falls back to the default.
 	cancelGraceWindow time.Duration
 }
 
+type codexAppServerSessionLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
 type codexAppServerSession struct {
-	client                 *acpClient
+	client                 *codexAppServerClient
 	threadID               string
 	serverInfo             map[string]any
 	account                map[string]any
@@ -125,9 +139,27 @@ type codexAppServerSession struct {
 	authState       string
 	authMessage     string
 	activeTurnID    string
-	activeTurn      *codexAppServerActiveTurn
+	// lastTurnID survives turn settlement so post-turn child lifecycle
+	// markers can carry a turn id (the activity store rejects turnless
+	// message updates).
+	lastTurnID   string
+	activeTurn   *codexAppServerActiveTurn
+	childThreads map[string]*codexAppServerThreadContext
+	// recentForeignDrops remembers recently dropped unknown thread ids so a
+	// late registration can report how many events the ordering gap lost.
+	recentForeignDrops map[string]int
 	acpLiveState
 	pendingRequests map[string]*pendingACPRequest
+}
+
+type codexAppServerThreadContext struct {
+	parentThreadID string
+	parentItemID   string
+	normalizer     *acpTurnNormalizer
+	// droppedBeforeRegistration counts events for this thread that arrived
+	// (and were dropped as unknown) before its receiverThreadIds registration
+	// - permanent telemetry for ADR 0003's ordering question.
+	droppedBeforeRegistration int
 }
 
 // codexAppServerActiveTurn carries the streaming context of an in-flight
@@ -136,7 +168,7 @@ type codexAppServerSession struct {
 // session-level message handler resolves this context to keep translating
 // notifications into activity events after the RPC has returned. The turn
 // finishes when the `turn/completed` notification delivers the final turn
-// payload through done.
+// payload through the reducer-owned terminal projection.
 type codexAppServerActiveTurn struct {
 	turnID       string
 	session      Session
@@ -144,11 +176,26 @@ type codexAppServerActiveTurn struct {
 	normalizer   *acpTurnNormalizer
 	emit         func([]activityshared.Event)
 	emitCommands CommandSnapshotSink
-	done         chan map[string]any
+	kind         codexAppServerTurnKind
+	phase        codexAppServerTurnPhase
+	terminal     chan codexAppServerTurnTerminal
 	// terminated is closed exactly once when the Exec goroutine for this turn
 	// returns (turn fully finalized). Cancel waits on it so it only responds
 	// after the turn has actually stopped.
 	terminated chan struct{}
+	// terminatedOnce closes terminated exactly once regardless of which path
+	// finalizes the turn (settle path or the blocking shell).
+	terminatedOnce sync.Once
+	// emitTerminal delivers the turn's final events through the turn's own
+	// single-shot emission chain (the shell's turnClosed guard dedupes).
+	emitTerminal func([]activityshared.Event)
+	// settleEmits marks turns whose terminal events are produced by the
+	// settle path (notification loop) instead of a parked goroutine
+	// (ADR 0005 C inversion). Guarded by the adapter mutex.
+	settleEmits bool
+	// settleFinalized records that finalizeSettledTurn produced the terminal
+	// events; the blocking shell logs a shadow miss if it ever has to.
+	settleFinalized atomic.Bool
 
 	cancelRequested     bool
 	cancelInterruptSent bool
@@ -167,6 +214,7 @@ func NewCodexAppServerAdapterWithHostMetadata(transport ProcessTransport, host H
 		transport:         transport,
 		host:              host,
 		sessions:          make(map[string]*codexAppServerSession),
+		lifecycleLocks:    make(map[string]*codexAppServerSessionLock),
 		cancelGraceWindow: defaultCodexAppServerCancelGraceWindow,
 	}
 }
@@ -277,10 +325,19 @@ func (a *CodexAppServerAdapter) commandString() string {
 }
 
 func (a *CodexAppServerAdapter) Start(ctx context.Context, session Session) (events []activityshared.Event, err error) {
+	unlockLifecycle := a.lockSessionLifecycle(session.AgentSessionID)
+	defer unlockLifecycle()
 	trace := newCodexAppServerStartupTrace(session)
 	defer func() {
 		trace.Finish(err)
 	}()
+	// One session owns at most one live app-server process. Starting over a
+	// session that already holds a live client replaces it: stop the old
+	// client first, then spawn the new process.
+	if existing := a.getSession(session.AgentSessionID); existing != nil && existing.client != nil {
+		a.rejectPendingRequests(session.AgentSessionID, errPermissionRequestCanceled)
+		_ = a.closeLiveSession(session.AgentSessionID)
+	}
 	client, initializeResult, err := a.startInitializedClient(ctx, session, trace)
 	if err != nil {
 		return nil, err
@@ -331,13 +388,14 @@ func (a *CodexAppServerAdapter) Start(ctx context.Context, session Session) (eve
 
 	threadParams := appServerThreadStartParams(session, a.sessionCWD(session))
 	trace.Log("thread.start.params", codexAppServerTraceThreadStartParams(session, threadParams, false))
-	threadResult, err := trace.Call(ctx, client, acpStartCallTimeout, appServerMethodThreadStart,
-		threadParams,
-		func(ctx context.Context, message acpMessage) error {
-			trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
-			_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
-			return err
-		})
+	threadResult, err := trace.TypedCall(acpStartCallTimeout, appServerMethodThreadStart, func() (json.RawMessage, error) {
+		return client.ThreadStart(ctx, acpStartCallTimeout, threadParams,
+			func(ctx context.Context, message acpMessage) error {
+				trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
+				_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
+				return err
+			})
+	})
 	if err != nil {
 		var callErr *acpCallError
 		if errors.As(err, &callErr) && callErr.AuthRequired() {
@@ -416,6 +474,12 @@ func (a *CodexAppServerAdapter) Resume(ctx context.Context, session Session) (er
 	if strings.TrimSpace(session.ProviderSessionID) == "" {
 		return missingProviderSessionResumeError(session)
 	}
+	unlockLifecycle := a.lockSessionLifecycle(session.AgentSessionID)
+	defer unlockLifecycle()
+	// Resume may run over a session that still holds a live client. Unlike
+	// Start, the old client is kept alive until the replacement has resumed
+	// successfully (storeSession closes it on replace): if the new spawn or
+	// thread/resume fails, the previous session must remain usable.
 	trace := newCodexAppServerStartupTrace(session)
 	defer func() {
 		trace.Finish(err)
@@ -473,21 +537,23 @@ func (a *CodexAppServerAdapter) Resume(ctx context.Context, session Session) (er
 	// usage here and fold it into the live state below.
 	var replayedUsage acpUsageState
 	replayedUsageKnown := false
-	threadResult, err := trace.Call(ctx, client, acpStartCallTimeout, appServerMethodThreadResume, params,
-		func(ctx context.Context, message acpMessage) error {
-			trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
-			if message.Method == appServerNotifyTokenUsage && len(message.Params) > 0 {
-				tokenParams := map[string]any{}
-				if json.Unmarshal(message.Params, &tokenParams) == nil {
-					if usage, ok := appServerTokenUsageState(tokenParams); ok {
-						replayedUsage = usage
-						replayedUsageKnown = true
+	threadResult, err := trace.TypedCall(acpStartCallTimeout, appServerMethodThreadResume, func() (json.RawMessage, error) {
+		return client.ThreadResume(ctx, acpStartCallTimeout, params,
+			func(ctx context.Context, message acpMessage) error {
+				trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
+				if message.Method == appServerNotifyTokenUsage && len(message.Params) > 0 {
+					tokenParams := map[string]any{}
+					if json.Unmarshal(message.Params, &tokenParams) == nil {
+						if usage, ok := appServerTokenUsageState(tokenParams); ok {
+							replayedUsage = usage
+							replayedUsageKnown = true
+						}
 					}
 				}
-			}
-			_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
-			return err
-		})
+				_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
+				return err
+			})
+	})
 	if err != nil {
 		return classifyACPResumeError(session, appServerMethodThreadResume, err)
 	}
@@ -541,6 +607,8 @@ func (a *CodexAppServerAdapter) Close(_ context.Context, session Session) error 
 		return nil
 	}
 	agentSessionID := strings.TrimSpace(session.AgentSessionID)
+	unlockLifecycle := a.lockSessionLifecycle(agentSessionID)
+	defer unlockLifecycle()
 	a.rejectPendingRequests(agentSessionID, errPermissionRequestCanceled)
 	return a.closeLiveSession(agentSessionID)
 }
@@ -550,6 +618,8 @@ func (a *CodexAppServerAdapter) ReleaseLiveSession(_ context.Context, session Se
 		return nil
 	}
 	agentSessionID := strings.TrimSpace(session.AgentSessionID)
+	unlockLifecycle := a.lockSessionLifecycle(agentSessionID)
+	defer unlockLifecycle()
 	if a.hasLiveSessionWork(agentSessionID) {
 		return ErrLiveSessionBusy
 	}
@@ -571,7 +641,7 @@ func (a *CodexAppServerAdapter) startInitializedClient(
 	ctx context.Context,
 	session Session,
 	trace *codexAppServerStartupTrace,
-) (*acpClient, json.RawMessage, error) {
+) (*codexAppServerClient, json.RawMessage, error) {
 	if a == nil || a.transport == nil {
 		return nil, nil, errors.New("app-server process transport is unavailable")
 	}
@@ -599,7 +669,7 @@ func (a *CodexAppServerAdapter) startInitializedClient(
 	trace.Log("process.start.succeeded", map[string]any{
 		"duration_ms": time.Since(processStartedAt).Milliseconds(),
 	})
-	client := newAppServerJSONRPCClient(conn)
+	client := newCodexAppServerClient(conn)
 	client.SetStderrSink(trace.LogStderr)
 	// The session-level handler receives every message that arrives outside
 	// an in-flight RPC. Because turn/start responds immediately while the
@@ -632,15 +702,17 @@ func (a *CodexAppServerAdapter) startInitializedClient(
 		}
 	}()
 
-	initializeResult, err := trace.Call(ctx, client, acpStartCallTimeout, appServerMethodInitialize, map[string]any{
-		"clientInfo": codexClientInfoParams(a.host, spawnEnv),
-		"capabilities": map[string]any{
-			"experimentalApi": true,
-		},
-	}, func(ctx context.Context, message acpMessage) error {
-		trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
-		_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
-		return err
+	initializeResult, err := trace.TypedCall(acpStartCallTimeout, appServerMethodInitialize, func() (json.RawMessage, error) {
+		return client.Initialize(ctx, acpStartCallTimeout, map[string]any{
+			"clientInfo": codexClientInfoParams(a.host, spawnEnv),
+			"capabilities": map[string]any{
+				"experimentalApi": true,
+			},
+		}, func(ctx context.Context, message acpMessage) error {
+			trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
+			_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
+			return err
+		})
 	})
 	if err != nil {
 		slog.Warn("agent session app-server initialize failed",
@@ -653,7 +725,7 @@ func (a *CodexAppServerAdapter) startInitializedClient(
 	}
 	trace.Log("initialized.notify.begin", nil)
 	notifyStartedAt := time.Now()
-	if err := client.Notify(ctx, appServerMethodInitialized, nil); err != nil {
+	if err := client.Initialized(ctx); err != nil {
 		trace.Log("initialized.notify.failed", map[string]any{
 			"duration_ms": time.Since(notifyStartedAt).Milliseconds(),
 			"error":       err.Error(),
@@ -669,16 +741,18 @@ func (a *CodexAppServerAdapter) startInitializedClient(
 
 func (a *CodexAppServerAdapter) fetchAccount(
 	ctx context.Context,
-	client *acpClient,
+	client *codexAppServerClient,
 	session Session,
 	trace *codexAppServerStartupTrace,
 ) (map[string]any, bool) {
-	result, err := trace.Call(ctx, client, acpStartCallTimeout, appServerMethodAccountRead, map[string]any{},
-		func(ctx context.Context, message acpMessage) error {
-			trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
-			_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
-			return err
-		})
+	result, err := trace.TypedCall(acpStartCallTimeout, appServerMethodAccountRead, func() (json.RawMessage, error) {
+		return client.AccountRead(ctx, acpStartCallTimeout, map[string]any{},
+			func(ctx context.Context, message acpMessage) error {
+				trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
+				_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
+				return err
+			})
+	})
 	if err != nil {
 		// Account introspection is best-effort; authentication problems will
 		// surface from thread/start instead.
@@ -700,16 +774,18 @@ func (a *CodexAppServerAdapter) fetchAccount(
 
 func (a *CodexAppServerAdapter) fetchModels(
 	ctx context.Context,
-	client *acpClient,
+	client *codexAppServerClient,
 	session Session,
 	trace *codexAppServerStartupTrace,
 ) []map[string]any {
-	result, err := trace.Call(ctx, client, acpStartCallTimeout, appServerMethodModelList, map[string]any{},
-		func(ctx context.Context, message acpMessage) error {
-			trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
-			_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
-			return err
-		})
+	result, err := trace.TypedCall(acpStartCallTimeout, appServerMethodModelList, func() (json.RawMessage, error) {
+		return client.ModelList(ctx, acpStartCallTimeout, map[string]any{},
+			func(ctx context.Context, message acpMessage) error {
+				trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
+				_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
+				return err
+			})
+	})
 	if err != nil {
 		return nil
 	}
@@ -727,10 +803,12 @@ func (a *CodexAppServerAdapter) fetchModels(
 
 func (a *CodexAppServerAdapter) fetchModelsNoHandler(
 	ctx context.Context,
-	client *acpClient,
+	client *codexAppServerClient,
 	trace *codexAppServerStartupTrace,
 ) []map[string]any {
-	result, err := trace.CallNoHandler(ctx, client, acpStartCallTimeout, appServerMethodModelList, map[string]any{})
+	result, err := trace.TypedCallNoHandler(acpStartCallTimeout, appServerMethodModelList, func() (json.RawMessage, error) {
+		return client.ModelListNoHandler(ctx, acpStartCallTimeout, map[string]any{})
+	})
 	if err != nil {
 		return nil
 	}
@@ -748,16 +826,18 @@ func (a *CodexAppServerAdapter) fetchModelsNoHandler(
 
 func (a *CodexAppServerAdapter) fetchRateLimits(
 	ctx context.Context,
-	client *acpClient,
+	client *codexAppServerClient,
 	session Session,
 	trace *codexAppServerStartupTrace,
 ) map[string]any {
-	result, err := trace.Call(ctx, client, acpStartCallTimeout, appServerMethodRateLimitsRead, nil,
-		func(ctx context.Context, message acpMessage) error {
-			trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
-			_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
-			return err
-		})
+	result, err := trace.TypedCall(acpStartCallTimeout, appServerMethodRateLimitsRead, func() (json.RawMessage, error) {
+		return client.AccountRateLimitsRead(ctx, acpStartCallTimeout,
+			func(ctx context.Context, message acpMessage) error {
+				trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
+				_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
+				return err
+			})
+	})
 	if err != nil {
 		return nil
 	}
@@ -775,10 +855,12 @@ func (a *CodexAppServerAdapter) fetchRateLimits(
 
 func (a *CodexAppServerAdapter) fetchRateLimitsNoHandler(
 	ctx context.Context,
-	client *acpClient,
+	client *codexAppServerClient,
 	trace *codexAppServerStartupTrace,
 ) map[string]any {
-	result, err := trace.CallNoHandler(ctx, client, acpStartCallTimeout, appServerMethodRateLimitsRead, nil)
+	result, err := trace.TypedCallNoHandler(acpStartCallTimeout, appServerMethodRateLimitsRead, func() (json.RawMessage, error) {
+		return client.AccountRateLimitsReadNoHandler(ctx, acpStartCallTimeout)
+	})
 	if err != nil {
 		return nil
 	}
@@ -800,16 +882,18 @@ func (a *CodexAppServerAdapter) fetchRateLimitsNoHandler(
 // Best effort: any error means the capability stays off.
 func (a *CodexAppServerAdapter) fetchCollaborationModeMasks(
 	ctx context.Context,
-	client *acpClient,
+	client *codexAppServerClient,
 	session Session,
 	trace *codexAppServerStartupTrace,
 ) (map[string]any, map[string]any) {
-	result, err := trace.Call(ctx, client, acpStartCallTimeout, appServerMethodCollaborationModeList, map[string]any{},
-		func(ctx context.Context, message acpMessage) error {
-			trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
-			_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
-			return err
-		})
+	result, err := trace.TypedCall(acpStartCallTimeout, appServerMethodCollaborationModeList, func() (json.RawMessage, error) {
+		return client.CollaborationModeList(ctx, acpStartCallTimeout,
+			func(ctx context.Context, message acpMessage) error {
+				trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
+				_, err := a.handleAppServerMessage(ctx, client, session, "", message, nil, nil, nil)
+				return err
+			})
+	})
 	if err != nil {
 		return nil, nil
 	}
@@ -1057,6 +1141,146 @@ func (a *CodexAppServerAdapter) Exec(
 	emit EventSink,
 	emitCommands CommandSnapshotSink,
 ) ([]activityshared.Event, error) {
+	return a.execBlocking(ctx, session, content, displayPrompt, turnID, emit, emitCommands)
+}
+
+func (a *CodexAppServerAdapter) ExecAsync(
+	ctx context.Context,
+	session Session,
+	content []PromptContentBlock,
+	displayPrompt string,
+	turnID string,
+	emit EventSink,
+	emitCommands CommandSnapshotSink,
+) error {
+	go func() {
+		if _, err := a.execBlocking(ctx, session, content, displayPrompt, turnID, emit, emitCommands); err != nil {
+			if emit == nil {
+				return
+			}
+			if errors.Is(err, context.Canceled) {
+				emit([]activityshared.Event{newTurnActivityEvent(session, EventTurnCanceled, turnID, SessionStatusCanceled, "", "", map[string]any{
+					"error": err.Error(),
+				})})
+				return
+			}
+			emit([]activityshared.Event{newTurnActivityEvent(session, EventTurnFailed, turnID, SessionStatusFailed, "", "", acpFailureMetadata(err))})
+		}
+	}()
+	return nil
+}
+
+func (appTurn *codexAppServerActiveTurn) markTerminated() {
+	appTurn.terminatedOnce.Do(func() { close(appTurn.terminated) })
+}
+
+// markTurnSettleEmits flips the turn to settle-path terminal emission just
+// before the provider turn is submitted, under the adapter mutex so the
+// notification loop observes it consistently.
+func (a *CodexAppServerAdapter) markTurnSettleEmits(agentSessionID string, appTurn *codexAppServerActiveTurn) {
+	if a == nil || appTurn == nil {
+		return
+	}
+	a.mu.Lock()
+	appTurn.settleEmits = true
+	a.mu.Unlock()
+}
+
+// finalizeSettledTurn produces the settled turn's terminal events from the
+// notification path, releases the active-turn slot, and signals terminated —
+// terminal production no longer depends on a parked goroutine (ADR 0005 C).
+// Classification mirrors the blocking shell exactly; the shell's turnClosed
+// guard drops any duplicate.
+func (a *CodexAppServerAdapter) finalizeSettledTurn(agentSessionID string, appTurn *codexAppServerActiveTurn, terminal codexAppServerTurnTerminal) {
+	if a == nil || appTurn == nil || appTurn.emitTerminal == nil {
+		return
+	}
+	appTurn.settleFinalized.Store(true)
+	session := appTurn.session
+	turnID := appTurn.turnID
+	if terminal.err != nil {
+		if errors.Is(terminal.err, context.Canceled) ||
+			errors.Is(terminal.err, errPermissionRequestCanceled) ||
+			a.turnForceCanceled(appTurn) ||
+			terminal.phase == codexAppServerTurnPhaseCanceled {
+			terminalEvents := a.pendingRequestFailureEvents(session, turnID, errPermissionRequestCanceled)
+			terminalEvents = append(terminalEvents, appTurn.normalizer.FinishInterrupted(session, turnID, "interrupted")...)
+			terminalEvents = append(terminalEvents, newTurnActivityEvent(session, EventTurnCanceled, turnID, SessionStatusCanceled, "", "", map[string]any{
+				"error": terminal.err.Error(),
+			}))
+			appTurn.emitTerminal(terminalEvents)
+		} else {
+			terminalEvents := appTurn.normalizer.FinishFailed(session, turnID)
+			terminalEvents = append(terminalEvents, newTurnActivityEvent(session, EventTurnFailed, turnID, SessionStatusFailed, "", "", acpFailureMetadata(terminal.err)))
+			appTurn.emitTerminal(terminalEvents)
+		}
+	} else {
+		appTurn.normalizer.ApplyAssistantFinalText(appServerTurnFinalAssistantText(terminal.turn))
+		appTurn.emitTerminal(appServerTurnTerminalEvents(session, turnID, terminal.turn, appTurn.normalizer))
+	}
+	a.endActiveTurn(agentSessionID, appTurn)
+	appTurn.markTerminated()
+}
+
+// settleTurnExternal settles THIS turn (pointer match) from an external
+// death signal — context cancellation or client death — as a first-class
+// machine transition instead of a parked-goroutine select arm.
+func (a *CodexAppServerAdapter) settleTurnExternal(agentSessionID string, appTurn *codexAppServerActiveTurn, terminal codexAppServerTurnTerminal) {
+	if a == nil || appTurn == nil {
+		return
+	}
+	a.mu.Lock()
+	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
+	settled := false
+	if appSession != nil && appSession.activeTurn == appTurn && !appTurn.phase.terminal() {
+		appTurn.phase = terminal.phase
+		appSession.activeTurnID = ""
+		settled = true
+	}
+	emits := settled && appTurn.settleEmits
+	a.mu.Unlock()
+	if !settled {
+		return
+	}
+	select {
+	case appTurn.terminal <- terminal:
+	default:
+	}
+	if emits {
+		a.finalizeSettledTurn(agentSessionID, appTurn, terminal)
+	}
+}
+
+// watchTurnExternalTermination translates external death signals (context
+// cancellation, client death) into turn-machine transitions. It exits as
+// soon as the turn terminates through any path.
+func (a *CodexAppServerAdapter) watchTurnExternalTermination(appSession *codexAppServerSession, appTurn *codexAppServerActiveTurn) {
+	select {
+	case <-appTurn.terminated:
+	case <-appTurn.ctx.Done():
+		a.settleTurnExternal(appTurn.session.AgentSessionID, appTurn, codexAppServerTurnTerminal{
+			err: appTurn.ctx.Err(), phase: codexAppServerTurnPhaseCanceled,
+		})
+	case <-appSession.client.Done():
+		err := appSession.client.Err()
+		if err == nil {
+			err = ErrSessionDisconnected
+		}
+		a.settleTurnExternal(appTurn.session.AgentSessionID, appTurn, codexAppServerTurnTerminal{
+			err: err, phase: codexAppServerTurnPhaseFailed,
+		})
+	}
+}
+
+func (a *CodexAppServerAdapter) execBlocking(
+	ctx context.Context,
+	session Session,
+	content []PromptContentBlock,
+	displayPrompt string,
+	turnID string,
+	emit EventSink,
+	emitCommands CommandSnapshotSink,
+) ([]activityshared.Event, error) {
 	appSession := a.getSession(session.AgentSessionID)
 	if appSession == nil || appSession.client == nil {
 		return nil, ErrSessionDisconnected
@@ -1129,12 +1353,16 @@ func (a *CodexAppServerAdapter) Exec(
 		normalizer:   normalizer,
 		emit:         emitEvents,
 		emitCommands: emitCommands,
-		done:         make(chan map[string]any, 1),
+		kind:         codexAppServerTurnKindNormal,
+		phase:        codexAppServerTurnPhaseRunning,
+		terminal:     make(chan codexAppServerTurnTerminal, 1),
 		terminated:   make(chan struct{}),
 	}
+	appTurn.emitTerminal = emitTerminal
 	// Signal turn termination once this goroutine returns (after terminal events
 	// are emitted), so a concurrent Cancel only responds after the turn stopped.
-	defer close(appTurn.terminated)
+	// The settle path may finalize first; the Once keeps the close single.
+	defer appTurn.markTerminated()
 	if !a.beginActiveTurn(session.AgentSessionID, appTurn) {
 		return nil, ErrSessionActiveTurn
 	}
@@ -1144,11 +1372,15 @@ func (a *CodexAppServerAdapter) Exec(
 		return snapshotEvents(), err
 	}
 
+	// From here on the settle path (notification loop) owns terminal event
+	// production; the blocking shell below only waits and returns.
+	a.markTurnSettleEmits(session.AgentSessionID, appTurn)
+
 	trace := newCodexAppServerTurnTrace(session, turnID, execMetadataFromContext(ctx))
 	turnParams := appServerTurnStartParams(session, appSession.threadID, content, appSession.planModeMask, appSession.defaultModeMask, appSession.defaultModel)
 	trace.Log("turn.start.params", codexAppServerTraceTurnStartParams(session, turnParams, content))
 	turnStartedAt := time.Now()
-	result, err := appSession.client.Call(ctx, appServerMethodTurnStart, turnParams,
+	result, err := appSession.client.TurnStart(ctx, turnParams,
 		func(ctx context.Context, message acpMessage) error {
 			trace.LogMessage(message.Method, len(message.ID) > 0, len(message.Params))
 			next, err := a.handleAppServerMessage(ctx, appSession.client, session, turnID, message, normalizer, emitEvents, emitCommands)
@@ -1189,8 +1421,26 @@ func (a *CodexAppServerAdapter) Exec(
 			a.interruptActiveTurnAsync(appSession, session, appTurn, providerTurnID, "queued cancel")
 		}
 	}
+	go a.watchTurnExternalTermination(appSession, appTurn)
 	finalTurn, finishErr := a.awaitTurnCompletion(ctx, appSession, appTurn, initialTurn)
+	// The settle path finalizes AFTER delivering the terminal channel value:
+	// wait for terminated (closed at the end of finalize) so the snapshot
+	// includes the terminal events. The timeout is a safety net for any
+	// settle hole; the shell classification below then covers it.
+	select {
+	case <-appTurn.terminated:
+	case <-time.After(2 * time.Second):
+	}
 	a.endActiveTurn(session.AgentSessionID, appTurn)
+	if appTurn.settleFinalized.Load() {
+		// The settle path already produced the terminal events.
+		return snapshotEvents(), nil
+	}
+	slog.Warn(
+		"agent session app-server turn terminal produced by blocking shell (settle shadow miss)",
+		"agent_session_id", session.AgentSessionID,
+		"turn_id", turnID,
+	)
 	if finishErr != nil {
 		if errors.Is(finishErr, context.Canceled) || errors.Is(finishErr, errPermissionRequestCanceled) || a.turnForceCanceled(appTurn) {
 			terminalEvents := a.pendingRequestFailureEvents(session, turnID, errPermissionRequestCanceled)
@@ -1251,11 +1501,11 @@ func (a *CodexAppServerAdapter) awaitTurnCompletion(
 	initialTurn map[string]any,
 ) (map[string]any, error) {
 	if appServerTurnStatusTerminal(initialTurn) {
-		return initialTurn, nil
+		a.completeActiveTurn(appTurn.session.AgentSessionID, initialTurn)
 	}
 	select {
-	case finalTurn := <-appTurn.done:
-		return finalTurn, nil
+	case terminal := <-appTurn.terminal:
+		return terminal.turn, terminal.err
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-appSession.client.Done():
@@ -1269,7 +1519,7 @@ func (a *CodexAppServerAdapter) awaitTurnCompletion(
 
 func appServerTurnStatusTerminal(turn map[string]any) bool {
 	switch asString(turn["status"]) {
-	case "completed", "failed", "interrupted":
+	case "completed", "failed", "interrupted", "canceled":
 		return true
 	default:
 		return false
@@ -1287,7 +1537,7 @@ func (a *CodexAppServerAdapter) steerActiveTurn(
 	activeTurnID string,
 	emit EventSink,
 ) ([]activityshared.Event, error) {
-	_, err := appSession.client.CallNoHandler(ctx, appServerMethodTurnSteer, map[string]any{
+	_, err := appSession.client.TurnSteerNoHandler(ctx, map[string]any{
 		"threadId":       appSession.threadID,
 		"expectedTurnId": activeTurnID,
 		"input":          appServerUserInput(content),
@@ -1321,7 +1571,8 @@ func (a *CodexAppServerAdapter) execSlashCommand(
 	command, args := splitSlashCommand(displayPrompt)
 	switch command {
 	case appServerSlashCompact:
-		_, err := appSession.client.Call(ctx, appServerMethodThreadCompact, map[string]any{
+		a.transitionActiveTurnPhase(session.AgentSessionID, appTurn, codexAppServerTurnPhaseCompacting)
+		_, err := appSession.client.ThreadCompactStart(ctx, map[string]any{
 			"threadId": appSession.threadID,
 		}, a.appServerMessageHandler(appSession, session, turnID, normalizer, emitEvents, emitCommands))
 		if err != nil {
@@ -1362,7 +1613,7 @@ func (a *CodexAppServerAdapter) execSlashCommand(
 	case appServerSlashGoal:
 		method, params := appServerGoalSlashRequest(args, appSession.threadID)
 		goalObjective := strings.TrimSpace(asString(params["objective"]))
-		result, err := appSession.client.Call(ctx, method, params,
+		result, err := appSession.callGoal(ctx, method, params,
 			a.appServerMessageHandler(appSession, session, turnID, normalizer, emitEvents, emitCommands))
 		if err != nil {
 			emitTerminal([]activityshared.Event{newTurnActivityEvent(session, EventTurnFailed, turnID, SessionStatusFailed, "", "", acpFailureMetadata(err))})
@@ -1423,7 +1674,7 @@ func (a *CodexAppServerAdapter) execSlashCommand(
 	case appServerSlashReview:
 		return a.execReviewSlashCommand(ctx, appSession, session, args, turnID, appTurn, normalizer, emitEvents, emitTerminal, emitCommands)
 	case appServerSlashUndo:
-		_, err := appSession.client.Call(ctx, appServerMethodThreadRollback, map[string]any{
+		_, err := appSession.client.ThreadRollback(ctx, map[string]any{
 			"threadId": appSession.threadID,
 			"numTurns": 1,
 		}, a.appServerMessageHandler(appSession, session, turnID, normalizer, emitEvents, emitCommands))
@@ -1492,8 +1743,8 @@ func (a *CodexAppServerAdapter) waitForAutomaticGoalContinuation(
 	timer := time.NewTimer(defaultCodexAppServerGoalContinuationGraceWindow)
 	defer timer.Stop()
 	select {
-	case finalTurn := <-appTurn.done:
-		return finalTurn, true, nil
+	case terminal := <-appTurn.terminal:
+		return terminal.turn, true, terminal.err
 	case <-ctx.Done():
 		return nil, false, ctx.Err()
 	case <-timer.C:
@@ -1544,9 +1795,8 @@ func (a *CodexAppServerAdapter) requestActiveGoalContinuation(
 	if objective := strings.TrimSpace(asStringRaw(goal["objective"])); objective != "" {
 		params["objective"] = objective
 	}
-	result, err := appSession.client.Call(
+	result, err := appSession.client.ThreadGoalSet(
 		ctx,
-		appServerMethodThreadGoalSet,
 		params,
 		a.appServerMessageHandler(appSession, session, turnID, normalizer, emitEvents, emitCommands),
 	)
@@ -1565,6 +1815,7 @@ func (a *CodexAppServerAdapter) Cancel(ctx context.Context, session Session, rea
 	if appSession == nil || appSession.client == nil {
 		return nil, ErrSessionDisconnected
 	}
+	childEvents := a.interruptLinkedChildThreads(session, appSession, a.sessionMarkerTurnID(session.AgentSessionID), reason)
 	activeTurnID, queued := a.requestActiveTurnCancel(session.AgentSessionID)
 	// Unblock any handler waiting on an approval answer first: the message
 	// read loop is parked inside that handler, so the interrupt response
@@ -1572,12 +1823,15 @@ func (a *CodexAppServerAdapter) Cancel(ctx context.Context, session Session, rea
 	a.rejectPendingRequests(session.AgentSessionID, errPermissionRequestCanceled)
 	if activeTurnID == "" {
 		if queued {
-			return nil, nil
+			return childEvents, nil
+		}
+		if len(childEvents) > 0 {
+			return childEvents, nil
 		}
 		return nil, ErrSessionNoActiveTurn
 	}
 	appTurn := a.sessionActiveTurn(session.AgentSessionID)
-	return nil, a.interruptActiveTurn(ctx, appSession, session, appTurn, activeTurnID, reason)
+	return childEvents, a.interruptActiveTurn(ctx, appSession, session, appTurn, activeTurnID, reason)
 }
 
 // interruptActiveTurn stops the active turn. It first asks codex to cancel
@@ -1648,21 +1902,141 @@ func (a *CodexAppServerAdapter) sendTurnInterrupt(
 	activeTurnID string,
 	reason string,
 ) {
+	a.sendThreadInterrupt(appSession.client, session, appSession.threadID, activeTurnID, reason)
+}
+
+// scheduleChildNicknameFetches resolves spawned sub-agents' display names.
+// codex assigns each spawned agent an agentNickname on its Thread object but
+// never pushes it (no thread/name/updated for children), so - like traycer -
+// we fetch it asynchronously via thread/read and emit a subAgentName marker.
+func (a *CodexAppServerAdapter) scheduleChildNicknameFetches(session Session, childThreadIDs []string) {
+	if a == nil || len(childThreadIDs) == 0 {
+		return
+	}
+	appSession := a.getSession(session.AgentSessionID)
+	if appSession == nil || appSession.client == nil {
+		return
+	}
+	client := appSession.client
+	for _, childThreadID := range childThreadIDs {
+		go a.fetchChildThreadNickname(client, session, childThreadID)
+	}
+}
+
+func (a *CodexAppServerAdapter) fetchChildThreadNickname(client *codexAppServerClient, session Session, childThreadID string) {
+	childThreadID = strings.TrimSpace(childThreadID)
+	if client == nil || childThreadID == "" {
+		return
+	}
+	// The nickname can be assigned slightly after the spawn item announces the
+	// thread; retry a few times before giving up (numbered fallback remains).
+	for attempt := 0; attempt < 5; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-client.Done():
+				return
+			case <-time.After(2 * time.Second):
+			}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), acpStartCallTimeout)
+		raw, err := client.ThreadReadNoHandler(ctx, acpStartCallTimeout, map[string]any{
+			"threadId": childThreadID,
+		})
+		cancel()
+		if err != nil {
+			continue
+		}
+		result := map[string]any{}
+		_ = json.Unmarshal(raw, &result)
+		thread := payloadObject(result["thread"])
+		nickname := firstNonEmpty(asString(thread["agentNickname"]), asString(thread["name"]))
+		if nickname == "" {
+			continue
+		}
+		event := appServerSubAgentNameEvent(session, childThreadID, nickname)
+		if event.Type == "" {
+			return
+		}
+		if event.Payload.TurnID == "" {
+			// The activity store rejects turnless message updates.
+			event.Payload.TurnID = a.sessionMarkerTurnID(session.AgentSessionID)
+		}
+		a.emitSessionEvents(session.AgentSessionID, []activityshared.Event{event})
+		return
+	}
+}
+
+func (a *CodexAppServerAdapter) sendThreadInterrupt(
+	client *codexAppServerClient,
+	session Session,
+	threadID string,
+	turnID string,
+	reason string,
+) {
+	threadID = strings.TrimSpace(threadID)
+	if client == nil || threadID == "" {
+		return
+	}
 	interruptCtx, cancel := context.WithTimeout(context.Background(), acpPermissionModeTimeout)
 	defer cancel()
-	if _, err := appSession.client.CallNoHandler(interruptCtx, appServerMethodTurnInterrupt, map[string]any{
-		"threadId": appSession.threadID,
-		"turnId":   activeTurnID,
+	if _, err := client.TurnInterruptNoHandler(interruptCtx, acpPermissionModeTimeout, map[string]any{
+		"threadId": threadID,
+		"turnId":   strings.TrimSpace(turnID),
 	}); err != nil {
 		slog.Warn("agent session app-server interrupt failed",
 			"event", "agent_session.app_server.interrupt.failed",
 			"agent_session_id", session.AgentSessionID,
-			"provider_session_id", appSession.threadID,
-			"turn_id", activeTurnID,
+			"provider_session_id", threadID,
+			"turn_id", turnID,
 			"reason", reason,
 			"error", err.Error(),
 		)
 	}
+}
+
+func (a *CodexAppServerAdapter) interruptLinkedChildThreads(
+	session Session,
+	appSession *codexAppServerSession,
+	markerTurnID string,
+	reason string,
+) []activityshared.Event {
+	if a == nil || appSession == nil || appSession.client == nil {
+		return nil
+	}
+	childThreadIDs := a.takeLinkedChildThreadIDs(session.AgentSessionID)
+	if len(childThreadIDs) == 0 {
+		return nil
+	}
+	events := make([]activityshared.Event, 0, len(childThreadIDs))
+	for _, childThreadID := range childThreadIDs {
+		go a.sendThreadInterrupt(appSession.client, session, childThreadID, "", reason)
+		event := appServerSubAgentLifecycleEvent(session, childThreadID, markerTurnID, "canceled", reason)
+		if event.Type != "" {
+			events = append(events, event)
+		}
+	}
+	return events
+}
+
+func (a *CodexAppServerAdapter) takeLinkedChildThreadIDs(agentSessionID string) []string {
+	if a == nil {
+		return nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
+	if appSession == nil || len(appSession.childThreads) == 0 {
+		return nil
+	}
+	childThreadIDs := make([]string, 0, len(appSession.childThreads))
+	for childThreadID := range appSession.childThreads {
+		if trimmed := strings.TrimSpace(childThreadID); trimmed != "" {
+			childThreadIDs = append(childThreadIDs, trimmed)
+		}
+	}
+	sort.Strings(childThreadIDs)
+	appSession.childThreads = nil
+	return childThreadIDs
 }
 
 func (a *CodexAppServerAdapter) markTurnForceCanceled(turn *codexAppServerActiveTurn) {
@@ -1671,7 +2045,20 @@ func (a *CodexAppServerAdapter) markTurnForceCanceled(turn *codexAppServerActive
 	}
 	a.mu.Lock()
 	turn.forceCanceled = true
+	agentSessionID := turn.session.AgentSessionID
+	emits := turn.settleEmits && !turn.phase.terminal()
+	turn.phase = codexAppServerTurnPhaseCanceled
 	a.mu.Unlock()
+	terminal := codexAppServerTurnTerminal{err: errPermissionRequestCanceled, phase: codexAppServerTurnPhaseCanceled}
+	select {
+	case turn.terminal <- terminal:
+	default:
+	}
+	// Force-cancel is a first-class terminal transition: finalize from here
+	// so terminal events do not depend on the (possibly wedged) shell.
+	if emits {
+		a.finalizeSettledTurn(agentSessionID, turn, terminal)
+	}
 }
 
 func (a *CodexAppServerAdapter) turnForceCanceled(turn *codexAppServerActiveTurn) bool {
@@ -1969,6 +2356,37 @@ func (a *CodexAppServerAdapter) SubmitInteractive(ctx context.Context, session S
 	}, nil
 }
 
+// lockSessionLifecycle serializes lifecycle operations (Start, Resume, Close,
+// ReleaseLiveSession) for one agent session: any interleaving of these calls
+// could otherwise spawn a second app-server process while the first is still
+// live, or close the wrong process. The lock entry is refcounted so the map
+// does not grow with retired session IDs.
+func (a *CodexAppServerAdapter) lockSessionLifecycle(agentSessionID string) func() {
+	if a == nil {
+		return func() {}
+	}
+	key := strings.TrimSpace(agentSessionID)
+	a.lifecycleMu.Lock()
+	lock := a.lifecycleLocks[key]
+	if lock == nil {
+		lock = &codexAppServerSessionLock{}
+		a.lifecycleLocks[key] = lock
+	}
+	lock.refs++
+	a.lifecycleMu.Unlock()
+
+	lock.mu.Lock()
+	return func() {
+		lock.mu.Unlock()
+		a.lifecycleMu.Lock()
+		lock.refs--
+		if lock.refs <= 0 && a.lifecycleLocks[key] == lock {
+			delete(a.lifecycleLocks, key)
+		}
+		a.lifecycleMu.Unlock()
+	}
+}
+
 func (a *CodexAppServerAdapter) storeSession(agentSessionID string, session *codexAppServerSession) {
 	a.mu.Lock()
 	if session != nil {
@@ -1980,8 +2398,20 @@ func (a *CodexAppServerAdapter) storeSession(agentSessionID string, session *cod
 			session.pendingRequests = make(map[string]*pendingACPRequest)
 		}
 	}
-	a.sessions[strings.TrimSpace(agentSessionID)] = session
+	key := strings.TrimSpace(agentSessionID)
+	// Replacing a stored session must never orphan its app-server process:
+	// when the new entry does not carry the existing client forward, that
+	// client (and its OS process) would otherwise leak without an owner.
+	var replacedClient *codexAppServerClient
+	if existing := a.sessions[key]; existing != nil && existing != session && existing.client != nil &&
+		(session == nil || existing.client != session.client) {
+		replacedClient = existing.client
+	}
+	a.sessions[key] = session
 	a.mu.Unlock()
+	if replacedClient != nil {
+		_ = replacedClient.Close()
+	}
 }
 
 func (a *CodexAppServerAdapter) removeSession(agentSessionID string) {
@@ -2046,29 +2476,6 @@ func (a *CodexAppServerAdapter) sessionActiveTurn(agentSessionID string) *codexA
 	return appSession.activeTurn
 }
 
-// completeActiveTurn delivers the final turn payload from the
-// `turn/completed` notification to the goroutine waiting in Exec.
-func (a *CodexAppServerAdapter) completeActiveTurn(agentSessionID string, turn map[string]any) {
-	if a == nil {
-		return
-	}
-	a.mu.Lock()
-	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
-	var activeTurn *codexAppServerActiveTurn
-	if appSession != nil {
-		activeTurn = appSession.activeTurn
-		appSession.activeTurnID = ""
-	}
-	a.mu.Unlock()
-	if activeTurn == nil {
-		return
-	}
-	select {
-	case activeTurn.done <- turn:
-	default:
-	}
-}
-
 func (a *CodexAppServerAdapter) sessionActiveTurnID(agentSessionID string) string {
 	if a == nil {
 		return ""
@@ -2093,6 +2500,9 @@ func (a *CodexAppServerAdapter) requestActiveTurnCancel(agentSessionID string) (
 		return "", false
 	}
 	if activeTurnID := strings.TrimSpace(appSession.activeTurnID); activeTurnID != "" {
+		if appSession.activeTurn != nil {
+			appSession.activeTurn.phase = codexAppServerTurnPhaseInterrupting
+		}
 		return activeTurnID, false
 	}
 	if appSession.activeTurn == nil {
@@ -2102,6 +2512,7 @@ func (a *CodexAppServerAdapter) requestActiveTurnCancel(agentSessionID string) (
 		return "", false
 	}
 	appSession.activeTurn.cancelRequested = true
+	appSession.activeTurn.phase = codexAppServerTurnPhaseInterrupting
 	return "", true
 }
 
@@ -2114,6 +2525,9 @@ func (a *CodexAppServerAdapter) setSessionActiveTurnID(agentSessionID string, tu
 	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
 	if appSession != nil {
 		appSession.activeTurnID = strings.TrimSpace(turnID)
+		if appSession.activeTurnID != "" {
+			appSession.lastTurnID = appSession.activeTurnID
+		}
 		if appSession.activeTurn != nil &&
 			appSession.activeTurnID != "" &&
 			appSession.activeTurn.cancelRequested &&
@@ -2123,6 +2537,21 @@ func (a *CodexAppServerAdapter) setSessionActiveTurnID(agentSessionID string, tu
 		}
 	}
 	return false
+}
+
+// sessionMarkerTurnID resolves the turn id to stamp on child lifecycle
+// markers: the active turn when one is running, else the last settled turn.
+func (a *CodexAppServerAdapter) sessionMarkerTurnID(agentSessionID string) string {
+	if a == nil {
+		return ""
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
+	if appSession == nil {
+		return ""
+	}
+	return firstNonEmpty(appSession.activeTurnID, appSession.lastTurnID)
 }
 
 func (a *CodexAppServerAdapter) storePendingRequest(pending *pendingACPRequest) {
@@ -2135,6 +2564,7 @@ func (a *CodexAppServerAdapter) storePendingRequest(pending *pendingACPRequest) 
 		if appSession.pendingRequests == nil {
 			appSession.pendingRequests = make(map[string]*pendingACPRequest)
 		}
+		pending.state = pendingACPRequestStatePending
 		appSession.pendingRequests[strings.TrimSpace(pending.requestID)] = pending
 	}
 	a.mu.Unlock()
@@ -2186,6 +2616,7 @@ func (a *CodexAppServerAdapter) rejectPendingRequests(agentSessionID string, err
 	pending := make([]*pendingACPRequest, 0)
 	if appSession != nil && appSession.pendingRequests != nil {
 		for requestID, request := range appSession.pendingRequests {
+			request.state = pendingACPRequestStateInterrupted
 			pending = append(pending, request)
 			delete(appSession.pendingRequests, requestID)
 		}

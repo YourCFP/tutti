@@ -598,6 +598,10 @@ function booleanValue(value: unknown): boolean | null {
   return typeof value === "boolean" ? value : null;
 }
 
+export function formatAgentToolDurationMs(value: number): string {
+  return formatDuration(value);
+}
+
 function formatDuration(value: number): string {
   if (value < 1000) {
     return `${value}ms`;
