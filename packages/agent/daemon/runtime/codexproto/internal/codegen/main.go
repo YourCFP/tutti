@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"go/format"
 	"os"
 	"path/filepath"
 	"sort"
@@ -837,6 +838,13 @@ func writeProtocolMetadata(outDir, codexCommit, codexVersion string) error {
 
 func writeFile(dir, name string, contents []byte) error {
 	path := filepath.Join(dir, name)
+	if filepath.Ext(name) == ".go" {
+		formatted, err := format.Source(contents)
+		if err != nil {
+			return fmt.Errorf("format %s: %w", name, err)
+		}
+		contents = formatted
+	}
 	return os.WriteFile(path, contents, 0o644)
 }
 
