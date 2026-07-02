@@ -2048,6 +2048,7 @@ function createLabels(): AgentGUIViewLabels {
     goalClearHint: "goalClearHint",
     processing: "processing",
     turnSummary: "turnSummary",
+    userMessageLocator: "userMessageLocator",
     planLead: "planLead",
     planModes: [],
     projectLocked: "projectLocked",
