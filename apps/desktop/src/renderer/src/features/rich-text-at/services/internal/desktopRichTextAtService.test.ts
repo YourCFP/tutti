@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {
+  AgentTarget,
   AgentProviderStatus,
   TuttidClient,
   WorkspaceAgentProvider
@@ -12,6 +13,14 @@ import {
   tuttiIssueAssetUrls
 } from "../../../../../../shared/tuttiAssetProtocol.ts";
 import { DesktopRichTextAtService } from "./desktopRichTextAtService.ts";
+import {
+  mapAgentTargetsToPresentations,
+  mapAgentTargetPresentationsToProviderTargets
+} from "../../../workspace-agent/services/internal/desktopAgentsService.ts";
+import type {
+  AgentsSnapshot,
+  IAgentsService
+} from "../../../workspace-agent/services/agentsService.interface.ts";
 
 test("desktop rich text @ service assembles workspace file providers by capability", async () => {
   const searchCalls: Array<{
@@ -578,34 +587,30 @@ test("desktop rich text @ service excludes legacy provider agent pseudo apps fro
 });
 
 test("desktop rich text @ service assembles agent target mentions", async () => {
+  const targets = [
+    createAgentTarget({
+      id: "local:codex",
+      name: "Codex",
+      provider: "codex",
+      sortOrder: 10
+    }),
+    createAgentTarget({
+      id: "local:claude-code",
+      name: "Claude Code",
+      provider: "claude-code",
+      sortOrder: 20
+    }),
+    createAgentTarget({
+      enabled: false,
+      id: "disabled-codex",
+      name: "Disabled Codex",
+      provider: "codex",
+      sortOrder: 30
+    })
+  ];
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
-      async listAgentTargets() {
-        return {
-          targets: [
-            createAgentTarget({
-              id: "local:codex",
-              name: "Codex",
-              provider: "codex",
-              sortOrder: 10
-            }),
-            createAgentTarget({
-              id: "local:claude-code",
-              name: "Claude Code",
-              provider: "claude-code",
-              sortOrder: 20
-            }),
-            createAgentTarget({
-              enabled: false,
-              id: "disabled-codex",
-              name: "Disabled Codex",
-              provider: "codex",
-              sortOrder: 30
-            })
-          ]
-        };
-      }
-    } as unknown as TuttidClient
+    agentsService: createAgentsService(targets),
+    tuttidClient: {} as unknown as TuttidClient
   });
 
   const [provider] = service.getProviders({
@@ -646,27 +651,23 @@ test("desktop rich text @ service assembles agent target mentions", async () => 
 });
 
 test("desktop rich text @ service hides agent target mentions using cached provider readiness", async () => {
+  const targets = [
+    createAgentTarget({
+      id: "local:codex",
+      name: "Codex",
+      provider: "codex",
+      sortOrder: 10
+    }),
+    createAgentTarget({
+      id: "local:claude-code",
+      name: "Claude Code",
+      provider: "claude-code",
+      sortOrder: 20
+    })
+  ];
   const service = new DesktopRichTextAtService({
-    tuttidClient: {
-      async listAgentTargets() {
-        return {
-          targets: [
-            createAgentTarget({
-              id: "local:codex",
-              name: "Codex",
-              provider: "codex",
-              sortOrder: 10
-            }),
-            createAgentTarget({
-              id: "local:claude-code",
-              name: "Claude Code",
-              provider: "claude-code",
-              sortOrder: 20
-            })
-          ]
-        };
-      }
-    } as unknown as TuttidClient,
+    agentsService: createAgentsService(targets),
+    tuttidClient: {} as unknown as TuttidClient,
     agentProviderStatuses: () => [
       createAgentProviderStatus({
         availability: "ready",
@@ -712,18 +713,6 @@ test("desktop rich text @ service keeps explicit workspace app queries scoped to
               description: "Manage automations.",
               displayName: "Automation",
               scopes: ["automation"]
-            })
-          ]
-        };
-      },
-      async listAgentTargets() {
-        return {
-          targets: [
-            createAgentTarget({
-              id: "local:codex",
-              name: "Codex",
-              provider: "codex",
-              sortOrder: 10
             })
           ]
         };
@@ -935,8 +924,9 @@ function createAgentTarget(input: {
   name: string;
   provider: "codex" | "claude-code";
   sortOrder: number;
-}) {
+}): AgentTarget {
   return {
+    createdAtUnixMs: 1780272000000,
     enabled: input.enabled ?? true,
     iconKey: "",
     id: input.id,
@@ -947,8 +937,38 @@ function createAgentTarget(input: {
     name: input.name,
     provider: input.provider,
     sortOrder: input.sortOrder,
-    source: "system"
+    source: "system",
+    updatedAtUnixMs: 1780272000000
   };
+}
+
+function createAgentsService(
+  targets: readonly AgentTarget[]
+): Pick<IAgentsService, "load"> {
+  const agentTargets = mapAgentTargetsToPresentations(targets, {
+    resolveAgentIconUrl: resolveTestAgentIconUrl
+  });
+  const snapshot: AgentsSnapshot = {
+    agentTargets,
+    capturedAtUnixMs: 1780272000000,
+    providerTargets: mapAgentTargetPresentationsToProviderTargets(agentTargets)
+  };
+  return {
+    async load() {
+      return snapshot;
+    }
+  };
+}
+
+function resolveTestAgentIconUrl(provider: string): string {
+  switch (provider) {
+    case "claude-code":
+      return tuttiAgentAssetUrls.claudeCode;
+    case "codex":
+      return tuttiAgentAssetUrls.codex;
+    default:
+      return "";
+  }
 }
 
 function createAgentProviderStatus(input: {

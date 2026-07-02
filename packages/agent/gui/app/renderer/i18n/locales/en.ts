@@ -980,6 +980,7 @@ export const en = {
       mentionFilterSession: "Sessions",
       mentionFilterCollab: "Collaboration",
       mentionFilterIssue: "Tasks",
+      mentionKindAgent: "Agent",
       mentionKindApp: "App",
       mentionKindAppFactory: "App Factory",
       mentionKindFile: "File",

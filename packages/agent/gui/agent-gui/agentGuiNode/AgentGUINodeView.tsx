@@ -119,6 +119,10 @@ import {
   type AgentGUIBottomDockStoreSnapshot
 } from "./AgentGUIBottomDockStore";
 import type { AgentMessageMarkdownWorkspaceAppIcon } from "../../shared/AgentMessageMarkdown";
+import {
+  AgentTargetPresentationProvider,
+  type AgentMessageMarkdownAgentTarget
+} from "../../shared/AgentTargetPresentationContext";
 import { AgentInteractivePromptSurface } from "./AgentInteractivePromptSurface";
 import { AgentConversationListSkeleton } from "./AgentConversationListSkeleton";
 import { useAgentHostApi } from "../../agentActivityHost";
@@ -1350,9 +1354,28 @@ export function AgentGUINodeView({
     conversationRailStore,
     conversationRailStoreState
   );
+  const agentTargetPresentations = useMemo<
+    readonly AgentMessageMarkdownAgentTarget[]
+  >(
+    () =>
+      viewModel.providerTargets.flatMap((target) =>
+        target.agentTargetId
+          ? [
+              {
+                agentTargetId: target.agentTargetId,
+                iconUrl: target.iconUrl ?? null,
+                name: target.label,
+                provider: target.provider,
+                workspaceId: viewModel.workspaceId
+              }
+            ]
+          : []
+      ),
+    [viewModel.providerTargets, viewModel.workspaceId]
+  );
 
   const content = (
-    <>
+    <AgentTargetPresentationProvider agentTargets={agentTargetPresentations}>
       <div
         ref={layoutElementRef}
         className={styles.layout}
@@ -1463,7 +1486,7 @@ export function AgentGUINodeView({
           onConfirm={confirmWorkspaceReferencePicker}
         />
       )}
-    </>
+    </AgentTargetPresentationProvider>
   );
 
   return previewMode ? content : <TooltipProvider>{content}</TooltipProvider>;
@@ -3591,7 +3614,9 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
                 alt=""
                 aria-hidden="true"
                 className={styles.providerRailAvatarImage}
-                src={resolveAgentGUIHeroIconUrl(target.provider)}
+                src={
+                  target.iconUrl || resolveAgentGUIHeroIconUrl(target.provider)
+                }
               />
             </span>
             <span className={styles.providerRailTileLabel}>

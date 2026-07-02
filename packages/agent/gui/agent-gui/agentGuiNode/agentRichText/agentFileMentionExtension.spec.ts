@@ -94,8 +94,7 @@ describe("parseAgentMentionMarkdown", () => {
         kind: "agent-target",
         workspaceId: "workspace-1",
         targetId: "local:codex",
-        name: "Codex",
-        agentProviderId: "codex"
+        name: "Codex"
       }
     });
   });
@@ -281,6 +280,7 @@ describe("attrsToMentionItem", () => {
         targetId: "local:claude-code",
         workspaceId: "ws-1",
         description: "Run Claude Code locally",
+        agentProviderId: "claude-code",
         iconUrl: "tutti://agent/claude-code.svg"
       })
     ).toMatchObject({

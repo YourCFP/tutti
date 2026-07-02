@@ -515,6 +515,14 @@ export function formatAgentMentionMarkdown(
       }
     });
   }
+  if (item.kind === "agent-target") {
+    return createRichTextMentionMarkdown({
+      providerId: "agent-target",
+      entityId: item.targetId,
+      label: item.name,
+      scope: { workspaceId: item.workspaceId }
+    });
+  }
   const identity = parseRichTextMentionHref(item.href, item.name);
   return identity ? createRichTextMentionMarkdown(identity) : "";
 }
@@ -685,8 +693,7 @@ export function parseMentionItemFromHref(input: {
       href,
       workspaceId,
       targetId,
-      name,
-      agentProviderId: agentProviderIdFromTargetId(targetId)
+      name
     };
   }
   if (resource === "workspace-reference") {
@@ -933,7 +940,7 @@ export function attrsToMentionItem(
         typeof attrs.agentProviderId === "string" &&
         attrs.agentProviderId.trim()
           ? attrs.agentProviderId.trim()
-          : agentProviderIdFromTargetId(targetId) || undefined,
+          : undefined,
       iconUrl:
         typeof attrs.iconUrl === "string" && attrs.iconUrl.trim()
           ? attrs.iconUrl.trim()
@@ -1128,17 +1135,6 @@ function mentionVisual(item: AgentContextMentionItem): {
     kindLabel: "Task",
     primary: item.name
   };
-}
-
-function agentProviderIdFromTargetId(targetId: string): string | undefined {
-  const normalized = targetId.trim();
-  if (normalized === "local:codex") {
-    return "codex";
-  }
-  if (normalized === "local:claude-code") {
-    return "claude-code";
-  }
-  return undefined;
 }
 
 function sessionMentionVisual(

@@ -1,5 +1,4 @@
 import type {
-  AgentTarget,
   AgentProviderStatus,
   TuttidClient,
   WorkspaceAgentProvider
@@ -22,11 +21,14 @@ import type {
   RichTextTriggerProvider
 } from "@tutti-os/ui-rich-text/types";
 import {
-  tuttiAgentAssetUrls,
   tuttiFileAssetUrls,
   tuttiFolderAssetUrls,
   tuttiIssueAssetUrls
 } from "../../../../../../shared/tuttiAssetProtocol.ts";
+import type {
+  AgentTargetPresentation,
+  IAgentsService
+} from "../../../workspace-agent/services/agentsService.interface";
 import { resolveDesktopWorkspaceAppDefaultIconUrl } from "../../../../../../shared/workspaceAppIconDefaults.ts";
 import type {
   DesktopRichTextAtCapability,
@@ -47,6 +49,7 @@ interface DesktopRichTextAtContributor {
 }
 
 export interface DesktopRichTextAtServiceDependencies {
+  agentsService?: Pick<IAgentsService, "load">;
   tuttidClient: TuttidClient;
   /** Active UI locale getter, read at query time so locale switches are picked up. */
   getLocale?: () => string;
@@ -171,7 +174,7 @@ export class DesktopRichTextAtService implements IDesktopRichTextAtService {
       createWorkspaceFileAtContributor(dependencies.tuttidClient),
       createWorkspaceIssueAtContributor(dependencies.tuttidClient),
       createAgentTargetAtContributor({
-        tuttidClient: dependencies.tuttidClient,
+        agentsService: dependencies.agentsService,
         agentProviderStatuses: dependencies.agentProviderStatuses
       }),
       createAgentSessionAtContributor(dependencies.tuttidClient),
@@ -853,7 +856,7 @@ function workspaceIssueIdSearchKeyword(keyword: string): string | null {
 }
 
 function createAgentTargetAtContributor(contributorInput: {
-  tuttidClient: TuttidClient;
+  agentsService?: Pick<IAgentsService, "load">;
   agentProviderStatuses?: () => readonly AgentProviderStatus[] | undefined;
 }): DesktopRichTextAtContributor {
   return {
@@ -867,16 +870,20 @@ function createAgentTargetAtContributor(contributorInput: {
             if (searchInput.abortSignal?.aborted) {
               return [];
             }
-            const response =
-              await contributorInput.tuttidClient.listAgentTargets();
+            const response = await contributorInput.agentsService?.load(
+              searchInput.abortSignal
+            );
             if (searchInput.abortSignal?.aborted) {
+              return [];
+            }
+            if (!response) {
               return [];
             }
             return agentTargetAtItemsFromTargets({
               agentProviderStatuses: contributorInput.agentProviderStatuses?.(),
               keyword: searchInput.keyword,
               maxResults: searchInput.maxResults,
-              targets: response.targets,
+              targets: response.agentTargets,
               workspaceId: input.workspaceId
             });
           },
@@ -905,13 +912,15 @@ function createAgentTargetAtContributor(contributorInput: {
               return null;
             }
             return resolveMentionSafely(async () => {
-              const response =
-                await contributorInput.tuttidClient.listAgentTargets();
+              const response = await contributorInput.agentsService?.load();
+              if (!response) {
+                return null;
+              }
               const item = agentTargetAtItemsFromTargets({
                 agentProviderStatuses:
                   contributorInput.agentProviderStatuses?.(),
                 keyword: "",
-                targets: response.targets,
+                targets: response.agentTargets,
                 workspaceId
               }).find((target) => target.targetId === identity.entityId);
               if (!item) {
@@ -938,7 +947,7 @@ function agentTargetAtItemsFromTargets(input: {
   agentProviderStatuses?: readonly AgentProviderStatus[];
   keyword: string;
   maxResults?: number;
-  targets: readonly AgentTarget[];
+  targets: readonly AgentTargetPresentation[];
   workspaceId: string;
 }): AgentTargetAtItem[] {
   const keyword = input.keyword.trim().toLowerCase();
@@ -957,7 +966,7 @@ function agentTargetAtItemsFromTargets(input: {
       ) {
         return null;
       }
-      const targetId = target.id.trim();
+      const targetId = target.agentTargetId.trim();
       if (!targetId) {
         return null;
       }
@@ -968,7 +977,7 @@ function agentTargetAtItemsFromTargets(input: {
       return {
         description,
         displayName: label,
-        iconUrl: agentTargetIconUrl(provider),
+        iconUrl: target.iconUrl,
         provider,
         targetId,
         workspaceId: input.workspaceId
@@ -993,12 +1002,6 @@ function normalizeWorkspaceAgentProvider(
     default:
       return null;
   }
-}
-
-function agentTargetIconUrl(provider: WorkspaceAgentProvider): string {
-  return provider === "claude-code"
-    ? tuttiAgentAssetUrls.claudeCode
-    : tuttiAgentAssetUrls.codex;
 }
 
 function agentTargetMatchesKeyword(

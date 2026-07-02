@@ -1115,14 +1115,17 @@ When `providerTargets` is omitted, package-level AgentGUI hosts may synthesize
 local targets from the static provider catalog for picker/display compatibility.
 An explicit `providerTargets` array, including an empty array, is authoritative
 and must not fall back to static local targets. Desktop workbench loads this
-array from tuttid `agent_targets`; while that fetch is in progress it passes an
-empty array plus a loading flag so the rail can show a loading state instead of
-pretending Codex or Claude Code came from durable target data. Fallback targets
-do not change the legacy activation contract: AgentGUI does not persist or send
-their `providerTargetRef`. For system local Codex and Claude Code targets, the
-synthesized targets may expose `local:codex` and `local:claude-code` as
-`agentTargetId`, matching the legacy local `providerTargetId` format so old node
-state can fall back without remapping.
+array through the renderer `AgentsService`, which is the renderer-side source
+of truth for agent target presentation data. The same service-backed snapshot
+feeds the AgentGUI rail, the composer `@` agent target contributor, and
+readonly/markdown mention hydration. While that fetch is in progress the
+workbench passes an empty array plus a loading flag so the rail can show a
+loading state instead of pretending Codex or Claude Code came from durable
+target data. Fallback targets do not change the legacy activation contract:
+AgentGUI does not persist or send their `providerTargetRef`. For system local
+Codex and Claude Code targets, the synthesized targets may expose `local:codex`
+and `local:claude-code` as `agentTargetId`, matching the legacy local
+`providerTargetId` format so old node state can fall back without remapping.
 
 ### Conversation Projection
 
@@ -1250,8 +1253,13 @@ Agent launch mentions use the external rich-text `agent-target` provider. The
 `workspace-app` provider is reserved for real workspace apps and must not return
 legacy `agent-codex` or `agent-claude-code` pseudo apps. New agent mentions
 should serialize as `mention://agent-target/local:codex` or
-`mention://agent-target/local:claude-code`; historical pseudo-app mentions may
-remain as display tokens but are not a new insertion target.
+`mention://agent-target/local:claude-code` with workspace scope only; they must
+not serialize provider ids or icon hints into the href. Renderer display code
+must resolve labels, providers, and icons by looking up the current
+`agentTargetId` in `AgentsService`-derived presentation data, so future
+user-defined icons and editable targets have one renderer source of truth.
+Historical pseudo-app mentions may remain as display tokens but are not a new
+insertion target.
 Desktop AgentGUI host input must include the `agent-target` capability when it
 builds composer context mention providers. Inside the AgentGUI mention palette,
 the Apps tab queries only `workspace-app`; first-party launch targets appear in

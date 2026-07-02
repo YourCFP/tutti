@@ -1654,10 +1654,7 @@ function providerItemToAgentMentionItem(input: {
     };
   }
   if (input.providerId === AGENT_TARGET_PROVIDER_ID) {
-    const agentProviderId =
-      presentation.agentProviderId?.trim() ||
-      agentProviderIdFromTargetId(targetId) ||
-      undefined;
+    const agentProviderId = presentation.agentProviderId?.trim() || undefined;
     return {
       kind: "agent-target",
       href: createRichTextMentionHref({
@@ -1707,17 +1704,6 @@ function providerItemToAgentMentionItem(input: {
       inputPreview: description || undefined,
       summaryPreview
     };
-  }
-  return null;
-}
-
-function agentProviderIdFromTargetId(targetId: string): string | null {
-  const normalized = targetId.trim();
-  if (normalized === "local:codex") {
-    return "codex";
-  }
-  if (normalized === "local:claude-code") {
-    return "claude-code";
   }
   return null;
 }

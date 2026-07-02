@@ -787,6 +787,14 @@ function resolveComposerProviderIconUrl(provider: string): string {
   );
 }
 
+function resolveComposerProviderTargetIconUrl(
+  target: AgentGUIProviderTarget
+): string {
+  return (
+    target.iconUrl?.trim() || resolveComposerProviderIconUrl(target.provider)
+  );
+}
+
 export function AgentComposer({
   workspaceId,
   workspacePath,
@@ -3315,9 +3323,7 @@ export function AgentComposer({
                             alt=""
                             aria-hidden="true"
                             className="size-4 shrink-0 rounded-[4px]"
-                            src={resolveComposerProviderIconUrl(
-                              target.provider
-                            )}
+                            src={resolveComposerProviderTargetIconUrl(target)}
                           />
                           <span className="min-w-0 truncate">
                             {target.label}

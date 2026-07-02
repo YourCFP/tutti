@@ -487,7 +487,7 @@ describe("AgentMentionSearchController", () => {
     expect(labelById.get("app")).toBe("应用");
     expect(labelById.get("session")).toBe("会话");
     expect(labelById.get("issue")).toBe("任务");
-    expect(labelById.get("agent")).toBe("Agent");
+    expect(labelById.get("agent")).toBe("智能体");
   });
 
   it("uses Tasks for the English issue browse category label", () => {
