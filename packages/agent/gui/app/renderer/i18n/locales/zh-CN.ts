@@ -700,6 +700,7 @@ export const zhCN = {
       goalBudgetUsage: "{{used}}/{{budget}} tokens",
       goalClearHint: "输入 /goal clear 清除",
       processing: "正在规划下一步",
+      agentTargetRequired: "请先选择可用的 Agent 目标。",
       promptImagesUnsupported: "当前模型不支持图片输入。",
       visibleErrorStartFailed: "{{provider}} 启动失败",
       visibleErrorRequestFailed: "{{provider}} 请求失败",

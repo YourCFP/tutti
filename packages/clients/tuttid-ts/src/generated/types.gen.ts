@@ -1305,7 +1305,7 @@ export type UpdateWorkspaceAgentSessionVisibilityRequest = {
 export type CreateWorkspaceAgentSessionRequest = {
   agentSessionId: string;
   /**
-   * Preferred target-first session launch authority. When present, the daemon derives provider from the stored agent target launchRef and rejects mismatched provider values.
+   * Required target-first session launch authority. The daemon derives provider and providerTargetRef from the stored agent target launchRef and rejects mismatched provider values.
    */
   agentTargetId?: string | null;
   provider?: WorkspaceAgentProvider;
@@ -1321,7 +1321,7 @@ export type CreateWorkspaceAgentSessionRequest = {
     [key: string]: unknown;
   };
   /**
-   * Opaque host-owned provider target reference. It is not authority; trusted launchers must re-authenticate and resolve it before invoking a provider.
+   * Deprecated opaque host-owned provider target reference. It is not launch authority; the daemon derives the trusted provider target ref from the stored agent target identified by agentTargetId.
    */
   providerTargetRef?: {
     [key: string]: unknown;

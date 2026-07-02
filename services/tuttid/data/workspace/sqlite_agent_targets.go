@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
@@ -29,6 +30,10 @@ ORDER BY sort_order ASC, name ASC, id ASC
 	for rows.Next() {
 		target, err := scanAgentTarget(rows)
 		if err != nil {
+			if isSkippableAgentTargetRowError(err) {
+				slog.Warn("skipping invalid agent target row", "error", err)
+				continue
+			}
 			return nil, err
 		}
 		result = append(result, target)
@@ -144,4 +149,9 @@ func scanAgentTarget(scanner agentTargetScanner) (agenttargetbiz.Target, error) 
 		return agenttargetbiz.Target{}, err
 	}
 	return normalized, nil
+}
+
+func isSkippableAgentTargetRowError(err error) bool {
+	return errors.Is(err, agenttargetbiz.ErrInvalidTarget) ||
+		errors.Is(err, agenttargetbiz.ErrInvalidLaunchRef)
 }

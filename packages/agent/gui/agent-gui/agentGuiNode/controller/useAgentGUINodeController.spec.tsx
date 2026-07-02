@@ -1294,7 +1294,7 @@ describe("useAgentGUINodeController", () => {
     });
   });
 
-  it("passes the selected provider target ref when starting a new conversation", async () => {
+  it("passes only the selected agent target id when starting a new conversation", async () => {
     const providerTargetRef = {
       kind: "shared-agent",
       provider: "codex" as const,
@@ -1347,7 +1347,7 @@ describe("useAgentGUINodeController", () => {
           mode: "new",
           agentTargetId: "agent-target-1",
           provider: "codex",
-          providerTargetRef
+          providerTargetRef: null
         })
       );
     });
@@ -1367,6 +1367,57 @@ describe("useAgentGUINodeController", () => {
       providerTargetId: null,
       providerTargetRef: null
     });
+  });
+
+  it("blocks submit when the selected provider target has no agent target id", async () => {
+    const activate = vi.fn(
+      async (input: AgentHostActivateAgentSessionInput) => ({
+        session: agentSession(input.agentSessionId, {
+          provider: input.mode === "new" ? input.provider : "codex"
+        }),
+        activation: { mode: input.mode, status: "attached" as const }
+      })
+    );
+    installAgentHostApi({
+      list: vi.fn(async () => ({ presences: [], sessions: [] })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn()),
+      activate
+    });
+    const onDataChange = vi.fn();
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData(null),
+        providerTargets: [
+          {
+            targetId: "shared-agent:agent-1",
+            provider: "codex",
+            ref: {
+              kind: "shared-agent",
+              provider: "codex",
+              sharedAgentId: "agent-1"
+            },
+            label: "Alice's Codex"
+          }
+        ],
+        defaultProviderTargetId: "shared-agent:agent-1",
+        onDataChange
+      })
+    );
+
+    act(() => {
+      result.current.actions.submitPrompt(promptBlocks("start shared codex"));
+    });
+
+    expect(activate).not.toHaveBeenCalled();
+    expect(result.current.viewModel.detailError).toBe(
+      "Select an available agent target before starting a session."
+    );
   });
 
   it("blocks new conversation submit while provider targets are loading", async () => {
@@ -10716,6 +10767,65 @@ describe("useAgentGUINodeController", () => {
     );
     expect(activate).not.toHaveBeenCalled();
     expect(subscribeEvents).not.toHaveBeenCalled();
+  });
+
+  it("reloads new session ACP options after the selected agent target changes", async () => {
+    const getComposerOptions = vi.fn(async () => ({
+      provider: "codex",
+      effectiveSettings: {},
+      runtimeContext: {
+        configOptions: [
+          {
+            id: "model",
+            currentValue: "gpt-5",
+            options: [{ value: "gpt-5", name: "GPT-5" }]
+          }
+        ]
+      }
+    }));
+    installAgentHostApi({
+      list: vi.fn(async () => ({ presences: [], sessions: [] })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn()),
+      getComposerOptions
+    });
+
+    const { rerender } = renderHook(
+      ({ data }) =>
+        useAgentGUINodeController({
+          workspaceId: "room-1",
+          currentUserId: "user-1",
+          workspacePath: "/workspace",
+          avoidGroupingEdits: false,
+          data,
+          onDataChange: vi.fn()
+        }),
+      {
+        initialProps: {
+          data: agentGuiData(null, "codex", {
+            agentTargetId: "target-a"
+          })
+        }
+      }
+    );
+
+    await waitFor(() => {
+      expect(getComposerOptions).toHaveBeenCalledWith(
+        expect.objectContaining({ agentTargetId: "target-a" })
+      );
+    });
+
+    rerender({
+      data: agentGuiData(null, "codex", {
+        agentTargetId: "target-b"
+      })
+    });
+
+    await waitFor(() => {
+      expect(getComposerOptions).toHaveBeenCalledWith(
+        expect.objectContaining({ agentTargetId: "target-b" })
+      );
+    });
   });
 
   it("keeps new-session draft settings when loaded composer defaults differ", async () => {

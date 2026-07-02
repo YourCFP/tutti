@@ -435,6 +435,10 @@ function agentGuiStateEquals(
       composerOverridesByProviderEqual(
         left.composerOverridesByProvider,
         right.composerOverridesByProvider
+      ) &&
+      composerOverridesByAgentTargetIdEqual(
+        left.composerOverridesByAgentTargetId,
+        right.composerOverridesByAgentTargetId
       ))
   );
 }
@@ -451,6 +455,31 @@ function composerOverridesByProviderEqual(
     const key = provider as keyof NonNullable<
       AgentGUINodeData["composerOverridesByProvider"]
     >;
+    const leftSettings = left?.[key] ?? null;
+    const rightSettings = right?.[key] ?? null;
+    if (
+      (leftSettings?.model ?? null) !== (rightSettings?.model ?? null) ||
+      (leftSettings?.reasoningEffort ?? null) !==
+        (rightSettings?.reasoningEffort ?? null) ||
+      (leftSettings?.planMode ?? null) !== (rightSettings?.planMode ?? null) ||
+      (leftSettings?.permissionModeId ?? null) !==
+        (rightSettings?.permissionModeId ?? null)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function composerOverridesByAgentTargetIdEqual(
+  left: AgentGUINodeData["composerOverridesByAgentTargetId"],
+  right: AgentGUINodeData["composerOverridesByAgentTargetId"]
+): boolean {
+  const keys = new Set([
+    ...Object.keys(left ?? {}),
+    ...Object.keys(right ?? {})
+  ]);
+  for (const key of keys) {
     const leftSettings = left?.[key] ?? null;
     const rightSettings = right?.[key] ?? null;
     if (

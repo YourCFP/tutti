@@ -3370,19 +3370,6 @@ export function useAgentGUINodeController({
     normalizedProviderTargets,
     shouldFallbackToLocalProviderTargets
   ]);
-  const selectedProviderTargetIsExplicit = useMemo(
-    () =>
-      normalizedExplicitProviderTargets.some(
-        (target) =>
-          target.provider === selectedProviderTarget.provider &&
-          target.targetId === selectedProviderTarget.targetId &&
-          agentGUIProviderTargetRefsEqual(
-            target.ref,
-            selectedProviderTarget.ref
-          )
-      ),
-    [normalizedExplicitProviderTargets, selectedProviderTarget]
-  );
   const agentActivityDisplayStatusesRef = useRef<Map<
     string,
     AgentActivityDisplayStatus
@@ -3841,11 +3828,6 @@ export function useAgentGUINodeController({
   const dataRef = useRef(data);
   const selectedProviderTargetRef = useRef(selectedProviderTarget);
   selectedProviderTargetRef.current = selectedProviderTarget;
-  const selectedProviderTargetIsExplicitRef = useRef(
-    selectedProviderTargetIsExplicit
-  );
-  selectedProviderTargetIsExplicitRef.current =
-    selectedProviderTargetIsExplicit;
   const draftSettingsBySessionIdRef = useRef(draftSettingsBySessionId);
   const onDataChangeRef = useRef(onDataChange);
   const onRememberComposerDefaultsRef = useRef(onRememberComposerDefaults);
@@ -5769,6 +5751,7 @@ export function useAgentGUINodeController({
     }
     loadDraftComposerOptions({ force: true });
   }, [
+    data.agentTargetId,
     data.provider,
     loadDraftComposerOptions,
     previewMode,
@@ -5832,6 +5815,7 @@ export function useAgentGUINodeController({
     );
   }, [
     activeConversationId,
+    data.agentTargetId,
     data.provider,
     isComposerHome,
     loadDraftComposerOptions,
@@ -6555,6 +6539,11 @@ export function useAgentGUINodeController({
       ) {
         return;
       }
+      const agentTargetId = target.agentTargetId?.trim() ?? "";
+      if (!agentTargetId) {
+        setDetailError(translate("agentHost.agentGui.agentTargetRequired"));
+        return;
+      }
       const normalizedInitialContent = Array.isArray(initialContentInput)
         ? normalizeAgentPromptContentBlocks(
             initialContentInput as AgentPromptContentBlock[]
@@ -6579,11 +6568,7 @@ export function useAgentGUINodeController({
       let pendingOptimisticConversation: AgentGUIConversationSummary | null =
         null;
       void (async () => {
-        const target = selectedProviderTargetRef.current;
         const provider = target.provider;
-        const shouldUseProviderTargetRef =
-          selectedProviderTargetIsExplicitRef.current;
-        const agentTargetId = target.agentTargetId?.trim() || null;
         onDataChangeRef.current((current) =>
           current.provider === provider &&
           (current.agentTargetId ?? null) === agentTargetId
@@ -6756,7 +6741,7 @@ export function useAgentGUINodeController({
           agentSessionId,
           agentTargetId,
           provider,
-          providerTargetRef: shouldUseProviderTargetRef ? target.ref : null,
+          providerTargetRef: null,
           cwd: selectedProjectPath ?? "",
           initialContent: normalizedInitialContent,
           initialDisplayPrompt,

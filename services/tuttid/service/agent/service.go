@@ -283,10 +283,7 @@ func (s *Service) resolveCreateSessionLaunch(ctx context.Context, input CreateSe
 	requestProvider := strings.TrimSpace(input.Provider)
 	agentTargetID := strings.TrimSpace(input.AgentTargetID)
 	if agentTargetID == "" {
-		return resolvedCreateSessionLaunch{
-			Provider:          requestProvider,
-			ProviderTargetRef: clonePayload(input.ProviderTargetRef),
-		}, nil
+		return resolvedCreateSessionLaunch{}, fmt.Errorf("%w: agent target id is required for agent session launch", ErrInvalidArgument)
 	}
 	if s.AgentTargetStore == nil {
 		return resolvedCreateSessionLaunch{}, fmt.Errorf("%w: agent target store is unavailable", ErrInvalidArgument)

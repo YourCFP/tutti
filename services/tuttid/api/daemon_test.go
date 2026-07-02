@@ -949,41 +949,13 @@ func TestDaemonAPIGeneratedRoutesRetryWorkspaceAppMapsInvalidRuntimeState(t *tes
 	)
 }
 
-func TestDaemonAPIGeneratedRoutesCreateAgentSession(t *testing.T) {
-	createdAt := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+func TestDaemonAPIGeneratedRoutesCreateAgentSessionRejectsMissingAgentTarget(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, NewRoutes(DaemonAPI{
 		AgentSessionService: stubAgentSessionService{
-			createFn: func(_ context.Context, workspaceID string, input agentservice.CreateSessionInput) (agentservice.Session, error) {
-				if workspaceID != "ws-1" {
-					t.Fatalf("workspaceID = %q, want ws-1", workspaceID)
-				}
-				if input.Provider != "codex" {
-					t.Fatalf("provider = %q, want codex", input.Provider)
-				}
-				if input.AgentSessionID != "11111111-1111-4111-8111-111111111111" {
-					t.Fatalf("agent session id = %q", input.AgentSessionID)
-				}
-				if input.ConversationDetailMode != preferencesbiz.DesktopAgentConversationDetailModeGeneral {
-					t.Fatalf("conversation detail mode = %q, want %q", input.ConversationDetailMode, preferencesbiz.DesktopAgentConversationDetailModeGeneral)
-				}
-				if input.ProviderTargetRef["kind"] != "sharedAgent" || input.ProviderTargetRef["sharedAgentId"] != "agent-1" {
-					t.Fatalf("provider target ref = %#v, want shared agent ref", input.ProviderTargetRef)
-				}
-				return agentservice.Session{
-					ID:        input.AgentSessionID,
-					Provider:  "codex",
-					Status:    "created",
-					CreatedAt: createdAt,
-				}, nil
-			},
-		},
-		PreferencesService: stubPreferencesService{
-			getFn: func(context.Context) (preferencesbiz.DesktopPreferences, error) {
-				return preferencesbiz.DesktopPreferences{
-					AgentConversationDetailMode: preferencesbiz.DesktopAgentConversationDetailModeGeneral,
-					Initialized:                 true,
-				}, nil
+			createFn: func(context.Context, string, agentservice.CreateSessionInput) (agentservice.Session, error) {
+				t.Fatal("Create should not be called when agentTargetId is missing")
+				return agentservice.Session{}, nil
 			},
 		},
 	}))
@@ -998,15 +970,16 @@ func TestDaemonAPIGeneratedRoutesCreateAgentSession(t *testing.T) {
 			"sharedAgentId": "agent-1",
 		},
 	})
-	if recorder.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusCreated, recorder.Body.String())
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
 	}
-
-	var response tuttigenerated.WorkspaceAgentSessionResponse
-	decodeGeneratedRouteResponse(t, recorder, &response)
-	if response.Session.Id != "11111111-1111-4111-8111-111111111111" {
-		t.Fatalf("session id = %q, want frontend UUID", response.Session.Id)
-	}
+	assertGeneratedRouteError(
+		t,
+		recorder,
+		tuttigenerated.InvalidRequest,
+		apierrors.ReasonMalformedRequest,
+		"agentTargetId is required",
+	)
 }
 
 func TestDaemonAPIGeneratedRoutesCreateAgentSessionAllowsTargetOnlyRequest(t *testing.T) {

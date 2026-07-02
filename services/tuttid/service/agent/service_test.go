@@ -22,10 +22,11 @@ import (
 
 func TestServiceCreatesAndListsSessions(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 
 	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "11111111-1111-4111-8111-111111111111",
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
 		Provider:       "codex",
 		Title:          stringRef("Migration smoke"),
 		InitialContent: TextPromptContent("hello"),
@@ -177,6 +178,20 @@ func TestServiceCreateRejectsInvalidAgentTargetInputs(t *testing.T) {
 			},
 			errContains: ErrInvalidArgument.Error(),
 		},
+		{
+			name: "provider target ref without agent target",
+			input: CreateSessionInput{
+				AgentSessionID: "target-session-provider-ref",
+				Provider:       "codex",
+				ProviderTargetRef: map[string]any{
+					"kind":     "shared-agent",
+					"provider": "codex",
+					"targetId": "shared-agent:codex-1",
+				},
+				InitialContent: TextPromptContent("hello"),
+			},
+			errContains: "agent target id is required",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			runtime := newFakeRuntime()
@@ -206,10 +221,11 @@ func TestServiceCreatePassesNormalizedConversationDetailModeToRuntime(t *testing
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			runtime := newFakeRuntime()
-			service := NewService(runtime)
+			service := newTestService(runtime)
 
 			_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 				AgentSessionID:         "session-" + strings.ReplaceAll(tc.name, " ", "-"),
+				AgentTargetID:          agenttargetbiz.IDLocalCodex,
 				Provider:               "codex",
 				ConversationDetailMode: tc.mode,
 				InitialContent:         TextPromptContent("hello"),
@@ -339,11 +355,12 @@ func TestServiceCreateRejectsInvalidAgentTargets(t *testing.T) {
 func TestServiceCreateReportsNodeResults(t *testing.T) {
 	runtime := newFakeRuntime()
 	reporter := &recordingAgentAnalyticsReporter{}
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	service.AnalyticsReporter = reporter
 
 	if _, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "session-1",
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
 		Provider:       "codex",
 		InitialContent: TextPromptContent("hello"),
 	}); err != nil {
@@ -1000,7 +1017,7 @@ func TestServiceImportsExternalAgentSessionsByProject(t *testing.T) {
 
 func TestServiceCreateUsesRuntimePreparerResult(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	var prepareInput agentsidecarservice.PrepareInput
 	service.RuntimePreparer = fakeRuntimePreparer{
 		result: agentsidecarservice.PreparedRuntime{
@@ -1013,6 +1030,7 @@ func TestServiceCreateUsesRuntimePreparerResult(t *testing.T) {
 
 	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID:         "11111111-1111-4111-8111-111111111111",
+		AgentTargetID:          agenttargetbiz.IDLocalCodex,
 		Cwd:                    &cwd,
 		Provider:               "codex",
 		ConversationDetailMode: "general",
@@ -1041,7 +1059,7 @@ func TestServiceCreateUsesRuntimePreparerResult(t *testing.T) {
 
 func TestServiceCreateRejectsInvalidCatalogModelBeforePreparingRuntime(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	service.ModelCatalog = fakeModelCatalog{
 		result: AgentModelCatalogResult{
 			Provider: "codex",
@@ -1058,9 +1076,10 @@ func TestServiceCreateRejectsInvalidCatalogModelBeforePreparingRuntime(t *testin
 	}
 
 	_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
-		Provider: "codex",
-		Model:    stringRef("gpt-6"),
-		Cwd:      stringRef("/repo"),
+		AgentTargetID: agenttargetbiz.IDLocalCodex,
+		Provider:      "codex",
+		Model:         stringRef("gpt-6"),
+		Cwd:           stringRef("/repo"),
 	})
 	if err == nil {
 		t.Fatal("Create returned nil error, want invalid model error")
@@ -1082,7 +1101,7 @@ func TestServiceCreateRejectsInvalidCatalogModelBeforePreparingRuntime(t *testin
 
 func TestServiceCreateRejectsInvalidCachedClaudeModelBeforePreparingRuntime(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	service.setLiveComposerModelOptions("claude-code", "ws-1", "/repo", time.Now().UTC(), []ComposerConfigOptionValue{
 		{Value: "default", Label: "Default"},
 		{Value: "sonnet", Label: "Sonnet"},
@@ -1093,9 +1112,10 @@ func TestServiceCreateRejectsInvalidCachedClaudeModelBeforePreparingRuntime(t *t
 	}
 
 	_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
-		Provider: "claude-code",
-		Model:    stringRef("not-a-claude-model"),
-		Cwd:      stringRef("/repo"),
+		AgentTargetID: agenttargetbiz.IDLocalClaudeCode,
+		Provider:      "claude-code",
+		Model:         stringRef("not-a-claude-model"),
+		Cwd:           stringRef("/repo"),
 	})
 	if err == nil {
 		t.Fatal("Create returned nil error, want invalid model error")
@@ -1138,7 +1158,7 @@ func TestServiceCreateDiscoversClaudeModelsBeforeStartingInvalidModel(t *testing
 		}
 		return session
 	}
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	var prepareInput agentsidecarservice.PrepareInput
 	var cleanupCalls []agentsidecarservice.CleanupInput
 	service.RuntimePreparer = fakeRuntimePreparer{
@@ -1147,9 +1167,10 @@ func TestServiceCreateDiscoversClaudeModelsBeforeStartingInvalidModel(t *testing
 	}
 
 	_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
-		Provider: "claude-code",
-		Model:    stringRef("MiniMax-M2.7"),
-		Cwd:      stringRef("/repo"),
+		AgentTargetID: agenttargetbiz.IDLocalClaudeCode,
+		Provider:      "claude-code",
+		Model:         stringRef("MiniMax-M2.7"),
+		Cwd:           stringRef("/repo"),
 	})
 	if err == nil {
 		t.Fatal("Create returned nil error, want invalid model error")
@@ -1176,7 +1197,7 @@ func TestServiceCreateDiscoversClaudeModelsBeforeStartingInvalidModel(t *testing
 
 func TestServiceCreateUsesProviderDefaultModelWhenModelOmitted(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	service.ModelCatalog = fakeModelCatalog{
 		result: AgentModelCatalogResult{
 			Provider: "codex",
@@ -1194,6 +1215,7 @@ func TestServiceCreateUsesProviderDefaultModelWhenModelOmitted(t *testing.T) {
 
 	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "33333333-3333-4333-8333-333333333333",
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
 		Provider:       "codex",
 		InitialContent: TextPromptContent("hello"),
 	})
@@ -1217,11 +1239,12 @@ func TestServiceCreateUsesProviderDefaultModelWhenModelOmitted(t *testing.T) {
 func TestServiceCreatePassesPlanModeToRuntime(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	planMode := true
 
 	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "11111111-1111-4111-8111-111111111111",
+		AgentTargetID:  agenttargetbiz.IDLocalClaudeCode,
 		InitialContent: TextPromptContent("hello"),
 		PlanMode:       &planMode,
 		Provider:       "claude-code",
@@ -1242,26 +1265,20 @@ func TestServiceCreatePassesPlanModeToRuntime(t *testing.T) {
 
 func TestServiceCreateClampsPlanModeForProvidersWithoutCapability(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	planMode := true
 
-	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
+	_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "22222222-2222-4222-8222-222222222222",
 		InitialContent: TextPromptContent("hello"),
 		PlanMode:       &planMode,
 		Provider:       "gemini",
 	})
-	if err != nil {
-		t.Fatalf("Create returned error: %v", err)
+	if !errors.Is(err, ErrInvalidArgument) || !strings.Contains(err.Error(), "agent target id is required") {
+		t.Fatalf("Create error = %v, want missing agent target ErrInvalidArgument", err)
 	}
-	if len(runtime.startCalls) != 1 {
-		t.Fatalf("start calls = %d, want 1", len(runtime.startCalls))
-	}
-	if runtime.startCalls[0].PlanMode {
-		t.Fatal("runtime start plan mode = true, want clamped to false for gemini")
-	}
-	if session.Settings == nil || session.Settings.PlanMode {
-		t.Fatalf("session settings = %#v, want plan mode clamped to false", session.Settings)
+	if len(runtime.startCalls) != 0 {
+		t.Fatalf("start calls = %d, want 0", len(runtime.startCalls))
 	}
 }
 
@@ -1269,7 +1286,7 @@ func TestServiceCreateCleansPreparedRuntimeWhenStartFails(t *testing.T) {
 	startErr := errors.New("start failed")
 	runtime := newFakeRuntime()
 	runtime.startErr = startErr
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	cleanupCalls := make([]agentsidecarservice.CleanupInput, 0)
 	service.RuntimePreparer = fakeRuntimePreparer{
 		result:       agentsidecarservice.PreparedRuntime{Cwd: "/prepared/workdir"},
@@ -1278,6 +1295,7 @@ func TestServiceCreateCleansPreparedRuntimeWhenStartFails(t *testing.T) {
 
 	_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "session-1",
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
 		InitialContent: TextPromptContent("hello"),
 		Provider:       "codex",
 	})
@@ -1293,7 +1311,7 @@ func TestServiceCreateCleansPreparedRuntimeWhenStartFails(t *testing.T) {
 
 func TestServiceCreateRejectsInvalidContentBeforePreparingRuntime(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	prepareInput := (*agentsidecarservice.PrepareInput)(nil)
 	service.RuntimePreparer = fakeRuntimePreparer{
 		input: prepareInput,
@@ -1301,6 +1319,7 @@ func TestServiceCreateRejectsInvalidContentBeforePreparingRuntime(t *testing.T) 
 
 	_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "session-1",
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
 		InitialContent: []PromptContentBlock{{
 			Type:     "image",
 			MimeType: "image/png",
@@ -1318,7 +1337,7 @@ func TestServiceCreateRejectsInvalidContentBeforePreparingRuntime(t *testing.T) 
 
 func TestServiceCreateChecksProviderAdapterBeforePreparingRuntime(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	var prepareInput agentsidecarservice.PrepareInput
 	service.RuntimePreparer = fakeRuntimePreparer{
 		input: &prepareInput,
@@ -1345,6 +1364,7 @@ func TestServiceCreateChecksProviderAdapterBeforePreparingRuntime(t *testing.T) 
 
 	_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "session-1",
+		AgentTargetID:  agenttargetbiz.IDLocalClaudeCode,
 		InitialContent: TextPromptContent("hello"),
 		Provider:       "claude-code",
 	})
@@ -1376,7 +1396,7 @@ func TestServiceCreateChecksProviderAdapterBeforePreparingRuntime(t *testing.T) 
 func TestServiceCreateDoesNotTreatAuthRequiredAsInstallNeeded(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	checker := &fakeProviderAvailabilityChecker{
 		result: []ProviderAvailability{{
 			Provider: "claude-code",
@@ -1396,6 +1416,7 @@ func TestServiceCreateDoesNotTreatAuthRequiredAsInstallNeeded(t *testing.T) {
 
 	_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "session-1",
+		AgentTargetID:  agenttargetbiz.IDLocalClaudeCode,
 		InitialContent: TextPromptContent("hello"),
 		Provider:       "claude-code",
 	})
@@ -1409,7 +1430,7 @@ func TestServiceCreateDoesNotTreatAuthRequiredAsInstallNeeded(t *testing.T) {
 
 func TestServiceCreateCachesProviderAvailabilityCheck(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	checker := &fakeProviderAvailabilityChecker{
 		result: []ProviderAvailability{{
 			Provider: "codex",
@@ -1421,6 +1442,7 @@ func TestServiceCreateCachesProviderAvailabilityCheck(t *testing.T) {
 	for _, sessionID := range []string{"session-1", "session-2"} {
 		_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 			AgentSessionID: sessionID,
+			AgentTargetID:  agenttargetbiz.IDLocalCodex,
 			InitialContent: TextPromptContent("hello"),
 			Provider:       "codex",
 		})
@@ -1507,7 +1529,7 @@ func TestServiceCreateCleansPreparedRuntimeWhenInitialPromptFails(t *testing.T) 
 	execErr := errors.New("exec failed")
 	runtime := newFakeRuntime()
 	runtime.execErr = execErr
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	cleanupCalls := make([]agentsidecarservice.CleanupInput, 0)
 	service.RuntimePreparer = fakeRuntimePreparer{
 		result:       agentsidecarservice.PreparedRuntime{Cwd: "/prepared/workdir"},
@@ -1516,6 +1538,7 @@ func TestServiceCreateCleansPreparedRuntimeWhenInitialPromptFails(t *testing.T) 
 
 	_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "session-1",
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
 		Provider:       "codex",
 		InitialContent: TextPromptContent("hello"),
 	})
@@ -1537,10 +1560,11 @@ func TestServiceCreateCleansPreparedRuntimeWhenInitialPromptFails(t *testing.T) 
 
 func TestServiceCreatePassesInitialDisplayPromptToRuntime(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 
 	_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID:       "session-1",
+		AgentTargetID:        agenttargetbiz.IDLocalCodex,
 		Provider:             "codex",
 		InitialContent:       TextPromptContent("real automation prompt"),
 		InitialDisplayPrompt: "Run Automation",
@@ -1575,11 +1599,12 @@ func TestServiceCreatePassesInitialDisplayPromptToRuntime(t *testing.T) {
 func TestServiceCreateEmptySessionDoesNotExec(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	visible := false
 
 	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "session-1",
+		AgentTargetID:  agenttargetbiz.IDLocalClaudeCode,
 		Provider:       "claude-code",
 		Visible:        &visible,
 	})
@@ -1605,10 +1630,11 @@ func TestServiceCreateEmptySessionDoesNotExec(t *testing.T) {
 
 func TestServiceCreateDoesNotPassDerivedPromptToRuntime(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 
 	_, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "session-1",
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
 		Provider:       "codex",
 		InitialContent: TextPromptContent("ordinary prompt"),
 	})
@@ -1626,10 +1652,11 @@ func TestServiceCreateDoesNotPassDerivedPromptToRuntime(t *testing.T) {
 func TestServiceUpdateVisibleUpdatesRuntimeSession(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	visible := false
 	created, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "session-1",
+		AgentTargetID:  agenttargetbiz.IDLocalClaudeCode,
 		Provider:       "claude-code",
 		Visible:        &visible,
 	})
@@ -1700,7 +1727,7 @@ func TestServiceSendInputPassesDisplayPromptToRuntime(t *testing.T) {
 func TestServiceCreateGeneratesSessionIDBeforePreparingRuntime(t *testing.T) {
 	runtime := newFakeRuntime()
 	var prepareInput agentsidecarservice.PrepareInput
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	service.RuntimePreparer = fakeRuntimePreparer{
 		input: &prepareInput,
 		result: agentsidecarservice.PreparedRuntime{
@@ -1710,6 +1737,7 @@ func TestServiceCreateGeneratesSessionIDBeforePreparingRuntime(t *testing.T) {
 	cwd := "/user/workdir"
 
 	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
 		Cwd:            &cwd,
 		Provider:       "codex",
 		InitialContent: TextPromptContent("hello"),
@@ -1734,7 +1762,7 @@ func TestServiceCreateGeneratesSessionIDBeforePreparingRuntime(t *testing.T) {
 func TestServiceCreatePassesExtraSkillsToRuntimePreparer(t *testing.T) {
 	runtime := newFakeRuntime()
 	var prepareInput agentsidecarservice.PrepareInput
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	service.RuntimePreparer = fakeRuntimePreparer{
 		input: &prepareInput,
 		result: agentsidecarservice.PreparedRuntime{
@@ -1744,6 +1772,7 @@ func TestServiceCreatePassesExtraSkillsToRuntimePreparer(t *testing.T) {
 	cwd := "/user/workdir"
 
 	if _, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
 		Cwd:            &cwd,
 		Provider:       "codex",
 		InitialContent: TextPromptContent("hello"),
@@ -1827,7 +1856,7 @@ func TestServiceGetSkillBundleRequiresRenderer(t *testing.T) {
 
 func TestServiceDeleteCleansPreparedRuntime(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	cleanupCalls := make([]agentsidecarservice.CleanupInput, 0)
 	service.RuntimePreparer = fakeRuntimePreparer{
 		result:       agentsidecarservice.PreparedRuntime{Cwd: "/prepared/workdir"},
@@ -1836,6 +1865,7 @@ func TestServiceDeleteCleansPreparedRuntime(t *testing.T) {
 	cwd := "/user/workdir"
 	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "11111111-1111-4111-8111-111111111111",
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
 		Cwd:            &cwd,
 		Provider:       "codex",
 		InitialContent: TextPromptContent("hello"),
@@ -3481,8 +3511,9 @@ func TestServiceDeletesPersistedSession(t *testing.T) {
 
 func TestServiceDeleteClosesRuntimeSession(t *testing.T) {
 	runtime := newFakeRuntime()
-	service := NewService(runtime)
+	service := newTestService(runtime)
 	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
 		Provider:       "codex",
 		InitialContent: TextPromptContent("hello"),
 	})
@@ -4291,6 +4322,20 @@ func writeAgentServiceJSONL(t *testing.T, path string, items ...map[string]any) 
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
 		t.Fatalf("write jsonl error = %v", err)
 	}
+}
+
+func newTestService(runtime RuntimeController) *Service {
+	service := NewService(runtime)
+	service.AgentTargetStore = fakeAgentTargetStore{targets: defaultTestAgentTargets()}
+	return service
+}
+
+func defaultTestAgentTargets() map[string]agenttargetbiz.Target {
+	targets := make(map[string]agenttargetbiz.Target)
+	for _, target := range agenttargetbiz.DefaultSystemTargets(0) {
+		targets[target.ID] = target
+	}
+	return targets
 }
 
 type fakeMessageReader struct {

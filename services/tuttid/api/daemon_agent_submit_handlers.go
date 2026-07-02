@@ -28,6 +28,13 @@ func (api DaemonAPI) CreateWorkspaceAgentSession(ctx context.Context, request tu
 		}, nil
 	}
 	agentSessionID := request.Body.AgentSessionId.String()
+	if stringPtrValue(request.Body.AgentTargetId) == "" {
+		return tuttigenerated.CreateWorkspaceAgentSession400JSONResponse{
+			InvalidRequestErrorJSONResponse: invalidRequestError(
+				apierrors.MalformedRequest(apierrors.WithDeveloperMessage("agentTargetId is required")),
+			),
+		}, nil
+	}
 	metadata := mapValue(request.Body.Metadata)
 	provider := workspaceAgentProviderString(request.Body.Provider)
 	logCreateAgentSubmitTrace("api.create.received", string(request.WorkspaceID), agentSessionID, metadata, provider, "", nil)
@@ -42,7 +49,6 @@ func (api DaemonAPI) CreateWorkspaceAgentSession(ctx context.Context, request tu
 		PermissionModeID:       request.Body.PermissionModeId,
 		PlanMode:               request.Body.PlanMode,
 		BrowserUse:             request.Body.BrowserUse,
-		ProviderTargetRef:      mapValue(request.Body.ProviderTargetRef),
 		Provider:               provider,
 		ReasoningEffort:        request.Body.ReasoningEffort,
 		Speed:                  request.Body.Speed,

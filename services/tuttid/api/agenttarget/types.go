@@ -2,6 +2,8 @@ package agenttarget
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 
 	tuttigenerated "github.com/tutti-os/tutti/services/tuttid/api/generated"
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
@@ -12,6 +14,10 @@ func GeneratedListAgentTargetsResponseFromBiz(targets []agenttargetbiz.Target) (
 	for _, target := range targets {
 		generated, err := GeneratedAgentTargetFromBiz(target)
 		if err != nil {
+			if isSkippableAgentTargetError(err) {
+				slog.Warn("skipping invalid agent target in API response", "targetId", target.ID, "error", err)
+				continue
+			}
 			return tuttigenerated.ListAgentTargetsResponse{}, err
 		}
 		result = append(result, generated)
@@ -47,4 +53,9 @@ func GeneratedAgentTargetFromBiz(target agenttargetbiz.Target) (tuttigenerated.A
 		Source:          tuttigenerated.AgentTargetSource(normalized.Source),
 		UpdatedAtUnixMs: normalized.UpdatedAtUnixMS,
 	}, nil
+}
+
+func isSkippableAgentTargetError(err error) bool {
+	return errors.Is(err, agenttargetbiz.ErrInvalidTarget) ||
+		errors.Is(err, agenttargetbiz.ErrInvalidLaunchRef)
 }

@@ -2307,7 +2307,7 @@ type CreateIssueManagerTopicRequest struct {
 type CreateWorkspaceAgentSessionRequest struct {
 	AgentSessionId openapi_types.UUID `json:"agentSessionId"`
 
-	// AgentTargetId Preferred target-first session launch authority. When present, the daemon derives provider from the stored agent target launchRef and rejects mismatched provider values.
+	// AgentTargetId Required target-first session launch authority. The daemon derives provider and providerTargetRef from the stored agent target launchRef and rejects mismatched provider values.
 	AgentTargetId  *string                   `json:"agentTargetId,omitempty"`
 	BrowserUse     *bool                     `json:"browserUse,omitempty"`
 	Cwd            *string                   `json:"cwd,omitempty"`
@@ -2323,7 +2323,7 @@ type CreateWorkspaceAgentSessionRequest struct {
 	PlanMode         *bool                   `json:"planMode,omitempty"`
 	Provider         *WorkspaceAgentProvider `json:"provider,omitempty"`
 
-	// ProviderTargetRef Opaque host-owned provider target reference. It is not authority; trusted launchers must re-authenticate and resolve it before invoking a provider.
+	// ProviderTargetRef Deprecated opaque host-owned provider target reference. It is not launch authority; the daemon derives the trusted provider target ref from the stored agent target identified by agentTargetId.
 	ProviderTargetRef *map[string]interface{} `json:"providerTargetRef,omitempty"`
 	ReasoningEffort   *string                 `json:"reasoningEffort,omitempty"`
 	Speed             *string                 `json:"speed,omitempty"`

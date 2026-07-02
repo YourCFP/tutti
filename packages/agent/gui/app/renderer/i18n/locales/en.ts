@@ -758,6 +758,8 @@ export const en = {
       goalBudgetUsage: "{{used}}/{{budget}} tokens",
       goalClearHint: "Type /goal clear to clear",
       processing: "Planning next moves",
+      agentTargetRequired:
+        "Select an available agent target before starting a session.",
       promptImagesUnsupported:
         "This agent does not support image input with the current model.",
       visibleErrorStartFailed: "{{provider}} failed to start",

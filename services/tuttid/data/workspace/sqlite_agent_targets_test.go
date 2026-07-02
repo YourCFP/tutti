@@ -39,6 +39,46 @@ func TestSQLiteStoreSeedsSystemAgentTargets(t *testing.T) {
 	}
 }
 
+func TestSQLiteStoreListAgentTargetsSkipsInvalidRows(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := openTestSQLiteStore(t)
+	now := int64(1700000000000)
+	if _, err := store.db.ExecContext(ctx, `
+	INSERT INTO agent_targets (
+	  id,
+	  provider,
+	  launch_ref_json,
+	  name,
+	  icon_key,
+	  enabled,
+	  source,
+	  sort_order,
+	  created_at_ms,
+	  updated_at_ms
+	)
+	VALUES ('broken-target', 'codex', '{"type":"local_cli","provider":"claude-code"}', 'Broken Target', NULL, 1, 'user', 5, ?, ?);
+	`, now, now); err != nil {
+		t.Fatalf("insert invalid agent target fixture: %v", err)
+	}
+
+	targets, err := store.ListAgentTargets(ctx)
+	if err != nil {
+		t.Fatalf("ListAgentTargets() error = %v", err)
+	}
+	ids := make(map[string]bool, len(targets))
+	for _, target := range targets {
+		ids[target.ID] = true
+	}
+	if ids["broken-target"] {
+		t.Fatalf("ListAgentTargets() returned invalid target: %#v", targets)
+	}
+	if !ids[agenttargetbiz.IDLocalCodex] || !ids[agenttargetbiz.IDLocalClaudeCode] {
+		t.Fatalf("ListAgentTargets() ids = %#v, want system targets", ids)
+	}
+}
+
 func TestSQLiteStoreSeedReconcilesLegacySystemAgentTargetIDs(t *testing.T) {
 	t.Parallel()
 
