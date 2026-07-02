@@ -240,8 +240,19 @@ func (s *Store) ListSessionMessages(
 	}
 	hasMore := false
 	if limit > 0 && len(filtered) > limit {
+		// Page membership must be contiguous in version space: deliver the
+		// lowest `limit` undelivered versions. Stored order is display order
+		// (occurredAt), so truncating it directly could return version N while
+		// omitting an undelivered version < N; cursor-based consumers would
+		// then advance past the omitted row and lose it permanently.
+		sort.SliceStable(filtered, func(i, j int) bool {
+			return filtered[i].Version < filtered[j].Version
+		})
 		filtered = filtered[:limit]
 		hasMore = true
+		// Advertise the page boundary, not the store head, so cursors advance
+		// exactly to the end of this page.
+		latestVersion = maxSessionMessageVersion(0, filtered)
 	}
 	return ListSessionMessagesReply{
 		Messages:      sortSessionMessages(filtered),

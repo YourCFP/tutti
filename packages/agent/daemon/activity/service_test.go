@@ -302,6 +302,69 @@ func TestStoreSortsSessionMessagesByOccurredAtNotVersion(t *testing.T) {
 	}
 }
 
+func TestStoreListSessionMessagesPagesByVersionDespiteOccurredAtOrder(t *testing.T) {
+	svc := New(nil)
+	svc.TrackRoom("room-1")
+
+	// Ingest (version) order is the reverse of display (occurredAt) order.
+	svc.ApplySessionMessages("room-1", EventSource{AgentID: "agent-1"}, "agent-1", []WorkspaceAgentSessionMessageUpdate{{
+		MessageID:        "third-by-time",
+		TurnID:           "turn-1",
+		Role:             "assistant",
+		Kind:             "text",
+		Payload:          map[string]any{"text": "third"},
+		OccurredAtUnixMS: 3000,
+	}, {
+		MessageID:        "second-by-time",
+		TurnID:           "turn-1",
+		Role:             "assistant",
+		Kind:             "text",
+		Payload:          map[string]any{"text": "second"},
+		OccurredAtUnixMS: 2000,
+	}, {
+		MessageID:        "first-by-time",
+		TurnID:           "turn-1",
+		Role:             "user",
+		Kind:             "text",
+		Payload:          map[string]any{"text": "first"},
+		OccurredAtUnixMS: 1000,
+	}})
+
+	// Page with limit=1 and advance the cursor the way poller.go
+	// maxMessageVersion does: max(reply.LatestVersion, delivered versions).
+	// Every message must be delivered exactly once; a page must never contain
+	// version N while omitting an undelivered version < N.
+	delivered := []string{}
+	cursor := uint64(0)
+	for page := 0; page < 6; page++ {
+		reply, ok := svc.ListSessionMessages("room-1", "agent-1", cursor, 1)
+		if !ok {
+			t.Fatalf("ListSessionMessages ok = false on page %d", page)
+		}
+		if len(reply.Messages) == 0 {
+			if reply.HasMore {
+				t.Fatalf("empty page %d reported hasMore", page)
+			}
+			break
+		}
+		next := reply.LatestVersion
+		for _, message := range reply.Messages {
+			delivered = append(delivered, message.MessageID)
+			if message.Version > next {
+				next = message.Version
+			}
+		}
+		if next <= cursor {
+			t.Fatalf("cursor did not advance on page %d: %d -> %d", page, cursor, next)
+		}
+		cursor = next
+	}
+	want := []string{"third-by-time", "second-by-time", "first-by-time"}
+	if !reflect.DeepEqual(delivered, want) {
+		t.Fatalf("delivered = %#v, want every message in version order %#v", delivered, want)
+	}
+}
+
 func TestStoreSnapshotCarriesTurnStateAndMessagesFromActivityEvents(t *testing.T) {
 	svc := New(nil)
 	svc.TrackRoom("room-1")
