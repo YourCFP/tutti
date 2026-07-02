@@ -302,6 +302,43 @@ func TestStoreSortsSessionMessagesByOccurredAtNotVersion(t *testing.T) {
 	}
 }
 
+func TestStoreZeroOccurredAtLegacyRowSortsByFallbackTimestamp(t *testing.T) {
+	svc := New(nil)
+	svc.TrackRoom("room-1")
+
+	// Hydration (RestoreSnapshot -> mergeSnapshotMessagesLocked) stores rows
+	// as-is: legacy rows can carry StartedAt/CompletedAt but no OccurredAt.
+	svc.RestoreSnapshot("room-1", WorkspaceAgentSnapshot{
+		SessionMessagesByID: map[string][]WorkspaceAgentSessionMessage{
+			"agent-1": {{
+				MessageID:       "legacy-started-only",
+				Role:            "assistant",
+				Kind:            "text",
+				Payload:         map[string]any{"text": "old"},
+				StartedAtUnixMS: 1000,
+			}, {
+				MessageID:        "timestamped-later",
+				Role:             "assistant",
+				Kind:             "text",
+				Payload:          map[string]any{"text": "new"},
+				OccurredAtUnixMS: 2000,
+			}},
+		},
+	})
+
+	reply, ok := svc.ListSessionMessages("room-1", "agent-1", 0, 10)
+	if !ok || len(reply.Messages) != 2 {
+		t.Fatalf("messages reply = %#v, ok=%v, want two rows", reply, ok)
+	}
+	if reply.Messages[0].MessageID != "legacy-started-only" || reply.Messages[1].MessageID != "timestamped-later" {
+		t.Fatalf(
+			"order = [%s %s], want the zero-OccurredAt legacy row placed by its startedAt fallback, not forced last",
+			reply.Messages[0].MessageID,
+			reply.Messages[1].MessageID,
+		)
+	}
+}
+
 func TestStoreListSessionMessagesPagesByVersionDespiteOccurredAtOrder(t *testing.T) {
 	svc := New(nil)
 	svc.TrackRoom("room-1")

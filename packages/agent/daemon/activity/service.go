@@ -2267,14 +2267,16 @@ func sortMessageUpdates(items []WorkspaceAgentMessageUpdate) []WorkspaceAgentMes
 	sort.SliceStable(items, func(i, j int) bool {
 		left := items[i]
 		right := items[j]
-		if left.OccurredAtUnixMS != right.OccurredAtUnixMS {
-			if left.OccurredAtUnixMS == 0 {
+		leftTime := messageUpdateEffectiveTimestamp(left)
+		rightTime := messageUpdateEffectiveTimestamp(right)
+		if leftTime != rightTime {
+			if leftTime == 0 {
 				return false
 			}
-			if right.OccurredAtUnixMS == 0 {
+			if rightTime == 0 {
 				return true
 			}
-			return left.OccurredAtUnixMS < right.OccurredAtUnixMS
+			return leftTime < rightTime
 		}
 		if left.Seq != right.Seq {
 			if left.Seq == 0 {
@@ -2290,18 +2292,43 @@ func sortMessageUpdates(items []WorkspaceAgentMessageUpdate) []WorkspaceAgentMes
 	return items
 }
 
+// sessionMessageEffectiveTimestamp resolves the display timestamp used for
+// ordering. Legacy/hydrated rows (older daemons, connectors omitting
+// occurredAtUnixMs) may only carry started/completed/created times; falling
+// back keeps them at their historical position instead of forcing them after
+// every timestamped row.
+func sessionMessageEffectiveTimestamp(message WorkspaceAgentSessionMessage) int64 {
+	return firstNonZeroInt64(
+		message.OccurredAtUnixMS,
+		message.StartedAtUnixMS,
+		message.CompletedAtUnixMS,
+		message.CreatedAtUnixMS,
+		message.UpdatedAtUnixMS,
+	)
+}
+
+func messageUpdateEffectiveTimestamp(update WorkspaceAgentMessageUpdate) int64 {
+	return firstNonZeroInt64(
+		update.OccurredAtUnixMS,
+		update.StartedAtUnixMS,
+		update.CompletedAtUnixMS,
+	)
+}
+
 func sortSessionMessages(items []WorkspaceAgentSessionMessage) []WorkspaceAgentSessionMessage {
 	sort.SliceStable(items, func(i, j int) bool {
 		left := items[i]
 		right := items[j]
-		if left.OccurredAtUnixMS != right.OccurredAtUnixMS {
-			if left.OccurredAtUnixMS == 0 {
+		leftTime := sessionMessageEffectiveTimestamp(left)
+		rightTime := sessionMessageEffectiveTimestamp(right)
+		if leftTime != rightTime {
+			if leftTime == 0 {
 				return false
 			}
-			if right.OccurredAtUnixMS == 0 {
+			if rightTime == 0 {
 				return true
 			}
-			return left.OccurredAtUnixMS < right.OccurredAtUnixMS
+			return leftTime < rightTime
 		}
 		if left.Version != right.Version {
 			if left.Version == 0 {
