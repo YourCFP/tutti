@@ -326,6 +326,7 @@ export interface AgentGUIViewLabels {
   goalClearHint: string;
   processing: string;
   turnSummary: string;
+  userMessageLocator: string;
   planLead: string;
   planModes: Array<{ id: string; label: string; description: string }>;
   stayInPlan: string;
@@ -1750,13 +1751,15 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       thinkingLabel: labels.thinkingLabel,
       toolCallsLabel: labels.toolCallsLabel,
       processing: labels.processing,
-      turnSummary: labels.turnSummary
+      turnSummary: labels.turnSummary,
+      userMessageLocator: labels.userMessageLocator
     }),
     [
       labels.processing,
       labels.thinkingLabel,
       labels.toolCallsLabel,
-      labels.turnSummary
+      labels.turnSummary,
+      labels.userMessageLocator
     ]
   );
   const conversationFlowEmpty = useMemo(
@@ -5003,6 +5006,7 @@ interface AgentGUIConversationTimelinePaneProps {
     toolCallsLabel: (count: number) => string;
     processing: string;
     turnSummary: string;
+    userMessageLocator: string;
   };
 }
 
