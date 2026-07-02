@@ -44,6 +44,7 @@ import {
   listCliCapabilities,
   listWorkspaceAppMentionCandidates,
   listWorkspaceAgentGeneratedFiles,
+  listWorkspaceAgentSessionGroups,
   listUserProjects,
   listWorkspaceAgentSessionMessages,
   listWorkspaceIssues,
@@ -582,6 +583,17 @@ export function createTuttidClient(
         query: request
       });
       return unwrapData(response, "Workspace agent sessions request failed.");
+    },
+    async listWorkspaceAgentSessionGroups(workspaceID, request) {
+      const response = await listWorkspaceAgentSessionGroups({
+        client,
+        path: { workspaceID },
+        query: request
+      });
+      return unwrapData(
+        response,
+        "Workspace agent session groups request failed."
+      );
     },
     async listWorkspaceAgentGeneratedFiles(workspaceID, request) {
       const response = await listWorkspaceAgentGeneratedFiles({

@@ -3235,8 +3235,26 @@ type WorkspaceAgentSessionGitBranchesResponse struct {
 	CurrentBranch *string  `json:"currentBranch,omitempty"`
 }
 
+// WorkspaceAgentSessionGroup defines model for WorkspaceAgentSessionGroup.
+type WorkspaceAgentSessionGroup struct {
+	Cwd                          string                  `json:"cwd"`
+	HasMore                      bool                    `json:"hasMore"`
+	LatestSessionUpdatedAtUnixMs int64                   `json:"latestSessionUpdatedAtUnixMs"`
+	NextCursor                   *string                 `json:"nextCursor,omitempty"`
+	SessionCount                 int                     `json:"sessionCount"`
+	Sessions                     []WorkspaceAgentSession `json:"sessions"`
+}
+
+// WorkspaceAgentSessionGroupsResponse defines model for WorkspaceAgentSessionGroupsResponse.
+type WorkspaceAgentSessionGroupsResponse struct {
+	Groups      []WorkspaceAgentSessionGroup `json:"groups"`
+	WorkspaceId string                       `json:"workspaceId"`
+}
+
 // WorkspaceAgentSessionListResponse defines model for WorkspaceAgentSessionListResponse.
 type WorkspaceAgentSessionListResponse struct {
+	HasMore     bool                    `json:"hasMore"`
+	NextCursor  *string                 `json:"nextCursor,omitempty"`
 	Sessions    []WorkspaceAgentSession `json:"sessions"`
 	WorkspaceId string                  `json:"workspaceId"`
 }
@@ -3888,9 +3906,17 @@ type ListWorkspaceAgentGeneratedFilesParams struct {
 
 // ListWorkspaceAgentSessionsParams defines parameters for ListWorkspaceAgentSessions.
 type ListWorkspaceAgentSessionsParams struct {
+	Cwd         *string `form:"cwd,omitempty" json:"cwd,omitempty"`
+	Cursor      *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 	SearchQuery *string `form:"searchQuery,omitempty" json:"searchQuery,omitempty"`
 	Limit       *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	VisibleOnly *bool   `form:"visibleOnly,omitempty" json:"visibleOnly,omitempty"`
+}
+
+// ListWorkspaceAgentSessionGroupsParams defines parameters for ListWorkspaceAgentSessionGroups.
+type ListWorkspaceAgentSessionGroupsParams struct {
+	SessionLimit *int  `form:"sessionLimit,omitempty" json:"sessionLimit,omitempty"`
+	VisibleOnly  *bool `form:"visibleOnly,omitempty" json:"visibleOnly,omitempty"`
 }
 
 // ListWorkspaceAgentSessionMessagesParams defines parameters for ListWorkspaceAgentSessionMessages.
