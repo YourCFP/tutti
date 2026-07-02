@@ -184,6 +184,22 @@ func specWithSeparateAdapter() ProviderSpec {
 	}
 }
 
+func TestNextMissingInstallerRepairsAdapterLaunchFailureBeforeCLI(t *testing.T) {
+	spec := specWithSeparateAdapter()
+	installer, missing, target := (Service{}).nextMissingInstaller(spec, providerRuntimeResolution{
+		ReasonCode: "acp_adapter_launch_failed",
+	})
+	if !missing {
+		t.Fatal("missing = false, want true")
+	}
+	if target != "adapter" {
+		t.Fatalf("target = %q, want adapter", target)
+	}
+	if installer.Kind != spec.AdapterInstall.Kind {
+		t.Fatalf("installer.Kind = %q, want %q", installer.Kind, spec.AdapterInstall.Kind)
+	}
+}
+
 func TestServiceListReportsInstallActionWhenACPAdapterMissing(t *testing.T) {
 	service := testService(func(name string) (string, error) {
 		if name == "codex" {

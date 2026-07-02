@@ -202,6 +202,9 @@ import type {
   ListWorkspaceAgentSessionGitBranchesData,
   ListWorkspaceAgentSessionGitBranchesErrors,
   ListWorkspaceAgentSessionGitBranchesResponses,
+  ListWorkspaceAgentSessionGroupsData,
+  ListWorkspaceAgentSessionGroupsErrors,
+  ListWorkspaceAgentSessionGroupsResponses,
   ListWorkspaceAgentSessionMessagesData,
   ListWorkspaceAgentSessionMessagesErrors,
   ListWorkspaceAgentSessionMessagesResponses,
@@ -1498,6 +1501,24 @@ export const createWorkspaceAgentSession = <
       "Content-Type": "application/json",
       ...options.headers
     }
+  });
+
+/**
+ * List grouped agent session summaries for one workspace
+ */
+export const listWorkspaceAgentSessionGroups = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<ListWorkspaceAgentSessionGroupsData, ThrowOnError>
+) =>
+  (options.client ?? client).get<
+    ListWorkspaceAgentSessionGroupsResponses,
+    ListWorkspaceAgentSessionGroupsErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-sessions/groups",
+    ...options
   });
 
 /**

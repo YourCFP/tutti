@@ -1615,6 +1615,16 @@ paths:
         - agent-session
       summary: List agent sessions for one workspace
       parameters:
+        - name: cwd
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
         - name: searchQuery
           in: query
           required: false
@@ -1693,6 +1703,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkspaceAgentSessionResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/agent-sessions/groups:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: listWorkspaceAgentSessionGroups
+      tags:
+        - agent-session
+      summary: List grouped agent session summaries for one workspace
+      parameters:
+        - name: sessionLimit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: visibleOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Workspace agent session groups
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAgentSessionGroupsResponse"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
         "400":
@@ -6241,6 +6291,7 @@ components:
       required:
         - workspaceId
         - sessions
+        - hasMore
       properties:
         workspaceId:
           type: string
@@ -6249,6 +6300,53 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WorkspaceAgentSession"
+        hasMore:
+          type: boolean
+        nextCursor:
+          type: string
+          minLength: 1
+    WorkspaceAgentSessionGroup:
+      type: object
+      additionalProperties: false
+      required:
+        - cwd
+        - sessionCount
+        - latestSessionUpdatedAtUnixMs
+        - sessions
+        - hasMore
+      properties:
+        cwd:
+          type: string
+        sessionCount:
+          type: integer
+          minimum: 0
+        latestSessionUpdatedAtUnixMs:
+          type: integer
+          format: int64
+          minimum: 0
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAgentSession"
+        hasMore:
+          type: boolean
+        nextCursor:
+          type: string
+          minLength: 1
+    WorkspaceAgentSessionGroupsResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - workspaceId
+        - groups
+      properties:
+        workspaceId:
+          type: string
+          minLength: 1
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAgentSessionGroup"
     ExternalAgentImportScanRequest:
       type: object
       additionalProperties: false

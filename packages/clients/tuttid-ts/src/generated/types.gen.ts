@@ -1209,6 +1209,22 @@ export type WorkspaceAgentGeneratedFileListResponse = {
 export type WorkspaceAgentSessionListResponse = {
   workspaceId: string;
   sessions: Array<WorkspaceAgentSession>;
+  hasMore: boolean;
+  nextCursor?: string;
+};
+
+export type WorkspaceAgentSessionGroup = {
+  cwd: string;
+  sessionCount: number;
+  latestSessionUpdatedAtUnixMs: number;
+  sessions: Array<WorkspaceAgentSession>;
+  hasMore: boolean;
+  nextCursor?: string;
+};
+
+export type WorkspaceAgentSessionGroupsResponse = {
+  workspaceId: string;
+  groups: Array<WorkspaceAgentSessionGroup>;
 };
 
 export type ExternalAgentImportScanRequest = {
@@ -4703,6 +4719,8 @@ export type ListWorkspaceAgentSessionsData = {
     workspaceID: string;
   };
   query?: {
+    cwd?: string;
+    cursor?: string;
     searchQuery?: string;
     limit?: number;
     visibleOnly?: boolean;
@@ -4798,6 +4816,58 @@ export type CreateWorkspaceAgentSessionResponses = {
 
 export type CreateWorkspaceAgentSessionResponse =
   CreateWorkspaceAgentSessionResponses[keyof CreateWorkspaceAgentSessionResponses];
+
+export type ListWorkspaceAgentSessionGroupsData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+  };
+  query?: {
+    sessionLimit?: number;
+    visibleOnly?: boolean;
+  };
+  url: "/v1/workspaces/{workspaceID}/agent-sessions/groups";
+};
+
+export type ListWorkspaceAgentSessionGroupsErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type ListWorkspaceAgentSessionGroupsError =
+  ListWorkspaceAgentSessionGroupsErrors[keyof ListWorkspaceAgentSessionGroupsErrors];
+
+export type ListWorkspaceAgentSessionGroupsResponses = {
+  /**
+   * Workspace agent session groups
+   */
+  200: WorkspaceAgentSessionGroupsResponse;
+};
+
+export type ListWorkspaceAgentSessionGroupsResponse =
+  ListWorkspaceAgentSessionGroupsResponses[keyof ListWorkspaceAgentSessionGroupsResponses];
 
 export type ScanWorkspaceExternalAgentSessionImportsData = {
   body?: ExternalAgentImportScanRequest;
