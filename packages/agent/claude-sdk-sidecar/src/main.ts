@@ -174,6 +174,14 @@ type AssistantSegmentState = {
 
 const DEFAULT_FORCE_CANCEL_GRACE_MS = 30_000;
 const CLAUDE_AUTH_REFRESH_LOG_PREFIX = "CLAUDE_CODE_AUTH_REFRESH_DEBUG";
+const CLAUDE_AUTH_REFRESH_CREDENTIAL_SNAPSHOT_TTL_MS = 300;
+
+let cachedClaudeCredentialSnapshot:
+  | {
+      readonly capturedAtMs: number;
+      readonly snapshot: Record<string, unknown>;
+    }
+  | undefined;
 
 class AsyncPromptQueue {
   private readonly values: PromptQueueItem[] = [];
@@ -3418,6 +3426,21 @@ function debugClaudeAuthRefreshLog(
 }
 
 function claudeCredentialSnapshot(): Record<string, unknown> {
+  const now = Date.now();
+  if (
+    cachedClaudeCredentialSnapshot &&
+    now - cachedClaudeCredentialSnapshot.capturedAtMs <=
+      CLAUDE_AUTH_REFRESH_CREDENTIAL_SNAPSHOT_TTL_MS
+  ) {
+    return {
+      ...cachedClaudeCredentialSnapshot.snapshot,
+      cache: {
+        hit: true,
+        ageMs: now - cachedClaudeCredentialSnapshot.capturedAtMs,
+        ttlMs: CLAUDE_AUTH_REFRESH_CREDENTIAL_SNAPSHOT_TTL_MS
+      }
+    };
+  }
   const configDir = claudeConfigDir();
   const keychain = claudeKeychainCredentialSnapshot(configDir);
   const plaintext = claudePlaintextCredentialSnapshot(configDir);
@@ -3427,7 +3450,7 @@ function claudeCredentialSnapshot(): Record<string, unknown> {
       : plaintext.found && plaintext.hasAccessToken
         ? "plaintext"
         : "none";
-  return {
+  const snapshot = {
     storageBackend:
       process.platform === "darwin"
         ? "keychain-with-plaintext-fallback"
@@ -3436,8 +3459,18 @@ function claudeCredentialSnapshot(): Record<string, unknown> {
     configDirDefault: !process.env.CLAUDE_CONFIG_DIR,
     effectiveSource,
     keychain,
-    plaintext
+    plaintext,
+    cache: {
+      hit: false,
+      ageMs: 0,
+      ttlMs: CLAUDE_AUTH_REFRESH_CREDENTIAL_SNAPSHOT_TTL_MS
+    }
   };
+  cachedClaudeCredentialSnapshot = {
+    capturedAtMs: now,
+    snapshot
+  };
+  return snapshot;
 }
 
 function claudeKeychainCredentialSnapshot(
