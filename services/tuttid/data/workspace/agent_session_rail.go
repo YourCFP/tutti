@@ -40,12 +40,13 @@ func classifyAgentSessionRailSectionTx(
 	ctx context.Context,
 	tx *sql.Tx,
 	cwd string,
+	runtimeContext map[string]any,
 ) (agentSessionRailSection, error) {
 	projects, err := listAgentSessionRailProjects(ctx, tx)
 	if err != nil {
 		return agentSessionRailSection{}, err
 	}
-	return classifyAgentSessionRailSection(cwd, projects), nil
+	return classifyAgentSessionRailSection(cwd, runtimeContext, projects), nil
 }
 
 func resolveAgentSessionRailSectionTx(
@@ -56,6 +57,7 @@ func resolveAgentSessionRailSectionTx(
 	hasExisting bool,
 	existingCWD string,
 	finalCWD string,
+	runtimeContext map[string]any,
 ) (agentSessionRailSection, error) {
 	existingRail, err := getExistingAgentSessionRailSectionTx(ctx, tx, workspaceID, agentSessionID)
 	if err != nil {
@@ -64,7 +66,7 @@ func resolveAgentSessionRailSectionTx(
 	if hasExisting && existingRail.Found && existingRail.Valid && strings.TrimSpace(existingCWD) == strings.TrimSpace(finalCWD) {
 		return existingRail.Section, nil
 	}
-	return classifyAgentSessionRailSectionTx(ctx, tx, finalCWD)
+	return classifyAgentSessionRailSectionTx(ctx, tx, finalCWD, runtimeContext)
 }
 
 func getExistingAgentSessionRailSectionTx(
@@ -95,9 +97,22 @@ WHERE workspace_id = ? AND agent_session_id = ?
 
 func classifyAgentSessionRailSection(
 	cwd string,
+	runtimeContext map[string]any,
 	projects []agentSessionRailProject,
 ) agentSessionRailSection {
 	normalizedCWD := normalizeAgentSessionRailPath(cwd)
+	for _, project := range projects {
+		if project.Path == normalizedCWD {
+			return agentSessionRailSection{
+				Kind:        agentSessionRailSectionKindProject,
+				ProjectPath: project.Path,
+				Key:         agentSessionRailSectionKeyForProject(project.Path),
+			}
+		}
+	}
+	if isAgentSessionNoProjectRuntimeContext(runtimeContext) || isAgentSessionScratchCWD(normalizedCWD) {
+		return conversationsAgentSessionRailSection()
+	}
 	for _, project := range projects {
 		if agentSessionRailPathContains(project.Path, normalizedCWD) {
 			return agentSessionRailSection{
@@ -106,9 +121,6 @@ func classifyAgentSessionRailSection(
 				Key:         agentSessionRailSectionKeyForProject(project.Path),
 			}
 		}
-	}
-	if isAgentSessionScratchCWD(normalizedCWD) {
-		return conversationsAgentSessionRailSection()
 	}
 	return conversationsAgentSessionRailSection()
 }
@@ -182,6 +194,21 @@ func agentSessionRailPathContains(parent string, child string) bool {
 		return false
 	}
 	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func isAgentSessionNoProjectRuntimeContext(runtimeContext map[string]any) bool {
+	value, ok := runtimeContext["externalImportNoProject"]
+	if !ok {
+		return false
+	}
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		return strings.EqualFold(strings.TrimSpace(typed), "true")
+	default:
+		return false
+	}
 }
 
 func isAgentSessionScratchCWD(cwd string) bool {

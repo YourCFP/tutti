@@ -778,12 +778,124 @@ func TestAgentSessionRailScratchDateDirectoriesUseConversations(t *testing.T) {
 		if err := mkdirAll(cwd); err != nil {
 			t.Fatalf("mkdir %q error = %v", cwd, err)
 		}
-		rail := classifyAgentSessionRailSection(cwd, nil)
+		rail := classifyAgentSessionRailSection(cwd, nil, nil)
 		if rail.Kind != agentSessionRailSectionKindConversations ||
 			rail.ProjectPath != "" ||
 			rail.Key != agentSessionRailSectionKeyConversations {
 			t.Fatalf("scratch cwd %q rail = %#v, want conversations", cwd, rail)
 		}
+	}
+}
+
+func TestSQLiteStoreAgentSessionRailNoProjectPrecedesParentProject(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	store := openTestSQLiteStore(t)
+	ctx := context.Background()
+
+	if err := store.Create(ctx, workspacebiz.Summary{
+		ID:   "ws-agent-rail-no-project",
+		Name: "Workspace Agent Rail No Project",
+	}); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	scratchCwd := filepath.Join(home, "Documents", "Codex", "2026-07-03", "codex-session")
+	importedNoProjectCwd := filepath.Join(home, "external-import")
+	for _, path := range []string{scratchCwd, importedNoProjectCwd} {
+		if err := mkdirAll(path); err != nil {
+			t.Fatalf("mkdir %q error = %v", path, err)
+		}
+	}
+	if _, err := store.PutUserProject(ctx, userprojectbiz.Project{
+		ID:    "project-home",
+		Path:  home,
+		Label: "home",
+	}); err != nil {
+		t.Fatalf("PutUserProject(home) error = %v", err)
+	}
+
+	for _, tc := range []struct {
+		sessionID      string
+		cwd            string
+		runtimeContext map[string]any
+	}{
+		{
+			sessionID: "session-scratch-under-home",
+			cwd:       scratchCwd,
+		},
+		{
+			sessionID:      "session-import-marker-under-home",
+			cwd:            importedNoProjectCwd,
+			runtimeContext: map[string]any{"externalImportNoProject": true},
+		},
+	} {
+		if _, err := store.ReportSessionState(ctx, agentactivitybiz.SessionStateReport{
+			WorkspaceID:      "ws-agent-rail-no-project",
+			AgentSessionID:   tc.sessionID,
+			Origin:           agentsessionstore.WorkspaceAgentSessionOriginRuntime,
+			Provider:         "codex",
+			RuntimeContext:   tc.runtimeContext,
+			Cwd:              tc.cwd,
+			Status:           "completed",
+			OccurredAtUnixMS: 100,
+		}); err != nil {
+			t.Fatalf("ReportSessionState(%s) error = %v", tc.sessionID, err)
+		}
+		rail := getTestAgentSessionRailSection(t, store, "ws-agent-rail-no-project", tc.sessionID)
+		if rail.Kind != agentSessionRailSectionKindConversations ||
+			rail.ProjectPath != "" ||
+			rail.Key != agentSessionRailSectionKeyConversations {
+			t.Fatalf("rail(%s) = %#v, want conversations", tc.sessionID, rail)
+		}
+	}
+}
+
+func TestSQLiteStoreAgentSessionRailExactProjectPrecedesNoProject(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	store := openTestSQLiteStore(t)
+	ctx := context.Background()
+
+	if err := store.Create(ctx, workspacebiz.Summary{
+		ID:   "ws-agent-rail-exact-project",
+		Name: "Workspace Agent Rail Exact Project",
+	}); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	scratchCwd := filepath.Join(home, "Documents", "Codex", "2026-07-03", "codex-session")
+	if err := mkdirAll(scratchCwd); err != nil {
+		t.Fatalf("mkdir scratch cwd error = %v", err)
+	}
+	scratchCanonical := normalizeAgentSessionRailPath(scratchCwd)
+	if _, err := store.PutUserProject(ctx, userprojectbiz.Project{
+		ID:    "project-scratch",
+		Path:  scratchCwd,
+		Label: "scratch",
+	}); err != nil {
+		t.Fatalf("PutUserProject(scratch) error = %v", err)
+	}
+
+	if _, err := store.ReportSessionState(ctx, agentactivitybiz.SessionStateReport{
+		WorkspaceID:      "ws-agent-rail-exact-project",
+		AgentSessionID:   "session-exact-scratch",
+		Origin:           agentsessionstore.WorkspaceAgentSessionOriginRuntime,
+		Provider:         "codex",
+		RuntimeContext:   map[string]any{"externalImportNoProject": true},
+		Cwd:              scratchCwd,
+		Status:           "completed",
+		OccurredAtUnixMS: 100,
+	}); err != nil {
+		t.Fatalf("ReportSessionState() error = %v", err)
+	}
+	rail := getTestAgentSessionRailSection(t, store, "ws-agent-rail-exact-project", "session-exact-scratch")
+	if rail.Kind != agentSessionRailSectionKindProject ||
+		rail.ProjectPath != scratchCanonical ||
+		rail.Key != agentSessionRailSectionKeyForProject(scratchCanonical) {
+		t.Fatalf("rail = %#v, want exact scratch project %q", rail, scratchCanonical)
 	}
 }
 
@@ -801,8 +913,9 @@ func TestSQLiteStoreMigrationBackfillsAgentSessionRailSectionsFromUserProjects(t
 
 	repo := filepath.Join(t.TempDir(), "repo")
 	repoSubdir := filepath.Join(repo, "pkg")
+	importedNoProjectDir := filepath.Join(repo, "imported-no-project")
 	otherDir := filepath.Join(t.TempDir(), "other")
-	for _, path := range []string{repoSubdir, otherDir} {
+	for _, path := range []string{repoSubdir, importedNoProjectDir, otherDir} {
 		if err := mkdirAll(path); err != nil {
 			t.Fatalf("mkdir %q error = %v", path, err)
 		}
@@ -826,6 +939,7 @@ CREATE TABLE user_projects (
 CREATE TABLE workspace_agent_sessions (
   workspace_id TEXT NOT NULL,
   agent_session_id TEXT NOT NULL,
+  runtime_context_json TEXT NOT NULL DEFAULT '{}',
   cwd TEXT NOT NULL DEFAULT '',
   deleted_at_unix_ms INTEGER NOT NULL DEFAULT 0,
   updated_at_unix_ms INTEGER NOT NULL,
@@ -841,11 +955,12 @@ VALUES ('project-repo', ?, 'repo', 1, 1, 1);
 		t.Fatalf("insert legacy user project error = %v", err)
 	}
 	if _, err := store.db.ExecContext(ctx, `
-INSERT INTO workspace_agent_sessions (workspace_id, agent_session_id, cwd, deleted_at_unix_ms, updated_at_unix_ms)
+INSERT INTO workspace_agent_sessions (workspace_id, agent_session_id, runtime_context_json, cwd, deleted_at_unix_ms, updated_at_unix_ms)
 VALUES
-  ('ws-agent-rail-migration', 'session-project', ?, 0, 1),
-  ('ws-agent-rail-migration', 'session-conversations', ?, 0, 1);
-`, repoSubdir, otherDir); err != nil {
+  ('ws-agent-rail-migration', 'session-project', '{}', ?, 0, 1),
+  ('ws-agent-rail-migration', 'session-import-no-project', '{"externalImportNoProject":true}', ?, 0, 1),
+  ('ws-agent-rail-migration', 'session-conversations', '{}', ?, 0, 1);
+`, repoSubdir, importedNoProjectDir, otherDir); err != nil {
 		t.Fatalf("insert legacy agent sessions error = %v", err)
 	}
 
@@ -858,6 +973,12 @@ VALUES
 		projectRail.ProjectPath != repoCanonical ||
 		projectRail.Key != agentSessionRailSectionKeyForProject(repoCanonical) {
 		t.Fatalf("project rail = %#v, want project %q", projectRail, repoCanonical)
+	}
+	importNoProjectRail := getTestAgentSessionRailSection(t, store, "ws-agent-rail-migration", "session-import-no-project")
+	if importNoProjectRail.Kind != agentSessionRailSectionKindConversations ||
+		importNoProjectRail.ProjectPath != "" ||
+		importNoProjectRail.Key != agentSessionRailSectionKeyConversations {
+		t.Fatalf("import no-project rail = %#v, want conversations", importNoProjectRail)
 	}
 	conversationRail := getTestAgentSessionRailSection(t, store, "ws-agent-rail-migration", "session-conversations")
 	if conversationRail.Kind != agentSessionRailSectionKindConversations ||

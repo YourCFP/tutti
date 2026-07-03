@@ -616,6 +616,7 @@ func upsertAgentSessionTx(
 		hasExisting,
 		existing.CWD,
 		session.CWD,
+		session.RuntimeContext,
 	)
 	if err != nil {
 		return false, false, 0, agentactivitybiz.Session{}, err

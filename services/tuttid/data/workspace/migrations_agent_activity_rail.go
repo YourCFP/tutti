@@ -72,7 +72,7 @@ func (s *SQLiteStore) backfillAgentSessionRailSections(ctx context.Context) erro
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
-SELECT workspace_id, agent_session_id, cwd
+SELECT workspace_id, agent_session_id, cwd, runtime_context_json
 FROM workspace_agent_sessions
 WHERE rail_section_key = ?
 `, agentSessionRailSectionKeyConversations)
@@ -91,10 +91,15 @@ WHERE rail_section_key = ?
 		var workspaceID string
 		var agentSessionID string
 		var cwd string
-		if err := rows.Scan(&workspaceID, &agentSessionID, &cwd); err != nil {
+		var runtimeContextJSON string
+		if err := rows.Scan(&workspaceID, &agentSessionID, &cwd, &runtimeContextJSON); err != nil {
 			return fmt.Errorf("scan workspace agent session for rail section backfill: %w", err)
 		}
-		section := classifyAgentSessionRailSection(cwd, projects)
+		runtimeContext, err := unmarshalJSONMap(runtimeContextJSON)
+		if err != nil {
+			return fmt.Errorf("decode workspace agent session runtime context for rail section backfill: %w", err)
+		}
+		section := classifyAgentSessionRailSection(cwd, runtimeContext, projects)
 		if section.Kind != agentSessionRailSectionKindProject {
 			continue
 		}

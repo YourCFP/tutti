@@ -601,11 +601,11 @@ delimited by ---`, and the composer skill picker may show partial or
   Persist Agent GUI rail grouping in daemon-owned
   `workspace_agent_sessions.rail_section_*` fields from the shared
   `services/tuttid/data/workspace` classifier. Migration and session-state
-  upsert should both use that classifier, matching exact user projects and
-  longest project parents before falling back to conversations for no-project
-  or provider scratch cwd shapes. Do not rederive historical rail assignment
-  from the current user-project list during read pagination; keep existing rail
-  fields stable when a session's final cwd has not changed.
+  upsert should both use that classifier, matching exact user projects first,
+  then preserving no-project/provider scratch cwd shapes as conversations, then
+  applying longest parent-project matches. Do not rederive historical rail
+  assignment from the current user-project list during read pagination; keep
+  existing rail fields stable when a session's final cwd has not changed.
 - Validation:
   Run
   `pnpm --filter @tutti-os/agent-gui test -- agent-gui/agentGuiNode/model/agentGuiConversationModel.spec.ts`,
