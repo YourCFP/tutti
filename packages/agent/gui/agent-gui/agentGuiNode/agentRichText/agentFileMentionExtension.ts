@@ -155,6 +155,7 @@ export interface AgentFileMentionExtensionOptions {
   onSuggestionKeyDown?: (event: KeyboardEvent) => boolean;
   removeActionAriaLabel?: string;
   renderAsLink?: boolean;
+  shouldSuppressSuggestion?: () => boolean;
 }
 
 export interface ParsedAgentMentionMarkdown {
@@ -394,6 +395,9 @@ export function createAgentFileMentionExtension(
           allowSpaces: true,
           items: () => [],
           allow: ({ state, range }) => {
+            if (options.shouldSuppressSuggestion?.()) {
+              return false;
+            }
             if (range.from <= 1) {
               return true;
             }

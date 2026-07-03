@@ -1245,6 +1245,12 @@ files or `workspace-reference` mentions must clear the active trigger text
 before launching the picker, otherwise the raw `@` query remains in the
 composer before the inserted mention.
 
+Pasting text that contains an `@` must not be treated as active mention input
+unless the paste leaves the caret immediately after the `@` trigger. A bare
+`@` paste may open the mention panel; a complete pasted query such as `@readme`
+should remain plain prompt text until the user explicitly places the caret in
+an active trigger position.
+
 `workspace-reference` hrefs are the passive reference contract, not a visual
 metadata store. Do not serialize app icons into the href just to render a chip.
 For `source=app` references, readonly and markdown renderers should hydrate the

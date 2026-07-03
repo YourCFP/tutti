@@ -4473,7 +4473,8 @@ describe("AgentGUINode", () => {
     });
     renderAgentGUINode();
 
-    pasteComposerText("@read");
+    pasteComposerText("@");
+    pasteComposerText("read");
     const palette = await screen.findByRole("listbox", {
       name: "agentHost.agentGui.fileMentionPalette"
     });
@@ -4882,7 +4883,8 @@ describe("AgentGUINode", () => {
     );
     renderAgentGUINode();
 
-    pasteComposerText("@read");
+    pasteComposerText("@");
+    pasteComposerText("read");
     const palette = await screen.findByRole("listbox", {
       name: "agentHost.agentGui.fileMentionPalette"
     });
@@ -5465,6 +5467,28 @@ describe("AgentGUINode", () => {
     expect(mockSearchWorkspaceFileManagerEntries).not.toHaveBeenCalledWith(
       expect.objectContaining({
         query: "b.com"
+      })
+    );
+    expect(
+      screen.queryByRole("listbox", {
+        name: "agentHost.agentGui.fileMentionPalette"
+      })
+    ).toBeNull();
+  });
+
+  it("does not open the mention panel after pasting a complete at query", async () => {
+    mockViewModel = createViewModel({
+      activeConversationId: "session-1",
+      draftPrompt: ""
+    });
+    renderAgentGUINode();
+
+    pasteComposerText("@read");
+
+    await waitFor(() => expect(getComposerEditor()).toHaveTextContent("@read"));
+    expect(mockSearchWorkspaceFileManagerEntries).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: "read"
       })
     );
     expect(

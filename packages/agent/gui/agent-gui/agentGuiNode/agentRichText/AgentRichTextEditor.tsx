@@ -489,6 +489,7 @@ export const AgentRichTextEditor = forwardRef<
   const removeMentionLabelRef = useRef(removeMentionLabel);
   const availableSkillsRef = useRef(availableSkills);
   const availableCapabilitiesRef = useRef(availableCapabilities);
+  const suppressPastedAtSuggestionRef = useRef(false);
   const scrollFrameRef = useRef<number | null>(null);
   const [contextMenu, setContextMenu] =
     useState<AgentRichTextContextMenuState | null>(null);
@@ -501,6 +502,13 @@ export const AgentRichTextEditor = forwardRef<
     const currentEditor = editorRef.current;
     if (!currentEditor || currentEditor.isDestroyed || !text) {
       return;
+    }
+    suppressPastedAtSuggestionRef.current =
+      text.includes("@") && !text.endsWith("@");
+    if (suppressPastedAtSuggestionRef.current) {
+      window.setTimeout(() => {
+        suppressPastedAtSuggestionRef.current = false;
+      }, 0);
     }
     currentEditor
       .chain()
@@ -605,7 +613,8 @@ export const AgentRichTextEditor = forwardRef<
             onFileMentionSuggestionChangeRef.current?.(state),
           onSuggestionKeyDown: (event) =>
             onFileMentionSuggestionKeyDownRef.current?.(event) ?? false,
-          removeActionAriaLabel: removeMentionLabelRef.current
+          removeActionAriaLabel: removeMentionLabelRef.current,
+          shouldSuppressSuggestion: () => suppressPastedAtSuggestionRef.current
         },
         { skills: availableSkillsRef.current },
         { capabilities: availableCapabilitiesRef.current }
@@ -811,6 +820,13 @@ export const AgentRichTextEditor = forwardRef<
             currentEditor.commands.setTextSelection(
               currentEditor.state.doc.content.size
             );
+          }
+          suppressPastedAtSuggestionRef.current =
+            text.includes("@") && !text.endsWith("@");
+          if (suppressPastedAtSuggestionRef.current) {
+            window.setTimeout(() => {
+              suppressPastedAtSuggestionRef.current = false;
+            }, 0);
           }
           currentEditor.commands.insertContent(
             plainTextToAgentRichTextInlineContent(text, {
