@@ -112,13 +112,23 @@ export interface ResolveWorkspaceLinkActionInput {
   source: WorkspaceLinkActionSource;
 }
 
+// 群聊消息引用(mention://room-message)的点击动作:宿主打开只读消息预览面板。
+// 协议契约见 tsh 仓库 openspecs/proposals/room-message-mention-contract.md。
+export interface OpenRoomChatMessagesLinkAction {
+  type: "open-room-chat-messages";
+  roomId: string;
+  messageIds: string[];
+  source: WorkspaceLinkActionSource;
+}
+
 export type WorkspaceLinkAction =
   | OpenWorkspaceFileLinkAction
   | OpenLocalAssetPreviewLinkAction
   | OpenWorkspaceUrlLinkAction
   | OpenAgentSessionLinkAction
   | OpenWorkspaceIssueLinkAction
-  | OpenWorkspaceAppLinkAction;
+  | OpenWorkspaceAppLinkAction
+  | OpenRoomChatMessagesLinkAction;
 
 const URL_LIKE_LINK_PATTERN = /^[a-zA-Z][a-zA-Z\d+.-]*:|^#/;
 const LOCAL_ASSET_ROOT = "/var/cache/tsh/local-assets";
@@ -275,10 +285,31 @@ export function resolveWorkspaceMentionLinkAction({
   | OpenAgentSessionLinkAction
   | OpenWorkspaceIssueLinkAction
   | OpenWorkspaceAppLinkAction
+  | OpenRoomChatMessagesLinkAction
   | null {
   const mention = parseRichTextMentionHref(href, "");
   if (!mention) {
     return null;
+  }
+
+  // room-message 的 scope 键是 roomId(不带 workspaceId),必须在下面的
+  // workspaceId 必填检查之前处理。
+  if (mention.providerId === "room-message") {
+    const roomId = mention.scope?.roomId?.trim() || "";
+    const firstId = mention.entityId.trim();
+    if (!roomId || !firstId) {
+      return null;
+    }
+    const ids = (mention.scope?.ids ?? "")
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    return {
+      type: "open-room-chat-messages",
+      roomId,
+      messageIds: ids.length > 0 ? ids : [firstId],
+      source
+    };
   }
 
   const workspaceId = mention.scope?.workspaceId?.trim() || "";

@@ -20,7 +20,8 @@ type AgentMentionNodeViewKind =
   | "workspace-app"
   | "workspace-reference"
   | "workspace-app-factory"
-  | "workspace-issue";
+  | "workspace-issue"
+  | "room-message";
 
 function parseFileCountAttr(value: unknown): number {
   const parsed =
@@ -65,6 +66,9 @@ function normalizeKind(value: string): AgentMentionNodeViewKind {
   }
   if (value === "agent-target") {
     return "agent-target";
+  }
+  if (value === "room-message") {
+    return "room-message";
   }
   return "file";
 }
@@ -216,6 +220,19 @@ function mentionViewModel(
         managedAgentRoundedIconUrl(agentProviderId),
       kind,
       label: name
+    };
+  }
+
+  if (kind === "room-message") {
+    return {
+      ariaLabel:
+        `${t("agentHost.agentGui.mentionKindRoomMessage")} ${name}`.trim(),
+      directoryPath: "",
+      entryKind: "",
+      href,
+      kind,
+      label: name,
+      summary: attrString(attrs, "preview").trim() || undefined
     };
   }
 
@@ -502,6 +519,55 @@ export function AgentMentionNodeView(props: NodeViewProps): JSX.Element {
           <TruncatingPillLabel tooltip={mention.label}>
             {mention.label}
           </TruncatingPillLabel>
+        </span>
+      </NodeViewWrapper>
+    );
+  }
+
+  if (mention.kind === "room-message") {
+    // 群聊消息引用:双行卡(第一行发送者+条数,第二行首条内容截断)。点击经编辑器的
+    // link click 委托(data-agent-mention-href)上抛 onLinkAction 打开只读预览。
+    return (
+      <NodeViewWrapper
+        as="span"
+        aria-label={mention.ariaLabel}
+        className={`agent-rich-text-mention-node inline-grid max-w-[min(100%,var(--agent-mention-max-width,20rem))] align-middle ${
+          selected ? "is-selected" : ""
+        }`}
+        contentEditable={false}
+        data-agent-file-mention="true"
+        data-agent-mention-href={mention.href}
+        data-agent-mention-kind={mention.kind}
+      >
+        <span
+          className="group relative grid max-w-full cursor-pointer gap-0.5 overflow-hidden rounded-[8px] border border-[var(--border-primary,rgba(0,0,0,0.08))] bg-block px-2.5 py-1.5 text-left align-middle"
+          data-agent-mention-kind={mention.kind}
+          data-slot="mention-card"
+        >
+          <span className="flex min-w-0 items-center gap-1">
+            <span
+              aria-hidden="true"
+              className="tsh-agent-object-token__kind-icon size-3.5 shrink-0"
+            />
+            <span className="truncate text-[13px] font-medium leading-[130%]">
+              {mention.label}
+            </span>
+            {isEditable ? (
+              <button
+                aria-label={removeActionAriaLabel}
+                className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-[var(--text-secondary)] opacity-0 transition-opacity hover:bg-transparency-block hover:text-[var(--text-primary)] focus-visible:opacity-100 group-hover:opacity-100"
+                type="button"
+                onMouseDown={handleRemove}
+              >
+                <CloseIcon className="size-3.5" />
+              </button>
+            ) : null}
+          </span>
+          {mention.summary ? (
+            <span className="truncate text-[12px] font-normal leading-[130%] text-[var(--text-tertiary)]">
+              {mention.summary}
+            </span>
+          ) : null}
         </span>
       </NodeViewWrapper>
     );

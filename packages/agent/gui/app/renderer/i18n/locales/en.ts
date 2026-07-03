@@ -985,6 +985,7 @@ export const en = {
       mentionKindAppFactory: "App Factory",
       mentionKindFile: "File",
       mentionKindIssue: "Task",
+      mentionKindRoomMessage: "Chat messages",
       mentionKindSession: "Session",
       mentionGroupFiles: "Files",
       mentionGroupOpenedFiles: "Files I opened",

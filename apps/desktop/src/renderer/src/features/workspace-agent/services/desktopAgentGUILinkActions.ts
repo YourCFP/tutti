@@ -140,6 +140,23 @@ export async function runDesktopAgentGUILinkAction(
         workspaceId: dependencies.workspaceId
       });
     }
+    case "open-room-chat-messages": {
+      // 群聊消息引用(mention://room-message):打开群聊应用并定位到首条消息。
+      if (
+        action.roomId !== dependencies.workspaceId ||
+        !dependencies.launchGroupChat
+      ) {
+        return false;
+      }
+      const [firstMessageId] = action.messageIds;
+      if (!firstMessageId) {
+        return false;
+      }
+      return dependencies.launchGroupChat({
+        messageId: firstMessageId,
+        workspaceId: dependencies.workspaceId
+      });
+    }
   }
 }
 

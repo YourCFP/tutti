@@ -308,6 +308,43 @@ describe("resolveWorkspaceMentionLinkAction", () => {
     });
   });
 
+  it("parses room-message mention context with the full ids list", () => {
+    expect(
+      resolveWorkspaceMentionLinkAction({
+        href: "mention://room-message/msg-a?count=2&ids=msg-a%2Cmsg-b&preview=222&roomId=room-1",
+        source: "agent-markdown"
+      })
+    ).toEqual({
+      type: "open-room-chat-messages",
+      roomId: "room-1",
+      messageIds: ["msg-a", "msg-b"],
+      source: "agent-markdown"
+    });
+  });
+
+  it("falls back to the path id for a room-message mention without ids", () => {
+    expect(
+      resolveWorkspaceMentionLinkAction({
+        href: "mention://room-message/msg-a?roomId=room-1",
+        source: "agent-markdown"
+      })
+    ).toEqual({
+      type: "open-room-chat-messages",
+      roomId: "room-1",
+      messageIds: ["msg-a"],
+      source: "agent-markdown"
+    });
+  });
+
+  it("rejects room-message mentions without a roomId", () => {
+    expect(
+      resolveWorkspaceMentionLinkAction({
+        href: "mention://room-message/msg-a",
+        source: "agent-markdown"
+      })
+    ).toBeNull();
+  });
+
   it("parses workspace-app mention context", () => {
     expect(
       resolveWorkspaceMentionLinkAction({

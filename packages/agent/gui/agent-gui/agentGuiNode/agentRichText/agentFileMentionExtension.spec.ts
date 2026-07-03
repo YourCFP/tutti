@@ -67,6 +67,24 @@ describe("parseAgentMentionMarkdown", () => {
     });
   });
 
+  it("accepts room-message mention hrefs with lossless ids", () => {
+    expect(
+      parseAgentMentionMarkdown(
+        "[@郑伟滨 的 2 条群聊消息](mention://room-message/msg-a?count=2&ids=msg-a%2Cmsg-b&preview=222&roomId=room-1)"
+      )
+    ).toMatchObject({
+      item: {
+        kind: "room-message",
+        workspaceId: "room-1",
+        targetId: "msg-a",
+        messageIds: ["msg-a", "msg-b"],
+        count: 2,
+        preview: "222",
+        name: "郑伟滨 的 2 条群聊消息"
+      }
+    });
+  });
+
   it("accepts workspace app mention hrefs without an @ prefix", () => {
     expect(
       parseAgentMentionMarkdown(

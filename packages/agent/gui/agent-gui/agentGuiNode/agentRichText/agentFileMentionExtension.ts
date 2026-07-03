@@ -13,6 +13,7 @@ import {
   resolveAgentMentionFileThumbnailUrl,
   resolveAgentMentionFileVisualKind
 } from "../../shared/mentionFilePresentation";
+import { roomMessageMentionWorkspaceIdOf } from "../../../shared/roomMessageMention";
 import { translate } from "../../../i18n/index";
 import { AgentMentionNodeView } from "./AgentMentionNodeView";
 import { AGENT_RICH_TEXT_CARET_ANCHOR } from "./agentRichTextCaretAnchor";
@@ -29,7 +30,8 @@ export type AgentMentionKind =
   | "workspace-app"
   | "workspace-reference"
   | "workspace-app-factory"
-  | "workspace-issue";
+  | "workspace-issue"
+  | "room-message";
 
 export type AgentMentionReferenceSource = "app" | "task";
 
@@ -127,6 +129,23 @@ export interface AgentMentionWorkspaceAppFactoryItem {
   contextPath?: string;
 }
 
+// 群聊消息引用(tsh room-chat 多选「发送给 Agent」):一次多选 = 一个 item/一个链接,
+// 活引用只存 id。协议契约见 tsh 仓库 openspecs/proposals/room-message-mention-contract.md。
+export interface AgentMentionRoomMessageItem {
+  kind: "room-message";
+  href: string;
+  workspaceId: string;
+  /** 首条消息 id(= href 的 entityId 槽位)。 */
+  targetId: string;
+  /** 全量消息 id,按 timeline seq 升序、去重(含首条)。 */
+  messageIds: string[];
+  /** label(发送者+条数),双行卡第一行。 */
+  name: string;
+  count: number;
+  /** 首条消息纯文本截断(≤60 字符),双行卡第二行。 */
+  preview?: string;
+}
+
 export type AgentContextMentionItem =
   | AgentMentionFileItem
   | AgentMentionAgentTargetItem
@@ -134,7 +153,8 @@ export type AgentContextMentionItem =
   | AgentMentionWorkspaceAppItem
   | AgentMentionWorkspaceReferenceItem
   | AgentMentionWorkspaceAppFactoryItem
-  | AgentMentionWorkspaceIssueItem;
+  | AgentMentionWorkspaceIssueItem
+  | AgentMentionRoomMessageItem;
 
 export type AgentFileMentionItem = AgentContextMentionItem;
 
@@ -214,7 +234,10 @@ export function createAgentFileMentionExtension(
         thumbnailUrl: { default: "" },
         source: { default: "" },
         groupId: { default: "" },
-        fileCount: { default: "" }
+        fileCount: { default: "" },
+        messageIds: { default: "" },
+        count: { default: "" },
+        preview: { default: "" }
       };
     },
 
@@ -730,6 +753,28 @@ export function parseMentionItemFromHref(input: {
       contextPath: mention.scope?.contextPath?.trim() || undefined
     };
   }
+  if (resource === "room-message") {
+    const mentionWorkspaceId = roomMessageMentionWorkspaceIdOf(mention.scope);
+    if (!mentionWorkspaceId || !targetId) {
+      return null;
+    }
+    const ids = (mention.scope?.ids ?? "")
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    // ids 缺失时兜底为 entityId 单条(容忍手写单 id 链接)。
+    const messageIds = ids.length > 0 ? ids : [targetId];
+    return {
+      kind: "room-message",
+      href,
+      workspaceId: mentionWorkspaceId,
+      targetId,
+      messageIds,
+      name,
+      count: parseMentionFileCount(mention.scope?.count) || messageIds.length,
+      preview: mention.scope?.preview?.trim() || undefined
+    };
+  }
   return null;
 }
 
@@ -816,6 +861,18 @@ export function mentionItemToAttrs(
       contextPath: item.contextPath ?? ""
     };
   }
+  if (item.kind === "room-message") {
+    return {
+      name: item.name,
+      kind: item.kind,
+      href: item.href,
+      ...workspaceMentionAttrs(item.workspaceId),
+      targetId: item.targetId,
+      messageIds: item.messageIds.join(","),
+      count: String(item.count),
+      preview: item.preview ?? ""
+    };
+  }
   return {
     name: item.name,
     kind: item.kind,
@@ -873,6 +930,38 @@ export function attrsToMentionItem(
         typeof attrs.summaryPreview === "string"
           ? attrs.summaryPreview
           : undefined
+    };
+  }
+  if (kind === "room-message") {
+    const workspaceId = workspaceIdFromMentionAttrs(attrs);
+    const attrTargetId =
+      typeof attrs.targetId === "string" ? attrs.targetId.trim() : "";
+    const parsedMessageIds = (
+      typeof attrs.messageIds === "string" ? attrs.messageIds : ""
+    )
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const targetId = attrTargetId || parsedMessageIds[0] || "";
+    const messageIds =
+      parsedMessageIds.length > 0
+        ? parsedMessageIds
+        : targetId
+          ? [targetId]
+          : [];
+    const preview =
+      typeof attrs.preview === "string" && attrs.preview.trim()
+        ? attrs.preview.trim()
+        : undefined;
+    return {
+      kind,
+      href,
+      workspaceId,
+      targetId,
+      messageIds,
+      name,
+      count: parseMentionFileCount(attrs.count) || messageIds.length,
+      preview
     };
   }
   if (kind === "workspace-issue") {
@@ -1083,6 +1172,9 @@ function normalizeMentionKind(value: unknown): AgentMentionKind {
   if (value === "workspace-app-factory") {
     return "workspace-app-factory";
   }
+  if (value === "room-message") {
+    return "room-message";
+  }
   return "file";
 }
 
@@ -1128,6 +1220,12 @@ function mentionVisual(item: AgentContextMentionItem): {
   if (item.kind === "workspace-reference") {
     return {
       kindLabel: "Reference",
+      primary: item.name
+    };
+  }
+  if (item.kind === "room-message") {
+    return {
+      kindLabel: "Chat messages",
       primary: item.name
     };
   }
