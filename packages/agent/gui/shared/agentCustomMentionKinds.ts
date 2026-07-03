@@ -56,12 +56,37 @@ export interface AgentCustomMentionKindDefinition {
 
 const registry = new Map<string, AgentCustomMentionKindDefinition>();
 
+// 包内管线已内置处理的 providerId(agentFileMentionExtension /
+// resolveWorkspaceMentionLinkAction),以及宿主侧沿用的 legacy 短名与内部 kind。
+// 注册表查找在部分链路先于内置分支执行,若放行同名注册会静默劫持内置 mention
+// 的解析——注册发生在宿主 bootstrap,直接抛错 fail-fast。
+const RESERVED_AGENT_MENTION_PROVIDER_IDS = new Set([
+  "agent-session",
+  "agent-target",
+  "custom",
+  "file",
+  "issue",
+  "session",
+  "task",
+  "workspace-app",
+  "workspace-app-factory",
+  "workspace-issue",
+  "workspace-reference"
+]);
+
 export function registerAgentCustomMentionKind(
   definition: AgentCustomMentionKindDefinition
 ): void {
   const kind = definition.kind.trim().toLowerCase();
   if (!kind) {
-    return;
+    throw new Error(
+      "[agent-gui] custom mention kind must be a non-empty provider id"
+    );
+  }
+  if (RESERVED_AGENT_MENTION_PROVIDER_IDS.has(kind)) {
+    throw new Error(
+      `[agent-gui] custom mention kind "${kind}" collides with a built-in provider id`
+    );
   }
   registry.set(kind, definition);
 }
