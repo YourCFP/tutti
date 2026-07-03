@@ -36,6 +36,10 @@ test("launchpad dock icon renders ALL instead of a tile grid", () => {
     css,
     /\.workspace-launchpad-dock-icon--tiles\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);[^}]*gap:\s*2px;[^}]*place-items:\s*stretch;/s
   );
+  assert.match(
+    css,
+    /\.workspace-launchpad-dock-icon__tile\s*>\s*img\s*{[^}]*border-radius:\s*999px;/s
+  );
 });
 
 test("launchpad blank areas stay dismissible instead of trapping clicks in a drag region", () => {
