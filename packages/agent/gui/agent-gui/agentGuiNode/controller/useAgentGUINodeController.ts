@@ -402,6 +402,58 @@ function composerOptionsForTarget(input: {
   );
 }
 
+function composerOptionValues(
+  options: readonly { value: string }[]
+): Set<string> {
+  return new Set(options.map((option) => option.value));
+}
+
+function sanitizeComposerSettingsForOptions(
+  settings: AgentSessionComposerSettings,
+  options: AgentActivityComposerOptions | null
+): AgentSessionComposerSettings {
+  if (!options) {
+    return settings;
+  }
+  const modelValues = composerOptionValues(options.models);
+  const reasoningValues = composerOptionValues(options.reasoningEfforts);
+  const speedValues = composerOptionValues(options.speeds ?? []);
+  const permissionValues = new Set(
+    options.permissionConfig?.modes.map((mode) => mode.id) ?? []
+  );
+  const model = normalizeOptionalText(settings.model);
+  const reasoningEffort = normalizeOptionalText(settings.reasoningEffort);
+  const speed = normalizeOptionalText(settings.speed);
+  const permissionModeId = normalizePermissionModeId(settings.permissionModeId);
+  const modelOptionsAreAuthoritative = options.provider === "claude-code";
+  return {
+    ...settings,
+    model:
+      modelOptionsAreAuthoritative &&
+      model &&
+      modelValues.size > 0 &&
+      !modelValues.has(model)
+        ? null
+        : model,
+    reasoningEffort:
+      reasoningEffort &&
+      reasoningValues.size > 0 &&
+      !reasoningValues.has(reasoningEffort)
+        ? null
+        : (reasoningEffort as AgentSessionReasoningEffort | null),
+    speed:
+      speed && speedValues.size > 0 && !speedValues.has(speed)
+        ? null
+        : (speed as AgentSessionSpeed | null),
+    permissionModeId:
+      permissionModeId &&
+      permissionValues.size > 0 &&
+      !permissionValues.has(permissionModeId)
+        ? null
+        : permissionModeId
+  };
+}
+
 function agentGUIProviderTargetsEqual(
   left: AgentGUIProviderTarget,
   right: AgentGUIProviderTarget
@@ -6930,8 +6982,22 @@ export function useAgentGUINodeController({
           defaultReasoningEffort,
           drafts: draftSettingsBySessionIdRef.current
         });
+        const snapshotComposerOptions =
+          (agentTargetId
+            ? agentActivityRuntime.getSnapshot(workspaceId)
+                .composerOptionsByAgentTargetId?.[agentTargetId]
+            : null) ??
+          agentActivityRuntime.getSnapshot(workspaceId)
+            .composerOptionsByProvider?.[provider] ??
+          null;
+        const targetSafeInitialNodeSettings = agentTargetId
+          ? sanitizeComposerSettingsForOptions(
+              initialNodeSettings,
+              snapshotComposerOptions
+            )
+          : initialNodeSettings;
         const initialSettings = resolveEffectiveComposerSettings({
-          settings: initialNodeSettings
+          settings: targetSafeInitialNodeSettings
         });
         const currentActiveConversationId = activeConversationIdRef.current;
         const currentActiveConversation = currentActiveConversationId
@@ -6942,7 +7008,7 @@ export function useAgentGUINodeController({
             )
           : null;
         const inheritedModel =
-          normalizeOptionalText(initialNodeSettings.model) === null
+          normalizeOptionalText(targetSafeInitialNodeSettings.model) === null
             ? (resolveSameProviderActiveSessionModel({
                 activeProvider: currentActiveConversation?.provider ?? null,
                 agentSessionId: currentActiveConversationId,
@@ -6959,14 +7025,12 @@ export function useAgentGUINodeController({
           inheritedModel === null
             ? initialSettings
             : { ...initialSettings, model: inheritedModel };
-        const snapshotComposerOptions =
-          (agentTargetId
-            ? agentActivityRuntime.getSnapshot(workspaceId)
-                .composerOptionsByAgentTargetId?.[agentTargetId]
-            : null) ??
-          agentActivityRuntime.getSnapshot(workspaceId)
-            .composerOptionsByProvider?.[provider] ??
-          null;
+        const targetSafeEffectiveInitialSettings = agentTargetId
+          ? sanitizeComposerSettingsForOptions(
+              effectiveInitialSettings,
+              snapshotComposerOptions
+            )
+          : effectiveInitialSettings;
         const snapshotDraftAgentSessionId =
           normalizedInitialContent.length > 0 && provider === "claude-code"
             ? draftAgentSessionIdFromComposerOptions(snapshotComposerOptions)
@@ -7044,11 +7108,11 @@ export function useAgentGUINodeController({
         startingConversationIdRef.current = agentSessionId;
         draftSettingsBySessionIdRef.current = {
           ...draftSettingsBySessionIdRef.current,
-          [agentSessionId]: effectiveInitialSettings
+          [agentSessionId]: targetSafeEffectiveInitialSettings
         };
         setDraftSettingsBySessionId((current) => ({
           ...current,
-          [agentSessionId]: effectiveInitialSettings
+          [agentSessionId]: targetSafeEffectiveInitialSettings
         }));
         const optimisticPromptMessage = createOptimisticPromptMessage({
           workspaceId,
@@ -7088,7 +7152,7 @@ export function useAgentGUINodeController({
           initialDisplayPrompt,
           metadata: agentSubmitTraceMetadata(submitTrace),
           title: initialConversationTitle,
-          settings: effectiveInitialSettings,
+          settings: targetSafeEffectiveInitialSettings,
           openclawGatewayReady:
             provider === "openclaw"
               ? openclawGateway?.status === "ready"
@@ -8583,13 +8647,20 @@ export function useAgentGUINodeController({
           computerUse:
             supportedNextSettings.computerUse ?? previousSettings.computerUse
         };
+        const snapshotComposerOptions = composerOptionsForTarget({
+          snapshot: agentActivityRuntime.getSnapshot(workspaceId),
+          target: targetData
+        });
+        const targetSafeMerged = targetData.agentTargetId
+          ? sanitizeComposerSettingsForOptions(merged, snapshotComposerOptions)
+          : merged;
         draftSettingsBySessionIdRef.current = {
           ...draftSettingsBySessionIdRef.current,
-          [defaultDraftKey]: merged
+          [defaultDraftKey]: targetSafeMerged
         };
         setDraftSettingsBySessionId((current) => ({
           ...current,
-          [defaultDraftKey]: merged
+          [defaultDraftKey]: targetSafeMerged
         }));
         onDataChangeRef.current((current) =>
           nodeDataFromComposerSettings(
@@ -8600,18 +8671,18 @@ export function useAgentGUINodeController({
               providerTargetId: targetData.providerTargetId,
               providerTargetRef: targetData.providerTargetRef
             },
-            merged
+            targetSafeMerged
           )
         );
         void onRememberComposerDefaultsRef.current?.({
           provider: targetData.provider,
-          defaults: composerDefaultsFromSettings(merged)
+          defaults: composerDefaultsFromSettings(targetSafeMerged)
         });
         void agentActivityRuntime.trackDraftComposerSettingsChange?.({
           workspaceId,
           provider: targetData.provider,
           previousSettings,
-          nextSettings: merged
+          nextSettings: targetSafeMerged
         });
         loadDraftComposerOptions(
           targetData.provider === "claude-code" ? { force: true } : undefined
@@ -9850,11 +9921,66 @@ export function useAgentGUINodeController({
       drafts: draftSettingsBySessionId
     })
   );
+  const targetSafeNodeDefaultSettings = useStableComposerSettings(
+    activeConversationId === null && selectedComposerTargetData.agentTargetId
+      ? sanitizeComposerSettingsForOptions(
+          storedNodeDefaultSettings,
+          providerComposerOptions
+        )
+      : storedNodeDefaultSettings
+  );
   const homeComposerSettings = useStableComposerSettings(
     resolveEffectiveComposerSettings({
-      settings: storedNodeDefaultSettings
+      settings: targetSafeNodeDefaultSettings
     })
   );
+  useEffect(() => {
+    if (
+      activeConversationId !== null ||
+      !selectedComposerTargetData.agentTargetId ||
+      !providerComposerOptions ||
+      sameComposerSettings(
+        storedNodeDefaultSettings,
+        targetSafeNodeDefaultSettings
+      )
+    ) {
+      return;
+    }
+    const targetDefaultDraftKey = nodeDefaultDraftKey(
+      selectedComposerTargetData.provider,
+      selectedComposerTargetData.agentTargetId
+    );
+    draftSettingsBySessionIdRef.current = {
+      ...draftSettingsBySessionIdRef.current,
+      [targetDefaultDraftKey]: targetSafeNodeDefaultSettings
+    };
+    setDraftSettingsBySessionId((current) => ({
+      ...current,
+      [targetDefaultDraftKey]: targetSafeNodeDefaultSettings
+    }));
+    onDataChangeRef.current((current) =>
+      nodeDataFromComposerSettings(
+        {
+          ...current,
+          provider: selectedComposerTargetData.provider,
+          agentTargetId: selectedComposerTargetData.agentTargetId,
+          providerTargetId: selectedComposerTargetData.providerTargetId,
+          providerTargetRef: selectedComposerTargetData.providerTargetRef
+        },
+        targetSafeNodeDefaultSettings
+      )
+    );
+    void onRememberComposerDefaultsRef.current?.({
+      provider: selectedComposerTargetData.provider,
+      defaults: composerDefaultsFromSettings(targetSafeNodeDefaultSettings)
+    });
+  }, [
+    activeConversationId,
+    providerComposerOptions,
+    selectedComposerTargetData,
+    storedNodeDefaultSettings,
+    targetSafeNodeDefaultSettings
+  ]);
   const activeConversationDraftSettings = activeConversationId
     ? (draftSettingsBySessionId[activeConversationId] ?? null)
     : null;

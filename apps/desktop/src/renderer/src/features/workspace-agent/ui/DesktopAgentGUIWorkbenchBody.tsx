@@ -68,6 +68,7 @@ import {
 import { mergeDesktopAgentProbeSnapshots } from "./desktopAgentProbeSnapshot.ts";
 import {
   hasDesktopAgentGUIConversationRailCollapsedState,
+  resolveDesktopAgentGUIProviderForAgentTarget,
   withDesktopAgentGUIProviderComposerDefaults
 } from "./desktopAgentGUIWorkbenchStateHelpers.ts";
 import { useDesktopManagedAgentsState } from "./useDesktopManagedAgentsState.ts";
@@ -449,8 +450,19 @@ function DesktopAgentGUIWorkbenchBodyImpl({
     workbenchStateRef.current = rawWorkbenchState;
   }
   const workbenchState = workbenchStateRef.current;
+  const workbenchAgentTargetId = workbenchState.agentTargetId?.trim() || null;
+  const nodeProvider = useMemo(
+    () =>
+      resolveDesktopAgentGUIProviderForAgentTarget(
+        workbenchAgentTargetId,
+        providerTargets,
+        provider
+      ),
+    [provider, providerTargets, workbenchAgentTargetId]
+  );
   const providerComposerDefaults =
-    desktopPreferencesState.agentComposerDefaultsByProvider[provider] ?? null;
+    desktopPreferencesState.agentComposerDefaultsByProvider[nodeProvider] ??
+    null;
   const hasExplicitConversationRailCollapsedState =
     hasDesktopAgentGUIConversationRailCollapsedState(rawWorkbenchStateSource);
   const preferredConversationRailCollapsed =
@@ -463,7 +475,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
   const nodeState = useMemo(() => {
     const baseState = normalizeDesktopAgentGUINodeState(
       workbenchState,
-      provider
+      nodeProvider
     );
     const railState =
       !hasExplicitConversationRailCollapsedState &&
@@ -472,7 +484,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
         : baseState;
     const nextState = withDesktopAgentGUIProviderComposerDefaults(
       railState,
-      provider,
+      nodeProvider,
       providerComposerDefaults
     );
     return nextState;
@@ -480,7 +492,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
     hasExplicitConversationRailCollapsedState,
     preferredConversationRailCollapsed,
     workbenchState,
-    provider,
+    nodeProvider,
     providerComposerDefaults
   ]);
   const nodeStateRef = useRef(nodeState);
@@ -517,7 +529,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
       const current = nodeStateRef.current;
       const next = normalizeDesktopAgentGUINodeState(
         updater(current),
-        provider
+        nodeProvider
       );
       if (areDesktopAgentGUINodeStatesEqual(current, next)) {
         return;
@@ -559,7 +571,13 @@ function DesktopAgentGUIWorkbenchBodyImpl({
         onStateChangeRef.current(nextWorkbenchState);
       }
     },
-    [desktopPreferencesService, previewMode, provider, runtimeApi, workspaceId]
+    [
+      desktopPreferencesService,
+      nodeProvider,
+      previewMode,
+      runtimeApi,
+      workspaceId
+    ]
   );
   const agentProbeProviders = useMemo(
     () => Array.from(new Set(Object.values(agentProbeDemandBySource))).sort(),
@@ -868,7 +886,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
         ...nodeState,
         conversationRailCollapsed: true
       },
-      provider
+      nodeProvider
     );
     const nextWorkbenchState =
       projectDesktopAgentGUIWorkbenchState(seededState);
@@ -883,9 +901,9 @@ function DesktopAgentGUIWorkbenchBodyImpl({
   }, [
     hasExplicitConversationRailCollapsedState,
     nodeState,
+    nodeProvider,
     preferredConversationRailCollapsed,
     previewMode,
-    provider,
     workbenchState
   ]);
 
