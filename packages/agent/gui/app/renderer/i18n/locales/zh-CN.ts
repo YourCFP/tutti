@@ -1110,7 +1110,7 @@ export const zhCN = {
     workspaceAgentMessageCenterWaitingCount_other: "{{count}} 个等待中",
     workspaceAgentMessageCenterFilterAll: "全部",
     workspaceAgentMessageCenterFilterWaiting: "等待中",
-    workspaceAgentMessageCenterFilterWorking: "工作中",
+    workspaceAgentMessageCenterFilterWorking: "运行中",
     workspaceAgentMessageCenterFilterCompleted: "已完成",
     workspaceAgentMessageCenterFilterFailed: "错误",
     workspaceAgentMessageCenterViewOptions: "视图选项",
