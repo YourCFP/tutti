@@ -167,6 +167,23 @@ function conversationFilterKey(
   return `agent-target:${normalized.agentTargetId}`;
 }
 
+/**
+ * A conversation may only be retained (pinned/carried over) in a query state
+ * whose agent-target filter it does not contradict. Conversations without a
+ * known summary or without an agentTargetId are kept: we can only prove a
+ * mismatch when both sides are known.
+ */
+function conversationRetainableForQueryFilter(
+  conversation: AgentGUIConversationSummary | undefined,
+  filter: AgentGUIConversationFilter | null
+): boolean {
+  if (!conversation || !filter || filter.kind !== "agentTarget") {
+    return true;
+  }
+  const agentTargetId = conversation.agentTargetId?.trim() ?? "";
+  return agentTargetId.length === 0 || agentTargetId === filter.agentTargetId;
+}
+
 export function createAgentGUIConversationListQueryKey(
   input: AgentGUIConversationListQuery
 ): string | null {
@@ -1326,17 +1343,34 @@ async function refreshAgentGUIConversationListQuery(
           ...baseConversations.map((conversation) => conversation.id)
         ])
       : null;
+    const currentConversationsById = new Map(
+      currentConversations.map((conversation) => [
+        conversation.id,
+        conversation
+      ])
+    );
+    const retainableForQueryFilter = (agentSessionId: string): boolean =>
+      conversationRetainableForQueryFilter(
+        currentConversationsById.get(agentSessionId),
+        state.query.conversationFilter
+      );
     const retainedSessionIds = new Set(retainedSnapshotSessionIds);
     if (reason === "workspace-agent-update") {
       for (const conversation of currentConversations) {
-        if (!nextDeletedConversationIds.has(conversation.id)) {
+        if (
+          !nextDeletedConversationIds.has(conversation.id) &&
+          retainableForQueryFilter(conversation.id)
+        ) {
           retainedSessionIds.add(conversation.id);
         }
       }
     }
     if (retainedSnapshotSessionIds.size > 0) {
       for (const agentSessionId of localCreatedConversationIds) {
-        if (!nextDeletedConversationIds.has(agentSessionId)) {
+        if (
+          !nextDeletedConversationIds.has(agentSessionId) &&
+          retainableForQueryFilter(agentSessionId)
+        ) {
           retainedSessionIds.add(agentSessionId);
         }
       }
@@ -1344,7 +1378,10 @@ async function refreshAgentGUIConversationListQuery(
 
     if (canApplyDirtySessionProjection) {
       for (const conversation of currentConversations) {
-        if (!nextDeletedConversationIds.has(conversation.id)) {
+        if (
+          !nextDeletedConversationIds.has(conversation.id) &&
+          retainableForQueryFilter(conversation.id)
+        ) {
           retainedSessionIds.add(conversation.id);
         }
       }
