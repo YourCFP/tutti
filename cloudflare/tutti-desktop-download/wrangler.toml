@@ -1,0 +1,14 @@
+name = "tutti-desktop-download"
+account_id = "39fe2eae2688546b97e5d7e8da81cceb"
+main = "src/index.mjs"
+compatibility_date = "2026-07-04"
+workers_dev = false
+
+[env.production]
+name = "tutti-desktop-download"
+routes = [
+  { pattern = "tutti.sh/desktop/download*", zone_name = "tutti.sh" },
+  { pattern = "tutti.sh/desktop/latest.json*", zone_name = "tutti.sh" },
+  { pattern = "www.tutti.sh/desktop/download*", zone_name = "tutti.sh" },
+  { pattern = "www.tutti.sh/desktop/latest.json*", zone_name = "tutti.sh" },
+]

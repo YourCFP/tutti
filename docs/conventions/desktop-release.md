@@ -186,6 +186,16 @@ https://<asset-base-url>/latest.json
 
 The prefix-root `latest.json` is a public stable contract. Release candidates and beta builds may upload immutable assets under their tag directory, but they must not update the prefix-root `latest.json`.
 
+Prerelease builds may also update channel-scoped latest metadata:
+
+```text
+https://<asset-base-url>/channels/preview/latest.json
+https://<asset-base-url>/channels/rc/latest.json
+https://<asset-base-url>/channels/beta/latest.json
+```
+
+`preview` is the user-facing name for the RC channel. RC releases write both `channels/preview/latest.json` and `channels/rc/latest.json`. Beta releases write only `channels/beta/latest.json`.
+
 The `latest.json` metadata must include stable-identifying fields:
 
 - `channel: "stable"`
@@ -195,6 +205,29 @@ The `latest.json` metadata must include stable-identifying fields:
 - `preferredDownloads.macosUniversalDmg`
 
 External download workers should treat these fields as a fail-closed contract. If the metadata is missing, malformed, or points at an RC or beta tag, the worker must not return that package as the public download.
+
+The download worker may expose `channel=preview` and `channel=beta` query parameters for internal links. Missing `channel` must default to `stable`. `channel=preview` must read RC metadata only; it must not fall back to beta.
+
+The tracked Worker source lives at:
+
+```text
+cloudflare/tutti-desktop-download
+```
+
+Deploy it with Wrangler:
+
+```bash
+CLOUDFLARE_API_TOKEN=<token> pnpm dlx wrangler deploy --config cloudflare/tutti-desktop-download/wrangler.toml --env production
+```
+
+The Worker supports:
+
+```text
+/desktop/download?platform=macos&arch=universal&format=dmg
+/desktop/download?channel=stable&platform=macos&arch=universal&format=dmg
+/desktop/download?channel=preview&platform=macos&arch=universal&format=dmg
+/desktop/download?channel=beta&platform=macos&arch=universal&format=dmg
+```
 
 Stable mirrored releases also update the aggregate changelog feed:
 

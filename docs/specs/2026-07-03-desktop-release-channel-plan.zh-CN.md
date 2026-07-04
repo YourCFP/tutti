@@ -307,15 +307,18 @@ RC 自动更新源需要明确：
 - stable 自动更新只读稳定 release metadata。
 - rc 自动更新继续走 GitHub pre-release / electron-updater 的 `rc` channel，不读取公共
   S3 根目录 `latest.json`。
-- 首期不新增 `channels/rc/latest.json`，避免多维护一条 CDN 指针。
-- 如果后续 QA 明确需要 CDN 托管的 RC 自动更新源，再单独设计
-  `channels/rc/latest.json`，不能复用公共 `latest.json`。
+- RC 发布会额外写入 CDN channel latest：
+  - `channels/preview/latest.json`
+  - `channels/rc/latest.json`
+- `preview` 是面向使用者的名字，内部语义等同于 RC。
+- 这些 channel latest 不能复用或覆盖公共根目录 `latest.json`。
 
 beta 自动更新源首期不新增：
 
 - beta 的首要用途是开发分支独立打包和固定链接验收。
 - beta tag 使用 `vX.Y.Z-beta.N`，GitHub Release 保持 Pre-release。
 - workflow 会上传 `beta-mac.yml`，保证未来需要 beta 自动更新时已有清晰契约。
+- beta 发布会额外写入 `channels/beta/latest.json`，供显式 beta 下载入口读取。
 - 但客户端开发者设置先不展示 beta，避免普通内部用户把自己切到过早期包。
 - 如果后续需要 beta 用户持续追更，再补一个显式的 beta opt-in 控件，并把
   `updateChannel="beta"` 映射到 electron-updater `channel="beta"`。
@@ -1016,9 +1019,12 @@ RC 是否写入长期 changelog：
 
 - 找到 `tutti-desktop-download` worker 源码，并纳入版本管理。
 - worker 读取公共 `latest.json` 后校验它必须是 stable。
-- 只给外部用户返回 stable 包。
-- 如果 QA 也需要 worker 代理 RC 下载，应该单独做内部入口，例如读取
-  `channels/rc/latest.json`，不要复用公共根目录 `latest.json`。
+- 没有 query 时默认返回 stable 包。
+- 支持 `channel=stable|preview|beta`：
+  - `stable` 读取根目录 `latest.json`。
+  - `preview` 读取 `channels/preview/latest.json`，并校验 metadata 必须是 RC。
+  - `beta` 读取 `channels/beta/latest.json`，并校验 metadata 必须是 beta。
+- `preview` 不 fallback 到 beta；beta 也不影响 preview。
 
 ### Step 5：增加发布摘要和 changelog
 

@@ -99,6 +99,31 @@ test("desktop release latest metadata rejects prerelease tags", async () => {
   }
 });
 
+test("desktop release latest metadata supports rc channel tags", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "desktop-release-latest-"));
+  try {
+    await writeFile(path.join(dir, "Tutti-1.2.3-rc.1-mac-universal.dmg"), "uni");
+
+    const latest = await buildDesktopReleaseLatest({
+      assetDirPath: dir,
+      channel: "rc",
+      releaseAssetBaseUrl:
+        "https://d111111abcdef8.cloudfront.net/desktop-release-assets/",
+      releaseTag: "v1.2.3-rc.1"
+    });
+
+    assert.equal(latest.channel, "rc");
+    assert.equal(latest.prerelease, true);
+    assert.equal(latest.version, "1.2.3-rc.1");
+    assert.equal(
+      latest.preferredDownloads.macosUniversalDmg?.includes("v1.2.3-rc.1"),
+      true
+    );
+  } finally {
+    await rm(dir, { force: true, recursive: true });
+  }
+});
+
 test("desktop release latest metadata rejects beta tags", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "desktop-release-latest-"));
   try {
@@ -116,6 +141,34 @@ test("desktop release latest metadata rejects beta tags", async () => {
           releaseTag: "v1.2.3-beta.1"
         }),
       /latest metadata can only be built for stable releases/
+    );
+  } finally {
+    await rm(dir, { force: true, recursive: true });
+  }
+});
+
+test("desktop release latest metadata supports beta channel tags", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "desktop-release-latest-"));
+  try {
+    await writeFile(
+      path.join(dir, "Tutti-1.2.3-beta.1-mac-universal.dmg"),
+      "uni"
+    );
+
+    const latest = await buildDesktopReleaseLatest({
+      assetDirPath: dir,
+      channel: "beta",
+      releaseAssetBaseUrl:
+        "https://d111111abcdef8.cloudfront.net/desktop-release-assets/",
+      releaseTag: "v1.2.3-beta.1"
+    });
+
+    assert.equal(latest.channel, "beta");
+    assert.equal(latest.prerelease, true);
+    assert.equal(latest.version, "1.2.3-beta.1");
+    assert.equal(
+      latest.preferredDownloads.macosUniversalDmg?.includes("v1.2.3-beta.1"),
+      true
     );
   } finally {
     await rm(dir, { force: true, recursive: true });

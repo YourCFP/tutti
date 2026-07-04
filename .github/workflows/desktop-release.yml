@@ -458,6 +458,7 @@ jobs:
       - name: Build desktop release latest metadata
         if: ${{ env.TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL != '' && needs.resolve.outputs.release_make_latest == 'true' }}
         env:
+          RELEASE_CHANNEL: stable
           RELEASE_GIT_SHA: ${{ env.TUTTI_DESKTOP_RELEASE_TARGET }}
           RELEASE_ASSET_BASE_URL: ${{ env.TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL }}
           RELEASE_SOURCE_REF: ${{ github.ref_name }}
@@ -476,6 +477,44 @@ jobs:
           aws s3 cp release-latest.json "${s3_root}/latest.json" \
             --content-type "application/json" \
             --cache-control "public, max-age=60"
+
+      - name: Build desktop prerelease channel latest metadata
+        if: ${{ env.TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL != '' && needs.resolve.outputs.release_channel != 'stable' }}
+        env:
+          RELEASE_CHANNEL: ${{ needs.resolve.outputs.release_channel }}
+          RELEASE_GIT_SHA: ${{ env.TUTTI_DESKTOP_RELEASE_TARGET }}
+          RELEASE_ASSET_BASE_URL: ${{ env.TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL }}
+          RELEASE_SOURCE_REF: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ env.TUTTI_DESKTOP_RELEASE_TAG }}
+        run: node apps/desktop/scripts/build-release-latest.mjs release-assets release-channel-latest.json
+
+      - name: Upload desktop prerelease channel latest metadata to AWS S3
+        if: ${{ env.TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL != '' && needs.resolve.outputs.release_channel != 'stable' }}
+        env:
+          RELEASE_CHANNEL: ${{ needs.resolve.outputs.release_channel }}
+        run: |
+          prefix="${TUTTI_DESKTOP_RELEASE_ASSETS_S3_PREFIX%/}"
+          if [ -n "${prefix}" ]; then
+            s3_root="s3://${TUTTI_DESKTOP_RELEASE_ASSETS_S3_BUCKET}/${prefix}"
+          else
+            s3_root="s3://${TUTTI_DESKTOP_RELEASE_ASSETS_S3_BUCKET}"
+          fi
+
+          if [[ "${RELEASE_CHANNEL}" == "rc" ]]; then
+            aws s3 cp release-channel-latest.json "${s3_root}/channels/preview/latest.json" \
+              --content-type "application/json" \
+              --cache-control "public, max-age=60"
+            aws s3 cp release-channel-latest.json "${s3_root}/channels/rc/latest.json" \
+              --content-type "application/json" \
+              --cache-control "public, max-age=60"
+          elif [[ "${RELEASE_CHANNEL}" == "beta" ]]; then
+            aws s3 cp release-channel-latest.json "${s3_root}/channels/beta/latest.json" \
+              --content-type "application/json" \
+              --cache-control "public, max-age=60"
+          else
+            echo "Unsupported prerelease channel: ${RELEASE_CHANNEL}" >&2
+            exit 1
+          fi
 
       - name: Update desktop release changelog metadata
         if: ${{ env.TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL != '' && needs.resolve.outputs.release_make_latest == 'true' }}

@@ -28,7 +28,7 @@ function releaseVersionFromTag(tag) {
 
 function parseReleaseVersion(value) {
   const match =
-    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?$/.exec(
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((rc|beta)\.(0|[1-9]\d*)))?$/.exec(
       value
     );
   if (!match) {
@@ -36,9 +36,49 @@ function parseReleaseVersion(value) {
   }
 
   return {
+    channel: match[5] ?? "stable",
     prerelease: match[4] ?? null,
     version: `${match[1]}.${match[2]}.${match[3]}${match[4] ? `-${match[4]}` : ""}`
   };
+}
+
+function resolveReleaseChannel(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized || "stable";
+}
+
+function validateReleaseChannel({ channel, parsedVersion, releaseTag }) {
+  if (channel === "stable") {
+    if (
+      parsedVersion.channel === "stable" &&
+      parsedVersion.prerelease === null
+    ) {
+      return false;
+    }
+    throw new Error(
+      `stable latest metadata can only be built for stable releases: ${releaseTag}`
+    );
+  }
+
+  if (channel === "rc") {
+    if (parsedVersion.channel === "rc") {
+      return true;
+    }
+    throw new Error(
+      `rc latest metadata can only be built for rc releases: ${releaseTag}`
+    );
+  }
+
+  if (channel === "beta") {
+    if (parsedVersion.channel === "beta") {
+      return true;
+    }
+    throw new Error(
+      `beta latest metadata can only be built for beta releases: ${releaseTag}`
+    );
+  }
+
+  throw new Error(`Unsupported release channel: ${channel}`);
 }
 
 function isMacosUniversalDmg(asset) {
@@ -104,16 +144,17 @@ async function buildDesktopReleaseLatest(options) {
     requireNonEmpty(options.assetDirPath, "assetDirPath")
   );
   const releaseTag = requireNonEmpty(options.releaseTag, "releaseTag");
+  const channel = resolveReleaseChannel(options.channel);
   const releaseVersion = releaseVersionFromTag(releaseTag);
   const parsedVersion = parseReleaseVersion(releaseVersion);
   if (!parsedVersion) {
     throw new Error(`releaseTag must contain a semver version: ${releaseTag}`);
   }
-  if (parsedVersion.prerelease !== null) {
-    throw new Error(
-      `latest metadata can only be built for stable releases: ${releaseTag}`
-    );
-  }
+  const prerelease = validateReleaseChannel({
+    channel,
+    parsedVersion,
+    releaseTag
+  });
   const baseUrl = normalizeBaseUrl(
     requireNonEmpty(options.releaseAssetBaseUrl, "releaseAssetBaseUrl")
   );
@@ -148,8 +189,8 @@ async function buildDesktopReleaseLatest(options) {
     schemaVersion,
     tag: releaseTag,
     version: releaseVersion,
-    channel: "stable",
-    prerelease: false,
+    channel,
+    prerelease,
     releasedAt,
     gitSha: gitSha || null,
     sourceRef: sourceRef || null,
@@ -165,6 +206,7 @@ async function main() {
   const [assetDirPath, outputPath] = process.argv.slice(2);
   const latest = await buildDesktopReleaseLatest({
     assetDirPath,
+    channel: process.env.RELEASE_CHANNEL,
     gitSha: process.env.RELEASE_GIT_SHA,
     releaseAssetBaseUrl: process.env.RELEASE_ASSET_BASE_URL,
     releaseTag: process.env.RELEASE_TAG,
@@ -195,5 +237,6 @@ export {
   normalizeBaseUrl,
   parseReleaseVersion,
   releaseVersionFromTag,
+  resolveReleaseChannel,
   schemaVersion
 };

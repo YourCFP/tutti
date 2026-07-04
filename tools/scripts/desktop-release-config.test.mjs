@@ -222,6 +222,16 @@ test("desktop release workflow only publishes root latest metadata for stable re
     latestUploadStep,
     /needs\.resolve\.outputs\.release_make_latest\s*==\s*'true'/
   );
+  assert.match(workflow, /Build desktop prerelease channel latest metadata/);
+  assert.match(
+    workflow,
+    /needs\.resolve\.outputs\.release_channel\s*!=\s*'stable'/
+  );
+  assert.match(
+    workflow,
+    /channels\/preview\/latest\.json[\s\S]*channels\/rc\/latest\.json/
+  );
+  assert.match(workflow, /channels\/beta\/latest\.json/);
 });
 
 test("desktop release workflow generates summaries and stable changelog metadata", async () => {
