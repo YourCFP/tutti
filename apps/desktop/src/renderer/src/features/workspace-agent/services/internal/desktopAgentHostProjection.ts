@@ -189,9 +189,7 @@ export function toAgentHostAgentSessionState(
   } = {}
 ) {
   const agentSessionId = options.agentSessionId?.trim() || session.id;
-  const settings = session.settings
-    ? normalizeComposerSettings(session.settings)
-    : options.defaults?.settings;
+  const settings = agentSessionStateSettings(session, options.defaults);
   const runtimeContext =
     session.runtimeContext ?? options.defaults?.runtimeContext;
   return {
@@ -215,6 +213,28 @@ export function toAgentHostAgentSessionState(
     updatedAtUnixMs: toUnixMs(session.updatedAt ?? session.createdAt),
     workspaceId
   };
+}
+
+function agentSessionStateSettings(
+  session: WorkspaceAgentSession,
+  defaults: AgentHostAgentSessionStateDefaults | undefined
+): AgentHostAgentSessionComposerSettings | undefined {
+  if (!session.settings) {
+    return defaults?.settings;
+  }
+  const settings = normalizeComposerSettings(session.settings);
+  if (
+    session.provider === "claude-code" &&
+    settings.model === "default" &&
+    normalizedOptionalString(defaults?.settings?.model) !== null &&
+    defaults?.settings?.model !== "default"
+  ) {
+    return {
+      ...settings,
+      model: defaults.settings.model
+    };
+  }
+  return settings;
 }
 
 export function agentHostWorkspaceSessionFromCore(
