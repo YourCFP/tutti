@@ -573,7 +573,7 @@ describe("agent GUI workbench contribution copy", () => {
           displayMode: "floating",
           frame: { height: 560, width: 1040, x: 0, y: 0 },
           id: "agent-gui-node-1",
-          title: "Codex"
+          title: "Agent"
         },
         surfaceSize: { height: 800, width: 1200 },
         windowActions: {
@@ -587,9 +587,10 @@ describe("agent GUI workbench contribution copy", () => {
       } as never) ?? null
     );
 
-    expect(screen.getByText("Codex")).toHaveClass(
+    expect(screen.getByText("Agent")).toHaveClass(
       "agent-gui-workbench-header__agent-name"
     );
+    expect(screen.queryByText("Codex")).toBeNull();
     expect(screen.queryByTestId("agent-gui-window-title-icon")).toBeNull();
   });
 
@@ -1136,9 +1137,10 @@ describe("agent GUI workbench contribution copy", () => {
       "data-agent-gui-workbench-header-collapsed",
       "true"
     );
-    expect(primary).toContainElement(screen.getByText("Codex"));
+    expect(primary).toContainElement(screen.getByText("Agent"));
     expect(screen.queryByTestId("agent-gui-window-title-icon")).toBeNull();
-    expect(screen.getByText("Codex")).toBeInTheDocument();
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.queryByText("Codex")).toBeNull();
     expect(toggleButton).toHaveClass("agent-gui-workbench-header__icon-button");
     expect(toggleButton).toHaveClass("agent-gui-workbench-header__rail-toggle");
     expect(toggleButton).toHaveAttribute("data-size", "icon-sm");
@@ -1284,7 +1286,8 @@ describe("agent GUI workbench contribution copy", () => {
       "--agent-gui-workbench-header-rail-width": "360px"
     });
     expect(primary).toHaveClass("agent-gui-workbench-header__primary");
-    expect(screen.getByText("Codex")).toBeInTheDocument();
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.queryByText("Codex")).toBeNull();
     expect(
       screen.getByTestId("agent-gui-toggle-conversation-rail")
     ).toHaveClass("agent-gui-workbench-header__rail-toggle");
@@ -1431,47 +1434,38 @@ describe("agent GUI workbench contribution copy", () => {
     );
   });
 
-  it("owns the clover-style tiled dock icon styles", () => {
+  it("owns the grid-style tiled dock icon styles", () => {
     const css = readFileSync(resolve("app/renderer/agentactivity.css"), "utf8");
 
     expect(css).toMatch(
-      /\.agent-gui-workbench-dock-icon\s*{[^}]*--agent-gui-workbench-dock-icon-tile-size:\s*18px;[^}]*position:\s*relative;[^}]*width:\s*44px;[^}]*height:\s*44px;/s
+      /\.agent-gui-workbench-dock-icon\s*{[^}]*display:\s*grid;[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[^}]*gap:\s*2px;[^}]*padding:\s*3px;[^}]*border:\s*1px solid var\(--agent-gui-workbench-dock-icon-border,\s*var\(--line-1\)\);[^}]*border-radius:\s*8px;[^}]*background:\s*var\(\s*--agent-gui-workbench-dock-icon-bg,\s*var\(--transparency-block\)\s*\);/s
+    );
+    expect(css).toMatch(
+      /\.agent-gui-workbench-dock-icon__tile\s*{[^}]*display:\s*block;[^}]*overflow:\s*hidden;[^}]*min-width:\s*0;[^}]*min-height:\s*0;[^}]*border-radius:\s*6px;[^}]*background:\s*transparent;/s
     );
     expect(css).not.toMatch(
-      /\.agent-gui-workbench-dock-icon\s*{[^}]*\b(?:border|background|border-radius)\s*:/s
+      /\.agent-gui-workbench-dock-icon__tile:nth-child\(1\)\s*{[^}]*transform:\s*translateX\(-50%\);/s
     );
     expect(css).toMatch(
-      /\.agent-gui-workbench-dock-icon__tile\s*{[^}]*position:\s*absolute;[^}]*overflow:\s*hidden;[^}]*width:\s*var\(--agent-gui-workbench-dock-icon-tile-size\);[^}]*height:\s*var\(--agent-gui-workbench-dock-icon-tile-size\);[^}]*border-radius:\s*50%;/s
+      /\.agent-gui-workbench-dock-icon__tile\s*>\s*img\s*{[^}]*object-fit:\s*contain;[^}]*object-position:\s*center;/s
     );
     expect(css).toMatch(
-      /\.agent-gui-workbench-dock-icon__tile:nth-child\(1\)\s*{[^}]*z-index:\s*4;[^}]*top:\s*var\(--agent-gui-workbench-dock-icon-tile-offset\);[^}]*left:\s*50%;[^}]*transform:\s*translateX\(-50%\);/s
+      /\.agent-gui-node__provider-rail-launchpad-icon\s*{[^}]*display:\s*grid;[^}]*width:\s*28px;[^}]*height:\s*28px;[^}]*grid-template-columns:\s*repeat\(2,\s*1fr\);[^}]*gap:\s*2px;[^}]*padding:\s*1px;[^}]*border:\s*0;[^}]*border-radius:\s*6px;/s
     );
     expect(css).toMatch(
-      /\.agent-gui-workbench-dock-icon__tile:nth-child\(2\)\s*{[^}]*z-index:\s*3;[^}]*top:\s*50%;[^}]*right:\s*var\(--agent-gui-workbench-dock-icon-tile-offset\);[^}]*transform:\s*translateY\(-50%\);/s
+      /\.agent-gui-node__provider-rail-launchpad-item\s*{[^}]*display:\s*grid;[^}]*min-width:\s*0;[^}]*min-height:\s*0;[^}]*place-items:\s*center;[^}]*overflow:\s*hidden;[^}]*background:\s*var\(--background-fronted\);[^}]*border-radius:\s*4px;/s
+    );
+    expect(css).not.toMatch(
+      /\.agent-gui-node__provider-rail-launchpad-item:nth-child\(1\)\s*{[^}]*transform:\s*translateX\(-50%\);/s
     );
     expect(css).toMatch(
-      /\.agent-gui-workbench-dock-icon__tile:nth-child\(3\)\s*{[^}]*z-index:\s*2;[^}]*bottom:\s*var\(--agent-gui-workbench-dock-icon-tile-offset\);[^}]*left:\s*50%;[^}]*transform:\s*translateX\(-50%\);/s
+      /\.agent-gui-node__empty-hero-launchpad-icon\s*{[^}]*width:\s*54px;[^}]*height:\s*54px;[^}]*border-color:\s*var\(--tutti-purple\);[^}]*border-radius:\s*8px;[^}]*background:\s*var\(--transparency-block\);/s
     );
     expect(css).toMatch(
-      /\.agent-gui-workbench-dock-icon__tile:nth-child\(4\)\s*{[^}]*z-index:\s*1;[^}]*top:\s*50%;[^}]*left:\s*var\(--agent-gui-workbench-dock-icon-tile-offset\);[^}]*transform:\s*translateY\(-50%\);/s
+      /\.agent-gui-node__empty-hero-launchpad-icon\s+\.agent-gui-node__provider-rail-launchpad-icon\s*{[^}]*width:\s*48px;[^}]*height:\s*48px;[^}]*gap:\s*3px;[^}]*padding:\s*1px;[^}]*border-radius:\s*8px;/s
     );
     expect(css).toMatch(
-      /\.agent-gui-workbench-dock-icon__tile\s*>\s*img\s*{[^}]*border-radius:\s*inherit;[^}]*object-fit:\s*contain;[^}]*object-position:\s*center;/s
-    );
-    expect(css).toMatch(
-      /\.agent-gui-node__provider-rail-launchpad-icon\s*{[^}]*display:\s*block;[^}]*position:\s*relative;[^}]*width:\s*var\(--agent-gui-node-launchpad-icon-size\);[^}]*height:\s*var\(--agent-gui-node-launchpad-icon-size\);/s
-    );
-    expect(css).toMatch(
-      /\.agent-gui-node__provider-rail-launchpad-icon\s*{[^}]*--agent-gui-node-launchpad-icon-size:\s*28px;[^}]*--agent-gui-node-launchpad-item-size:\s*12px;[^}]*--agent-gui-node-launchpad-item-offset:\s*2px;/s
-    );
-    expect(css).toMatch(
-      /\.agent-gui-node__provider-rail-launchpad-item\s*{[^}]*position:\s*absolute;[^}]*overflow:\s*hidden;[^}]*width:\s*var\(--agent-gui-node-launchpad-item-size\);[^}]*height:\s*var\(--agent-gui-node-launchpad-item-size\);[^}]*border-radius:\s*50%;/s
-    );
-    expect(css).toMatch(
-      /\.agent-gui-node__empty-hero-launchpad-icon\s*{[^}]*width:\s*72px;[^}]*height:\s*72px;/s
-    );
-    expect(css).toMatch(
-      /\.agent-gui-node__empty-hero-launchpad-icon\s+\.agent-gui-node__provider-rail-launchpad-icon\s*{[^}]*--agent-gui-node-launchpad-icon-size:\s*72px;[^}]*--agent-gui-node-launchpad-item-size:\s*30px;[^}]*--agent-gui-node-launchpad-item-offset:\s*6px;/s
+      /\.agent-gui-node__empty-hero-launchpad-icon\s+\.agent-gui-node__provider-rail-launchpad-item\s*{[^}]*border-radius:\s*6px;/s
     );
     expect(css).toMatch(
       /\.agent-gui-node__provider-rail-tile\[data-selected="true"\]\s+\.agent-gui-node__provider-rail-avatar:has\(\s*>\s*\.agent-gui-node__provider-rail-launchpad-icon\s*\),\s*\.agent-gui-node__provider-rail-tile\[data-selected="true"\]:hover:not\(:disabled\)\s+\.agent-gui-node__provider-rail-avatar:has\(\s*>\s*\.agent-gui-node__provider-rail-launchpad-icon\s*\)\s*{[^}]*border-color:\s*var\(--tutti-purple\);[^}]*background:\s*var\(--transparency-block\);/s

@@ -3624,8 +3624,10 @@ export interface AgentGUIOpenSessionRequest {
 }
 
 export interface AgentGUIPrefillPromptRequest {
+  agentTargetId?: string | null;
   autoSubmit?: boolean;
   draftPrompt: string;
+  provider?: AgentGUIProvider;
   sequence: number;
   userProjectPath?: string | null;
 }
@@ -3661,25 +3663,31 @@ export function useAgentGUINodeController({
       }),
     [conversationScope, providerTargets]
   );
-  const normalizedProviderTargets = useMemo(
-    () =>
-      providerTargetsLoading
-        ? []
-        : providerTargets === undefined
-          ? normalizeAgentGUIProviderTargets(null, {
-              includeDisabledPlaceholders:
-                conversationScope === "multi-provider"
-            })
-          : normalizedExplicitProviderTargets,
-    [
-      conversationScope,
-      normalizedExplicitProviderTargets,
-      providerTargets,
-      providerTargetsLoading
-    ]
-  );
+  const normalizedProviderTargets = useMemo(() => {
+    if (providerTargetsLoading) {
+      return [];
+    }
+    if (
+      providerTargets === undefined ||
+      (conversationScope === "multi-provider" &&
+        normalizedExplicitProviderTargets.length === 0)
+    ) {
+      return normalizeAgentGUIProviderTargets(null, {
+        includeDisabledPlaceholders: conversationScope === "multi-provider"
+      });
+    }
+    return normalizedExplicitProviderTargets;
+  }, [
+    conversationScope,
+    normalizedExplicitProviderTargets,
+    providerTargets,
+    providerTargetsLoading
+  ]);
   const shouldFallbackToLocalProviderTargets =
-    providerTargets === undefined && !providerTargetsLoading;
+    !providerTargetsLoading &&
+    (providerTargets === undefined ||
+      (conversationScope === "multi-provider" &&
+        normalizedExplicitProviderTargets.length === 0));
   const selectedProviderTarget = useMemo(() => {
     const resolved = resolveAgentGUIProviderTarget({
       agentTargetId: data.agentTargetId,
@@ -7649,13 +7657,14 @@ export function useAgentGUINodeController({
     setActiveConversationId(null);
     setIsLoadingMessages(false);
     setDetailError(null);
-    const targetData = selectedComposerTargetDataRef.current;
+    const selectedTargetData = selectedComposerTargetDataRef.current;
+    const targetProvider =
+      prefillPromptRequest.provider ?? selectedTargetData.provider;
+    const targetAgentTargetId =
+      prefillPromptRequest.agentTargetId ?? selectedTargetData.agentTargetId;
     setDraftBySessionId((current) => ({
       ...current,
-      [nodeDefaultDraftContentKey(
-        targetData.provider,
-        targetData.agentTargetId
-      )]: {
+      [nodeDefaultDraftContentKey(targetProvider, targetAgentTargetId)]: {
         ...emptyAgentComposerDraft(),
         prompt: draftPrompt
       }
@@ -10707,14 +10716,7 @@ export function useAgentGUINodeController({
         isExplicit: nextTargetIsExplicit,
         target: nextTarget
       });
-      if (canUseConversationTargetFilter && conversationFilter.kind !== "all") {
-        const agentTargetId = nextTarget.agentTargetId?.trim() ?? "";
-        setConversationFilter(
-          agentTargetId
-            ? { kind: "agentTarget", agentTargetId }
-            : { kind: "all" }
-        );
-      } else if (!canUseConversationTargetFilter) {
+      if (!canUseConversationTargetFilter) {
         setConversationFilter({ kind: "all" });
       }
       setHomeComposerTargetOverride(nextTarget);
@@ -10767,7 +10769,6 @@ export function useAgentGUINodeController({
       defaultProviderTargetId,
       loadComposerOptionsForTarget,
       canUseConversationTargetFilter,
-      conversationFilter.kind,
       normalizedExplicitProviderTargets,
       normalizedProviderTargets,
       persistActiveConversation,

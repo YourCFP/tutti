@@ -325,6 +325,7 @@ function ReadyWorkspaceWorkbench({
           state.workspace.id,
           async ({
             agentSessionId,
+            agentTargetId,
             autoSubmit,
             draftPrompt,
             openInNewWindow,
@@ -335,8 +336,10 @@ function ReadyWorkspaceWorkbench({
             await host.launchNode(
               normalizedDraftPrompt
                 ? createWorkspaceAgentGuiDraftLaunchRequest({
+                    agentTargetId,
                     autoSubmit,
                     draftPrompt: normalizedDraftPrompt,
+                    openInNewWindow,
                     provider,
                     userProjectPath
                   })

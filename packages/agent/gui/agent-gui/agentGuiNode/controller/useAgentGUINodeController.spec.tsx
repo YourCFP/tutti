@@ -2422,6 +2422,49 @@ describe("useAgentGUINodeController", () => {
     });
   });
 
+  it("falls back to local provider rail targets when multi-provider targets load empty", () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({ presences: [], sessions: [] })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn())
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        conversationScope: "multi-provider",
+        data: agentGuiData(null),
+        providerTargets: [],
+        onDataChange: vi.fn()
+      })
+    );
+
+    expect(
+      result.current.viewModel.providerTargets.map((target) => ({
+        agentTargetId: target.agentTargetId ?? null,
+        label: target.label,
+        provider: target.provider
+      }))
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          agentTargetId: "local:codex",
+          label: "Codex",
+          provider: "codex"
+        },
+        {
+          agentTargetId: "local:claude-code",
+          label: "Claude Code",
+          provider: "claude-code"
+        }
+      ])
+    );
+    expect(result.current.viewModel.providerTargets.length).toBeGreaterThan(1);
+  });
+
   it("sends fallback local agent target ids without provider target refs when provider targets are omitted", async () => {
     const activate = vi.fn(
       async (input: AgentHostActivateAgentSessionInput) => ({

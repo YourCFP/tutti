@@ -29,6 +29,7 @@ import {
 } from "../../app/renderer/components/ui/popover";
 import { AgentUsageMeter } from "./AgentUsageMeter";
 import { openAgentEnvPanel } from "../../shared/agentEnv/agentEnvPanelStore";
+import { createLocalAgentGUIProviderTargets } from "../../providerTargets";
 import type {
   ReferenceLocateTarget,
   ReferenceNode,
@@ -89,7 +90,8 @@ import { useProjectedAgentConversation } from "../../shared/agentConversation/pr
 import { normalizeOptionalWorkspaceAgentStatus } from "../../shared/workspaceAgentStatusNormalizer";
 import {
   MANAGED_AGENT_ICON_FALLBACK_URL,
-  MANAGED_AGENT_ICON_URLS
+  MANAGED_AGENT_ICON_URLS,
+  MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS
 } from "../../shared/managedAgentIcons";
 import type { UiLanguage } from "../../contexts/settings/domain/agentSettings";
 import type {
@@ -152,7 +154,10 @@ import type {
   AgentContextMentionItem,
   AgentMentionWorkspaceReferenceItem
 } from "./agentRichText/agentFileMentionExtension";
+import { formatAgentMentionMarkdown } from "./agentRichText/agentFileMentionExtension";
 import { createRichTextMentionHref } from "@tutti-os/ui-rich-text/core";
+import claudeCodeFlatFilledIconUrl from "../../app/renderer/assets/icons/agents/claudecode-flat-filled.svg";
+import codexFlatFilledIconUrl from "../../app/renderer/assets/icons/agents/codex-flat-filled.svg";
 
 /**
  * 把 @ 面板里的任务/应用 mention 解析为引用 picker 的定位目标(sourceId + 语义 params)。
@@ -227,6 +232,20 @@ function agentGUIProviderIconPresentation(
   return {
     provider: normalizedProvider,
     iconUrl: iconUrl?.trim() || resolveAgentGUIHeroIconUrl(normalizedProvider)
+  };
+}
+
+function agentGUIProviderRailIconPresentation(
+  provider: string | undefined,
+  iconUrl?: string | null
+): AgentGUIProviderIconPresentation {
+  const normalizedProvider = normalizeManagedAgentProvider(provider);
+  return {
+    provider: normalizedProvider,
+    iconUrl:
+      iconUrl?.trim() ||
+      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS[normalizedProvider] ||
+      resolveAgentGUIHeroIconUrl(normalizedProvider)
   };
 }
 
@@ -349,6 +368,7 @@ export interface AgentGUIViewLabels {
   conversationFilterAll: string;
   conversationFilterCodex: string;
   conversationFilterClaudeCode: string;
+  conversationFilterTutti: string;
   providerSwitchLabel: string;
   startConversation: string;
   selectConversation: string;
@@ -510,6 +530,8 @@ export interface AgentGUIViewLabels {
   addReference: string;
   addContent: string;
   referenceWorkspaceFiles: string;
+  handoffConversation: string;
+  handoffConversationMenu: string;
   projectLocked: string;
   projectMissingDescription: string;
   syncPending: string;
@@ -526,6 +548,12 @@ export interface AgentGUIViewLabels {
 interface AgentGUINodeViewProps {
   viewModel: AgentGUINodeViewModel;
   onLinkAction?: (action: WorkspaceLinkAction) => void;
+  onHandoffConversation?: (input: {
+    agentTargetId?: string | null;
+    draftPrompt: string;
+    provider: AgentGUIProvider;
+    userProjectPath?: string | null;
+  }) => void | Promise<void>;
   capabilityMenuState?: AgentComposerProps["capabilityMenuState"];
   onCapabilitySettingsRequest?: AgentComposerProps["onCapabilitySettingsRequest"];
   isActive?: boolean;
@@ -910,9 +938,59 @@ function conversationPlainTitle(
   });
 }
 
+function buildAgentConversationHandoffPrompt(input: {
+  activeConversation: AgentGUINodeViewModel["activeConversation"];
+  currentUserId?: string | null;
+  labels: Pick<AgentGUIViewLabels, "fallbackAgentTitle">;
+  selectedProviderTarget: AgentGUIProviderTarget | null;
+  uiLanguage: UiLanguage;
+  workspaceId: string;
+}): string {
+  const conversation = input.activeConversation;
+  if (!conversation) {
+    return "";
+  }
+  const sourceAgentLabel =
+    input.selectedProviderTarget?.label?.trim() || conversation.provider;
+  const title = conversationPlainTitle(
+    conversation,
+    input.labels,
+    input.uiLanguage
+  );
+  const mentionLabel = `${sourceAgentLabel}${title ? ` ${title}` : ""}`.trim();
+  const href = createRichTextMentionHref({
+    providerId: "agent-session",
+    entityId: conversation.id,
+    label: mentionLabel,
+    scope: { workspaceId: input.workspaceId }
+  });
+  return `${formatAgentMentionMarkdown({
+    kind: "session",
+    href,
+    workspaceId: input.workspaceId,
+    targetId: conversation.id,
+    name: mentionLabel,
+    title: title || sourceAgentLabel,
+    scope: "my_sessions",
+    initiatorName: input.currentUserId?.trim() || sourceAgentLabel,
+    agentName: sourceAgentLabel,
+    status: conversation.status,
+    updatedAtUnixMs: conversation.updatedAtUnixMs
+  })} `;
+}
+
+function handoffProjectPathForConversation(
+  conversation: AgentGUINodeViewModel["activeConversation"]
+): string | null {
+  return (
+    conversation?.project?.path?.trim() || conversation?.cwd?.trim() || null
+  );
+}
+
 export function AgentGUINodeView({
   viewModel,
   onLinkAction,
+  onHandoffConversation,
   capabilityMenuState,
   onCapabilitySettingsRequest,
   isActive = true,
@@ -1331,18 +1409,20 @@ export function AgentGUINodeView({
   const visualConversationRailWidthPx = isRailResizing
     ? (railResizeInteractionRef.current?.lastWidthPx ?? conversationRailWidthPx)
     : (railResizeWidthPx ?? conversationRailWidthPx);
+  const effectiveConversationRailWidthPx = conversationRailCollapsed
+    ? 0
+    : visualConversationRailWidthPx;
   const showProviderRail = viewModel.conversationScope === "multi-provider";
   const renderProviderRail = showProviderRail && !conversationRailCollapsed;
 
   const layoutStyle = {
-    "--agent-gui-conversation-rail-width": `${visualConversationRailWidthPx}px`,
+    "--agent-gui-conversation-rail-width": `${effectiveConversationRailWidthPx}px`,
+    "--agent-gui-conversation-rail-content-width": `${visualConversationRailWidthPx}px`,
     "--agent-gui-detail-min-width": `${detailMinWidthPx}px`,
     "--agent-gui-provider-rail-width": renderProviderRail ? "52px" : "0px",
-    gridTemplateColumns: conversationRailCollapsed
-      ? "minmax(var(--agent-gui-detail-min-width), 1fr)"
-      : renderProviderRail
-        ? "var(--agent-gui-provider-rail-width) var(--agent-gui-conversation-rail-width) minmax(var(--agent-gui-detail-min-width), 1fr)"
-        : "var(--agent-gui-conversation-rail-width) minmax(var(--agent-gui-detail-min-width), 1fr)"
+    gridTemplateColumns: showProviderRail
+      ? "var(--agent-gui-provider-rail-width) var(--agent-gui-conversation-rail-width) minmax(var(--agent-gui-detail-min-width), 1fr)"
+      : "var(--agent-gui-conversation-rail-width) minmax(var(--agent-gui-detail-min-width), 1fr)"
   } as CSSProperties;
   const effectiveRailConfigProvider =
     railConfigProvider === undefined
@@ -1486,10 +1566,12 @@ export function AgentGUINodeView({
         inert={previewMode ? true : undefined}
         style={layoutStyle}
       >
-        {renderProviderRail ? (
+        {showProviderRail ? (
           <aside
             className={styles.providerRailPanel}
             aria-label={labels.providerSwitchLabel}
+            aria-hidden={conversationRailCollapsed ? "true" : undefined}
+            inert={conversationRailCollapsed ? true : undefined}
           >
             <AgentGUIProviderRail
               conversationFilter={viewModel.conversationFilter}
@@ -1505,17 +1587,22 @@ export function AgentGUINodeView({
             />
           </aside>
         ) : null}
-        {!conversationRailCollapsed ? (
-          <aside id="agent-gui-conversation-rail" className={styles.railPanel}>
-            <AgentGUIConversationRailStorePane
-              conversations={viewModel.conversations}
-              store={conversationRailStore}
-              storeState={conversationRailStoreState}
-              userProjects={viewModel.userProjects}
-              workspaceId={viewModel.workspaceId}
-            />
-          </aside>
-        ) : null}
+        <aside
+          id="agent-gui-conversation-rail"
+          className={`${styles.railPanel}${
+            conversationRailCollapsed ? ` ${styles.railPanelCollapsed}` : ""
+          }`}
+          aria-hidden={conversationRailCollapsed ? "true" : undefined}
+          inert={conversationRailCollapsed ? true : undefined}
+        >
+          <AgentGUIConversationRailStorePane
+            conversations={viewModel.conversations}
+            store={conversationRailStore}
+            storeState={conversationRailStoreState}
+            userProjects={viewModel.userProjects}
+            workspaceId={viewModel.workspaceId}
+          />
+        </aside>
         <div
           id="agent-gui-conversation-rail-resize"
           className={
@@ -1560,6 +1647,7 @@ export function AgentGUINodeView({
             slashStatusLimits={slashStatusLimits}
             slashStatusLimitsLoading={slashStatusLimitsLoading}
             onLinkAction={onLinkAction}
+            onHandoffConversation={onHandoffConversation}
             capabilityMenuState={capabilityMenuState}
             onCapabilitySettingsRequest={onCapabilitySettingsRequest}
             onAgentProviderLogin={onAgentProviderLogin}
@@ -1625,6 +1713,7 @@ interface AgentGUIDetailPaneProps {
   slashStatusLimits: readonly AgentComposerSlashStatusLimit[];
   slashStatusLimitsLoading: boolean;
   onLinkAction?: (action: WorkspaceLinkAction) => void;
+  onHandoffConversation?: AgentGUINodeViewProps["onHandoffConversation"];
   capabilityMenuState?: AgentComposerProps["capabilityMenuState"];
   onCapabilitySettingsRequest?: AgentComposerProps["onCapabilitySettingsRequest"];
   onAgentProviderLogin?: (provider?: string | null) => void;
@@ -1721,6 +1810,7 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   slashStatusLimits,
   slashStatusLimitsLoading,
   onLinkAction,
+  onHandoffConversation,
   capabilityMenuState,
   onCapabilitySettingsRequest,
   onAgentProviderLogin,
@@ -2170,6 +2260,8 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       addReference: labels.addReference,
       addContent: labels.addContent,
       referenceWorkspaceFiles: labels.referenceWorkspaceFiles,
+      handoffConversation: labels.handoffConversation,
+      handoffConversationMenu: labels.handoffConversationMenu,
       providerSwitchLabel: labels.providerSwitchLabel,
       projectLocked: labels.projectLocked,
       projectMissingDescription: labels.projectMissingDescription,
@@ -2189,6 +2281,8 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       labels.fileMentionLoading,
       labels.fileMentionPalette,
       labels.fileMentionTabHint,
+      labels.handoffConversation,
+      labels.handoffConversationMenu,
       labels.inheritedUnavailable,
       labels.loadingConversation,
       labels.modelLabel,
@@ -2447,6 +2541,8 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       isActive,
       promptImagesSupported: viewModel.promptImagesSupported,
       providerSelectLabel: labels.providerSwitchLabel,
+      handoffLabel: labels.handoffConversation,
+      handoffMenuLabel: labels.handoffConversationMenu,
       isInterrupting: viewModel.isInterrupting,
       isSendingTurn: isComposerSending,
       isSubmittingPrompt: viewModel.isRespondingApproval,
@@ -2467,6 +2563,25 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       onSubmitInteractivePrompt: submitInteractivePrompt,
       onCapabilitySettingsRequest,
       onLinkAction: stableLinkAction,
+      onHandoffConversation:
+        onHandoffConversation && viewModel.activeConversationId !== null
+          ? (target) =>
+              onHandoffConversation({
+                agentTargetId: target.agentTargetId ?? target.targetId,
+                draftPrompt: buildAgentConversationHandoffPrompt({
+                  activeConversation: viewModel.activeConversation,
+                  currentUserId: viewModel.currentUserId,
+                  labels,
+                  selectedProviderTarget: composerSelectedProviderTarget,
+                  uiLanguage,
+                  workspaceId: viewModel.workspaceId
+                }),
+                provider: target.provider,
+                userProjectPath: handoffProjectPathForConversation(
+                  viewModel.activeConversation
+                )
+              })
+          : undefined,
       onRequestWorkspaceReferences: stableRequestWorkspaceReferences,
       resolveDroppedFileReferences,
       selectProjectDirectory: stableSelectProjectDirectory,
@@ -2489,9 +2604,13 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       isActive,
       isComposerSending,
       labels.followupPlaceholder,
+      labels.handoffConversation,
+      labels.handoffConversationMenu,
       labels.initialPlaceholder,
       labels.promptTips,
       labels.providerSwitchLabel,
+      labels,
+      onHandoffConversation,
       previewMode,
       workspaceReferencePickerOpen,
       composerActivePrompt,
@@ -2523,6 +2642,7 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       viewModel.composerSettings,
       viewModel.currentUserId,
       viewModel.activeConversationId,
+      viewModel.activeConversation,
       composerProvider,
       viewModel.draftContent,
       viewModel.draftPrompt,
@@ -4298,6 +4418,13 @@ const agentGUIProviderRailOrder: readonly AgentGUIProvider[] = [
   "gemini"
 ];
 
+const agentGUIProviderRailDefaultProviders = [
+  "codex",
+  "claude-code",
+  "nexight",
+  "hermes"
+] as const satisfies readonly AgentGUIProvider[];
+
 function agentGUIProviderRailOrderIndex(provider: AgentGUIProvider): number {
   const index = agentGUIProviderRailOrder.indexOf(provider);
   return index < 0 ? agentGUIProviderRailOrder.length : index;
@@ -4305,11 +4432,24 @@ function agentGUIProviderRailOrderIndex(provider: AgentGUIProvider): number {
 
 function agentGUILaunchpadIconPresentations(): readonly AgentGUIProviderIconPresentation[] {
   return [
-    agentGUIProviderIconPresentation("codex"),
-    agentGUIProviderIconPresentation("claude-code"),
-    agentGUIProviderIconPresentation("tutti"),
-    agentGUIProviderIconPresentation("hermes")
+    agentGUIProviderRailIconPresentation("codex"),
+    agentGUIProviderRailIconPresentation("claude-code"),
+    agentGUIProviderRailIconPresentation("tutti"),
+    agentGUIProviderRailIconPresentation("hermes")
   ];
+}
+
+function agentGUIConversationProviderIconUrl(
+  provider: string | undefined
+): string | null {
+  switch (normalizeManagedAgentProvider(provider)) {
+    case "claude-code":
+      return claudeCodeFlatFilledIconUrl;
+    case "codex":
+      return codexFlatFilledIconUrl;
+    default:
+      return null;
+  }
 }
 
 function agentGUIProviderRailLabel(
@@ -4317,6 +4457,9 @@ function agentGUIProviderRailLabel(
   targetLabel: string,
   labels: AgentGUIViewLabels
 ): string {
+  if (provider === "nexight" && targetLabel === "Tutti Agent") {
+    return labels.conversationFilterTutti;
+  }
   if (targetLabel.trim() && targetLabel !== provider) {
     return targetLabel;
   }
@@ -4336,6 +4479,47 @@ function agentGUIProviderTargetMatchesConversationFilter(
   return (
     filter.kind === "agentTarget" &&
     (target.agentTargetId?.trim() ?? "") === filter.agentTargetId
+  );
+}
+
+function agentGUIProviderRailTargets(
+  providerTargets: AgentGUINodeViewModel["providerTargets"],
+  providerTargetsLoading: boolean
+): AgentGUINodeViewModel["providerTargets"] {
+  if (providerTargetsLoading) {
+    return [];
+  }
+  const source =
+    providerTargets.length > 0 &&
+    !agentGUIProviderRailTargetsAreFullLocalFallback(providerTargets)
+      ? providerTargets
+      : [];
+  const seenProviders = new Set(source.map((target) => target.provider));
+  const missingDefaultProviders = agentGUIProviderRailDefaultProviders.filter(
+    (provider) => !seenProviders.has(provider)
+  );
+  if (source.length > 0 && missingDefaultProviders.length === 0) {
+    return source;
+  }
+  return [
+    ...source,
+    ...createLocalAgentGUIProviderTargets(missingDefaultProviders)
+  ];
+}
+
+function agentGUIProviderRailTargetsAreFullLocalFallback(
+  providerTargets: AgentGUINodeViewModel["providerTargets"]
+): boolean {
+  if (providerTargets.length !== agentGUIProviderRailOrder.length) {
+    return false;
+  }
+  const fallbackProviders = new Set(agentGUIProviderRailOrder);
+  return providerTargets.every(
+    (target) =>
+      fallbackProviders.has(target.provider) &&
+      target.ref.kind === "local" &&
+      target.ref.provider === target.provider &&
+      target.targetId === `local:${target.provider}`
   );
 }
 
@@ -4363,8 +4547,12 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
   onUpdateConversationFilter
 }: AgentGUIProviderRailProps): React.JSX.Element {
   "use memo";
+  const railProviderTargets = useMemo(
+    () => agentGUIProviderRailTargets(providerTargets, providerTargetsLoading),
+    [providerTargets, providerTargetsLoading]
+  );
   const providerTiles = useMemo(() => {
-    const targets = [...providerTargets];
+    const targets = [...railProviderTargets];
     const originalIndexByTarget = new Map<string, number>();
     targets.forEach((target, index) => {
       originalIndexByTarget.set(
@@ -4387,7 +4575,7 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
         ) ?? 0)
       );
     });
-  }, [providerTargets]);
+  }, [railProviderTargets]);
   const launchpadIconPresentations = useMemo(
     () => agentGUILaunchpadIconPresentations(),
     []
@@ -4400,7 +4588,7 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
     onUpdateConversationFilter({ kind: "all" });
     if (selectedProviderTargetIsPlaceholder) {
       const fallbackTarget =
-        providerTargets.find((target) => target.disabled !== true) ?? null;
+        railProviderTargets.find((target) => target.disabled !== true) ?? null;
       if (fallbackTarget) {
         onSelectConversationFilterTarget({
           provider: fallbackTarget.provider,
@@ -4411,7 +4599,7 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
   }, [
     onSelectConversationFilterTarget,
     onUpdateConversationFilter,
-    providerTargets,
+    railProviderTargets,
     selectedProviderTargetIsPlaceholder
   ]);
   const selectProviderTile = useCallback(
@@ -4434,6 +4622,7 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
       <button
         type="button"
         role="tab"
+        aria-label={labels.conversationFilterAll}
         aria-selected={allTileSelected}
         className={styles.providerRailTile}
         data-selected={allTileSelected ? "true" : "false"}
@@ -4441,9 +4630,6 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
         onClick={selectAllProviders}
       >
         <AgentGUIAllProviderGridIcon icons={launchpadIconPresentations} />
-        <span className={styles.providerRailTileLabel}>
-          {labels.conversationFilterAll}
-        </span>
       </button>
       <span aria-hidden="true" className={styles.providerRailSeparator} />
       {providerTargetsLoading
@@ -4459,10 +4645,6 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
               disabled
             >
               <span aria-hidden="true" className={styles.providerRailAvatar} />
-              <span
-                aria-hidden="true"
-                className={styles.providerRailTileLabel}
-              />
             </button>
           ))
         : null}
@@ -4475,14 +4657,21 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
                 target,
                 conversationFilter
               );
-        return (
+        const label = agentGUIProviderRailLabel(
+          target.provider,
+          target.label,
+          labels
+        );
+        const tile = (
           <button
             key={`${target.provider}:${target.targetId}`}
             type="button"
             role="tab"
+            aria-label={label}
             aria-selected={providerSelected}
             className={styles.providerRailTile}
             data-disabled={target.disabled === true ? "true" : undefined}
+            data-provider-tile="true"
             data-selected={providerSelected ? "true" : "false"}
             disabled={previewMode}
             onClick={() => selectProviderTile(target)}
@@ -4491,16 +4680,24 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
               <AgentGUIProviderIconVisual
                 ariaHidden
                 imageClassName={styles.providerRailAvatarImage}
-                icon={agentGUIProviderIconPresentation(
+                icon={agentGUIProviderRailIconPresentation(
                   target.provider,
                   target.iconUrl
                 )}
               />
             </span>
-            <span className={styles.providerRailTileLabel}>
-              {agentGUIProviderRailLabel(target.provider, target.label, labels)}
-            </span>
           </button>
+        );
+        if (previewMode) {
+          return tile;
+        }
+        return (
+          <Tooltip key={`${target.provider}:${target.targetId}:tooltip`}>
+            <TooltipTrigger asChild>{tile}</TooltipTrigger>
+            <TooltipContent side="right" sideOffset={-4}>
+              {label}
+            </TooltipContent>
+          </Tooltip>
         );
       })}
     </div>
@@ -5759,6 +5956,7 @@ const AgentGUIConversationRailItem = memo(
   }: AgentGUIConversationRailItemProps): React.JSX.Element {
     "use memo";
     const pinned = (item.pinnedAtUnixMs ?? 0) > 0;
+    const providerIconUrl = agentGUIConversationProviderIconUrl(item.provider);
     const setItemElement = useCallback(
       (element: HTMLDivElement | null) => {
         registerItemElement(item.id, element);
@@ -5782,7 +5980,6 @@ const AgentGUIConversationRailItem = memo(
     const handleRequestDelete = useCallback(() => {
       onRequestDeleteConversation(item.id);
     }, [item.id, onRequestDeleteConversation]);
-
     return (
       <div
         ref={setItemElement}
@@ -5798,8 +5995,21 @@ const AgentGUIConversationRailItem = memo(
           className={styles.conversationSelect}
           onClick={handleSelect}
         >
-          <span className={styles.conversationTitle}>
-            {conversationPlainTitle(item, labels, uiLanguage)}
+          <span className={styles.conversationTitleRow}>
+            {providerIconUrl ? (
+              <span
+                aria-hidden="true"
+                className={styles.conversationProviderIcon}
+                style={
+                  {
+                    "--agent-gui-conversation-provider-icon-url": `url("${providerIconUrl}")`
+                  } as CSSProperties
+                }
+              />
+            ) : null}
+            <span className={styles.conversationTitle}>
+              {conversationPlainTitle(item, labels, uiLanguage)}
+            </span>
           </span>
           <ConversationMeta item={item} nowMs={currentTimeMs} labels={labels} />
         </button>

@@ -75,6 +75,10 @@ export function localAgentGUIAgentTargetId(
       return "local:codex";
     case "claude-code":
       return "local:claude-code";
+    case "hermes":
+      return "local:hermes";
+    case "nexight":
+      return "local:nexight";
     default:
       return null;
   }

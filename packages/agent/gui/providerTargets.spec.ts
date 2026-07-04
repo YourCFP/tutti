@@ -30,8 +30,14 @@ describe("agent gui provider targets", () => {
       "local:openclaw"
     ]);
     expect(createLocalAgentGUIProviderTarget("nexight")).toMatchObject({
+      agentTargetId: "local:nexight",
       label: "Tutti Agent",
       provider: "nexight"
+    });
+    expect(createLocalAgentGUIProviderTarget("hermes")).toMatchObject({
+      agentTargetId: "local:hermes",
+      label: "Hermes",
+      provider: "hermes"
     });
   });
 
@@ -49,15 +55,36 @@ describe("agent gui provider targets", () => {
 
     expect(
       targets.map((target) => ({
+        agentTargetId: target.agentTargetId ?? null,
         disabled: target.disabled === true,
         label: target.label,
         provider: target.provider
       }))
     ).toEqual([
-      { disabled: false, label: "Codex", provider: "codex" },
-      { disabled: false, label: "Claude Code", provider: "claude-code" },
-      { disabled: true, label: "Tutti Agent", provider: "nexight" },
-      { disabled: true, label: "Hermes", provider: "hermes" }
+      {
+        agentTargetId: "local:codex",
+        disabled: false,
+        label: "Codex",
+        provider: "codex"
+      },
+      {
+        agentTargetId: "local:claude-code",
+        disabled: false,
+        label: "Claude Code",
+        provider: "claude-code"
+      },
+      {
+        agentTargetId: "local:nexight",
+        disabled: true,
+        label: "Tutti Agent",
+        provider: "nexight"
+      },
+      {
+        agentTargetId: "local:hermes",
+        disabled: true,
+        label: "Hermes",
+        provider: "hermes"
+      }
     ]);
   });
 

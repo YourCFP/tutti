@@ -7,7 +7,8 @@ import {
   useState,
   type CSSProperties,
   type FocusEvent as ReactFocusEvent,
-  type FormEvent
+  type FormEvent,
+  type JSX
 } from "react";
 import { createPortal, flushSync } from "react-dom";
 import type { AgentSessionCommand } from "../../shared/agentSessionTypes";
@@ -37,7 +38,6 @@ import type { AgentConversationPromptVM } from "../../shared/agentConversation/c
 import { AgentUsageMeter, agentUsageBarColor } from "./AgentUsageMeter";
 import { cn } from "../../app/renderer/lib/utils";
 import {
-  AddIcon,
   Button,
   Select,
   SelectContent,
@@ -151,7 +151,9 @@ import {
   USAGE_CRITICAL_PERCENT,
   USAGE_WARN_PERCENT
 } from "./model/agentUsageThresholds";
-import atLinedIconUrl from "../../app/renderer/assets/icons/@-lined-14px.svg";
+import addLinedIconUrl from "../../app/renderer/assets/icons/add-lined-bold.svg";
+import atLinedIconUrl from "../../app/renderer/assets/icons/@-bold-lined.svg";
+import handoffLinedIconUrl from "../../app/renderer/assets/icons/handoff-lined.svg";
 import { useOptionalAgentActivityRuntime } from "../../agentActivityRuntime";
 import { useOptionalAgentHostApi } from "../../agentActivityHost";
 import type { AgentDroppedFileReferenceResolver } from "./model/agentDroppedFileReferences";
@@ -222,6 +224,7 @@ export interface AgentComposerProps {
     provider: AgentGUIProvider;
     providerTargetId?: string | null;
   }) => void;
+  onHandoffConversation?: (target: AgentGUIProviderTarget) => void;
   canQueueWhileBusy: boolean;
   showStopButton: boolean;
   activePrompt: AgentConversationPromptVM | null;
@@ -239,6 +242,8 @@ export interface AgentComposerProps {
   composerFocusRequestSequence?: number | null;
   layoutMode?: "dock" | "hero";
   providerSelectLabel?: string;
+  handoffLabel?: string;
+  handoffMenuLabel?: string;
   labels: {
     send: string;
     modelLabel: string;
@@ -374,6 +379,8 @@ export interface AgentComposerProps {
     addReference: string;
     addContent: string;
     referenceWorkspaceFiles: string;
+    handoffConversation: string;
+    handoffConversationMenu: string;
     providerSwitchLabel: string;
     projectLocked: string;
     projectMissingDescription: string;
@@ -825,6 +832,152 @@ function hasInlineOverflow(element: HTMLElement | null): boolean {
   return element.scrollWidth > element.clientWidth + 1;
 }
 
+function AgentComposerMaskIcon({
+  iconUrl,
+  marker
+}: {
+  iconUrl: string;
+  marker?: "reference-add";
+}): JSX.Element {
+  return (
+    <span
+      aria-hidden
+      className="inline-block size-3.5 bg-[var(--text-secondary)] transition-colors group-hover:bg-[var(--text-primary)] group-focus-visible:bg-[var(--text-primary)]"
+      data-agent-reference-add-icon={
+        marker === "reference-add" ? "true" : undefined
+      }
+      style={{
+        WebkitMaskImage: `url("${iconUrl}")`,
+        WebkitMaskPosition: "center",
+        WebkitMaskRepeat: "no-repeat",
+        WebkitMaskSize: "contain",
+        maskImage: `url("${iconUrl}")`,
+        maskPosition: "center",
+        maskRepeat: "no-repeat",
+        maskSize: "contain"
+      }}
+    />
+  );
+}
+
+type DotLottieWcProps = {
+  autoplay?: boolean;
+  className?: string;
+  loop?: boolean;
+  src: string;
+  style?: CSSProperties;
+};
+
+declare module "react" {
+  namespace JSX {
+    interface IntrinsicElements {
+      "dotlottie-wc": DotLottieWcProps;
+    }
+  }
+}
+
+const HANDOFF_DOTLOTTIE_SCRIPT_ID = "agent-gui-handoff-dotlottie-wc";
+const HANDOFF_DOTLOTTIE_SOURCE_PRELOAD_ID =
+  "agent-gui-handoff-dotlottie-source-preload";
+const HANDOFF_DOTLOTTIE_SCRIPT_URL =
+  "https://unpkg.com/@lottiefiles/dotlottie-wc@0.9.14/dist/dotlottie-wc.js";
+const HANDOFF_DOTLOTTIE_SRC =
+  "https://lottie.host/03d75946-52e5-4ccf-97df-174919a13ced/Av6piqVmPa.lottie";
+const HANDOFF_SELECT_IDLE_VALUE = "__agent-handoff-idle__";
+
+function ensureHandoffDotLottieAssets(): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  if (!document.getElementById(HANDOFF_DOTLOTTIE_SOURCE_PRELOAD_ID)) {
+    const preload = document.createElement("link");
+    preload.id = HANDOFF_DOTLOTTIE_SOURCE_PRELOAD_ID;
+    preload.as = "fetch";
+    preload.crossOrigin = "anonymous";
+    preload.href = HANDOFF_DOTLOTTIE_SRC;
+    preload.rel = "preload";
+    document.head.appendChild(preload);
+  }
+  if (!document.getElementById(HANDOFF_DOTLOTTIE_SCRIPT_ID)) {
+    const script = document.createElement("script");
+    script.id = HANDOFF_DOTLOTTIE_SCRIPT_ID;
+    script.src = HANDOFF_DOTLOTTIE_SCRIPT_URL;
+    script.type = "module";
+    document.head.appendChild(script);
+  }
+}
+
+function AgentComposerHandoffIcon(): JSX.Element {
+  const rootRef = useRef<HTMLSpanElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    ensureHandoffDotLottieAssets();
+  }, []);
+
+  const startPlaying = useCallback(() => {
+    ensureHandoffDotLottieAssets();
+    setIsPlaying(true);
+  }, []);
+
+  const reset = useCallback(() => {
+    setIsPlaying(false);
+  }, []);
+
+  useEffect(() => {
+    const trigger = rootRef.current?.closest(
+      `.${styles.composerHandoffTrigger}`
+    );
+    if (!trigger) {
+      return;
+    }
+    trigger.addEventListener("mouseenter", startPlaying);
+    trigger.addEventListener("mouseleave", reset);
+    trigger.addEventListener("focusin", startPlaying);
+    trigger.addEventListener("focusout", reset);
+    return () => {
+      trigger.removeEventListener("mouseenter", startPlaying);
+      trigger.removeEventListener("mouseleave", reset);
+      trigger.removeEventListener("focusin", startPlaying);
+      trigger.removeEventListener("focusout", reset);
+    };
+  }, [reset, startPlaying]);
+
+  return (
+    <span
+      ref={rootRef}
+      aria-hidden="true"
+      className={styles.composerHandoffIcon}
+      data-playing={isPlaying ? "true" : "false"}
+      onFocus={startPlaying}
+      onMouseEnter={startPlaying}
+      onMouseLeave={reset}
+      onBlur={reset}
+    >
+      <span
+        className={styles.composerHandoffStaticIcon}
+        style={{
+          WebkitMaskImage: `url("${handoffLinedIconUrl}")`,
+          WebkitMaskPosition: "center",
+          WebkitMaskRepeat: "no-repeat",
+          WebkitMaskSize: "contain",
+          maskImage: `url("${handoffLinedIconUrl}")`,
+          maskPosition: "center",
+          maskRepeat: "no-repeat",
+          maskSize: "contain"
+        }}
+      />
+      <dotlottie-wc
+        autoplay
+        className={styles.composerHandoffAnimatedIcon}
+        data-active={isPlaying ? "true" : "false"}
+        loop
+        src={HANDOFF_DOTLOTTIE_SRC}
+      />
+    </span>
+  );
+}
+
 export function AgentComposer({
   workspaceId,
   workspacePath,
@@ -850,6 +1003,7 @@ export function AgentComposer({
   providerTargets = [],
   providerSelectReadonly = false,
   onProviderSelect,
+  onHandoffConversation,
   canQueueWhileBusy,
   showStopButton,
   activePrompt,
@@ -867,6 +1021,8 @@ export function AgentComposer({
   composerFocusRequestSequence = null,
   layoutMode = "dock",
   providerSelectLabel = "",
+  handoffLabel,
+  handoffMenuLabel,
   labels,
   workspaceUserProjectI18n,
   onDraftContentChange,
@@ -2375,10 +2531,28 @@ export function AgentComposer({
     )
       ? [selectedProviderSwitchTarget, ...providerSwitchTargets]
       : providerSwitchTargets;
+  const handoffMenuTargets = selectedProviderSwitchTarget
+    ? providerMenuTargets.filter((target) => {
+        if (target.disabled === true) {
+          return false;
+        }
+        if (target.targetId === selectedProviderSwitchTarget.targetId) {
+          return false;
+        }
+        const selectedAgentTargetId =
+          selectedProviderSwitchTarget.agentTargetId ??
+          selectedProviderSwitchTarget.targetId;
+        const targetAgentTargetId = target.agentTargetId ?? target.targetId;
+        return targetAgentTargetId !== selectedAgentTargetId;
+      })
+    : providerMenuTargets;
   const selectedProviderLabel =
     selectedProviderSwitchTarget?.label ??
     selectedProviderTarget?.label ??
     provider;
+  const effectiveHandoffLabel = handoffLabel || labels.handoffConversation;
+  const effectiveHandoffMenuLabel =
+    handoffMenuLabel || labels.handoffConversationMenu;
   const inputShellClassName = cn(
     styles.composerInputShell,
     isHeroLayout && styles.composerInputShellHero
@@ -2387,10 +2561,17 @@ export function AgentComposer({
     isSelectedProjectMissing || (disabled && !canQueueWhileBusy);
   const providerSelectDisabled =
     providerSelectReadonly || composerControlsHardDisabled || inputDisabled;
+  const handoffDisabled =
+    composerControlsHardDisabled ||
+    inputDisabled ||
+    !onHandoffConversation ||
+    handoffMenuTargets.length === 0;
   const showProviderSelect =
     !isHeroLayout &&
     selectedProviderSwitchTarget !== null &&
     providerMenuTargets.length > 0;
+  const showHandoffSelect =
+    showProviderSelect && providerSelectReadonly && !previewMode;
   const handleMentionPaletteButton = useCallback((): void => {
     if (composerControlsHardDisabled || inputDisabled) {
       return;
@@ -3304,13 +3485,12 @@ export function AgentComposer({
                           className={cn(
                             styles.composerMenuTrigger,
                             styles.composerReferenceTrigger,
-                            "w-auto justify-center text-[var(--agent-gui-text-secondary)] [&_svg]:shrink-0"
+                            "group w-auto justify-center text-[var(--agent-gui-text-secondary)]"
                           )}
                         >
-                          <AddIcon
-                            aria-hidden
-                            className="size-3.5"
-                            data-agent-reference-add-icon="true"
+                          <AgentComposerMaskIcon
+                            iconUrl={addLinedIconUrl}
+                            marker="reference-add"
                           />
                         </button>
                       </TooltipTrigger>
@@ -3344,16 +3524,16 @@ export function AgentComposer({
                           <SelectTrigger
                             size="sm"
                             aria-label={labels.referenceWorkspaceFiles}
+                            title={labels.referenceWorkspaceFiles}
                             className={cn(
                               styles.composerMenuTrigger,
                               styles.composerReferenceTrigger,
-                              "w-auto justify-center text-[var(--agent-gui-text-secondary)] [&>svg:last-child]:hidden [&_svg]:shrink-0"
+                              "group w-auto justify-center text-[var(--agent-gui-text-secondary)] [&>svg:last-child]:hidden"
                             )}
                           >
-                            <AddIcon
-                              aria-hidden
-                              className="size-3.5"
-                              data-agent-reference-add-icon="true"
+                            <AgentComposerMaskIcon
+                              iconUrl={addLinedIconUrl}
+                              marker="reference-add"
                             />
                           </SelectTrigger>
                         </TooltipTrigger>
@@ -3401,7 +3581,70 @@ export function AgentComposer({
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              {showProviderSelect && selectedProviderSwitchTarget ? (
+              {showHandoffSelect ? (
+                <Select
+                  value={HANDOFF_SELECT_IDLE_VALUE}
+                  disabled={handoffDisabled}
+                  onValueChange={(nextTargetId) => {
+                    const target = handoffMenuTargets.find(
+                      (candidate) => candidate.targetId === nextTargetId
+                    );
+                    if (!target || target.disabled === true) {
+                      return;
+                    }
+                    onHandoffConversation?.(target);
+                  }}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    aria-label={effectiveHandoffLabel}
+                    title={effectiveHandoffLabel}
+                    className={cn(
+                      styles.composerMenuTrigger,
+                      styles.composerProviderSelect,
+                      styles.composerHandoffTrigger,
+                      "w-auto max-w-[180px] [&>svg:last-child]:hidden"
+                    )}
+                  >
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <AgentComposerHandoffIcon />
+                      <span className="min-w-0 truncate">
+                        {effectiveHandoffLabel}
+                      </span>
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent
+                    align="start"
+                    className={cn(
+                      styles.composerMenuContent,
+                      styles.composerHandoffMenuContent,
+                      "min-w-[190px]"
+                    )}
+                    aria-label={effectiveHandoffMenuLabel}
+                  >
+                    {handoffMenuTargets.map((target) => (
+                      <SelectItem
+                        key={`${target.provider}:${target.targetId}`}
+                        value={target.targetId}
+                        className={cn(styles.composerMenuItem, "gap-2")}
+                        disabled={target.disabled === true}
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <img
+                            alt=""
+                            aria-hidden="true"
+                            className="size-4 shrink-0 rounded-[4px]"
+                            src={resolveComposerProviderTargetIconUrl(target)}
+                          />
+                          <span className="min-w-0 truncate">
+                            {target.label}
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : showProviderSelect && selectedProviderSwitchTarget ? (
                 <Select
                   value={selectedProviderSwitchTarget.targetId}
                   disabled={providerSelectDisabled}

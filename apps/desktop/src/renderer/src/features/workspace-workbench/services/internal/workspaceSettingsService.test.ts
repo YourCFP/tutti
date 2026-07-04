@@ -749,14 +749,7 @@ test("WorkspaceSettingsService writes changed preferences", async () => {
   await service.changeAgentDockLayout("unified");
   await service.changeThemeSource("dark");
 
-  assert.deepEqual(writes, [
-    "zh-CN",
-    "left",
-    "claude-code",
-    "general",
-    "unified",
-    "dark"
-  ]);
+  assert.deepEqual(writes, ["zh-CN", "left", "claude-code", "general", "dark"]);
 });
 
 test("WorkspaceSettingsService refreshes App Center after changing catalog channel", async () => {
@@ -821,7 +814,6 @@ test("WorkspaceSettingsService reports preference save failures", async () => {
     "We couldn't switch the app language right now.",
     "We couldn't update the dock layout right now.",
     "We couldn't update the default provider right now.",
-    "We couldn't update the Agent dock right now.",
     "We couldn't switch the app appearance right now."
   ]);
 });

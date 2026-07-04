@@ -636,7 +636,10 @@ export const en = {
       conversationFilterAll: "All",
       conversationFilterCodex: "Codex",
       conversationFilterClaudeCode: "Claude Code",
+      conversationFilterTutti: "Tutti",
       providerSwitchLabel: "Switch provider",
+      handoffConversation: "Handoff",
+      handoffConversationMenu: "Choose an agent for handoff",
       batchRunnerStandaloneTitle: "Agent GUI batch runner",
       batchRunnerSubtitle:
         "Run JSONL prompt cases and review execution results",

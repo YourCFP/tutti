@@ -11,6 +11,11 @@ const styles = {
   composerFooterRight: "agent-gui-node__composer-footer-right",
   composerHero: "agent-gui-node__composer-hero",
   composerFloatingPrompt: "agent-gui-node__composer-floating-prompt",
+  composerHandoffAnimatedIcon: "agent-gui-node__composer-handoff-icon-animated",
+  composerHandoffIcon: "agent-gui-node__composer-handoff-icon",
+  composerHandoffMenuContent: "agent-gui-node__composer-handoff-menu-content",
+  composerHandoffStaticIcon: "agent-gui-node__composer-handoff-icon-static",
+  composerHandoffTrigger: "agent-gui-node__composer-handoff-trigger",
   composerQueuedPromptFloating:
     "agent-gui-node__composer-floating-prompt--queued",
   composerInputGroup: "agent-gui-node__composer-input-group",
@@ -59,6 +64,7 @@ const styles = {
   conversationItem: "agent-gui-node__conversation-item",
   conversationList: "agent-gui-node__conversation-list",
   conversationMeta: "agent-gui-node__conversation-meta",
+  conversationProviderIcon: "agent-gui-node__conversation-provider-icon",
   conversationOpenWindowButton:
     "agent-gui-node__conversation-open-window-button",
   conversationPinButton: "agent-gui-node__conversation-pin-button",
@@ -88,6 +94,7 @@ const styles = {
   conversationStatusGlyph: "agent-gui-node__conversation-status-glyph",
   conversationTime: "agent-gui-node__conversation-time",
   conversationTitle: "agent-gui-node__conversation-title",
+  conversationTitleRow: "agent-gui-node__conversation-title-row",
   conversationUnreadLamp: "agent-gui-node__conversation-unread-lamp",
   detailHeader: "agent-gui-node__detail-header",
   detailHeaderPathInfo: "agent-gui-node__detail-header-path-info",

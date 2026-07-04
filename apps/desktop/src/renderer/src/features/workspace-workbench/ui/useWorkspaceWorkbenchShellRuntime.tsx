@@ -130,8 +130,13 @@ export function useWorkspaceWorkbenchShellRuntime({
     readonly AgentGUIProviderTarget[] | undefined
   >(undefined);
   const agentGuiProviderTargetsLoading = agentGuiProviderTargets === undefined;
+  // An empty daemon target list means "no remote targets found", not "hide the
+  // local Codex/Claude rail tiles"; let AgentGUI synthesize its local fallback.
   const resolvedAgentGuiProviderTargets = useMemo(
-    () => agentGuiProviderTargets ?? [],
+    () =>
+      agentGuiProviderTargets && agentGuiProviderTargets.length > 0
+        ? agentGuiProviderTargets
+        : undefined,
     [agentGuiProviderTargets]
   );
   const reporterService = useService(IReporterService);

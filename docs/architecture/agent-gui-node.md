@@ -165,6 +165,12 @@ and must not switch the running session. Do not encode provider switching only
 as a conversation-list filter; filters can scope the visible Codex/Claude
 session list, while provider selection changes which provider a new empty
 composer will launch.
+In an active session, the composer footer may replace the display-only provider
+select with a handoff affordance. Handoff is a workbench launch, not an
+in-session provider switch: AgentGUI serializes the active session as a single
+`agent-session` mention in a draft prompt, passes the selected provider target
+through the host launch callback, and the desktop workbench opens a new empty
+composer for that target via the existing draft prefill activation path.
 When provider selection happens from the empty-home composer or title control
 while the rail is already scoped to a provider target in multi-provider scope,
 it must update the rail conversation filter to the matching agent target so the

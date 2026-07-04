@@ -1228,7 +1228,7 @@ describe("AgentGUINode", () => {
     expect(panel).not.toHaveTextContent("Rate limits unavailable");
   });
 
-  it("uses the active agent name as the Agent GUI window title", () => {
+  it("uses the generic Agent label as the Agent GUI window title", () => {
     const { container } = renderAgentGUINode({
       title: "Agent",
       state: {
@@ -1245,7 +1245,7 @@ describe("AgentGUINode", () => {
       '[data-workspace-node-window-root="true"]'
     );
 
-    expect(windowTitle).toHaveTextContent("Codex");
+    expect(windowTitle).toHaveTextContent("Agent");
     expect(windowTitle).toHaveClass("max-w-[280px]");
     expect(windowTitle).toHaveClass("gap-2");
     expect(windowRoot?.style.getPropertyValue("--node-header-padding-x")).toBe(
@@ -1284,7 +1284,7 @@ describe("AgentGUINode", () => {
     expect(claudeIcon).toBeNull();
   });
 
-  it("uses the active conversation as the window title when the rail is collapsed", () => {
+  it("keeps the Agent window title when the rail is collapsed", () => {
     mockViewModel = createViewModel({
       activeConversation: {
         id: "session-1",
@@ -1311,13 +1311,13 @@ describe("AgentGUINode", () => {
     const windowTitle = container.querySelector(
       '[data-workspace-node-window-title="true"]'
     );
-    expect(windowTitle).toHaveTextContent("Fresh dock title");
+    expect(windowTitle).toHaveTextContent("Agent");
     expect(
       container.querySelector(".agent-gui-node__detail-header")
     ).toBeNull();
   });
 
-  it("keeps a fallback active conversation title at the window top when the rail is collapsed", () => {
+  it("does not promote a fallback active conversation title into the window title when the rail is collapsed", () => {
     mockViewModel = createViewModel({
       activeConversation: {
         id: "session-1",
@@ -1343,7 +1343,7 @@ describe("AgentGUINode", () => {
 
     expect(
       container.querySelector('[data-workspace-node-window-title="true"]')
-    ).toHaveTextContent("Current task");
+    ).toHaveTextContent("Agent");
   });
 
   it("does not clear the dock conversation title while the active conversation is unavailable", () => {

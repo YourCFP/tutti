@@ -21,6 +21,12 @@ const launchpadOverlaySource = readFileSync(
   ),
   "utf8"
 );
+const shellRuntimeSource = readFileSync(
+  resolve(
+    "src/renderer/src/features/workspace-workbench/ui/useWorkspaceWorkbenchShellRuntime.tsx"
+  ),
+  "utf8"
+);
 
 test("WorkspaceWorkbench does not render a global agent install pending overlay", () => {
   assert.doesNotMatch(source, /WorkspaceAgentConnectingCard/);
@@ -91,5 +97,16 @@ test("WorkspaceLaunchpad renders one generic Agent entry", () => {
   assert.doesNotMatch(
     launchpadOverlaySource,
     /workspaceAgentGuiProviders\.map\(\(provider\) =>\s*resolveLaunchpadAgentDescriptor/
+  );
+});
+
+test("workspace shell preserves AgentGUI local provider target fallback for empty loads", () => {
+  assert.match(
+    shellRuntimeSource,
+    /agentGuiProviderTargets && agentGuiProviderTargets\.length > 0\s*\?\s*agentGuiProviderTargets\s*:\s*undefined/s
+  );
+  assert.doesNotMatch(
+    shellRuntimeSource,
+    /const resolvedAgentGuiProviderTargets = useMemo\(\s*\(\) => agentGuiProviderTargets \?\? \[\]/s
   );
 });

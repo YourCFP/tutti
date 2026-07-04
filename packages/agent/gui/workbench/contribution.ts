@@ -225,13 +225,7 @@ export function createAgentGuiWorkbenchContribution(
           windowActions
         }) => {
           const provider = agentGuiWorkbenchProviderFromInstanceId(instanceId);
-          const providerTitle = resolveAgentGuiWorkbenchProviderLabel(provider);
-          const isUnifiedDockNode =
-            agentGuiWorkbenchDockIdentityFromIdentifier(node.data.dockEntryId)
-              ?.kind === "unifiedAggregate";
-          const headerTitle = isUnifiedDockNode
-            ? copy.nodeTitle
-            : providerTitle;
+          const headerTitle = copy.nodeTitle;
           const rawWorkbenchState = (externalNodeState ??
             node.data.runtimeNodeState) as
             | Partial<AgentGuiWorkbenchNodeState>
@@ -394,11 +388,7 @@ export function createAgentGuiWorkbenchContribution(
           ? nodeStateSource.findInstanceIdByAgentSessionId(targetAgentSessionId)
           : null;
       const instanceId = existingInstanceId ?? descriptorInstanceId;
-      const title =
-        agentGuiWorkbenchDockIdentityFromIdentifier(dockEntryId)?.kind ===
-        "unifiedAggregate"
-          ? copy.nodeTitle
-          : resolveAgentGuiWorkbenchProviderLabel(provider);
+      const title = copy.nodeTitle;
       const providerTarget = providerTargetLaunchPayloadFromRequest(
         launchPayload,
         provider
