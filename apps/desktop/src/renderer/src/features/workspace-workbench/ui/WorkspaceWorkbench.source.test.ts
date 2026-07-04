@@ -50,6 +50,18 @@ test("WorkspaceWorkbench validates requested file targets before opening workspa
   );
 });
 
+test("WorkspaceWorkbench surfaces a toast instead of silently no-op'ing when a requested file target doesn't exist", () => {
+  // Regression coverage for imported (historical Codex/Claude Code) sessions
+  // whose recorded working directory may no longer exist on this machine —
+  // previously, opening the Files panel for such a session (via a file link
+  // or the project menu's "Open folder" action) silently did nothing with no
+  // user-facing feedback at all.
+  assert.match(
+    source,
+    /workspaceID: request\.workspaceId[\s\S]*?\}\)\)\s*\)\s*\{[\s\S]*?Toast\.Error\(\s*translate\(\s*"workspace\.workbenchDesktop\.filesLaunch\.openFailedTitle"\s*\),\s*translate\(\s*"workspace\.workbenchDesktop\.filesLaunch\.openFailedDescription"\s*\)\s*\);\s*return false;/
+  );
+});
+
 test("WorkspaceWorkbench uses temporary dock retention to control app visibility", () => {
   assert.match(source, /temporaryWorkspaceAppDockRetentionActionPrefix/);
   assert.match(source, /resolveTemporaryDockRetentionContribution/);

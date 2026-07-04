@@ -45,7 +45,9 @@ import {
 } from "@renderer/features/workspace-agent/desktopAgentGUINodeState";
 import { useService } from "@tutti-os/infra/di";
 import { useTranslation } from "@renderer/i18n";
+import { translate } from "@renderer/i18n/appRuntime";
 import { cn } from "@renderer/lib/format";
+import { Toast } from "@renderer/lib/toast";
 import {
   createWorkspaceAgentGuiDraftLaunchRequest,
   createWorkspaceAgentGuiSessionLaunchRequest
@@ -923,6 +925,16 @@ async function openWorkspaceFilesNode(
       workspaceID: request.workspaceId
     }))
   ) {
+    // The requested path doesn't exist on this machine (e.g. an imported
+    // historical session's recorded working directory has since been deleted
+    // or moved — see resolveExternalImportSessionCwd on the import side,
+    // which deliberately keeps such sessions instead of dropping them). Surface
+    // this instead of silently doing nothing, which previously looked like the
+    // Files panel simply refused to open with no explanation.
+    Toast.Error(
+      translate("workspace.workbenchDesktop.filesLaunch.openFailedTitle"),
+      translate("workspace.workbenchDesktop.filesLaunch.openFailedDescription")
+    );
     return false;
   }
 

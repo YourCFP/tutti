@@ -831,6 +831,11 @@ export const en = {
         unsupportedFallback:
           "Preview is not supported yet. Opening with your local app."
       },
+      filesLaunch: {
+        openFailedDescription:
+          "This session's original working directory could no longer be found on this computer.",
+        openFailedTitle: "Couldn't open folder"
+      },
       agentProviders: {
         checking: "Checking local CLI status...",
         comingSoon: "Coming soon",
