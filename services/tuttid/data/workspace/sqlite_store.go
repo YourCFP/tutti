@@ -124,7 +124,18 @@ func (s *SQLiteStore) Delete(ctx context.Context, workspaceID string) error {
 		return errors.New("workspace id is required")
 	}
 
-	result, err := s.db.ExecContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete workspace: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	result, err := tx.ExecContext(ctx, `
 DELETE FROM workspaces
 WHERE id = ?
 `, workspaceID)
@@ -140,11 +151,17 @@ WHERE id = ?
 		return ErrWorkspaceNotFound
 	}
 
-	// Agent activity tables no longer carry a foreign key into workspaces;
-	// cascade the deletion explicitly through the agent store.
-	if _, err := s.agentStore().ClearSessions(ctx, workspaceID); err != nil {
+	// Agent activity tables no longer carry a foreign key into workspaces on
+	// fresh schemas; cascade the deletion explicitly through the agent store
+	// inside the same transaction so a failure leaves no orphaned agent rows.
+	if _, err := s.agentStore().ClearSessionsTx(ctx, tx, workspaceID); err != nil {
 		return fmt.Errorf("clear agent sessions for deleted workspace: %w", err)
 	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete workspace: %w", err)
+	}
+	committed = true
 
 	return nil
 }

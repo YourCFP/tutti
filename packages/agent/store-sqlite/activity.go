@@ -273,6 +273,35 @@ func (s *Store) ClearSessions(
 		}
 	}()
 
+	result, err := s.ClearSessionsTx(ctx, tx, workspaceID)
+	if err != nil {
+		return ClearSessionsResult{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return ClearSessionsResult{}, fmt.Errorf("commit clear workspace agent sessions: %w", err)
+	}
+	committed = true
+	return result, nil
+}
+
+// ClearSessionsTx hard-deletes a workspace's sessions and messages within
+// the caller's transaction. Hosts that delete a workspace of their own and
+// need the agent-row cascade to be atomic with that deletion should run
+// both through one transaction via this method; the caller owns commit and
+// rollback.
+func (s *Store) ClearSessionsTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	workspaceID string,
+) (ClearSessionsResult, error) {
+	if s == nil || tx == nil {
+		return ClearSessionsResult{}, errors.New("workspace database is not initialized")
+	}
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		return ClearSessionsResult{}, nil
+	}
+
 	removedSessionIDs, err := listAgentSessionIDsTx(ctx, tx, workspaceID)
 	if err != nil {
 		return ClearSessionsResult{}, err
@@ -291,10 +320,6 @@ WHERE workspace_id = ?
 	if err != nil {
 		return ClearSessionsResult{}, fmt.Errorf("clear workspace agent sessions: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
-		return ClearSessionsResult{}, fmt.Errorf("commit clear workspace agent sessions: %w", err)
-	}
-	committed = true
 	removedMessages, err := messageResult.RowsAffected()
 	if err != nil {
 		return ClearSessionsResult{}, fmt.Errorf("clear workspace agent messages rows affected: %w", err)

@@ -86,6 +86,15 @@ CREATE TABLE IF NOT EXISTS `+schemaMigrationsTable+` (
 // applied under the legacy tuttid ledger into the package ledger, exactly
 // once, so already-applied migrations are not replayed against upgraded
 // databases.
+//
+// Deliberate compatibility trade-off: because v1 is claimed instead of
+// replayed, an upgraded legacy database keeps its original
+// workspace_agent_sessions table including the FOREIGN KEY into the host's
+// workspaces table. That FK is harmless there (the tuttid host always has
+// the workspaces table, and its cascade is redundant with the host's
+// explicit ClearSessionsTx call); only databases created fresh by this
+// package get the FK-free schema. Rebuilding existing tables just to drop
+// the FK is not worth the migration risk.
 func (s *Store) claimLegacyMigrations(ctx context.Context) error {
 	claimed, err := s.hasMigration(ctx, schemaMigrationLegacyClaimV1)
 	if err != nil {

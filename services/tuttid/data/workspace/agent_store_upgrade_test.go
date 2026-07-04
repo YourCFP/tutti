@@ -265,6 +265,50 @@ SELECT applied_at_unix_ms FROM agent_store_schema_migrations WHERE id = ?
 	if err := store.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate() second run error = %v", err)
 	}
+
+	// Deliberate compatibility trade-off: claimed (not replayed) v1 keeps
+	// the legacy workspaces foreign key on upgraded databases; only fresh
+	// schemas are FK-free.
+	rows, err := store.db.QueryContext(ctx, `PRAGMA foreign_key_list(workspace_agent_sessions)`)
+	if err != nil {
+		t.Fatalf("foreign_key_list error = %v", err)
+	}
+	defer rows.Close()
+	hasWorkspacesFK := false
+	for rows.Next() {
+		var (
+			id, seq                                    int
+			table, from, to, onUpdate, onDelete, match string
+		)
+		if err := rows.Scan(&id, &seq, &table, &from, &to, &onUpdate, &onDelete, &match); err != nil {
+			t.Fatalf("scan foreign_key_list: %v", err)
+		}
+		if table == "workspaces" {
+			hasWorkspacesFK = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate foreign_key_list: %v", err)
+	}
+	if !hasWorkspacesFK {
+		t.Fatal("upgraded legacy database lost its workspaces foreign key; claim semantics changed unexpectedly")
+	}
+
+	// Workspace deletion on the upgraded schema clears agent rows through
+	// the single-transaction explicit cascade (the legacy FK cascade is
+	// redundant with it).
+	if err := store.Delete(ctx, "ws-upgrade"); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	var sessionCount int
+	if err := store.db.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM workspace_agent_sessions WHERE workspace_id = 'ws-upgrade'
+`).Scan(&sessionCount); err != nil {
+		t.Fatalf("count sessions after delete: %v", err)
+	}
+	if sessionCount != 0 {
+		t.Fatalf("sessions after workspace delete = %d, want 0", sessionCount)
+	}
 }
 
 func TestSQLiteStoreWorkspaceDeleteClearsAgentSessionsWithoutForeignKey(t *testing.T) {

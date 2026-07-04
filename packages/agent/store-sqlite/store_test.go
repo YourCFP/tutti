@@ -226,6 +226,58 @@ func TestStoreReportAndListSessionLifecycle(t *testing.T) {
 	}
 }
 
+func TestStoreClearSessionsTxJoinsCallerTransaction(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t, testOptions(&staticProjectPaths{}))
+	ctx := context.Background()
+
+	if _, err := store.ReportSessionState(ctx, SessionStateReport{
+		WorkspaceID:      "ws-tx",
+		AgentSessionID:   "session-1",
+		Origin:           "runtime",
+		Provider:         "codex",
+		Status:           "completed",
+		OccurredAtUnixMS: 100,
+	}); err != nil {
+		t.Fatalf("ReportSessionState() error = %v", err)
+	}
+
+	// A rollback of the caller's transaction must undo the clear.
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("BeginTx() error = %v", err)
+	}
+	result, err := store.ClearSessionsTx(ctx, tx, "ws-tx")
+	if err != nil {
+		t.Fatalf("ClearSessionsTx() error = %v", err)
+	}
+	if result.RemovedSessions != 1 {
+		t.Fatalf("ClearSessionsTx() = %#v, want one removed session", result)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatalf("Rollback() error = %v", err)
+	}
+	if _, ok, err := store.GetSession(ctx, "ws-tx", "session-1"); err != nil || !ok {
+		t.Fatalf("GetSession() after rollback ok=%v error=%v, want session restored", ok, err)
+	}
+
+	// A committed transaction applies it.
+	tx, err = store.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("BeginTx(second) error = %v", err)
+	}
+	if _, err := store.ClearSessionsTx(ctx, tx, "ws-tx"); err != nil {
+		t.Fatalf("ClearSessionsTx(second) error = %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit() error = %v", err)
+	}
+	if _, ok, err := store.GetSession(ctx, "ws-tx", "session-1"); err != nil || ok {
+		t.Fatalf("GetSession() after commit ok=%v error=%v, want cleared", ok, err)
+	}
+}
+
 func TestStoreWorkspaceExistsCallbackGatesWrites(t *testing.T) {
 	t.Parallel()
 

@@ -209,6 +209,34 @@ WHERE workspace_id = 'ws-legacy' AND agent_session_id = 'session-untargeted'
 		t.Fatalf("legacy message page = %#v", page)
 	}
 
+	// Deliberate compatibility trade-off: the claimed (not replayed) v1
+	// leaves the legacy workspaces foreign key on workspace_agent_sessions.
+	// Only fresh databases get the FK-free schema.
+	rows, err := db.QueryContext(ctx, `PRAGMA foreign_key_list(workspace_agent_sessions)`)
+	if err != nil {
+		t.Fatalf("foreign_key_list error = %v", err)
+	}
+	defer rows.Close()
+	hasWorkspacesFK := false
+	for rows.Next() {
+		var (
+			id, seq                                    int
+			table, from, to, onUpdate, onDelete, match string
+		)
+		if err := rows.Scan(&id, &seq, &table, &from, &to, &onUpdate, &onDelete, &match); err != nil {
+			t.Fatalf("scan foreign_key_list: %v", err)
+		}
+		if table == "workspaces" {
+			hasWorkspacesFK = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate foreign_key_list: %v", err)
+	}
+	if !hasWorkspacesFK {
+		t.Fatal("upgraded legacy database lost its workspaces foreign key; claim semantics changed unexpectedly")
+	}
+
 	// A second Migrate is a no-op for claimed and applied migrations.
 	if err := store.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate() second run error = %v", err)
