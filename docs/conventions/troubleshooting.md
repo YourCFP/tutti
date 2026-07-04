@@ -43,6 +43,36 @@ Use this shape for new entries:
 
 ## Current Entries
 
+### Claude SDK context window shows 200k for 1M models
+
+- Symptom:
+  Claude Code GUI usage shows a 200k context window for a model that should have
+  1M context, such as Claude Sonnet 5.
+- Quick checks:
+  Inspect the session runtime context for `usage.contextWindow.totalTokens`,
+  then trace the Claude SDK sidecar `usage_updated` payload and daemon
+  `agent_session.claude_sdk.usage_update` log. If the payload keys include
+  `modelUsage` but `raw_total_tokens` is `0`, the daemon did not parse the
+  model-usage context window.
+- Root cause:
+  AgentGUI only renders `runtimeContext.usage`; the total comes from the daemon
+  and Claude SDK sidecar. Claude SDK result messages expose model usage as a
+  map keyed by model id, for example
+  `modelUsage["claude-sonnet-5"].contextWindow`. If either sidecar or daemon
+  only parses array-shaped `modelUsage`, the context-window total is missing and
+  daemon normalization falls back to 200k.
+- Fix:
+  Parse `modelUsage` recursively as both arrays and maps before using fallback
+  context-window values. Do not hard-code alias-to-model mappings in Tutti.
+- Validation:
+  Add sidecar and daemon coverage with map-shaped `modelUsage` carrying
+  `contextWindow: 1_000_000`, then run the Claude SDK sidecar tests, daemon Go
+  tests, and sidecar typecheck.
+- References:
+  [main.ts](../../packages/agent/claude-sdk-sidecar/src/main.ts)
+  [main.test.ts](../../packages/agent/claude-sdk-sidecar/src/main.test.ts)
+  [claude_sdk_adapter.go](../../packages/agent/daemon/runtime/claude_sdk_adapter.go)
+
 ### Codex npm install misses the platform package
 
 - Symptom:
@@ -153,6 +183,40 @@ Use this shape for new entries:
   [dev-gui.sh](../../tools/scripts/dev-gui.sh)
   [bootstrap.ts](../../apps/desktop/src/main/bootstrap.ts)
   [defaults.ts](../../apps/desktop/src/main/defaults.ts)
+
+### macOS updates fail from a mounted DMG
+
+- Symptom:
+  A packaged macOS build can check for and download an update, but clicking
+  install appears to do nothing or logs an updater error such as
+  `Cannot update while running on a read-only volume`. The desktop log shows
+  the app executable under `/Volumes/.../Tutti.app`, and the daemon may stop
+  briefly because the update install flow began before the updater rejected the
+  read-only volume.
+- Quick checks:
+  Inspect `tutti-desktop.log` for `process.execPath`, updater errors, or
+  managed daemon start lines that point under `/Volumes`. Confirm whether the
+  user launched Tutti directly from a mounted `.dmg` instead of the copy in
+  `/Applications`.
+- Root cause:
+  macOS mounts compressed DMG installers as read-only volumes. Electron's macOS
+  updater cannot replace an app bundle that is running from that volume, so the
+  failure is an install-location problem rather than a dead `tuttid` process.
+- Fix:
+  In packaged macOS builds, detect `/Volumes` startup before desktop services
+  and managed `tuttid` are created. Prompt the user to move Tutti to
+  `/Applications`, call Electron's application-folder move when accepted, and
+  quit rather than continuing from the mounted image. Development builds must
+  skip this guard so local Electron runs keep working.
+- Validation:
+  Cover the guard with tests for development mode, non-macOS platforms,
+  `/Applications`, `/Volumes`, declined installation, successful automatic
+  move, and failed automatic move. Run the desktop tests, desktop typecheck, and
+  i18n check because the guard uses Electron dialog copy.
+- References:
+  [macosApplicationInstallGuard.ts](../../apps/desktop/src/main/macosApplicationInstallGuard.ts)
+  [bootstrap.ts](../../apps/desktop/src/main/bootstrap.ts)
+  [desktop-release.md](./desktop-release.md)
 
 ### App Center list requests repeatedly log runtime preload
 
@@ -535,6 +599,41 @@ delimited by ---`, and the composer skill picker may show partial or
 - References:
   [terminalImeInputGuard.ts](../../packages/workspace/terminal/src/react/terminalImeInputGuard.ts)
   [terminalSurfaceRuntime.ts](../../packages/workspace/terminal/src/react/terminalSurfaceRuntime.ts)
+
+### Post-composition suppression window swallows real terminal input
+
+- Symptom:
+  After committing Chinese IME text in a workspace terminal, the next quick
+  keystroke is intermittently lost: Enter pressed right after the candidate
+  commits does not execute the command (it must be pressed twice), fast typing
+  drops the first letter of the next word, or a full-width punctuation mark
+  typed immediately after a commit never reaches the PTY.
+- Quick checks:
+  Reproduce with fast input — commit a candidate with Space, then press Enter
+  or type the next character within ~80ms. Losses that disappear when typing
+  slowly point at the IME guard's post-composition window, not the PTY.
+- Root cause:
+  The guard suppressed every unmodified key for a fixed window after
+  `compositionend` to swallow ghost commit-key events. Only keys that can
+  commit a candidate (Enter, Escape, Space, digit selection keys) can replay
+  after `compositionend`; blanket suppression also swallowed genuine next
+  keystrokes, and blocking keyCode 229 keydowns kept xterm's
+  `CompositionHelper._handleAnyTextareaChanges` from forwarding IME
+  punctuation entered right after a commit.
+- Fix:
+  Inside the window, suppress only commit-capable keys (Enter, Escape, Space,
+  digits); let all other keys through so xterm's own keyCode 229 handling
+  still runs. Ghost events replay before the physical key is released, so
+  close the window as soon as a keyup arrives outside composition — any later
+  keydown is genuine user input, including genuine digits.
+- Validation:
+  Unit-cover letters and `Process` keys passing through the window, keyup
+  closing the window so a repeated Enter or digit is processed, and commit
+  keys (including digits) staying suppressed. Manually commit with Space then
+  immediately press Enter, select a candidate with a digit key, and type
+  full-width punctuation right after a commit.
+- References:
+  [terminalImeInputGuard.ts](../../packages/workspace/terminal/src/react/terminalImeInputGuard.ts)
 
 ### Agent GUI app mentions show unavailable workspace apps
 
@@ -1037,10 +1136,14 @@ delimited by ---`, and the composer skill picker may show partial or
   For nested launches: register tool_use blocks from child-stream assistant
   messages, treat the `Async agent launched successfully` result text as the
   authoritative subagent-launch signal even when the tool name is unknown,
-  inherit the delegated-task turn id along the parent tool-use chain, let
-  interactive requests fall back to any delegated task's turn id (settled
-  ones included) and open a synthetic turn as last resort rather than emit a
-  turnless event.
+  inherit the delegated-task turn id along the parent tool-use chain, and do
+  not settle a nested `end_turn` assistant while it still has a child tool_use
+  whose tool_result has not been processed. Use the sidecar's pending
+  `toolByID` entry for that pre-result window, then rely on the delegated task
+  created from the launch result while the grandchild is running. Let
+  interactive requests fall back to any delegated task's turn id (settled ones
+  included) and open a synthetic turn as last resort rather than emit a turnless
+  event.
 - Validation:
   Add adapter coverage that stored pending turn ids survive missing
   `approval_resolved.turnId`. Add service coverage for ghost approval reconcile
@@ -1051,8 +1154,9 @@ delimited by ---`, and the composer skill picker may show partial or
   launches, keep sidecar coverage that a grandchild launch registers with the
   inherited turn id (with and without an observed tool_use block), that a
   nested approval after the parent task completed still carries a turn id, and
-  that a child `end_turn` assistant defers completion while a grandchild task
-  is running.
+  that a child `end_turn` assistant defers completion both while a grandchild
+  tool_result is still pending and while the resulting grandchild task is
+  running.
 
 ### Claude SDK parent waits forever for background agents that already finished
 
@@ -1555,30 +1659,34 @@ information is not available yet`, but `ps` or `lsof` still shows an older
 ### macOS in-app update closes Tutti but does not install the new version
 
 - Symptom:
-  After downloading a desktop update on macOS, clicking **Install** closes Tutti.
-  Reopening the app still shows the old version.
+  After downloading a desktop update on macOS, clicking **Install** closes or
+  relaunches Tutti, but reopening the app still shows the old version. ShipIt
+  logs may contain `SQRLInstallerErrorDomain Code=-9` or
+  `App Still Running Error`.
 - Quick checks:
   Confirm the packaged build is signed (unsigned or ad-hoc builds disable in-app
-  updates). Inspect desktop logs for `desktop app before quit` immediately after
-  `application update install requested` without a relaunch.
+  updates). Inspect `~/Library/Caches/sh.tutti.desktop.ShipIt/ShipIt_stderr.log`
+  for `Aborting update attempt because there are 1 running instances of the
+target app`. Compare `/Applications/Tutti.app/Contents/Info.plist` with the
+  cached update under `~/Library/Caches/@tutti-osdesktop-updater/pending`.
 - Root cause:
-  `electron-updater` calls `quitAndInstall()` during Squirrel.Mac install.
-  Desktop's async `before-quit` gate called `event.preventDefault()` to stop
-  `tuttid` gracefully, which cancelled the updater's first quit and prevented
-  the install/relaunch sequence from completing.
+  Squirrel.Mac refuses to replace `/Applications/Tutti.app` while any target
+  app instance is still running. Stopping `tuttid` before `quitAndInstall()` is
+  not sufficient because the Electron main process and helper windows still need
+  to complete the app quit path.
 - Fix:
-  Stop managed `tuttid` inside `installUpdate()` before calling
-  `quitAndInstall()`, mark the update install as pending, and bypass the async
-  `before-quit` gate while that flag is set. If stopping `tuttid` fails, abort
-  the install before calling `quitAndInstall()`. If the updater reports an
-  install error after the pending flag is set, clear the flag and restart
-  managed `tuttid` so the desktop process does not stay open with its daemon
-  stopped.
+  Keep daemon shutdown in the desktop lifecycle instead of the update service.
+  `installUpdate()` should mark the install pending and call
+  `quitAndInstall()`. The `before-quit` gate should still run for pending update
+  installs: prevent the first quit, stop managed `tuttid`, destroy all windows,
+  then call `app.quit()` again so the app process exits and ShipIt can replace
+  the bundle.
 - Validation:
   Run `src/main/desktopAppLifecycle.test.ts` and
-  `src/main/update/appUpdateService.test.ts`, including mock install failure
-  recovery cases. Then install a downloaded update in a packaged macOS build;
-  the app should relaunch on the new version.
+  `src/main/update/appUpdateService.test.ts`, including updater error and
+  synchronous `quitAndInstall()` failure cases. Then install a downloaded update
+  in a packaged macOS build; the app should relaunch on the new version and
+  ShipIt should not log `App Still Running Error`.
 - References:
   [appUpdateService.ts](../../apps/desktop/src/main/update/appUpdateService.ts)
   [desktopAppLifecycle.ts](../../apps/desktop/src/main/desktopAppLifecycle.ts)

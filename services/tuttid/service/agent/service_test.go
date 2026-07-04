@@ -14,6 +14,7 @@ import (
 	agentsessionstore "github.com/tutti-os/tutti/packages/agentactivity/daemon/activity"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
+	userprojectbiz "github.com/tutti-os/tutti/services/tuttid/biz/userproject"
 	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
 	workspacedata "github.com/tutti-os/tutti/services/tuttid/data/workspace"
 	agentsidecarservice "github.com/tutti-os/tutti/services/tuttid/service/agentsidecar"
@@ -66,6 +67,27 @@ func TestServiceCreatesAndListsSessions(t *testing.T) {
 
 func TestServiceCreateResolvesProviderFromAgentTarget(t *testing.T) {
 	runtime := newFakeRuntime()
+	// Service.Create validates the Claude composer model via a hidden live
+	// discovery session (composer_live_model_discovery.go); without a
+	// populated RuntimeContext the poll loop never sees model options and
+	// spins until the test's own timeout kills it. Supply one immediately so
+	// discovery resolves on its first check, matching the pattern used by
+	// TestServiceCreateDiscoversClaudeModelsBeforeStartingInvalidModel below.
+	runtime.startHook = func(input RuntimeStartInput, session RuntimeSession) RuntimeSession {
+		if input.Visible != nil && !*input.Visible {
+			session.RuntimeContext = map[string]any{
+				"configOptions": []any{
+					map[string]any{
+						"id": "model",
+						"options": []any{
+							map[string]any{"value": "default", "name": "Default"},
+						},
+					},
+				},
+			}
+		}
+		return session
+	}
 	service := NewService(runtime)
 	service.AgentTargetStore = fakeAgentTargetStore{
 		targets: map[string]agenttargetbiz.Target{
@@ -83,6 +105,12 @@ func TestServiceCreateResolvesProviderFromAgentTarget(t *testing.T) {
 	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
 		AgentSessionID: "target-session-1",
 		AgentTargetID:  agenttargetbiz.IDLocalClaudeCode,
+		// Pin the model explicitly so resolveCreateSessionModel never falls
+		// through to composerDefaultModel's readClaudeCodeConfiguredDefaultModel,
+		// which reads the *real* local Claude Code CLI config file on the
+		// machine running the test — making the test's behavior depend on
+		// whatever model happens to be configured on the developer's machine.
+		Model:          stringPointer("default"),
 		InitialContent: TextPromptContent("hello target"),
 		ProviderTargetRef: map[string]any{
 			"kind":     "local_cli",
@@ -96,16 +124,29 @@ func TestServiceCreateResolvesProviderFromAgentTarget(t *testing.T) {
 	if session.Provider != "claude-code" || session.AgentTargetID != agenttargetbiz.IDLocalClaudeCode {
 		t.Fatalf("session provider/target = %q/%q, want claude-code/%s", session.Provider, session.AgentTargetID, agenttargetbiz.IDLocalClaudeCode)
 	}
-	if len(runtime.startCalls) != 1 {
-		t.Fatalf("start calls = %d, want 1", len(runtime.startCalls))
+	// Service.Create's Claude composer model validation runs a hidden
+	// (Visible=false) discovery session start in addition to the real,
+	// user-facing session start — assert against the visible one specifically
+	// rather than assuming index/count, so this doesn't re-break if discovery
+	// internals change again.
+	var visibleStart *RuntimeStartInput
+	for i := range runtime.startCalls {
+		call := runtime.startCalls[i]
+		if call.Visible == nil || *call.Visible {
+			visibleStart = &runtime.startCalls[i]
+			break
+		}
 	}
-	if got := runtime.startCalls[0].Provider; got != "claude-code" {
+	if visibleStart == nil {
+		t.Fatalf("start calls = %#v, want one visible (user-facing) start call", runtime.startCalls)
+	}
+	if got := visibleStart.Provider; got != "claude-code" {
 		t.Fatalf("runtime provider = %q, want claude-code", got)
 	}
-	if got := runtime.startCalls[0].AgentTargetID; got != agenttargetbiz.IDLocalClaudeCode {
+	if got := visibleStart.AgentTargetID; got != agenttargetbiz.IDLocalClaudeCode {
 		t.Fatalf("runtime agent target id = %q, want %s", got, agenttargetbiz.IDLocalClaudeCode)
 	}
-	ref := runtime.startCalls[0].ProviderTargetRef
+	ref := visibleStart.ProviderTargetRef
 	if ref["kind"] != agenttargetbiz.LaunchRefTypeLocalCLI ||
 		ref["provider"] != "claude-code" ||
 		ref["targetId"] != agenttargetbiz.IDLocalClaudeCode {
@@ -769,6 +810,80 @@ func TestServiceImportPreservesLocalCodexModelAndReasoningEffort(t *testing.T) {
 	}
 	if session.Settings.ReasoningEffort != "xhigh" {
 		t.Fatalf("settings.ReasoningEffort = %q, want imported turn_context effort", session.Settings.ReasoningEffort)
+	}
+}
+
+func TestServiceScanCountsAndImportsSessionWithDeletedWorkingDirectory(t *testing.T) {
+	// Regression: a session whose recorded cwd no longer exists (a deleted
+	// git worktree, a cleaned-up temp dir) used to be silently dropped from
+	// the scan entirely — not counted in ScannedSessions, not offered for
+	// import, and not appearing in SkippedSessions either (it never got that
+	// far). That both undercounts what scan reports (eW5WPl sub-issue 1) and
+	// can make a substantial real conversation look empty/vanished (uOivri),
+	// since it never surfaces anywhere for the user to see or import.
+	ctx := context.Background()
+	store := openAgentServiceSQLiteStore(t)
+	if err := store.Create(ctx, workspacebiz.Summary{ID: "ws-1", Name: "Workspace One"}); err != nil {
+		t.Fatalf("Create workspace error = %v", err)
+	}
+	root := t.TempDir()
+	deletedCwd := filepath.Join(root, "deleted-project")
+	if err := os.MkdirAll(deletedCwd, 0o755); err != nil {
+		t.Fatalf("create then delete cwd error = %v", err)
+	}
+	if canonical, ok := canonicalExistingDir(deletedCwd); ok {
+		deletedCwd = canonical
+	}
+	if err := os.RemoveAll(deletedCwd); err != nil {
+		t.Fatalf("remove cwd error = %v", err)
+	}
+	codexHome := filepath.Join(root, "codex-home")
+	t.Setenv("CODEX_HOME", codexHome)
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "deleted-cwd.jsonl"),
+		map[string]any{
+			"timestamp": now,
+			"type":      "session_meta",
+			"payload":   map[string]any{"id": "deleted-cwd", "cwd": deletedCwd},
+		},
+		map[string]any{"timestamp": now, "type": "response_item", "payload": map[string]any{
+			"type": "message", "id": "deleted-cwd-1", "role": "user",
+			"content": []any{map[string]any{"type": "input_text", "text": "Still real content"}},
+		}},
+	)
+
+	service := NewService(newFakeRuntime())
+	scan, err := service.ScanExternalImports(ctx, ExternalImportScanInput{})
+	if err != nil {
+		t.Fatalf("ScanExternalImports error = %v", err)
+	}
+	if scan.ScannedSessions != 1 || scan.SkippedSessions != 0 {
+		t.Fatalf("scan = %#v, want the deleted-cwd session counted as scanned, not skipped", scan)
+	}
+	if len(scan.Sessions) != 1 || scan.Sessions[0].ProjectPath != deletedCwd {
+		t.Fatalf("scan sessions = %#v, want one session grouped under its original deleted cwd %q", scan.Sessions, deletedCwd)
+	}
+
+	projection := NewActivityProjection(store)
+	service.SessionReader = projection
+	service.MessageReader = projection
+	service.ExternalImportStore = store
+	result, err := service.ImportExternalSessions(ctx, "ws-1", ExternalImportInput{
+		Projects: []ExternalImportProjectSelection{{Path: root}},
+	})
+	if err != nil {
+		t.Fatalf("ImportExternalSessions error = %v", err)
+	}
+	if result.ImportedSessions != 1 || result.ImportedMessages != 1 {
+		t.Fatalf("import result = %#v, want the deleted-cwd session imported", result)
+	}
+	session, err := service.Get(ctx, "ws-1", externalImportedSessionID("codex", "deleted-cwd"))
+	if err != nil {
+		t.Fatalf("Get imported deleted-cwd session error = %v", err)
+	}
+	if session.Cwd != deletedCwd {
+		t.Fatalf("session cwd = %q, want original deleted cwd %q preserved", session.Cwd, deletedCwd)
 	}
 }
 
@@ -3503,7 +3618,7 @@ func TestServiceListFilteredMatchesSearchVisibilityLimitAndUpdatedOrder(t *testi
 		Cwd:             "/workspace/hidden",
 		Status:          "completed",
 		Visible:         false,
-		Title:           "Mention hidden",
+		Title:           "Hidden",
 		CreatedAtUnixMS: time.UnixMilli(1000).UnixMilli(),
 		UpdatedAtUnixMS: hiddenUpdatedAt.UnixMilli(),
 	}
@@ -3534,7 +3649,6 @@ func TestServiceListFilteredMatchesSearchVisibilityLimitAndUpdatedOrder(t *testi
 	list, err := service.ListFiltered(context.Background(), "ws-1", ListSessionsInput{
 		SearchQuery: "mention",
 		Limit:       1,
-		VisibleOnly: true,
 	})
 	if err != nil {
 		t.Fatalf("ListFiltered returned error: %v", err)
@@ -3545,6 +3659,112 @@ func TestServiceListFilteredMatchesSearchVisibilityLimitAndUpdatedOrder(t *testi
 	if list[0].ID != "session-newer" {
 		t.Fatalf("list[0].ID = %q, want session-newer", list[0].ID)
 	}
+}
+
+func TestServiceListSessionSectionsUsesCurrentProjectsAndConversations(t *testing.T) {
+	reader := &fakeSectionReader{
+		pages: map[string]agentactivitybiz.SessionSectionPage{
+			"project:/workspace/project": {
+				SectionKey: "project:/workspace/project",
+				Sessions: []agentactivitybiz.Session{{
+					ID:              "project-session",
+					WorkspaceID:     "ws-1",
+					Provider:        "codex",
+					Cwd:             "/workspace/project",
+					Status:          "completed",
+					CreatedAtUnixMS: 1000,
+					UpdatedAtUnixMS: 5000,
+				}},
+				HasMore:    true,
+				NextCursor: "5000|project-session",
+			},
+			"conversations": {
+				SectionKey: "conversations",
+				Sessions: []agentactivitybiz.Session{{
+					ID:              "chat-session",
+					WorkspaceID:     "ws-1",
+					Provider:        "codex",
+					Cwd:             "/scratch/session",
+					Status:          "completed",
+					CreatedAtUnixMS: 1000,
+					UpdatedAtUnixMS: 4000,
+				}},
+			},
+		},
+	}
+	service := NewService(newFakeRuntime())
+	service.SessionReader = reader
+	service.UserProjectReader = fakeUserProjectReader{projects: []userprojectbiz.Project{{
+		ID:    "project-1",
+		Path:  "/workspace/project",
+		Label: "Project",
+	}}}
+
+	page, err := service.ListSessionSections(context.Background(), "ws-1", ListSessionSectionsInput{
+		LimitPerSection: 5,
+		AgentTargetID:   "claude-target",
+	})
+	if err != nil {
+		t.Fatalf("ListSessionSections returned error: %v", err)
+	}
+	if len(page.Sections) != 2 {
+		t.Fatalf("sections = %d, want 2", len(page.Sections))
+	}
+	if page.Sections[0].Kind != "project" || page.Sections[0].SectionKey != "project:/workspace/project" {
+		t.Fatalf("project section = %#v", page.Sections[0])
+	}
+	if got, want := sessionIDs(page.Sections[0].Sessions), []string{"project-session"}; !slices.Equal(got, want) {
+		t.Fatalf("project sessions = %#v, want %#v", got, want)
+	}
+	if !page.Sections[0].HasMore || page.Sections[0].NextCursor != "5000|project-session" {
+		t.Fatalf("project page state = hasMore %v cursor %q", page.Sections[0].HasMore, page.Sections[0].NextCursor)
+	}
+	if page.Sections[1].Kind != "conversations" || page.Sections[1].SectionKey != "conversations" {
+		t.Fatalf("conversations section = %#v", page.Sections[1])
+	}
+	if reader.lastInput.AgentTargetID != "claude-target" {
+		t.Fatalf("reader agentTargetID = %q, want claude-target", reader.lastInput.AgentTargetID)
+	}
+}
+
+func TestServiceListSessionSectionPageForwardsStableCursor(t *testing.T) {
+	reader := &fakeSectionReader{}
+	service := NewService(newFakeRuntime())
+	service.SessionReader = reader
+	service.UserProjectReader = fakeUserProjectReader{projects: []userprojectbiz.Project{{
+		ID:         "project-1",
+		Path:       "/workspace/project",
+		Label:      "Project",
+		SectionKey: "project:/workspace/project",
+	}}}
+
+	section, err := service.ListSessionSectionPage(context.Background(), "ws-1", ListSessionSectionPageInput{
+		SectionKey:    "project:/workspace/project",
+		Cursor:        "4000|middle",
+		Limit:         2,
+		AgentTargetID: "claude-target",
+	})
+	if err != nil {
+		t.Fatalf("ListSessionSectionPage returned error: %v", err)
+	}
+	if section.Kind != "project" || section.SectionKey != "project:/workspace/project" {
+		t.Fatalf("section = %#v", section)
+	}
+	if reader.lastInput.SectionKey != "project:/workspace/project" ||
+		reader.lastInput.CursorUpdatedAtMS != 4000 ||
+		reader.lastInput.CursorSessionID != "middle" ||
+		reader.lastInput.Limit != 2 ||
+		reader.lastInput.AgentTargetID != "claude-target" {
+		t.Fatalf("reader input = %#v", reader.lastInput)
+	}
+}
+
+func sessionIDs(sessions []Session) []string {
+	ids := make([]string, 0, len(sessions))
+	for _, session := range sessions {
+		ids = append(ids, session.ID)
+	}
+	return ids
 }
 
 func TestServiceListsActivePeersFromCanonicalSessionStatus(t *testing.T) {
@@ -4812,6 +5032,40 @@ type fakeSessionReader struct {
 	sessions   map[string]PersistedSession
 }
 
+type fakeSectionReader struct {
+	fakeSessionReader
+	lastInput agentactivitybiz.ListSessionSectionInput
+	pages     map[string]agentactivitybiz.SessionSectionPage
+}
+
+func (f *fakeSectionReader) ListSessionSection(_ context.Context, input agentactivitybiz.ListSessionSectionInput) (agentactivitybiz.SessionSectionPage, bool) {
+	f.lastInput = input
+	if f.pages == nil {
+		return agentactivitybiz.SessionSectionPage{
+			WorkspaceID: input.WorkspaceID,
+			SectionKey:  input.SectionKey,
+		}, true
+	}
+	page, ok := f.pages[input.SectionKey]
+	if !ok {
+		return agentactivitybiz.SessionSectionPage{
+			WorkspaceID: input.WorkspaceID,
+			SectionKey:  input.SectionKey,
+		}, true
+	}
+	page.WorkspaceID = input.WorkspaceID
+	page.SectionKey = input.SectionKey
+	return page, true
+}
+
+type fakeUserProjectReader struct {
+	projects []userprojectbiz.Project
+}
+
+func (f fakeUserProjectReader) List(context.Context) ([]userprojectbiz.Project, error) {
+	return f.projects, nil
+}
+
 func (f fakeMessageReader) ListSessionMessages(
 	input agentactivitybiz.ListSessionMessagesInput,
 ) (SessionMessagesPage, bool) {
@@ -4842,6 +5096,10 @@ func (f *fakeRuntime) Cancel(_ context.Context, input RuntimeCancelInput) (Runti
 		return f.cancelResult, nil
 	}
 	return RuntimeCancelResult{AgentSessionID: input.AgentSessionID, Canceled: true}, nil
+}
+
+func (*fakeRuntime) GoalControl(_ context.Context, input RuntimeGoalControlInput) (RuntimeGoalControlResult, error) {
+	return RuntimeGoalControlResult{AgentSessionID: input.AgentSessionID}, nil
 }
 
 func (f *fakeRuntime) Close(_ context.Context, input RuntimeCloseInput) error {
@@ -5094,6 +5352,10 @@ func (*activityProjectionRepoStub) GetSession(context.Context, string, string) (
 
 func (*activityProjectionRepoStub) ListSessions(context.Context, string) ([]agentactivitybiz.Session, bool, error) {
 	return nil, false, nil
+}
+
+func (*activityProjectionRepoStub) ListSessionSection(context.Context, agentactivitybiz.ListSessionSectionInput) (agentactivitybiz.SessionSectionPage, bool, error) {
+	return agentactivitybiz.SessionSectionPage{}, false, nil
 }
 
 func (*activityProjectionRepoStub) ListSessionMessages(context.Context, agentactivitybiz.ListSessionMessagesInput) (agentactivitybiz.MessagePage, bool, error) {

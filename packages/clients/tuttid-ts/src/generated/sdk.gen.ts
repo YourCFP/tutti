@@ -175,6 +175,9 @@ import type {
   GetWorkspaceWorkbenchData,
   GetWorkspaceWorkbenchErrors,
   GetWorkspaceWorkbenchResponses,
+  GoalControlWorkspaceAgentSessionData,
+  GoalControlWorkspaceAgentSessionErrors,
+  GoalControlWorkspaceAgentSessionResponses,
   ImportWorkspaceAppData,
   ImportWorkspaceAppErrors,
   ImportWorkspaceAppResponses,
@@ -209,6 +212,12 @@ import type {
   ListWorkspaceAgentSessionMessagesErrors,
   ListWorkspaceAgentSessionMessagesResponses,
   ListWorkspaceAgentSessionsData,
+  ListWorkspaceAgentSessionSectionPageData,
+  ListWorkspaceAgentSessionSectionPageErrors,
+  ListWorkspaceAgentSessionSectionPageResponses,
+  ListWorkspaceAgentSessionSectionsData,
+  ListWorkspaceAgentSessionSectionsErrors,
+  ListWorkspaceAgentSessionSectionsResponses,
   ListWorkspaceAgentSessionsErrors,
   ListWorkspaceAgentSessionsResponses,
   ListWorkspaceAppFactoryJobsData,
@@ -1522,6 +1531,42 @@ export const createWorkspaceAgentSession = <
   });
 
 /**
+ * List agent session rail sections for one workspace
+ */
+export const listWorkspaceAgentSessionSections = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<ListWorkspaceAgentSessionSectionsData, ThrowOnError>
+) =>
+  (options.client ?? client).get<
+    ListWorkspaceAgentSessionSectionsResponses,
+    ListWorkspaceAgentSessionSectionsErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-session-sections",
+    ...options
+  });
+
+/**
+ * List one agent session rail section page for one workspace
+ */
+export const listWorkspaceAgentSessionSectionPage = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<ListWorkspaceAgentSessionSectionPageData, ThrowOnError>
+) =>
+  (options.client ?? client).get<
+    ListWorkspaceAgentSessionSectionPageResponses,
+    ListWorkspaceAgentSessionSectionPageErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-session-sections/page",
+    ...options
+  });
+
+/**
  * Scan external local agent session history that can be imported into one workspace
  */
 export const scanWorkspaceExternalAgentSessionImports = <
@@ -1811,6 +1856,28 @@ export const cancelWorkspaceAgentSession = <
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/cancel",
     ...options
+  });
+
+/**
+ * Perform a goal control action on one workspace agent session
+ */
+export const goalControlWorkspaceAgentSession = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<GoalControlWorkspaceAgentSessionData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    GoalControlWorkspaceAgentSessionResponses,
+    GoalControlWorkspaceAgentSessionErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/goal",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
   });
 
 /**

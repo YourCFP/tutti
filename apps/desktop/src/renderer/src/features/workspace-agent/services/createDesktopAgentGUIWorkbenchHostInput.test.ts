@@ -597,6 +597,14 @@ test("desktop agent GUI queued prompt drainer interrupts active turn for send-ne
         })
       };
     },
+    async goalControl(input) {
+      return {
+        goal: null,
+        session: activitySession(input.agentSessionId, {
+          updatedAtUnixMs: 2
+        })
+      };
+    },
     async sendInput(input) {
       sendInputs.push(input);
       return {
@@ -2040,6 +2048,15 @@ function createWorkspaceAgentActivityService(
         }
       };
     },
+    async goalControl(input) {
+      return {
+        goal: null,
+        session: {
+          ...emptySession(),
+          agentSessionId: input.agentSessionId
+        }
+      };
+    },
     async createSession(input) {
       return {
         ...emptySession(),
@@ -2095,6 +2112,20 @@ function createWorkspaceAgentActivityService(
     },
     async listAgentGeneratedFiles() {
       return { entries: [], workspaceId };
+    },
+    async listSessionsPage(input) {
+      return { hasMore: false, sessions: [], workspaceId: input.workspaceId };
+    },
+    async listSessionSections(input) {
+      return { sections: [], workspaceId: input.workspaceId };
+    },
+    async listSessionSectionPage(input) {
+      return {
+        kind: "conversations",
+        sectionKey: input.sectionKey,
+        sessions: [],
+        hasMore: false
+      };
     },
     async scanExternalSessionImports() {
       throw new Error("not implemented");

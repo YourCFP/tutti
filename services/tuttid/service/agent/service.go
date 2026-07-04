@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sort"
 	"strings"
 	"time"
 
@@ -35,60 +34,6 @@ func NewService(runtime RuntimeController) *Service {
 		capabilityCatalogCache:    newComposerCapabilityCatalogCache(),
 		liveModelCache:            newComposerLiveModelCache(),
 	}
-}
-
-func (s *Service) List(ctx context.Context, workspaceID string) ([]Session, error) {
-	return s.ListFiltered(ctx, workspaceID, ListSessionsInput{})
-}
-
-func (s *Service) ListFiltered(ctx context.Context, workspaceID string, input ListSessionsInput) ([]Session, error) {
-	_ = ctx
-	workspaceID = strings.TrimSpace(workspaceID)
-	if workspaceID == "" {
-		return nil, ErrInvalidArgument
-	}
-	sessionByID := make(map[string]Session)
-	if s.SessionReader != nil {
-		if persisted, ok := s.SessionReader.ListSessions(workspaceID); ok {
-			for _, session := range persisted {
-				sessionByID[strings.TrimSpace(session.ID)] = sessionFromPersisted(
-					session,
-					persistedSessionCanResume(s.controller(), session),
-				)
-			}
-		}
-	}
-	sessions := s.controller().Sessions(workspaceID)
-	for _, session := range sessions {
-		service := serviceSession(
-			session,
-			s.controller().CanResume(runtimeResumeInputFromRuntimeSession(session)),
-		)
-		if s.SessionReader != nil {
-			if persisted, ok := s.SessionReader.GetSession(workspaceID, session.ID); ok {
-				service = mergePersistedSessionState(service, persisted)
-			}
-		}
-		sessionByID[strings.TrimSpace(session.ID)] = service
-	}
-	result := make([]Session, 0, len(sessionByID))
-	for _, session := range sessionByID {
-		result = append(result, cloneSession(session))
-	}
-
-	result = filterSessions(result, input)
-	sort.SliceStable(result, func(left, right int) bool {
-		leftUpdatedAtUnixMS := sessionUpdatedAtUnixMS(result[left])
-		rightUpdatedAtUnixMS := sessionUpdatedAtUnixMS(result[right])
-		if leftUpdatedAtUnixMS == rightUpdatedAtUnixMS {
-			return strings.TrimSpace(result[left].ID) < strings.TrimSpace(result[right].ID)
-		}
-		return leftUpdatedAtUnixMS > rightUpdatedAtUnixMS
-	})
-	if input.Limit > 0 && len(result) > input.Limit {
-		result = result[:input.Limit]
-	}
-	return result, nil
 }
 
 func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSessionInput) (Session, error) {
@@ -588,6 +533,70 @@ func (s *Service) cleanupRuntime(ctx context.Context, workspaceID string, agentS
 		WorkspaceID:    workspaceID,
 		AgentSessionID: agentSessionID,
 	})
+}
+
+// GoalControlSessionResult carries the refreshed session plus the goal
+// snapshot after a goal control action (nil after clear).
+type GoalControlSessionResult struct {
+	Session Session
+	Goal    map[string]any
+}
+
+// GoalControl performs a direct goal action (pause/resume/clear/set) on the
+// session's thread. Like Cancel it is a control operation: it never opens a
+// turn, so it works while a turn is running.
+func (s *Service) GoalControl(ctx context.Context, workspaceID string, agentSessionID string, action string, objective string) (GoalControlSessionResult, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	agentSessionID = strings.TrimSpace(agentSessionID)
+	slog.Info("workspace agent session goal control requested",
+		"event", "workspace_agent_session.goal_control.requested",
+		"workspaceId", workspaceID,
+		"agentSessionId", agentSessionID,
+		"action", action,
+	)
+	if _, err := s.ensureRuntimeSessionResult(ctx, workspaceID, agentSessionID); err != nil {
+		slog.Warn("workspace agent session goal control prepare failed",
+			"event", "workspace_agent_session.goal_control.prepare_failed",
+			"workspaceId", workspaceID,
+			"agentSessionId", agentSessionID,
+			"error", err.Error(),
+		)
+		return GoalControlSessionResult{}, err
+	}
+	controlResult, err := s.controller().GoalControl(ctx, RuntimeGoalControlInput{
+		WorkspaceID:    workspaceID,
+		AgentSessionID: agentSessionID,
+		Action:         action,
+		Objective:      objective,
+	})
+	if err != nil {
+		normalizedErr := normalizeRuntimeError(err)
+		slog.Warn("workspace agent session goal control runtime request failed",
+			"event", "workspace_agent_session.goal_control.runtime_failed",
+			"workspaceId", workspaceID,
+			"agentSessionId", agentSessionID,
+			"action", action,
+			"error", normalizedErr.Error(),
+		)
+		return GoalControlSessionResult{}, normalizedErr
+	}
+	session, err := s.Get(ctx, workspaceID, agentSessionID)
+	if err != nil {
+		slog.Warn("workspace agent session goal control refresh failed",
+			"event", "workspace_agent_session.goal_control.refresh_failed",
+			"workspaceId", workspaceID,
+			"agentSessionId", agentSessionID,
+			"error", err.Error(),
+		)
+		return GoalControlSessionResult{}, err
+	}
+	slog.Info("workspace agent session goal control completed",
+		"event", "workspace_agent_session.goal_control.completed",
+		"workspaceId", workspaceID,
+		"agentSessionId", agentSessionID,
+		"action", action,
+	)
+	return GoalControlSessionResult{Session: session, Goal: controlResult.Goal}, nil
 }
 
 func (s *Service) Cancel(ctx context.Context, workspaceID string, agentSessionID string) (CancelSessionResult, error) {

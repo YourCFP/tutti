@@ -668,6 +668,19 @@ func (a *ClaudeCodeSDKAdapter) dispatchClaudeSDKEvent(agentSessionID string, ada
 		a.completeClaudeSDKWaiterEvent(adapterSession, waiter, turnID, next, terminal, err)
 		return
 	}
+	if terminal {
+		// No daemon-registered Exec()/ExecAsync() waiter is tracking this
+		// turnID's outcome: either its terminal event was already delivered
+		// once (the waiter already completed and was unregistered) or this
+		// turn never became the tracked active turn in the first place (for
+		// example an internal/queued Claude SDK turn — see turnQueue /
+		// settleQueuedTurn in the sidecar — that got settled without ever
+		// being submitted through Exec). Publishing it here would surface a
+		// stray, possibly contradictory outcome notification for the session:
+		// a phantom completed/failed toast landing alongside the real turn's
+		// own outcome toast for the same agent session. Drop it instead.
+		return
+	}
 	if err != nil {
 		next = append(next, newSessionActivityEvent(session, EventSessionFailed, SessionStatusFailed, map[string]any{
 			"error": err.Error(),
@@ -763,7 +776,20 @@ func (a *ClaudeCodeSDKAdapter) failClaudeSDKReader(agentSessionID string, adapte
 	for _, response := range responses {
 		response <- claudeSDKSidecarEvent{Type: "error", Payload: map[string]any{"error": err.Error()}}
 	}
+	// Any interactive/permission request still awaiting a human decision when
+	// the sidecar connection is lost must be resolved explicitly. Without
+	// this, the pending approval bookkeeping is discarded silently along
+	// with the session (below), leaving the GUI's permission dialog with no
+	// terminal event: on the next reconnect/resume it simply vanishes with
+	// no explanation while the turn itself fails, giving the appearance that
+	// the request was answered (or bypassed) when it never was.
+	session := a.claudeSDKSessionSnapshot(adapterSession)
+	if strings.TrimSpace(session.AgentSessionID) == "" {
+		session.AgentSessionID = agentSessionID
+	}
+	pendingFailureEvents := a.claudeSDKPendingRequestFailureEvents(adapterSession, session, "", err)
 	a.removeSession(agentSessionID)
+	a.emitClaudeSDKSessionEvents(agentSessionID, pendingFailureEvents)
 }
 
 func (a *ClaudeCodeSDKAdapter) takeClaudeSDKResponseWaiter(adapterSession *claudeSDKAdapterSession, event claudeSDKSidecarEvent) chan claudeSDKSidecarEvent {
@@ -1665,10 +1691,32 @@ func claudeSDKContextWindowTokens(payload map[string]any) int64 {
 	); ok {
 		return total
 	}
-	modelUsage, _ := payload["modelUsage"].([]any)
-	for _, item := range modelUsage {
-		if candidate, ok := item.(map[string]any); ok {
-			if total := claudeSDKContextWindowTokens(candidate); total > 0 {
+	if total := claudeSDKContextWindowTokensFromValue(payload["modelUsage"]); total > 0 {
+		return total
+	}
+	return 0
+}
+
+func claudeSDKContextWindowTokensFromValue(value any) int64 {
+	switch typed := value.(type) {
+	case []any:
+		for _, item := range typed {
+			if total := claudeSDKContextWindowTokensFromValue(item); total > 0 {
+				return total
+			}
+		}
+	case []map[string]any:
+		for _, item := range typed {
+			if total := claudeSDKContextWindowTokens(item); total > 0 {
+				return total
+			}
+		}
+	case map[string]any:
+		if total := claudeSDKContextWindowTokens(typed); total > 0 {
+			return total
+		}
+		for _, item := range typed {
+			if total := claudeSDKContextWindowTokensFromValue(item); total > 0 {
 				return total
 			}
 		}
