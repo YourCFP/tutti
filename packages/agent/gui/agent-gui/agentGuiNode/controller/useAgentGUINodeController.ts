@@ -8692,16 +8692,16 @@ export function useAgentGUINodeController({
           const queuedUpdate =
             queuedComposerSettingsUpdatesRef.current[agentSessionId] ?? null;
           const optimisticSettings = queuedUpdate?.sessionSettingsPatch ?? null;
-          const nextAppliedSettings = optimisticSettings
-            ? {
-                ...result.settings,
-                ...sessionSettingsPatch,
-                ...optimisticSettings
-              }
-            : {
-                ...result.settings,
-                ...sessionSettingsPatch
-              };
+          const pendingClaudeModelRefreshSettings =
+            dataRef.current.provider === "claude-code" &&
+            sessionSettingsPatch.model !== undefined
+              ? { model: sessionSettingsPatch.model }
+              : null;
+          const nextAppliedSettings = {
+            ...result.settings,
+            ...(pendingClaudeModelRefreshSettings ?? {}),
+            ...(optimisticSettings ?? {})
+          };
           updateAgentSessionViewControlState(
             sessionViewRef(agentSessionId),
             (existing) =>

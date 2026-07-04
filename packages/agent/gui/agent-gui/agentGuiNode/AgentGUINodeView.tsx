@@ -19,7 +19,6 @@ import {
   ChevronsDown,
   ExternalLink,
   Info,
-  LayoutGrid,
   Wrench
 } from "lucide-react";
 import {
@@ -186,17 +185,6 @@ const AGENT_GUI_TOP_MASK_SCROLL_EPSILON_PX = 1;
 const AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE = 5;
 const AGENT_GUI_CONVERSATION_RAIL_PROJECTION_PROVIDER: AgentGUIProvider =
   "codex";
-// TODO(legacySplit-removal): remove together with the legacySplit dock layout.
-// Single-provider docks have no agent-target filter, so rail sections scope to
-// the provider's system-local target. Ids must match the daemon backfill
-// (services/tuttid/biz/agenttarget/model.go IDLocalCodex/IDLocalClaudeCode).
-const AGENT_GUI_SINGLE_PROVIDER_SECTION_AGENT_TARGET_IDS: Partial<
-  Record<AgentGUIProvider, string>
-> = {
-  "claude-code": "local:claude-code",
-  codex: "local:codex"
-};
-
 const AGENT_GUI_TIMELINE_SCROLL_AREA_CONTENT_STYLE: CSSProperties = {
   width: "100%",
   minWidth: "100%",
@@ -1433,11 +1421,16 @@ export function AgentGUINodeView({
       : railConfigProvider;
   const effectiveRailSlashStatusLimits =
     railSlashStatusLimits ?? slashStatusLimits;
+  const enabledProviderTargets = viewModel.providerTargets.filter(
+    (target) =>
+      target.disabled !== true &&
+      ((target.agentTargetId?.trim() ?? "") || (target.targetId?.trim() ?? ""))
+  );
   const sectionAgentTargetFallbackId =
-    viewModel.conversationScope === "single-provider"
-      ? (AGENT_GUI_SINGLE_PROVIDER_SECTION_AGENT_TARGET_IDS[
-          viewModel.data.provider
-        ] ?? null)
+    enabledProviderTargets.length <= 1
+      ? viewModel.selectedProviderTarget.agentTargetId?.trim() ||
+        viewModel.selectedProviderTarget.targetId?.trim() ||
+        null
       : null;
   const openAgentEnvSetup = useCallback(() => {
     if (!effectiveRailConfigProvider) {
@@ -5022,13 +5015,8 @@ const AgentGUIConversationRailPane = memo(
     isCollapsed,
     railConfigProvider,
     slashStatusLimits,
-    providerTargets,
-    providerTargetsLoading,
-    conversationScope,
     conversationFilter,
     sectionAgentTargetFallbackId,
-    onUpdateConversationFilter,
-    onSelectConversationFilterTarget,
     onCreateConversation,
     onOpenAgentEnvSetup,
     onRetryOpenclawGateway,
