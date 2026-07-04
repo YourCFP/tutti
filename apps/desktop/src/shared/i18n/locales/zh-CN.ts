@@ -644,10 +644,10 @@ export const zhCN = {
         addFileDefaultOpener: "添加",
         removeFileDefaultOpener: "移除 .{{extension}}",
         releaseChannelDescription:
-          "选择稳定版更新；内部验收时可切到 RC 构建。",
+          "选择稳定版更新；需要提前验收时可切到预览版。",
         releaseChannelLabel: "发布渠道",
         releaseChannelOptions: {
-          rc: "RC",
+          rc: "预览版",
           stable: "稳定版"
         },
         showAppDeveloperSourcesDescription:

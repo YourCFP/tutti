@@ -88,6 +88,98 @@ test("createDesktopHostPreferencesState initializes missing preferences with dar
   assert.equal(state.getUpdateChannel(), "stable");
 });
 
+test("createDesktopHostPreferencesState defaults missing rc package preferences to rc updates", async () => {
+  const putRequests: PutDesktopPreferencesRequest[] = [];
+  const state = await createDesktopHostPreferencesState({
+    appVersion: "0.1.6-rc.2",
+    fallbackLocale: "zh-CN",
+    logger: createLogger(),
+    tuttidClient: {
+      async getDesktopPreferences() {
+        return {
+          initialized: false,
+          preferences: {
+            agentComposerDefaultsByProvider: {},
+            agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
+            agentDockLayout: "legacySplit",
+            appCatalogChannel: "production",
+            browserUseConnectionMode: "isolated",
+            defaultAgentProvider: "codex",
+
+            dockIconStyle: "flat",
+            dockPlacement: "bottom",
+            fileDefaultOpenersByExtension: { html: "defaultBrowser" },
+            locale: "en",
+            minimizeAnimation: "scale",
+            sleepPreventionMode: "never",
+            showAppDeveloperSources: false,
+            themeSource: "system",
+            updateChannel: "stable",
+            updatePolicy: "prompt"
+          }
+        };
+      },
+      async putDesktopPreferences(request) {
+        putRequests.push(request);
+        return {
+          initialized: true,
+          preferences: request.preferences
+        };
+      }
+    }
+  });
+
+  assert.equal(state.getUpdateChannel(), "rc");
+  assert.equal(putRequests[0]?.preferences.updateChannel, "rc");
+});
+
+test("createDesktopHostPreferencesState keeps missing beta package preferences on stable updates", async () => {
+  const putRequests: PutDesktopPreferencesRequest[] = [];
+  const state = await createDesktopHostPreferencesState({
+    appVersion: "0.1.7-beta.1",
+    fallbackLocale: "zh-CN",
+    logger: createLogger(),
+    tuttidClient: {
+      async getDesktopPreferences() {
+        return {
+          initialized: false,
+          preferences: {
+            agentComposerDefaultsByProvider: {},
+            agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
+            agentDockLayout: "legacySplit",
+            appCatalogChannel: "production",
+            browserUseConnectionMode: "isolated",
+            defaultAgentProvider: "codex",
+
+            dockIconStyle: "flat",
+            dockPlacement: "bottom",
+            fileDefaultOpenersByExtension: { html: "defaultBrowser" },
+            locale: "en",
+            minimizeAnimation: "scale",
+            sleepPreventionMode: "never",
+            showAppDeveloperSources: false,
+            themeSource: "system",
+            updateChannel: "rc",
+            updatePolicy: "prompt"
+          }
+        };
+      },
+      async putDesktopPreferences(request) {
+        putRequests.push(request);
+        return {
+          initialized: true,
+          preferences: request.preferences
+        };
+      }
+    }
+  });
+
+  assert.equal(state.getUpdateChannel(), "stable");
+  assert.equal(putRequests[0]?.preferences.updateChannel, "stable");
+});
+
 test("createDesktopHostPreferencesState keeps initialized theme preferences", async () => {
   let putCalls = 0;
   const state = await createDesktopHostPreferencesState({
@@ -242,6 +334,52 @@ test("createDesktopHostPreferencesState migrates the old rc default update chann
     ),
     /^\d{4}-\d{2}-\d{2}T/
   );
+});
+
+test("createDesktopHostPreferencesState preserves initialized rc channel on rc packages", async () => {
+  const migrationStateRootDir = await mkdtemp(
+    join(tmpdir(), "tutti-update-channel-migration-")
+  );
+  let putCalls = 0;
+  const state = await createDesktopHostPreferencesState({
+    appVersion: "v0.1.6-rc.2",
+    fallbackLocale: "zh-CN",
+    logger: createLogger(),
+    migrationStateRootDir,
+    tuttidClient: {
+      async getDesktopPreferences() {
+        return {
+          initialized: true,
+          preferences: {
+            agentComposerDefaultsByProvider: {},
+            agentGuiConversationRailCollapsedByProvider: {},
+            agentConversationDetailMode: "coding",
+            agentDockLayout: "legacySplit",
+            appCatalogChannel: "production",
+            defaultAgentProvider: "codex",
+
+            dockIconStyle: "default",
+            dockPlacement: "bottom",
+            fileDefaultOpenersByExtension: { html: "defaultBrowser" },
+            locale: "zh-CN",
+            minimizeAnimation: "scale",
+            sleepPreventionMode: "never",
+            showAppDeveloperSources: false,
+            themeSource: "dark",
+            updateChannel: "rc",
+            updatePolicy: "prompt"
+          }
+        };
+      },
+      async putDesktopPreferences() {
+        putCalls += 1;
+        throw new Error("putDesktopPreferences should not be called");
+      }
+    }
+  });
+
+  assert.equal(putCalls, 0);
+  assert.equal(state.getUpdateChannel(), "rc");
 });
 
 test("createDesktopHostPreferencesState preserves rc after the stable default migration ran", async () => {

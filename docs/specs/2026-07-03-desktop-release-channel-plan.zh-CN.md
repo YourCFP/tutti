@@ -251,6 +251,10 @@ tag/version 一致、首选下载地址存在并指向当前 tag 目录。任何
 推荐默认：
 
 - 普通用户 / 对外安装包默认使用 `stable`。
+- 如果本地还没有保存过更新偏好，首次默认值跟随当前包版本：
+  - 正式包默认检测 `stable`。
+  - RC 包默认检测 `rc`，用于内部验收继续收到后续 RC。
+  - beta 包首期仍默认检测 `stable`，因为 beta 自动更新还不暴露给客户端设置。
 - 内部 QA / 开发者可以在开发者设置里切换到 `rc`。
 - beta 首期只作为 CI 独立打包通道，不进入客户端设置。
 - stable 渠道只检测稳定 release。
@@ -280,7 +284,8 @@ tag/version 一致、首选下载地址存在并指向当前 tag 目录。任何
 
 需要改造：
 
-1. 把默认 update channel 改成 `stable`。
+1. 把默认 update channel 改成按当前包版本推导：正式包 `stable`，RC 包 `rc`，beta 包暂时
+   `stable`。
 2. 保留 `rc` 作为内部 opt-in 渠道。
 3. 在开发者设置里增加一个 release channel 控件：
 
@@ -293,8 +298,11 @@ tag/version 一致、首选下载地址存在并指向当前 tag 目录。任何
 4. 这个控件直接接现有的 `updateChannel` 偏好，不新增第二套设置。
 5. 对老版本已经因为旧默认值写入的 `rc` 做一次性迁移，拉回 `stable`。
    迁移 marker 写入后，用户再从开发者设置手动选择 `rc`，后续就视为显式 opt-in 并保留。
+   RC 包自身的首次默认 `rc` 不执行这次拉回。
 6. 增加测试：
-   - 默认偏好是 `stable`。
+   - 正式包首次默认偏好是 `stable`。
+   - RC 包首次默认偏好是 `rc`。
+   - beta 包首次默认偏好仍是 `stable`。
    - stable 会配置为 `channel="latest"` + `allowPrerelease=false`。
    - rc 会配置为 `channel="rc"` + `allowPrerelease=true`。
    - GitHub release fallback 对 stable / rc 的过滤符合预期。
@@ -325,10 +333,13 @@ beta 自动更新源首期不新增：
 
 既有用户迁移需要单独处理：
 
-- 新用户默认 `stable`。
+- 正式包首次启动、且没有已保存偏好时默认 `stable`。
+- RC 包首次启动、且没有已保存偏好时默认 `rc`。
+- beta 包首次启动仍默认 `stable`，避免开发分支包进入持续自动更新链路。
 - 已显式选择过 `rc` 的内部用户保留 `rc`。
 - 如果历史上有“默认迁到 rc”的 marker，需要识别这是系统默认还是用户显式选择。
-- 无法确认显式选择时，不强制覆盖用户偏好；开发者设置中展示当前渠道并允许手动切回。
+- 稳定包上没有迁移 marker 的历史 `rc` 默认值会被一次性拉回 `stable`；迁移 marker
+  写入后，开发者设置中的手动选择会继续保留。
 - 迁移逻辑和测试要覆盖：新安装、已有 rc、已有 stable、旧 marker 四种情况。
 
 ## 问题 3：RC 验收通过后，如何转成正式 release
@@ -998,7 +1009,7 @@ RC 是否写入长期 changelog：
 
 ### Step 2：调整自动更新默认策略
 
-- 默认 update channel 改成 `stable`。
+- 默认 update channel 改成按包版本推导：正式包 `stable`，RC 包 `rc`，beta 包暂时 `stable`。
 - 保留 `rc` 作为内部 opt-in。
 - 在开发者设置中增加 stable / pre-release 控件。
 - 明确既有用户 update channel 迁移规则。

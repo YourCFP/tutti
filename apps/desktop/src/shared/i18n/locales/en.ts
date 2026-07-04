@@ -673,10 +673,10 @@ export const en = {
         addFileDefaultOpener: "Add",
         removeFileDefaultOpener: "Remove .{{extension}}",
         releaseChannelDescription:
-          "Choose stable release updates, or opt in to RC builds for internal verification.",
+          "Choose stable release updates, or opt in to preview builds for internal verification.",
         releaseChannelLabel: "Release channel",
         releaseChannelOptions: {
-          rc: "RC",
+          rc: "Preview",
           stable: "Stable"
         },
         showAppDeveloperSourcesDescription:
