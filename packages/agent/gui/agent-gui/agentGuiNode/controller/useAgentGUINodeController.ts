@@ -8693,19 +8693,15 @@ export function useAgentGUINodeController({
           const queuedUpdate =
             queuedComposerSettingsUpdatesRef.current[agentSessionId] ?? null;
           const optimisticSettings = queuedUpdate?.sessionSettingsPatch ?? null;
-          const confirmedModelSetting =
-            sessionSettingsPatch.model !== undefined
-              ? { model: sessionSettingsPatch.model }
-              : {};
           const nextAppliedSettings = optimisticSettings
             ? {
                 ...result.settings,
-                ...confirmedModelSetting,
+                ...sessionSettingsPatch,
                 ...optimisticSettings
               }
             : {
                 ...result.settings,
-                ...confirmedModelSetting
+                ...sessionSettingsPatch
               };
           updateAgentSessionViewControlState(
             sessionViewRef(agentSessionId),
