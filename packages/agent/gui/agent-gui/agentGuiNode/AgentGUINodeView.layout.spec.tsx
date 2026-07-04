@@ -546,6 +546,37 @@ describe("AgentGUINodeView layout persistence", () => {
     expect(actions.selectProvider).not.toHaveBeenCalled();
   });
 
+  it("uses bundled rail icons before explicit daemon target icon urls", () => {
+    renderAgentGUINodeView({
+      viewModel: {
+        ...createViewModel(),
+        providerTargets: [
+          {
+            ...createLocalAgentGUIProviderTarget("codex"),
+            iconUrl: "tutti-asset://agent/codex.png"
+          },
+          {
+            ...createLocalAgentGUIProviderTarget("claude-code"),
+            iconUrl: "tutti-asset://agent/claudecode.png"
+          }
+        ]
+      }
+    });
+
+    expect(
+      screen
+        .getByRole("tab", { name: "Codex" })
+        .querySelector("img")
+        ?.getAttribute("src")
+    ).toBe(MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.codex);
+    expect(
+      screen
+        .getByRole("tab", { name: "Claude Code" })
+        .querySelector("img")
+        ?.getAttribute("src")
+    ).toBe(MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS["claude-code"]);
+  });
+
   it("orders provider rail tiles as Codex, Claude Code, Tutti, Hermes, OpenClaw without visible provider labels", () => {
     renderAgentGUINodeView({
       viewModel: {

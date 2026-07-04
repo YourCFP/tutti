@@ -243,12 +243,13 @@ function agentGUIProviderRailIconPresentation(
   iconUrl?: string | null
 ): AgentGUIProviderIconPresentation {
   const normalizedProvider = normalizeManagedAgentProvider(provider);
+  const bundledIconUrl =
+    MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS[normalizedProvider] ??
+    MANAGED_AGENT_ICON_URLS[normalizedProvider];
   return {
     provider: normalizedProvider,
     iconUrl:
-      iconUrl?.trim() ||
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS[normalizedProvider] ||
-      resolveAgentGUIHeroIconUrl(normalizedProvider)
+      bundledIconUrl || iconUrl?.trim() || MANAGED_AGENT_ICON_FALLBACK_URL
   };
 }
 
