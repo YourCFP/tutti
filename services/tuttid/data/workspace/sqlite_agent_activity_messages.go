@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	agentactivityprojection "github.com/tutti-os/tutti/packages/agentactivity/daemon/activity/projection"
+	agentactivityprojection "github.com/tutti-os/tutti/packages/agent/daemon/activity/projection"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 )
 
