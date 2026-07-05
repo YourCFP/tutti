@@ -1412,6 +1412,11 @@ func (a *CodexAppServerAdapter) execBlocking(
 	}
 	session.ProviderSessionID = appSession.threadID
 	explicitDisplayPrompt, visibleText := explicitAndVisiblePromptText(content, displayPrompt)
+	mentionRoutingApplied, mentionRoutingSkills := tuttiMentionRoutingSkills(visibleText)
+	providerContent := content
+	if mentionRoutingApplied {
+		providerContent = appendTuttiMentionRoutingContent(providerContent, mentionRoutingSkills)
+	}
 
 	if activeTurnID := a.sessionActiveTurnID(session.AgentSessionID); activeTurnID != "" {
 		if command, args := splitSlashCommand(visibleText); command == appServerSlashGoal {
@@ -1420,7 +1425,7 @@ func (a *CodexAppServerAdapter) execBlocking(
 			// instead of executing the RPC.
 			return a.execGoalControlCommand(ctx, appSession, session, args, turnID, content, explicitDisplayPrompt, visibleText, emit)
 		}
-		return a.steerActiveTurn(ctx, appSession, session, content, explicitDisplayPrompt, visibleText, turnID, activeTurnID, emit)
+		return a.steerActiveTurn(ctx, appSession, session, content, providerContent, explicitDisplayPrompt, visibleText, turnID, activeTurnID, emit)
 	}
 
 	normalizer := newACPTurnNormalizer()
@@ -1509,8 +1514,8 @@ func (a *CodexAppServerAdapter) execBlocking(
 	a.markTurnSettleEmits(appTurn)
 
 	trace := newCodexAppServerTurnTrace(session, turnID, execMetadataFromContext(ctx))
-	turnParams := appServerTurnStartParams(session, appSession.threadID, content, appSession.planModeMask, appSession.defaultModeMask, appSession.defaultModel)
-	trace.Log("turn.start.params", codexAppServerTraceTurnStartParams(session, turnParams, content))
+	turnParams := appServerTurnStartParams(session, appSession.threadID, providerContent, appSession.planModeMask, appSession.defaultModeMask, appSession.defaultModel)
+	trace.Log("turn.start.params", codexAppServerTraceTurnStartParams(session, turnParams, providerContent))
 	turnStartedAt := time.Now()
 	result, err := appSession.client.TurnStart(ctx, turnParams,
 		func(ctx context.Context, message acpMessage) error {
@@ -1663,6 +1668,7 @@ func (*CodexAppServerAdapter) steerActiveTurn(
 	appSession *codexAppServerSession,
 	session Session,
 	content []PromptContentBlock,
+	providerContent []PromptContentBlock,
 	explicitDisplayPrompt string,
 	displayPrompt string,
 	turnID string,
@@ -1672,7 +1678,7 @@ func (*CodexAppServerAdapter) steerActiveTurn(
 	_, err := appSession.client.TurnSteerNoHandler(ctx, map[string]any{
 		"threadId":       appSession.threadID,
 		"expectedTurnId": activeTurnID,
-		"input":          appServerUserInput(content),
+		"input":          appServerUserInput(providerContent),
 	})
 	if err != nil {
 		return nil, err
