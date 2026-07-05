@@ -6,7 +6,7 @@ import "encoding/json"
 
 const (
 	BusinessEventProtocolVersion = 1
-	BusinessEventCatalogRevision = "sha256:a7c346d98bac9dfc"
+	BusinessEventCatalogRevision = "sha256:d270a7981989a456"
 )
 
 type Topic string
@@ -64,33 +64,45 @@ type PreferencesDesktopPreferences struct {
 			Model            *string `json:"model,omitempty"`
 			PermissionModeId *string `json:"permissionModeId,omitempty"`
 			ReasoningEffort  *string `json:"reasoningEffort,omitempty"`
+			Speed            *string `json:"speed,omitempty"`
 		} `json:"claude-code,omitempty"`
 		Codex *struct {
 			Model            *string `json:"model,omitempty"`
 			PermissionModeId *string `json:"permissionModeId,omitempty"`
 			ReasoningEffort  *string `json:"reasoningEffort,omitempty"`
+			Speed            *string `json:"speed,omitempty"`
 		} `json:"codex,omitempty"`
 		Nexight *struct {
 			Model            *string `json:"model,omitempty"`
 			PermissionModeId *string `json:"permissionModeId,omitempty"`
 			ReasoningEffort  *string `json:"reasoningEffort,omitempty"`
+			Speed            *string `json:"speed,omitempty"`
 		} `json:"nexight,omitempty"`
 		Gemini *struct {
 			Model            *string `json:"model,omitempty"`
 			PermissionModeId *string `json:"permissionModeId,omitempty"`
 			ReasoningEffort  *string `json:"reasoningEffort,omitempty"`
+			Speed            *string `json:"speed,omitempty"`
 		} `json:"gemini,omitempty"`
 		Hermes *struct {
 			Model            *string `json:"model,omitempty"`
 			PermissionModeId *string `json:"permissionModeId,omitempty"`
 			ReasoningEffort  *string `json:"reasoningEffort,omitempty"`
+			Speed            *string `json:"speed,omitempty"`
 		} `json:"hermes,omitempty"`
 		Openclaw *struct {
 			Model            *string `json:"model,omitempty"`
 			PermissionModeId *string `json:"permissionModeId,omitempty"`
 			ReasoningEffort  *string `json:"reasoningEffort,omitempty"`
+			Speed            *string `json:"speed,omitempty"`
 		} `json:"openclaw,omitempty"`
 	} `json:"agentComposerDefaultsByProvider"`
+	AgentComposerDefaultsByAgentTarget *map[string]struct {
+		Model            *string `json:"model,omitempty"`
+		PermissionModeId *string `json:"permissionModeId,omitempty"`
+		ReasoningEffort  *string `json:"reasoningEffort,omitempty"`
+		Speed            *string `json:"speed,omitempty"`
+	} `json:"agentComposerDefaultsByAgentTarget,omitempty"`
 	AgentGuiConversationRailCollapsedByProvider struct {
 		ClaudeCode *bool `json:"claude-code,omitempty"`
 		Codex      *bool `json:"codex,omitempty"`
@@ -99,6 +111,8 @@ type PreferencesDesktopPreferences struct {
 		Hermes     *bool `json:"hermes,omitempty"`
 		Openclaw   *bool `json:"openclaw,omitempty"`
 	} `json:"agentGuiConversationRailCollapsedByProvider"`
+	AgentConversationDetailMode   string            `json:"agentConversationDetailMode"`
+	AgentDockLayout               string            `json:"agentDockLayout"`
 	AppCatalogChannel             string            `json:"appCatalogChannel"`
 	BrowserUseConnectionMode      *string           `json:"browserUseConnectionMode,omitempty"`
 	DefaultAgentProvider          string            `json:"defaultAgentProvider"`
@@ -126,6 +140,7 @@ type WorkspaceWorkspaceAppFactoryJob struct {
 	AppId            *string         `json:"appId"`
 	DisplayName      string          `json:"displayName"`
 	Description      *string         `json:"description"`
+	AgentTargetId    *string         `json:"agentTargetId"`
 	Provider         *string         `json:"provider"`
 	Model            *string         `json:"model"`
 	ReasoningEffort  *string         `json:"reasoningEffort"`
@@ -188,10 +203,11 @@ type WorkspaceWorkspaceApp struct {
 }
 
 type AgentActivityUpdatedPayload struct {
-	WorkspaceId    string `json:"workspaceId"`
-	AgentSessionId string `json:"agentSessionId"`
-	EventType      string `json:"eventType"`
-	Data           any    `json:"data"`
+	WorkspaceId    string  `json:"workspaceId"`
+	AgentSessionId string  `json:"agentSessionId"`
+	AgentTargetId  *string `json:"agentTargetId,omitempty"`
+	EventType      string  `json:"eventType"`
+	Data           any     `json:"data"`
 }
 
 type AnalyticsDebugReportedPayload struct {

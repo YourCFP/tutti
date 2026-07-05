@@ -1,11 +1,16 @@
 import type { AgentActivityUsage } from "@tutti-os/agent-activity-core";
-import type { AgentGUINodeData, AgentGUIProviderTarget } from "../../../types";
+import type {
+  AgentGUINodeData,
+  AgentGUIProviderReadinessGate,
+  AgentGUIProviderTarget
+} from "../../../types";
 import type {
   AgentGUIApprovalRequest,
   AgentGUIConversationSummary,
   AgentGUIConversationUserProject,
   AgentGUIInteractivePrompt
 } from "./agentGuiConversationModel";
+import type { AgentGUIConversationFilter } from "./agentGuiConversationFilter";
 import type {
   AgentSessionCommand,
   AgentSessionComposerSettings,
@@ -159,6 +164,9 @@ export interface AgentGUINodeViewModel {
   currentUserId?: string | null;
   data: AgentGUINodeData;
   selectedProviderTarget: AgentGUIProviderTarget;
+  providerTargets: readonly AgentGUIProviderTarget[];
+  providerTargetsLoading: boolean;
+  conversationFilter: AgentGUIConversationFilter;
   conversations: AgentGUIConversationSummary[];
   userProjects: AgentGUIConversationUserProject[];
   activeConversation: AgentGUIConversationSummary | null;
@@ -178,7 +186,13 @@ export interface AgentGUINodeViewModel {
   isRespondingApproval: boolean;
   promptImagesSupported: boolean;
   compactSupported: boolean | null;
+  /**
+   * Provider goal supports a real paused state (codex thread goals). Claude
+   * Code's goal has none — the banner then omits pause/resume controls.
+   */
+  goalPauseSupported: boolean;
   usage: AgentActivityUsage | null;
+  backgroundAgentCount: number;
   /** Codex plan turn finished: offer the TUI-equivalent implement prompt. */
   listError: string | null;
   isDeletingConversation: boolean;
@@ -201,4 +215,5 @@ export interface AgentGUINodeViewModel {
   conversationDetail: WorkspaceAgentSessionDetailViewModel | null;
   sessionChrome: AgentGUISessionChrome;
   inlineNotice: AgentGUIInlineNotice | null;
+  providerReadinessGate: AgentGUIProviderReadinessGate | null;
 }

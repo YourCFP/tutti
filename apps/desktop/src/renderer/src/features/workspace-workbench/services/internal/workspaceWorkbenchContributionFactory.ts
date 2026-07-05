@@ -47,6 +47,7 @@ export interface DesktopWorkbenchContributionContext {
   defaultAgentProvider?: string | null;
   defaultProviderTargetId?: string | null;
   dockIcons: {
+    agentUnified: string;
     agents: Record<string, string>;
     applications: string;
     browser: string;
@@ -60,6 +61,7 @@ export interface DesktopWorkbenchContributionContext {
     target: WorkspaceWorkbenchCapabilitySettingsTarget
   ) => void;
   providerTargets?: readonly AgentGUIProviderTarget[];
+  providerTargetsLoading?: boolean;
   agentProviderStatusService: AgentProviderStatusService;
   workspaceFileManagerService: IWorkspaceFileManagerService;
   workspaceUserProjectService: IWorkspaceUserProjectService;
@@ -69,7 +71,7 @@ export interface DesktopWorkbenchContributionContext {
   tuttidClient: TuttidClient;
   platformApi: Pick<
     DesktopPlatformApi,
-    "homeDirectory" | "os" | "resolveDroppedPaths"
+    "homeDirectory" | "os" | "resolveDroppedEntries" | "resolveDroppedPaths"
   >;
   reporterService?: Pick<IReporterService, "trackEvents">;
   renderFilesNodeBody: (

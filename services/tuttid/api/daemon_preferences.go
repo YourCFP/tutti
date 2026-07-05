@@ -312,6 +312,54 @@ func (api DaemonAPI) PutDesktopPreferences(ctx context.Context, request tuttigen
 		}, nil
 	}
 
+	agentConversationDetailMode := strings.TrimSpace(string(request.Body.Preferences.AgentConversationDetailMode))
+	if agentConversationDetailMode == "" {
+		return tuttigenerated.PutDesktopPreferences400JSONResponse{
+			InvalidRequestErrorJSONResponse: invalidRequestError(
+				apierrors.InvalidRequest(
+					apierrors.ReasonMissingDesktopAgentConversationDetailMode,
+					apierrors.WithDeveloperMessage("desktop agent conversation detail mode is required"),
+					apierrors.WithParams(map[string]any{"field": "preferences.agentConversationDetailMode"}),
+				),
+			),
+		}, nil
+	}
+	if !preferencesbiz.IsDesktopAgentConversationDetailMode(agentConversationDetailMode) {
+		return tuttigenerated.PutDesktopPreferences400JSONResponse{
+			InvalidRequestErrorJSONResponse: invalidRequestError(
+				apierrors.InvalidRequest(
+					apierrors.ReasonUnsupportedDesktopAgentConversationDetailMode,
+					apierrors.WithDeveloperMessage("desktop agent conversation detail mode is unsupported"),
+					apierrors.WithParams(map[string]any{"field": "preferences.agentConversationDetailMode"}),
+				),
+			),
+		}, nil
+	}
+
+	agentDockLayout := strings.TrimSpace(string(request.Body.Preferences.AgentDockLayout))
+	if agentDockLayout == "" {
+		return tuttigenerated.PutDesktopPreferences400JSONResponse{
+			InvalidRequestErrorJSONResponse: invalidRequestError(
+				apierrors.InvalidRequest(
+					apierrors.ReasonMissingDesktopAgentDockLayout,
+					apierrors.WithDeveloperMessage("desktop agent dock layout is required"),
+					apierrors.WithParams(map[string]any{"field": "preferences.agentDockLayout"}),
+				),
+			),
+		}, nil
+	}
+	if !preferencesbiz.IsDesktopAgentDockLayout(agentDockLayout) {
+		return tuttigenerated.PutDesktopPreferences400JSONResponse{
+			InvalidRequestErrorJSONResponse: invalidRequestError(
+				apierrors.InvalidRequest(
+					apierrors.ReasonUnsupportedDesktopAgentDockLayout,
+					apierrors.WithDeveloperMessage("desktop agent dock layout is unsupported"),
+					apierrors.WithParams(map[string]any{"field": "preferences.agentDockLayout"}),
+				),
+			),
+		}, nil
+	}
+
 	var windowSnapping *preferencesservice.DesktopWindowSnappingInput
 	if request.Body.Preferences.WorkbenchWindowSnapping != nil {
 		windowSnappingShortcutPreset := strings.TrimSpace(
@@ -349,14 +397,19 @@ func (api DaemonAPI) PutDesktopPreferences(ctx context.Context, request tuttigen
 		AgentComposerDefaultsByProvider: agentComposerDefaultsByProviderFromGenerated(
 			request.Body.Preferences.AgentComposerDefaultsByProvider,
 		),
+		AgentComposerDefaultsByAgentTarget: agentComposerDefaultsByAgentTargetFromGenerated(
+			request.Body.Preferences.AgentComposerDefaultsByAgentTarget,
+		),
 		AgentGUIConversationRailCollapsedByProvider: agentGUIConversationRailCollapsedByProviderFromGenerated(
 			request.Body.Preferences.AgentGuiConversationRailCollapsedByProvider,
 		),
-		AppCatalogChannel:        appCatalogChannel,
-		BrowserUseConnectionMode: browserUseConnectionMode,
-		DefaultAgentProvider:     defaultAgentProvider,
-		DockIconStyle:            dockIconStyle,
-		DockPlacement:            dockPlacement,
+		AgentConversationDetailMode: agentConversationDetailMode,
+		AgentDockLayout:             agentDockLayout,
+		AppCatalogChannel:           appCatalogChannel,
+		BrowserUseConnectionMode:    browserUseConnectionMode,
+		DefaultAgentProvider:        defaultAgentProvider,
+		DockIconStyle:               dockIconStyle,
+		DockPlacement:               dockPlacement,
 		FileDefaultOpenersByExtension: fileDefaultOpenersByExtensionFromGenerated(
 			request.Body.Preferences.FileDefaultOpenersByExtension,
 		),
@@ -442,9 +495,34 @@ func setAgentComposerDefaultsFromGenerated(
 	if value == nil {
 		return
 	}
-	result[provider] = preferencesbiz.AgentComposerDefaults{
+	result[provider] = agentComposerDefaultsFromGenerated(*value)
+}
+
+func agentComposerDefaultsByAgentTargetFromGenerated(
+	value *tuttigenerated.DesktopAgentComposerDefaultsByAgentTarget,
+) map[string]preferencesbiz.AgentComposerDefaults {
+	// A missing field decodes to nil so the service keeps the stored
+	// defaults; only an explicitly sent (possibly empty) map replaces them.
+	if value == nil {
+		return nil
+	}
+	result := map[string]preferencesbiz.AgentComposerDefaults{}
+	for agentTargetID, defaults := range *value {
+		if strings.TrimSpace(agentTargetID) == "" {
+			continue
+		}
+		result[strings.TrimSpace(agentTargetID)] = agentComposerDefaultsFromGenerated(defaults)
+	}
+	return result
+}
+
+func agentComposerDefaultsFromGenerated(
+	value tuttigenerated.DesktopAgentComposerDefaults,
+) preferencesbiz.AgentComposerDefaults {
+	return preferencesbiz.AgentComposerDefaults{
 		Model:            optionalStringValue(value.Model),
 		PermissionModeID: optionalStringValue(value.PermissionModeId),
 		ReasoningEffort:  optionalStringValue(value.ReasoningEffort),
+		Speed:            optionalStringValue(value.Speed),
 	}
 }

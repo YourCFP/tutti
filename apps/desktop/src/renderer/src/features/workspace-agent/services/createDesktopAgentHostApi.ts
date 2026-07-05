@@ -37,7 +37,7 @@ interface CreateDesktopAgentHostApiInput {
   tuttidClient: TuttidClient;
   platformApi: Pick<
     DesktopPlatformApi,
-    "homeDirectory" | "os" | "resolveDroppedPaths"
+    "homeDirectory" | "os" | "resolveDroppedEntries"
   >;
   runtimeApi: DesktopRuntimeApi;
   reporterNow?: () => number;
@@ -222,8 +222,15 @@ export function createDesktopAgentHostApi({
         await navigator.clipboard.writeText(payload.path);
       },
       ensureDirectory: async () => {},
-      getPathForFile: (file: File) =>
-        platformApi.resolveDroppedPaths([file])[0] ?? file.name,
+      getReferenceForFile: (file: File) => {
+        const entry = platformApi.resolveDroppedEntries([file])[0] ?? null;
+        const kind: "file" | "folder" =
+          entry?.kind === "folder" ? "folder" : "file";
+        return {
+          path: entry?.path || file.name,
+          kind
+        };
+      },
       readFile: async (payload: { path: string }) => {
         const bytes = await hostFilesApi.readPreviewFile(
           workspaceId,

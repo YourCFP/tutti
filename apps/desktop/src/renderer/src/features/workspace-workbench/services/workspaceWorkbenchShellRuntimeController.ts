@@ -131,6 +131,7 @@ export interface WorkspaceWorkbenchShellHostInput {
     target: WorkspaceWorkbenchCapabilitySettingsTarget
   ) => void;
   providerTargets?: readonly AgentGUIProviderTarget[];
+  providerTargetsLoading?: boolean;
   renderFilesNodeBody: (
     context: WorkspaceWorkbenchBodyRendererContext
   ) => ReactNode;
@@ -282,6 +283,7 @@ function createHostInput(input: {
     i18n: input.input.i18n,
     onCapabilitySettingsRequest: input.input.onCapabilitySettingsRequest,
     providerTargets: input.input.providerTargets,
+    providerTargetsLoading: input.input.providerTargetsLoading,
     renderFilesNodeBody: input.input.renderFilesNodeBody,
     themeAppearance: input.input.themeAppearance,
     workspaceId: input.input.workspaceId

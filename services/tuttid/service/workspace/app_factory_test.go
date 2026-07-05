@@ -10,9 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	agentsessionstore "github.com/tutti-os/tutti/packages/agentactivity/daemon/activity"
+	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
 	workspacefiles "github.com/tutti-os/tutti/packages/workspace/files"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
+	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
 	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
 	builtinapps "github.com/tutti-os/tutti/services/tuttid/builtin-apps"
 	workspacedata "github.com/tutti-os/tutti/services/tuttid/data/workspace"
@@ -26,6 +27,10 @@ type appFactoryStoreStub struct {
 type workspaceAppFactoryPublisherStub struct {
 	published  []workspacebiz.AppFactoryJob
 	workspaces []string
+}
+
+type appFactoryAgentTargetStoreStub struct {
+	targets map[string]agenttargetbiz.Target
 }
 
 type factoryAgentSessionServiceStub struct {
@@ -75,6 +80,38 @@ func (s factoryAgentSessionReaderStub) ListSessions(workspaceID string) ([]agent
 func (s factoryAgentMessageReaderStub) ListSessionMessages(input agentactivitybiz.ListSessionMessagesInput) (agentservice.SessionMessagesPage, bool) {
 	page, ok := s.pages[appFactoryJobStoreKey(input.WorkspaceID, input.AgentSessionID)]
 	return page, ok
+}
+
+func newAppFactoryAgentTargetStoreStub() appFactoryAgentTargetStoreStub {
+	targets := make(map[string]agenttargetbiz.Target)
+	for _, target := range agenttargetbiz.DefaultSystemTargets(1) {
+		targets[target.ID] = target
+	}
+	return appFactoryAgentTargetStoreStub{targets: targets}
+}
+
+func (s appFactoryAgentTargetStoreStub) GetAgentTarget(_ context.Context, id string) (agenttargetbiz.Target, error) {
+	target, ok := s.targets[strings.TrimSpace(id)]
+	if !ok {
+		return agenttargetbiz.Target{}, workspacedata.ErrAgentTargetNotFound
+	}
+	return target, nil
+}
+
+func (s appFactoryAgentTargetStoreStub) ListAgentTargets(context.Context) ([]agenttargetbiz.Target, error) {
+	targets := make([]agenttargetbiz.Target, 0, len(s.targets))
+	for _, target := range s.targets {
+		targets = append(targets, target)
+	}
+	return targets, nil
+}
+
+func (appFactoryAgentTargetStoreStub) PutAgentTarget(_ context.Context, target agenttargetbiz.Target) (agenttargetbiz.Target, error) {
+	return target, nil
+}
+
+func (appFactoryAgentTargetStoreStub) DeleteAgentTarget(context.Context, string) error {
+	return nil
 }
 
 func newAppFactoryStoreStub() *appFactoryStoreStub {
@@ -160,7 +197,7 @@ func (s workspaceRootResolverStub) ResolveWorkspaceRoot(context.Context, string)
 	return s.root, nil
 }
 
-func TestAppFactoryServiceGetProviderComposerOptionsUsesFactoryDraftContext(t *testing.T) {
+func TestAppFactoryServiceGetAgentTargetComposerOptionsUsesFactoryDraftContext(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -168,15 +205,16 @@ func TestAppFactoryServiceGetProviderComposerOptionsUsesFactoryDraftContext(t *t
 	sessions := &factoryAgentSessionServiceStub{}
 	service := AppFactoryService{
 		AgentSessionService: sessions,
+		AgentTargetStore:    newAppFactoryAgentTargetStoreStub(),
 		StateDir:            stateDir,
 		WorkspaceStore: &catalogStoreStub{
 			getWorkspace: workspacebiz.Summary{ID: "ws-1", Name: "Workspace"},
 		},
 	}
 
-	options, err := service.GetProviderComposerOptions(ctx, "ws-1", AppFactoryProviderComposerOptionsInput{
-		Locale:   "zh-CN",
-		Provider: "claude-code",
+	options, err := service.GetAgentTargetComposerOptions(ctx, "ws-1", AppFactoryAgentTargetComposerOptionsInput{
+		AgentTargetID: agenttargetbiz.IDLocalClaudeCode,
+		Locale:        "zh-CN",
 		Settings: agentservice.ComposerSettings{
 			Model:            "sonnet",
 			PermissionModeID: "default",
@@ -184,7 +222,7 @@ func TestAppFactoryServiceGetProviderComposerOptionsUsesFactoryDraftContext(t *t
 		},
 	})
 	if err != nil {
-		t.Fatalf("GetProviderComposerOptions() error = %v", err)
+		t.Fatalf("GetAgentTargetComposerOptions() error = %v", err)
 	}
 
 	expectedCwd := filepath.Join(stateDir, "apps", "factory", "composer", "ws-1", "draft")
@@ -199,6 +237,9 @@ func TestAppFactoryServiceGetProviderComposerOptionsUsesFactoryDraftContext(t *t
 	}
 	if sessions.composerInput.Provider != "claude-code" {
 		t.Fatalf("composer provider = %q, want claude-code", sessions.composerInput.Provider)
+	}
+	if sessions.composerInput.AgentTargetID != agenttargetbiz.IDLocalClaudeCode {
+		t.Fatalf("composer agentTargetId = %q, want %q", sessions.composerInput.AgentTargetID, agenttargetbiz.IDLocalClaudeCode)
 	}
 	if sessions.composerInput.Locale != "zh-CN" {
 		t.Fatalf("composer locale = %q, want zh-CN", sessions.composerInput.Locale)
@@ -221,6 +262,7 @@ func TestAppFactoryServiceCreateUsesDraftDirAndReferenceContext(t *testing.T) {
 	service := AppFactoryService{
 		Store:               store,
 		AgentSessionService: sessions,
+		AgentTargetStore:    newAppFactoryAgentTargetStoreStub(),
 		StateDir:            stateDir,
 		WorkspaceRootResolver: workspaceRootResolverStub{root: workspacefiles.WorkspaceRoot{
 			LogicalRoot:  "/workspace",
@@ -232,6 +274,7 @@ func TestAppFactoryServiceCreateUsesDraftDirAndReferenceContext(t *testing.T) {
 	}
 
 	job, err := service.Create(ctx, "ws-1", CreateAppFactoryJobInput{
+		AgentTargetID:    agenttargetbiz.IDLocalCodex,
 		DisplayName:      "Weather Watch",
 		Model:            "gpt-5",
 		PermissionModeID: "auto",
@@ -246,6 +289,9 @@ func TestAppFactoryServiceCreateUsesDraftDirAndReferenceContext(t *testing.T) {
 	}
 	if sessions.createInput.Cwd == nil || *sessions.createInput.Cwd != job.DraftDir {
 		t.Fatalf("CreateSession cwd = %v, want %q", sessions.createInput.Cwd, job.DraftDir)
+	}
+	if sessions.createInput.AgentTargetID != agenttargetbiz.IDLocalCodex {
+		t.Fatalf("CreateSession agentTargetId = %q, want %q", sessions.createInput.AgentTargetID, agenttargetbiz.IDLocalCodex)
 	}
 	if job.ReasoningEffort != "high" {
 		t.Fatalf("job reasoningEffort = %q, want high", job.ReasoningEffort)
@@ -440,14 +486,74 @@ func TestAppFactoryServiceCreateUsesDraftDirAndReferenceContext(t *testing.T) {
 	}
 
 	secondJob, err := service.Create(ctx, "ws-1", CreateAppFactoryJobInput{
-		DisplayName: "Second App",
-		Prompt:      "Create another app.",
+		AgentTargetID: agenttargetbiz.IDLocalCodex,
+		DisplayName:   "Second App",
+		Prompt:        "Create another app.",
 	})
 	if err != nil {
 		t.Fatalf("Create(second) error = %v", err)
 	}
 	if secondJob.DraftDir == job.DraftDir {
 		t.Fatalf("second draft dir reused first draft dir %q", job.DraftDir)
+	}
+}
+
+func TestAppFactoryServiceCreateLaunchesSessionsWithAgentTargetID(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		agentTargetID string
+		wantProvider  string
+	}{
+		{
+			name:          "codex",
+			agentTargetID: agenttargetbiz.IDLocalCodex,
+			wantProvider:  "codex",
+		},
+		{
+			name:          "claude code",
+			agentTargetID: agenttargetbiz.IDLocalClaudeCode,
+			wantProvider:  "claude-code",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			sessions := &factoryAgentSessionServiceStub{}
+			service := AppFactoryService{
+				Store:               newAppFactoryStoreStub(),
+				AgentSessionService: sessions,
+				AgentTargetStore:    newAppFactoryAgentTargetStoreStub(),
+				StateDir:            t.TempDir(),
+				WorkspaceRootResolver: workspaceRootResolverStub{root: workspacefiles.WorkspaceRoot{
+					LogicalRoot:  "/workspace",
+					PhysicalRoot: "/Users/example",
+				}},
+				WorkspaceStore: &catalogStoreStub{
+					getWorkspace: workspacebiz.Summary{ID: "ws-1", Name: "Workspace"},
+				},
+			}
+
+			job, err := service.Create(context.Background(), "ws-1", CreateAppFactoryJobInput{
+				AgentTargetID: tt.agentTargetID,
+				DisplayName:   "Target App",
+				Prompt:        "Create an app.",
+			})
+			if err != nil {
+				t.Fatalf("Create() error = %v", err)
+			}
+			if job.Status != workspacebiz.AppFactoryJobStatusGenerating {
+				t.Fatalf("status = %q, want generating", job.Status)
+			}
+			if sessions.createInput.AgentTargetID != tt.agentTargetID {
+				t.Fatalf("CreateSession agentTargetId = %q, want %q", sessions.createInput.AgentTargetID, tt.agentTargetID)
+			}
+			if sessions.createInput.Provider != tt.wantProvider {
+				t.Fatalf("CreateSession provider = %q, want %q", sessions.createInput.Provider, tt.wantProvider)
+			}
+		})
 	}
 }
 

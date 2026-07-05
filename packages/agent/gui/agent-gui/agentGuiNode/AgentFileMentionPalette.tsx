@@ -70,7 +70,7 @@ export interface AgentFileMentionPaletteProps {
   onNavigateHierarchy?: (delta: 1 | -1) => void;
   onNavigateIntoItem?: (item: AgentContextMentionItem) => void;
   /**
-   * 可选:点击 issue / app 行末尾的「查看产物文件」图标时回调(打开引用 picker 并定位)。
+   * 可选:点击 issue / app 行末尾的「查看产物」入口时回调(打开引用 picker 并定位)。
    * 仅 workspace-issue / workspace-app 行渲染该入口。
    */
   onOpenReferences?: (item: AgentContextMentionItem) => void;
@@ -403,6 +403,9 @@ function resolveMentionPaletteEmptyLabel(input: {
   if (input.filter === "app") {
     return agentMentionEmptyGroupLabel("apps", input.query);
   }
+  if (input.filter === "agent") {
+    return agentMentionEmptyGroupLabel("agents", input.query);
+  }
   if (input.filter === "issue") {
     return agentMentionEmptyGroupLabel("issues", input.query);
   }
@@ -491,6 +494,15 @@ function agentMentionItemToRowItem(
     };
   }
 
+  if (item.kind === "agent-target") {
+    return {
+      kind: "app",
+      name: item.name,
+      description: item.description ?? null,
+      iconUrl: item.iconUrl ?? managedAgentRoundedIconUrl(item.agentProviderId)
+    };
+  }
+
   if (item.kind === "workspace-reference") {
     return {
       kind: "app",
@@ -507,6 +519,17 @@ function agentMentionItemToRowItem(
     };
   }
 
+  if (item.kind === "custom") {
+    // 自定义 mention 只经 draftPrompt prefill 进入 composer,不出现在 @ 面板候选;
+    // 兜底按通用条目展示(label 即注册方给的 name)。
+    return {
+      kind: "issue",
+      title: item.name,
+      creatorName: null,
+      statusTag: null
+    };
+  }
+
   return {
     kind: "issue",
     title: item.title,
@@ -517,7 +540,7 @@ function agentMentionItemToRowItem(
 
 /**
  * 仅 workspace-issue 行,以及声明了能够提供产物文件(reference)的 workspace-app 行,
- * 才在行末尾展示「查看产物文件」入口。应用是否能提供产物文件由其 manifest 的
+ * 才在行末尾展示「查看产物」入口。应用是否能提供产物文件由其 manifest 的
  * references 能力决定(`referencesListSupported`),而非硬编码应用名单。
  */
 function isReferenceableMentionItem(item: AgentContextMentionItem): boolean {
@@ -602,6 +625,8 @@ function mentionStatusTone(
 
 function browseHintForFilter(filter: AgentMentionFilterId): string {
   switch (filter) {
+    case "agent":
+      return translate("agentHost.agentGui.contextPickerBrowseAgentHint");
     case "app":
       return translate("agentHost.agentGui.contextPickerBrowseAppHint");
     case "file":

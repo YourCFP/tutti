@@ -116,13 +116,17 @@ import type { WorkspaceFileReferenceAdapter } from "@tutti-os/workspace-file-ref
 import type { WorkspaceUserProjectApi } from "@tutti-os/workspace-user-project/contracts";
 import { serializeWorkspaceAppExternalAtMatch } from "./workspaceAppExternalAtSerialization.ts";
 import { requestWorkspaceWorkbenchNodeLaunch } from "../workspaceWorkbenchNodeLaunchCoordinator.ts";
-
+import {
+  IAgentsService,
+  type IAgentsService as AgentsService
+} from "../../../workspace-agent/services/agentsService.interface.ts";
 const workspaceDockNativePreviewMaxWidthPx = 260;
 const workspaceDockNativePreviewMaxHeightPx = 170;
 const workspaceDockNativePreviewTimeoutMs = 2_500;
 
 export interface WorkspaceWorkbenchHostServiceDependencies {
   agentProviderStatusService: AgentProviderStatusService;
+  agentsService: AgentsService;
   appCenterService: IWorkspaceAppCenterService;
   browserApi?: DesktopBrowserApi;
   browserService: WorkspaceBrowserService;
@@ -143,7 +147,7 @@ export interface WorkspaceWorkbenchHostServiceDependencies {
   tuttidClient: TuttidClient;
   platformApi: Pick<
     DesktopPlatformApi,
-    "homeDirectory" | "os" | "resolveDroppedPaths"
+    "homeDirectory" | "os" | "resolveDroppedEntries" | "resolveDroppedPaths"
   >;
   repository: DesktopWorkspaceWorkbenchRepository;
   reporterService?: Pick<IReporterService, "trackEvents">;
@@ -167,7 +171,7 @@ export interface WorkspaceWorkbenchHostExternalDependencies {
   tuttidClient: TuttidClient;
   platformApi: Pick<
     DesktopPlatformApi,
-    "homeDirectory" | "os" | "resolveDroppedPaths"
+    "homeDirectory" | "os" | "resolveDroppedEntries" | "resolveDroppedPaths"
   >;
   reporterService?: Pick<IReporterService, "trackEvents">;
   runtimeApi: DesktopRuntimeApi;
@@ -203,10 +207,14 @@ export class WorkspaceWorkbenchHostService implements IWorkspaceWorkbenchHostSer
   };
   private readonly windowCloseRequestTracker =
     createWindowCloseRequestTracker();
+  private agentGuiProviderTargetsPromise: Promise<
+    readonly AgentGUIProviderTarget[]
+  > | null = null;
 
   constructor(
     externalDependencies: WorkspaceWorkbenchHostExternalDependencies,
     richTextAtService: IDesktopRichTextAtService,
+    agentsService: AgentsService,
     agentProviderStatusService: AgentProviderStatusService,
     workspaceAgentActivityService: WorkspaceAgentActivityService,
     workspaceAgentPromptSessionService: WorkspaceAgentPromptSessionService,
@@ -219,6 +227,7 @@ export class WorkspaceWorkbenchHostService implements IWorkspaceWorkbenchHostSer
     );
     this.dependencies = {
       agentProviderStatusService,
+      agentsService,
       appCenterService,
       browserApi: externalDependencies.browserApi,
       browserService: createWorkspaceBrowserService({
@@ -252,6 +261,16 @@ export class WorkspaceWorkbenchHostService implements IWorkspaceWorkbenchHostSer
 
   approveWindowClose(): Promise<void> {
     return this.dependencies.hostWindowApi.approveClose();
+  }
+
+  loadAgentGuiProviderTargets(): Promise<readonly AgentGUIProviderTarget[]> {
+    if (!this.agentGuiProviderTargetsPromise) {
+      this.agentGuiProviderTargetsPromise = this.dependencies.agentsService
+        .load()
+        .then((snapshot) => snapshot.providerTargets)
+        .catch(() => []);
+    }
+    return this.agentGuiProviderTargetsPromise;
   }
 
   onWindowCloseRequest(
@@ -299,7 +318,7 @@ export class WorkspaceWorkbenchHostService implements IWorkspaceWorkbenchHostSer
     workspaceId: string;
   }): Promise<TuttiExternalAtQueryResult[]> {
     const providerIds = new Set(
-      input.query.providers && input.query.providers.length > 0
+      input.query.providers !== undefined
         ? input.query.providers
         : tuttiExternalAtProviderIds
     );
@@ -725,6 +744,7 @@ export class WorkspaceWorkbenchHostService implements IWorkspaceWorkbenchHostSer
       target: WorkspaceWorkbenchCapabilitySettingsTarget
     ) => void;
     providerTargets?: readonly AgentGUIProviderTarget[];
+    providerTargetsLoading?: boolean;
     renderFilesNodeBody: (
       context: WorkspaceWorkbenchBodyRendererContext
     ) => ReactNode;
@@ -739,6 +759,7 @@ export class WorkspaceWorkbenchHostService implements IWorkspaceWorkbenchHostSer
       cached.dockIconStyle === input.dockIconStyle &&
       cached.i18n === input.i18n &&
       cached.providerTargets === input.providerTargets &&
+      cached.providerTargetsLoading === input.providerTargetsLoading &&
       cached.themeAppearance === input.themeAppearance
     ) {
       cached.capabilitySettingsRequestRef.current =
@@ -784,6 +805,7 @@ export class WorkspaceWorkbenchHostService implements IWorkspaceWorkbenchHostSer
           defaultAgentProvider: input.defaultAgentProvider,
           defaultProviderTargetId: input.defaultProviderTargetId,
           dockIcons: {
+            agentUnified: dockIcons.agentUnified,
             agents: dockIcons.agents,
             applications: dockIcons.applications,
             browser: dockIcons.browser,
@@ -797,6 +819,7 @@ export class WorkspaceWorkbenchHostService implements IWorkspaceWorkbenchHostSer
             capabilitySettingsRequestRef.current?.(target);
           },
           providerTargets: input.providerTargets,
+          providerTargetsLoading: input.providerTargetsLoading,
           agentProviderStatusService:
             this.dependencies.agentProviderStatusService,
           eventStreamClient: this.dependencies.eventStreamClient,
@@ -877,6 +900,7 @@ export class WorkspaceWorkbenchHostService implements IWorkspaceWorkbenchHostSer
       dockIcons,
       i18n: input.i18n,
       providerTargets: input.providerTargets,
+      providerTargetsLoading: input.providerTargetsLoading,
       renderFilesNodeBodyRef,
       themeAppearance: input.themeAppearance
     };
@@ -1208,16 +1232,17 @@ function resolveWorkspaceNodeCaptureTarget(nodeId: string): {
 
 // Avoid decorator syntax so the renderer Babel pass can parse this file.
 IDesktopRichTextAtService(WorkspaceWorkbenchHostService, undefined, 1);
-IAgentProviderStatusService(WorkspaceWorkbenchHostService, undefined, 2);
-IWorkspaceAgentActivityService(WorkspaceWorkbenchHostService, undefined, 3);
+IAgentsService(WorkspaceWorkbenchHostService, undefined, 2);
+IAgentProviderStatusService(WorkspaceWorkbenchHostService, undefined, 3);
+IWorkspaceAgentActivityService(WorkspaceWorkbenchHostService, undefined, 4);
 IWorkspaceAgentPromptSessionService(
   WorkspaceWorkbenchHostService,
   undefined,
-  4
+  5
 );
-IWorkspaceAppCenterService(WorkspaceWorkbenchHostService, undefined, 5);
-IWorkspaceFileManagerService(WorkspaceWorkbenchHostService, undefined, 6);
-IWorkspaceUserProjectService(WorkspaceWorkbenchHostService, undefined, 7);
+IWorkspaceAppCenterService(WorkspaceWorkbenchHostService, undefined, 6);
+IWorkspaceFileManagerService(WorkspaceWorkbenchHostService, undefined, 7);
+IWorkspaceUserProjectService(WorkspaceWorkbenchHostService, undefined, 8);
 
 export function createWorkspaceAppExternalUserProjectApi(
   service: IWorkspaceUserProjectService
@@ -1282,6 +1307,7 @@ interface CachedWorkspaceWorkbenchHostInput {
   dynamicHostInput?: WorkspaceWorkbenchHostInput;
   i18n: WorkspaceWorkbenchDesktopI18nRuntime;
   providerTargets?: readonly AgentGUIProviderTarget[];
+  providerTargetsLoading?: boolean;
   renderFilesNodeBodyRef: {
     current: (context: WorkspaceWorkbenchBodyRendererContext) => ReactNode;
   };

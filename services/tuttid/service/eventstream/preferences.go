@@ -28,14 +28,19 @@ func (p DesktopPreferencesPublisher) PublishDesktopPreferencesUpdated(ctx contex
 			AgentComposerDefaultsByProvider: desktopAgentComposerDefaultsByProviderPayloadFromBiz(
 				preferences.AgentComposerDefaultsByProvider,
 			),
+			AgentComposerDefaultsByAgentTarget: desktopAgentComposerDefaultsByAgentTargetPayloadFromBiz(
+				preferences.AgentComposerDefaultsByAgentTarget,
+			),
 			AgentGUIConversationRailCollapsedByProvider: agentGUIConversationRailCollapsedByProviderPayloadFromBiz(
 				preferences.AgentGUIConversationRailCollapsedByProvider,
 			),
-			AppCatalogChannel:        preferences.AppCatalogChannel,
-			BrowserUseConnectionMode: preferences.BrowserUseConnectionMode,
-			DefaultAgentProvider:     preferences.DefaultAgentProvider,
-			DockIconStyle:            preferences.DockIconStyle,
-			DockPlacement:            preferences.DockPlacement,
+			AgentConversationDetailMode: preferencesbiz.NormalizeDesktopAgentConversationDetailMode(preferences.AgentConversationDetailMode),
+			AgentDockLayout:             preferencesbiz.NormalizeDesktopAgentDockLayout(preferences.AgentDockLayout),
+			AppCatalogChannel:           preferences.AppCatalogChannel,
+			BrowserUseConnectionMode:    preferences.BrowserUseConnectionMode,
+			DefaultAgentProvider:        preferences.DefaultAgentProvider,
+			DockIconStyle:               preferences.DockIconStyle,
+			DockPlacement:               preferences.DockPlacement,
 			FileDefaultOpenersByExtension: fileDefaultOpenersByExtensionPayloadFromBiz(
 				preferences.FileDefaultOpenersByExtension,
 			),
@@ -71,7 +76,10 @@ func NewPreferencesDesktopUpdateRequestedHandler(mutator PreferencesMutator) Int
 
 		_, err = mutator.Put(ctx, preferencesservice.PutInput{
 			AgentComposerDefaultsByProvider:             decoded.AgentComposerDefaultsByProvider,
+			AgentComposerDefaultsByAgentTarget:          decoded.AgentComposerDefaultsByAgentTarget,
 			AgentGUIConversationRailCollapsedByProvider: decoded.AgentGUIConversationRailCollapsedByProvider,
+			AgentConversationDetailMode:                 decoded.AgentConversationDetailMode,
+			AgentDockLayout:                             decoded.AgentDockLayout,
 			AppCatalogChannel:                           decoded.AppCatalogChannel,
 			BrowserUseConnectionMode:                    decoded.BrowserUseConnectionMode,
 			DefaultAgentProvider:                        decoded.DefaultAgentProvider,
@@ -96,7 +104,10 @@ func NewPreferencesDesktopUpdateRequestedHandler(mutator PreferencesMutator) Int
 
 type decodedDesktopPreferencesMutationPayload struct {
 	AgentComposerDefaultsByProvider             map[string]preferencesbiz.AgentComposerDefaults
+	AgentComposerDefaultsByAgentTarget          map[string]preferencesbiz.AgentComposerDefaults
 	AgentGUIConversationRailCollapsedByProvider map[string]bool
+	AgentConversationDetailMode                 string
+	AgentDockLayout                             string
 	AppCatalogChannel                           string
 	BrowserUseConnectionMode                    string
 	DefaultAgentProvider                        string
@@ -130,14 +141,19 @@ func decodeDesktopPreferencesMutationPayload(payload []byte) (decodedDesktopPref
 		AgentComposerDefaultsByProvider: agentComposerDefaultsByProviderFromPayload(
 			decoded.Preferences.AgentComposerDefaultsByProvider,
 		),
+		AgentComposerDefaultsByAgentTarget: agentComposerDefaultsByAgentTargetFromPayload(
+			decoded.Preferences.AgentComposerDefaultsByAgentTarget,
+		),
 		AgentGUIConversationRailCollapsedByProvider: agentGUIConversationRailCollapsedByProviderFromPayload(
 			decoded.Preferences.AgentGUIConversationRailCollapsedByProvider,
 		),
-		AppCatalogChannel:        decoded.Preferences.AppCatalogChannel,
-		BrowserUseConnectionMode: decoded.Preferences.BrowserUseConnectionMode,
-		DefaultAgentProvider:     decoded.Preferences.DefaultAgentProvider,
-		DockIconStyle:            decoded.Preferences.DockIconStyle,
-		DockPlacement:            decoded.Preferences.DockPlacement,
+		AgentConversationDetailMode: decoded.Preferences.AgentConversationDetailMode,
+		AgentDockLayout:             decoded.Preferences.AgentDockLayout,
+		AppCatalogChannel:           decoded.Preferences.AppCatalogChannel,
+		BrowserUseConnectionMode:    decoded.Preferences.BrowserUseConnectionMode,
+		DefaultAgentProvider:        decoded.Preferences.DefaultAgentProvider,
+		DockIconStyle:               decoded.Preferences.DockIconStyle,
+		DockPlacement:               decoded.Preferences.DockPlacement,
 		FileDefaultOpenersByExtension: fileDefaultOpenersByExtensionFromPayload(
 			decoded.Preferences.FileDefaultOpenersByExtension,
 		),
@@ -220,19 +236,41 @@ func desktopAgentComposerDefaultsByProviderPayloadFromBiz(
 		if normalizedProvider == "" {
 			continue
 		}
-		normalizedDefaults := desktopAgentComposerDefaultsPayload{
-			Model:            defaults.Model,
-			PermissionModeID: defaults.PermissionModeID,
-			ReasoningEffort:  defaults.ReasoningEffort,
-		}
-		if normalizedDefaults.Model == "" &&
-			normalizedDefaults.PermissionModeID == "" &&
-			normalizedDefaults.ReasoningEffort == "" {
+		normalizedDefaults := desktopAgentComposerDefaultsPayloadFromBiz(defaults)
+		if normalizedDefaults.isZero() {
 			continue
 		}
 		payload[normalizedProvider] = normalizedDefaults
 	}
 	return payload
+}
+
+func desktopAgentComposerDefaultsByAgentTargetPayloadFromBiz(
+	defaultsByAgentTarget map[string]preferencesbiz.AgentComposerDefaults,
+) desktopAgentComposerDefaultsByAgentTargetPayload {
+	payload := desktopAgentComposerDefaultsByAgentTargetPayload{}
+	for agentTargetID, defaults := range defaultsByAgentTarget {
+		if agentTargetID == "" {
+			continue
+		}
+		normalizedDefaults := desktopAgentComposerDefaultsPayloadFromBiz(defaults)
+		if normalizedDefaults.isZero() {
+			continue
+		}
+		payload[agentTargetID] = normalizedDefaults
+	}
+	return payload
+}
+
+func desktopAgentComposerDefaultsPayloadFromBiz(
+	defaults preferencesbiz.AgentComposerDefaults,
+) desktopAgentComposerDefaultsPayload {
+	return desktopAgentComposerDefaultsPayload{
+		Model:            defaults.Model,
+		PermissionModeID: defaults.PermissionModeID,
+		ReasoningEffort:  defaults.ReasoningEffort,
+		Speed:            defaults.Speed,
+	}
 }
 
 func agentComposerDefaultsByProviderFromPayload(
@@ -244,11 +282,36 @@ func agentComposerDefaultsByProviderFromPayload(
 		if normalizedProvider == "" {
 			continue
 		}
-		defaultsByProvider[normalizedProvider] = preferencesbiz.AgentComposerDefaults{
-			Model:            defaults.Model,
-			PermissionModeID: defaults.PermissionModeID,
-			ReasoningEffort:  defaults.ReasoningEffort,
-		}
+		defaultsByProvider[normalizedProvider] = agentComposerDefaultsFromPayload(defaults)
 	}
 	return defaultsByProvider
+}
+
+func agentComposerDefaultsByAgentTargetFromPayload(
+	payload desktopAgentComposerDefaultsByAgentTargetPayload,
+) map[string]preferencesbiz.AgentComposerDefaults {
+	// A missing field decodes to nil so the service keeps the stored
+	// defaults; only an explicitly sent (possibly empty) map replaces them.
+	if payload == nil {
+		return nil
+	}
+	defaultsByAgentTarget := map[string]preferencesbiz.AgentComposerDefaults{}
+	for agentTargetID, defaults := range payload {
+		if agentTargetID == "" {
+			continue
+		}
+		defaultsByAgentTarget[agentTargetID] = agentComposerDefaultsFromPayload(defaults)
+	}
+	return defaultsByAgentTarget
+}
+
+func agentComposerDefaultsFromPayload(
+	defaults desktopAgentComposerDefaultsPayload,
+) preferencesbiz.AgentComposerDefaults {
+	return preferencesbiz.AgentComposerDefaults{
+		Model:            defaults.Model,
+		PermissionModeID: defaults.PermissionModeID,
+		ReasoningEffort:  defaults.ReasoningEffort,
+		Speed:            defaults.Speed,
+	}
 }

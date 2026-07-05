@@ -293,11 +293,6 @@ export function IssueManagerNodeHeader({
       ? "max-content"
       : "min(var(--issue-manager-sidebar-width, 280px), 100%)"
   } satisfies CSSProperties;
-  const rightHeaderDividerMaskStyle = {
-    left: effectiveCollapsed
-      ? "0px"
-      : "min(var(--issue-manager-sidebar-width, 280px), 100%)"
-  } satisfies CSSProperties;
   const topicHeaderStyle = {
     left: effectiveCollapsed
       ? "50%"
@@ -311,16 +306,12 @@ export function IssueManagerNodeHeader({
         "relative flex h-full min-h-0 w-full items-center bg-transparent",
         className
       )}
+      data-workbench-custom-header-border="none"
     >
       <div
         {...dragHandleProps}
         aria-hidden="true"
         className="absolute inset-0 cursor-grab active:cursor-grabbing"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute right-0 bottom-0 z-[11] h-px bg-[var(--background-panel)]"
-        style={rightHeaderDividerMaskStyle}
       />
       <div
         {...dragHandleProps}

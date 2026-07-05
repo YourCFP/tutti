@@ -45,33 +45,48 @@ export interface PreferencesDesktopPreferencesV1 {
       model?: string;
       permissionModeId?: string;
       reasoningEffort?: string;
+      speed?: string;
     };
     codex?: {
       model?: string;
       permissionModeId?: string;
       reasoningEffort?: string;
+      speed?: string;
     };
     nexight?: {
       model?: string;
       permissionModeId?: string;
       reasoningEffort?: string;
+      speed?: string;
     };
     gemini?: {
       model?: string;
       permissionModeId?: string;
       reasoningEffort?: string;
+      speed?: string;
     };
     hermes?: {
       model?: string;
       permissionModeId?: string;
       reasoningEffort?: string;
+      speed?: string;
     };
     openclaw?: {
       model?: string;
       permissionModeId?: string;
       reasoningEffort?: string;
+      speed?: string;
     };
   };
+  agentComposerDefaultsByAgentTarget?: Record<
+    string,
+    {
+      model?: string;
+      permissionModeId?: string;
+      reasoningEffort?: string;
+      speed?: string;
+    }
+  >;
   agentGuiConversationRailCollapsedByProvider: {
     "claude-code"?: boolean;
     codex?: boolean;
@@ -80,6 +95,8 @@ export interface PreferencesDesktopPreferencesV1 {
     hermes?: boolean;
     openclaw?: boolean;
   };
+  agentConversationDetailMode: "coding" | "general";
+  agentDockLayout: "legacySplit" | "unified";
   appCatalogChannel: "production" | "staging";
   browserUseConnectionMode?: "isolated" | "autoConnect";
   defaultAgentProvider:
@@ -124,6 +141,7 @@ export interface WorkspaceWorkspaceAppFactoryJobV1 {
   appId: string | null;
   displayName: string;
   description: string | null;
+  agentTargetId: string | null;
   provider: string | null;
   model: string | null;
   reasoningEffort: string | null;
@@ -191,6 +209,7 @@ export type AgentActivityUpdatedPayloadV1 =
       data: {
         workspaceId: string;
         agentSessionId: string;
+        agentTargetId?: string;
         eventType: "session_update";
         lastEventUnixMs: number;
       };
@@ -245,6 +264,7 @@ export type AgentActivityUpdatedPayloadV1 =
         lastEventUnixMs: number;
         occurredAtUnixMs?: number;
         provider?: string;
+        agentTargetId?: string;
         providerSessionId?: string;
         model?: string;
         cwd?: string;

@@ -226,7 +226,7 @@ export function AgentTurnSummaryRow({
   return (
     <section className="workspace-agents-status-panel__detail-turn-summary">
       <div className="agent-turn-summary-card w-full overflow-hidden rounded-[8px] text-[var(--text-primary)]">
-        <div className="flex items-start gap-3 px-4 py-3">
+        <div className="flex items-center gap-3 px-4 py-3">
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-3">
               <div className="min-w-0 text-[15px] font-semibold leading-5 tracking-[0] text-[var(--text-primary)]">
@@ -415,12 +415,19 @@ function TurnSummaryFileCard({
           >
             <div className="min-w-0 flex-1 overflow-hidden">
               <span
-                className={`agent-turn-summary-card__path block min-w-0 truncate text-[13px] font-medium leading-5 text-[var(--text-secondary)] ${
+                className={`agent-turn-summary-card__path flex min-w-0 max-w-full overflow-hidden whitespace-nowrap text-[13px] font-medium leading-5 text-[var(--text-secondary)] ${
                   file.changeType === "deleted" ? "line-through" : ""
                 }`}
                 title={file.path}
               >
-                {file.path}
+                {file.directory ? (
+                  <span className="agent-turn-summary-card__path-directory">
+                    {file.directory}/
+                  </span>
+                ) : null}
+                <span className="agent-turn-summary-card__path-file">
+                  {file.fileName}
+                </span>
               </span>
             </div>
             <span className="shrink-0 text-[var(--text-tertiary)] opacity-0 transition-opacity group-hover/file-toggle:opacity-100 group-focus-visible/file-toggle:opacity-100">

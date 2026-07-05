@@ -1,7 +1,8 @@
 import { createDecorator } from "@tutti-os/infra/di";
 import type { DesktopLocale } from "@shared/i18n";
 import type {
-  DesktopAgentComposerDefaults,
+  DesktopAgentComposerDefaultsPatch,
+  DesktopAgentConversationDetailMode,
   DesktopAgentProvider,
   DesktopAppCatalogChannel,
   DesktopBrowserUseConnectionMode,
@@ -24,6 +25,9 @@ export interface IDesktopPreferencesService {
   setDefaultAgentProvider(
     provider: DesktopAgentProvider
   ): Promise<DesktopAgentProvider>;
+  setAgentConversationDetailMode(
+    mode: DesktopAgentConversationDetailMode
+  ): Promise<DesktopAgentConversationDetailMode>;
   setAppCatalogChannel(
     channel: DesktopAppCatalogChannel
   ): Promise<DesktopAppCatalogChannel>;
@@ -53,9 +57,9 @@ export interface IDesktopPreferencesService {
   setWorkbenchWindowSnapping(
     value: DesktopWorkbenchWindowSnapping
   ): Promise<DesktopWorkbenchWindowSnapping>;
-  rememberAgentComposerDefaults(
-    provider: DesktopAgentProvider,
-    defaults: DesktopAgentComposerDefaults | null
+  rememberAgentComposerDefaultsForAgentTarget(
+    agentTargetId: string,
+    defaults: DesktopAgentComposerDefaultsPatch | null
   ): Promise<void>;
   rememberAgentGuiConversationRailCollapsed(
     provider: DesktopAgentProvider,

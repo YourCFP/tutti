@@ -1,7 +1,9 @@
 import type { DesktopLocale } from "@shared/i18n";
 import type {
+  DesktopAgentComposerDefaultsByAgentTarget,
   DesktopAgentComposerDefaultsByProvider,
   DesktopAgentGuiConversationRailCollapsedByProvider,
+  DesktopAgentConversationDetailMode,
   DesktopAgentProvider,
   DesktopAppCatalogChannel,
   DesktopBrowserUseConnectionMode,
@@ -18,6 +20,7 @@ import type { DesktopThemeSource, DesktopThemeState } from "@shared/theme";
 
 export interface DesktopPreferencesStoreState {
   changingDefaultAgentProvider: DesktopAgentProvider | null;
+  changingAgentConversationDetailMode: DesktopAgentConversationDetailMode | null;
   changingAppCatalogChannel: DesktopAppCatalogChannel | null;
   changingBrowserUseConnectionMode: DesktopBrowserUseConnectionMode | null;
   changingDockIconStyle: DesktopDockIconStyle | null;
@@ -31,7 +34,9 @@ export interface DesktopPreferencesStoreState {
   changingUpdatePolicy: DesktopUpdatePolicy | null;
   changingWorkbenchWindowSnapping: DesktopWorkbenchWindowSnapping | null;
   agentComposerDefaultsByProvider: DesktopAgentComposerDefaultsByProvider;
+  agentComposerDefaultsByAgentTarget: DesktopAgentComposerDefaultsByAgentTarget;
   agentGuiConversationRailCollapsedByProvider: DesktopAgentGuiConversationRailCollapsedByProvider;
+  agentConversationDetailMode: DesktopAgentConversationDetailMode;
   appCatalogChannel: DesktopAppCatalogChannel;
   browserUseConnectionMode: DesktopBrowserUseConnectionMode;
   defaultAgentProvider: DesktopAgentProvider;
@@ -50,6 +55,7 @@ export interface DesktopPreferencesStoreState {
 
 export interface DesktopPreferencesReadableStoreState {
   readonly changingDefaultAgentProvider: DesktopAgentProvider | null;
+  readonly changingAgentConversationDetailMode: DesktopAgentConversationDetailMode | null;
   readonly changingAppCatalogChannel: DesktopAppCatalogChannel | null;
   readonly changingBrowserUseConnectionMode: DesktopBrowserUseConnectionMode | null;
   readonly changingDockIconStyle: DesktopDockIconStyle | null;
@@ -63,7 +69,9 @@ export interface DesktopPreferencesReadableStoreState {
   readonly changingUpdatePolicy: DesktopUpdatePolicy | null;
   readonly changingWorkbenchWindowSnapping: DesktopWorkbenchWindowSnapping | null;
   readonly agentComposerDefaultsByProvider: DesktopAgentComposerDefaultsByProvider;
+  readonly agentComposerDefaultsByAgentTarget: DesktopAgentComposerDefaultsByAgentTarget;
   readonly agentGuiConversationRailCollapsedByProvider: DesktopAgentGuiConversationRailCollapsedByProvider;
+  readonly agentConversationDetailMode: DesktopAgentConversationDetailMode;
   readonly appCatalogChannel: DesktopAppCatalogChannel;
   readonly browserUseConnectionMode: DesktopBrowserUseConnectionMode;
   readonly defaultAgentProvider: DesktopAgentProvider;

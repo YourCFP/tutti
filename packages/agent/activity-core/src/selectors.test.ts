@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  isLiveTurnLifecyclePhase,
+  LIVE_TURN_LIFECYCLE_PHASES,
   normalizeAgentActivityDisplayStatus,
+  resolveLatestAgentActivityMessageDisplayStatus,
   selectNeedsAttentionCount,
   selectNeedsAttentionItems,
   selectSessionDisplayStatuses
@@ -129,6 +132,94 @@ test("session display status treats settled turn lifecycle as terminal", () => {
 
   assert.equal(statuses.get("session-completed"), "completed");
   assert.equal(statuses.get("session-failed"), "failed");
+});
+
+test("session display status follows the latest turn instead of stale session failure", () => {
+  const snapshot = snapshotWithSessionMessages(
+    [
+      session({
+        agentSessionId: "session-1",
+        status: "failed",
+        currentPhase: "failed"
+      })
+    ],
+    {
+      "session-1": [
+        message({
+          messageId: "failed-message",
+          status: "failed",
+          turnId: "turn-1",
+          version: 1
+        }),
+        message({
+          messageId: "latest-user",
+          role: "user",
+          status: null,
+          turnId: "turn-2",
+          version: 2
+        }),
+        message({
+          messageId: "latest-assistant",
+          status: "completed",
+          turnId: "turn-2",
+          version: 3
+        })
+      ]
+    }
+  );
+
+  assert.equal(
+    selectSessionDisplayStatuses(snapshot).get("session-1"),
+    "completed"
+  );
+});
+
+test("session display status keeps failed sessions failed while latest turn is only working", () => {
+  const snapshot = snapshotWithSessionMessages(
+    [
+      session({
+        agentSessionId: "session-1",
+        status: "error"
+      })
+    ],
+    {
+      "session-1": [
+        message({
+          messageId: "latest-user",
+          role: "user",
+          status: null,
+          turnId: "turn-1",
+          version: 1
+        })
+      ]
+    }
+  );
+
+  assert.equal(
+    selectSessionDisplayStatuses(snapshot).get("session-1"),
+    "failed"
+  );
+});
+
+test("latest message display status uses only the newest turn", () => {
+  assert.equal(
+    resolveLatestAgentActivityMessageDisplayStatus([
+      message({
+        messageId: "old-failed",
+        status: "failed",
+        turnId: "turn-1",
+        version: 1
+      }),
+      message({
+        messageId: "new-user",
+        role: "user",
+        status: null,
+        turnId: "turn-2",
+        version: 2
+      })
+    ]),
+    "working"
+  );
 });
 
 test("agent activity display status normalizes raw status aliases", () => {
@@ -498,3 +589,44 @@ function message(
     ...overrides
   };
 }
+
+test("LIVE_TURN_LIFECYCLE_PHASES mirrors the Go canonical list", () => {
+  // SOURCE OF TRUTH: packages/agent/daemon/activity/events/turn_lifecycle_snapshot.go
+  // (LiveTurnLifecyclePhases). The Go side pins the same literal list in
+  // TestLiveTurnLifecyclePhasesCanonicalList; change both together.
+  assert.deepEqual(
+    [...LIVE_TURN_LIFECYCLE_PHASES],
+    ["submitted", "running", "waiting_approval", "waiting_input"]
+  );
+  for (const phase of LIVE_TURN_LIFECYCLE_PHASES) {
+    assert.equal(isLiveTurnLifecyclePhase(phase), true);
+  }
+  for (const legacy of [
+    "working",
+    "streaming",
+    "waiting",
+    "awaiting_approval"
+  ]) {
+    assert.equal(isLiveTurnLifecyclePhase(legacy), true);
+  }
+  for (const dead of ["", "settled", "idle", "failed"]) {
+    assert.equal(isLiveTurnLifecyclePhase(dead), false);
+  }
+});
+
+test("a present turn lifecycle resolves the display status entirely", () => {
+  // Legacy live tokens resolve inside the lifecycle branch — a contradictory
+  // session.status must not override them (ADR 0008).
+  assert.equal(
+    normalizeAgentActivityDisplayStatus("ready", {
+      turnLifecyclePhase: "working"
+    }),
+    "working"
+  );
+  assert.equal(
+    normalizeAgentActivityDisplayStatus("failed", {
+      turnLifecyclePhase: "streaming"
+    }),
+    "working"
+  );
+});
