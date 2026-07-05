@@ -5722,7 +5722,7 @@ button.agent-gui-node__conversation-section-toggle:hover
   flex: 0 0 14px;
   width: 14px;
   height: 14px;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   background-color: currentColor;
   mask: var(--agent-gui-conversation-provider-icon-url) center / contain
     no-repeat;
