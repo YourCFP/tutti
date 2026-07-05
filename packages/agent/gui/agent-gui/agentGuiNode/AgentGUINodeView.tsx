@@ -1562,7 +1562,7 @@ export function AgentGUINodeView({
       >
         {showProviderRail ? (
           <aside
-            className={styles.providerRailPanel}
+            className={`${styles.providerRailPanel} nodrag tsh-desktop-no-drag`}
             aria-label={labels.providerSwitchLabel}
             aria-hidden={conversationRailCollapsed ? "true" : undefined}
             inert={conversationRailCollapsed ? true : undefined}
@@ -3646,8 +3646,13 @@ function EmptyHeroTitle({
   const selectedProviderTargetId =
     selectedProviderTarget?.targetId ??
     `local:${selectedProviderTarget?.provider ?? ""}`;
+  const enabledProviderTargets = providerTargets.filter(
+    (target) => target.disabled !== true
+  );
   const canSwitchProvider =
-    providerTargets.length > 1 && selectedProviderTarget && onProviderSelect;
+    enabledProviderTargets.length > 1 &&
+    selectedProviderTarget &&
+    onProviderSelect;
   const providerName = label.slice(providerStart, providerEnd);
 
   return (
@@ -3657,10 +3662,10 @@ function EmptyHeroTitle({
         <Select
           value={selectedProviderTargetId}
           onValueChange={(nextTargetId) => {
-            const target = providerTargets.find(
+            const target = enabledProviderTargets.find(
               (candidate) => candidate.targetId === nextTargetId
             );
-            if (!target || target.disabled === true) {
+            if (!target) {
               return;
             }
             onProviderSelect({
@@ -3681,27 +3686,17 @@ function EmptyHeroTitle({
             align="center"
             className={cn(styles.composerMenuContent, "min-w-[190px]")}
           >
-            {providerTargets.map((target) => (
+            {enabledProviderTargets.map((target) => (
               <SelectItem
                 key={`${target.provider}:${target.targetId}`}
                 value={target.targetId}
-                className={cn(
-                  styles.composerMenuItem,
-                  "gap-2 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-30 data-[disabled]:text-[var(--text-disabled,var(--text-tertiary))]",
-                  target.disabled === true
-                    ? "cursor-not-allowed opacity-30"
-                    : null
-                )}
-                disabled={target.disabled === true}
+                className={cn(styles.composerMenuItem, "gap-2")}
               >
                 <span className="flex min-w-0 items-center gap-1.5">
                   <img
                     alt=""
                     aria-hidden="true"
-                    className={cn(
-                      "size-4 shrink-0 rounded-[4px]",
-                      target.disabled === true ? "grayscale opacity-30" : null
-                    )}
+                    className="size-4 shrink-0 rounded-[4px]"
                     src={
                       agentGUIProviderIconPresentation(
                         target.provider,
@@ -3709,16 +3704,7 @@ function EmptyHeroTitle({
                       ).iconUrl
                     }
                   />
-                  <span
-                    className={cn(
-                      "min-w-0 truncate",
-                      target.disabled === true
-                        ? "text-[var(--text-disabled,var(--text-tertiary))]"
-                        : null
-                    )}
-                  >
-                    {target.label}
-                  </span>
+                  <span className="min-w-0 truncate">{target.label}</span>
                 </span>
               </SelectItem>
             ))}
@@ -4668,7 +4654,7 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
             data-disabled={target.disabled === true ? "true" : undefined}
             data-provider-tile="true"
             data-selected={providerSelected ? "true" : "false"}
-            disabled={previewMode || target.disabled === true}
+            disabled={previewMode}
             onClick={() => selectAgentTargetTile(target)}
           >
             <span className={styles.providerRailAvatar}>

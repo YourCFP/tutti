@@ -354,7 +354,7 @@ export const zhCN = {
       providerGateComingSoonTitle: "{{provider}} 即将上线",
       providerGateComingSoonDescription:
         "{{provider}} 暂未开放。准备好后即可在这里使用这个 Agent。",
-      providerGateComingSoonAction: "即将上线",
+      providerGateComingSoonAction: "comming soon",
       providerGateUnavailableTitle: "{{provider}} 暂时还不可用",
       providerGateUnavailableDescription:
         "我们还不能确认 {{provider}} 已准备好，可以再检测一次。",

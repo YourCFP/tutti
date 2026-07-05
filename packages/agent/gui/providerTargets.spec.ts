@@ -38,6 +38,11 @@ describe("agent gui provider targets", () => {
       label: "Hermes",
       provider: "hermes"
     });
+    expect(createLocalAgentGUIProviderTarget("openclaw")).toMatchObject({
+      agentTargetId: "local:openclaw",
+      label: "OpenClaw",
+      provider: "openclaw"
+    });
   });
 
   it("can append disabled placeholder targets for unavailable future providers", () => {
@@ -85,7 +90,7 @@ describe("agent gui provider targets", () => {
         provider: "hermes"
       },
       {
-        agentTargetId: null,
+        agentTargetId: "local:openclaw",
         disabled: true,
         label: "OpenClaw",
         provider: "openclaw"

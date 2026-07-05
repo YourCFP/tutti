@@ -78,6 +78,7 @@ import {
 } from "../model/agentGuiConversationModel";
 import {
   createAgentGUIConversationFilterState,
+  filterAgentGUIConversationSummaries,
   normalizeAgentGUIConversationFilter,
   type AgentGUIConversationFilter
 } from "../model/agentGuiConversationFilter";
@@ -10726,11 +10727,86 @@ export function useAgentGUINodeController({
   ]);
   const stableComposerSettings = useStableComposerSettingsVM(composerSettings);
 
+  const resolveDefaultHomeComposerTarget =
+    useCallback((): AgentGUIProviderTarget | null => {
+      const defaultTargetId = defaultProviderTargetId?.trim() ?? "";
+      const explicitDefaultTarget = defaultTargetId
+        ? (normalizedProviderTargets.find(
+            (target) =>
+              target.targetId === defaultTargetId ||
+              target.agentTargetId === defaultTargetId
+          ) ?? null)
+        : null;
+      return (
+        explicitDefaultTarget ??
+        normalizedProviderTargets.find((target) => target.disabled !== true) ??
+        normalizedProviderTargets[0] ??
+        null
+      );
+    }, [defaultProviderTargetId, normalizedProviderTargets]);
+
+  const resetHomeComposerAgentTargetToDefault = useCallback(() => {
+    if (previewMode) {
+      return;
+    }
+    const nextTarget = resolveDefaultHomeComposerTarget();
+    if (!nextTarget) {
+      return;
+    }
+    const nextTargetIsExplicit = normalizedExplicitProviderTargets.some(
+      (target) =>
+        target.provider === nextTarget.provider &&
+        target.targetId === nextTarget.targetId &&
+        agentGUIProviderTargetRefsEqual(target.ref, nextTarget.ref)
+    );
+    const nextTargetData = composerTargetDataFromProviderTarget({
+      current: dataRef.current,
+      isExplicit: nextTargetIsExplicit,
+      target: nextTarget
+    });
+    setHomeComposerTargetOverride(nextTarget);
+    setIntent({ tag: "home" });
+    isComposerHomeRef.current = true;
+    setIsComposerHome(true);
+    onDataChangeRef.current((current) => {
+      const currentNextTargetData = composerTargetDataFromProviderTarget({
+        current,
+        isExplicit: nextTargetIsExplicit,
+        target: nextTarget
+      });
+      const nextData: AgentGUINodeData = {
+        ...currentNextTargetData.data,
+        lastActiveAgentSessionId: null
+      };
+      dataRef.current = nextData;
+      return nextData;
+    });
+    dataRef.current = {
+      ...nextTargetData.data,
+      lastActiveAgentSessionId: null
+    };
+    if (nextTarget.disabled !== true) {
+      loadComposerOptionsForTarget(nextTargetData, { force: true });
+    }
+  }, [
+    loadComposerOptionsForTarget,
+    normalizedExplicitProviderTargets,
+    previewMode,
+    resolveDefaultHomeComposerTarget
+  ]);
+
   const updateConversationFilter = useCallback(
     (filter: AgentGUIConversationFilter) => {
-      setConversationFilter(normalizeAgentGUIConversationFilter(filter));
+      const nextFilter = normalizeAgentGUIConversationFilter(filter);
+      setConversationFilter(nextFilter);
+      if (
+        nextFilter.kind === "all" &&
+        activeConversationIdRef.current === null
+      ) {
+        resetHomeComposerAgentTargetToDefault();
+      }
     },
-    []
+    [resetHomeComposerAgentTargetToDefault]
   );
   const selectHomeComposerAgentTarget = useCallback(
     (input: {
@@ -10762,7 +10838,17 @@ export function useAgentGUINodeController({
         isExplicit: nextTargetIsExplicit,
         target: nextTarget
       });
+      const shouldSyncScopedRailFilter =
+        conversationFilterRef.current.kind === "agentTarget";
       setHomeComposerTargetOverride(nextTarget);
+      if (shouldSyncScopedRailFilter) {
+        const nextAgentTargetId = nextTarget.agentTargetId?.trim() ?? "";
+        setConversationFilter(
+          nextAgentTargetId
+            ? { kind: "agentTarget", agentTargetId: nextAgentTargetId }
+            : { kind: "all" }
+        );
+      }
       const previous = activeConversationIdRef.current;
       if (previous) {
         void activation.unactivate(previous);
@@ -10830,12 +10916,12 @@ export function useAgentGUINodeController({
         providerTargets: normalizedProviderTargets,
         useStaticCatalog: shouldUseStaticProviderTargets
       });
-      if (!nextTarget || nextTarget.disabled === true) {
+      if (!nextTarget) {
         reportAgentGUIConversationFilterTargetUnresolved({
           provider: input.provider,
           providerTargetId: input.providerTargetId ?? null,
           providerTargetCount: normalizedProviderTargets.length,
-          reason: nextTarget ? "disabled" : "unresolved",
+          reason: "unresolved",
           runtime: agentActivityRuntime,
           workspaceId
         });
@@ -10847,8 +10933,8 @@ export function useAgentGUINodeController({
         : { kind: "all" as const };
       setConversationFilter(nextFilter);
       // Keep the home composer chip in sync with the selected tab. Active
-      // conversations keep owning their target and must not be unactivated by a
-      // rail filter click.
+      // conversations keep owning their target until the target-filtered list
+      // has initialized and proven empty.
       if (activeConversationIdRef.current === null) {
         selectHomeComposerAgentTarget(input);
       }
@@ -10862,6 +10948,46 @@ export function useAgentGUINodeController({
       workspaceId
     ]
   );
+  useEffect(() => {
+    if (
+      previewMode ||
+      providerTargetsLoading ||
+      activeConversationId === null ||
+      conversationFilter.kind !== "agentTarget" ||
+      isLoadingConversations ||
+      conversationListState?.initialized !== true
+    ) {
+      return;
+    }
+    if (
+      filterAgentGUIConversationSummaries(conversations, conversationFilter)
+        .length > 0
+    ) {
+      return;
+    }
+    const target = normalizedProviderTargets.find(
+      (candidate) =>
+        (candidate.agentTargetId?.trim() ?? "") ===
+        conversationFilter.agentTargetId
+    );
+    if (!target) {
+      return;
+    }
+    selectHomeComposerAgentTarget({
+      provider: target.provider,
+      providerTargetId: target.targetId
+    });
+  }, [
+    activeConversationId,
+    conversationFilter,
+    conversationListState?.initialized,
+    conversations,
+    isLoadingConversations,
+    normalizedProviderTargets,
+    previewMode,
+    providerTargetsLoading,
+    selectHomeComposerAgentTarget
+  ]);
   const stableCreateConversation =
     useStableControllerEventCallback(createConversation);
   const stableSelectHomeComposerAgentTarget = useStableControllerEventCallback(

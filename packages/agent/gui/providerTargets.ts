@@ -95,6 +95,8 @@ export function localAgentGUIAgentTargetId(
       return "local:hermes";
     case "nexight":
       return "local:nexight";
+    case "openclaw":
+      return "local:openclaw";
     default:
       return null;
   }

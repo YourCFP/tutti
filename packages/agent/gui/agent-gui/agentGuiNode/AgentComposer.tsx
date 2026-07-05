@@ -8,6 +8,7 @@ import {
   type CSSProperties,
   type FocusEvent as ReactFocusEvent,
   type FormEvent,
+  type HTMLAttributes,
   type JSX
 } from "react";
 import { createPortal, flushSync } from "react-dom";
@@ -166,7 +167,25 @@ import type { AgentGUIProvider, AgentGUIProviderTarget } from "../../types";
 
 export { formatSlashStatusTokenCount };
 
+type DotLottieElementProps = HTMLAttributes<HTMLElement> & {
+  autoplay?: boolean;
+  loop?: boolean;
+  src?: string;
+};
+
+declare module "react" {
+  namespace JSX {
+    interface IntrinsicElements {
+      "dotlottie-wc": DotLottieElementProps;
+    }
+  }
+}
+
 const USAGE_POPOVER_HOVER_DELAY_MS = 120;
+const HANDOFF_LOTTIE_PLAYER_SCRIPT_SRC =
+  "https://unpkg.com/@lottiefiles/dotlottie-wc@0.9.14/dist/dotlottie-wc.js";
+const HANDOFF_LOTTIE_ANIMATION_SRC =
+  "https://lottie.host/03d75946-52e5-4ccf-97df-174919a13ced/Av6piqVmPa.lottie";
 const DOCK_COMPOSER_INPUT_MIN_HEIGHT = 56;
 const DOCK_COMPOSER_TEXT_LINE_HEIGHT = 24;
 const DOCK_COMPOSER_MAX_VISIBLE_TEXT_LINES = 3.5;
@@ -862,9 +881,76 @@ function AgentComposerMaskIcon({
 
 const HANDOFF_SELECT_IDLE_VALUE = "__agent-handoff-idle__";
 
-function AgentComposerHandoffIcon(): JSX.Element {
+let handoffLottiePlayerLoadPromise: Promise<boolean> | null = null;
+
+function loadHandoffLottiePlayer(): Promise<boolean> {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return Promise.resolve(false);
+  }
+  if (window.customElements?.get("dotlottie-wc")) {
+    return Promise.resolve(true);
+  }
+  if (handoffLottiePlayerLoadPromise) {
+    return handoffLottiePlayerLoadPromise;
+  }
+
+  handoffLottiePlayerLoadPromise = new Promise((resolve) => {
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      'script[data-agent-gui-handoff-lottie="true"]'
+    );
+    const script = existingScript ?? document.createElement("script");
+
+    const handleLoad = () => {
+      resolve(Boolean(window.customElements?.get("dotlottie-wc")));
+    };
+    const handleError = () => {
+      resolve(false);
+    };
+
+    script.addEventListener("load", handleLoad, { once: true });
+    script.addEventListener("error", handleError, { once: true });
+
+    if (!existingScript) {
+      script.dataset.agentGuiHandoffLottie = "true";
+      script.src = HANDOFF_LOTTIE_PLAYER_SCRIPT_SRC;
+      script.type = "module";
+      document.head.append(script);
+    }
+  });
+
+  return handoffLottiePlayerLoadPromise;
+}
+
+function AgentComposerHandoffIcon({
+  disabled,
+  isPlaying
+}: {
+  disabled: boolean;
+  isPlaying: boolean;
+}): JSX.Element {
+  const [isLottieReady, setIsLottieReady] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    void loadHandoffLottiePlayer().then((isReady) => {
+      if (isMounted) {
+        setIsLottieReady(isReady);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const shouldShowAnimation = !disabled && isPlaying && isLottieReady;
+
   return (
-    <span aria-hidden="true" className={styles.composerHandoffIcon}>
+    <span
+      aria-hidden="true"
+      className={styles.composerHandoffIcon}
+      data-disabled={disabled ? "true" : undefined}
+      data-playing={shouldShowAnimation ? "true" : undefined}
+    >
       <span
         className={styles.composerHandoffStaticIcon}
         style={{
@@ -877,6 +963,13 @@ function AgentComposerHandoffIcon(): JSX.Element {
           maskRepeat: "no-repeat",
           maskSize: "contain"
         }}
+      />
+      <dotlottie-wc
+        autoplay
+        className={styles.composerHandoffAnimatedIcon}
+        data-active={shouldShowAnimation ? "true" : undefined}
+        loop
+        src={HANDOFF_LOTTIE_ANIMATION_SRC}
       />
     </span>
   );
@@ -967,6 +1060,7 @@ export function AgentComposer({
   );
   const [isPaletteOpen, setIsPaletteOpen] = useState(true);
   const [isReviewPickerOpen, setIsReviewPickerOpen] = useState(false);
+  const [isHandoffIconPlaying, setIsHandoffIconPlaying] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [mentionHighlightedKey, setMentionHighlightedKey] = useState<
     string | null
@@ -2420,6 +2514,10 @@ export function AgentComposer({
     () => providerTargets.filter(Boolean),
     [providerTargets]
   );
+  const enabledProviderSwitchTargets = useMemo(
+    () => providerSwitchTargets.filter((target) => target.disabled !== true),
+    [providerSwitchTargets]
+  );
   const selectedProviderTargetId =
     selectedProviderTarget?.targetId ?? `local:${provider}`;
   const selectedProviderSwitchTarget =
@@ -2430,11 +2528,11 @@ export function AgentComposer({
     selectedProviderTarget;
   const providerMenuTargets =
     selectedProviderSwitchTarget &&
-    !providerSwitchTargets.some(
+    !enabledProviderSwitchTargets.some(
       (target) => target.targetId === selectedProviderSwitchTarget.targetId
     )
-      ? [selectedProviderSwitchTarget, ...providerSwitchTargets]
-      : providerSwitchTargets;
+      ? [selectedProviderSwitchTarget, ...enabledProviderSwitchTargets]
+      : enabledProviderSwitchTargets;
   const handoffMenuTargets = selectedProviderSwitchTarget
     ? providerMenuTargets.filter((target) => {
         if (target.disabled === true) {
@@ -3503,6 +3601,18 @@ export function AgentComposer({
                     size="sm"
                     aria-label={effectiveHandoffLabel}
                     title={effectiveHandoffLabel}
+                    onBlur={() => {
+                      setIsHandoffIconPlaying(false);
+                    }}
+                    onFocus={() => {
+                      setIsHandoffIconPlaying(true);
+                    }}
+                    onMouseEnter={() => {
+                      setIsHandoffIconPlaying(true);
+                    }}
+                    onMouseLeave={() => {
+                      setIsHandoffIconPlaying(false);
+                    }}
                     className={cn(
                       styles.composerMenuTrigger,
                       styles.composerProviderSelect,
@@ -3511,7 +3621,10 @@ export function AgentComposer({
                     )}
                   >
                     <span className="flex min-w-0 items-center gap-1.5">
-                      <AgentComposerHandoffIcon />
+                      <AgentComposerHandoffIcon
+                        disabled={handoffDisabled}
+                        isPlaying={isHandoffIconPlaying}
+                      />
                       <span className="min-w-0 truncate">
                         {effectiveHandoffLabel}
                       </span>

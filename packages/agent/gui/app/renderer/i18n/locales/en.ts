@@ -382,7 +382,7 @@ export const en = {
       providerGateComingSoonTitle: "{{provider}} is coming soon",
       providerGateComingSoonDescription:
         "{{provider}} is not available yet. We will enable this agent when it is ready.",
-      providerGateComingSoonAction: "Coming soon",
+      providerGateComingSoonAction: "comming soon",
       providerGateUnavailableTitle: "{{provider}} is not ready yet",
       providerGateUnavailableDescription:
         "We could not confirm that {{provider}} is ready. Try checking again.",
