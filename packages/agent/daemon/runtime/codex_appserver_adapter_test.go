@@ -2905,7 +2905,7 @@ func TestCodexAppServerAdapterGoalContinuesAfterMidGoalTurnFailure(t *testing.T)
 
 	var sinkMu sync.Mutex
 	sinkEvents := []activityshared.Event{}
-	adapter.SetSessionEventSink(func(agentSessionID string, events []activityshared.Event) {
+	adapter.SetSessionEventSink(func(_ string, events []activityshared.Event) {
 		sinkMu.Lock()
 		defer sinkMu.Unlock()
 		sinkEvents = append(sinkEvents, events...)
