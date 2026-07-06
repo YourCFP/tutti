@@ -91,6 +91,7 @@ func TestRunExternalAgentRegistryNPMInstallerPurgesDirtyTreeBeforeRetry(t *testi
 	service := Service{
 		ManagedRuntime: fakeManagedRuntimeResolver(t, runtimeRoot),
 		Environ:        func() []string { return []string{"PATH=/usr/bin:/bin"} },
+		HTTPClient:     agentNPMRegistryProbeHTTPClient(nil),
 	}
 	spec := npmInstallerSpec(t)
 	nodeModules := filepath.Join(spec.RegistryNPM.PrefixDir, "node_modules")
