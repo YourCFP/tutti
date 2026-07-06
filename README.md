@@ -247,7 +247,7 @@ Download Tutti · Local — coming soon.
 
 <!-- TODO: waitlist link for Tutti · VM -->
 
-Join the waitlist for Tutti · VM — coming soon.
+Join the [Tutti · VM waitlist](https://tutti.sh/waitlist).
 
 ### Build from source
 
