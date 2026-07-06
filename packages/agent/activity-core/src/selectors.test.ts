@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   deriveSubmitAvailability,
   isLiveTurnLifecyclePhase,
+  resolveSubmitAvailability,
   LIVE_TURN_LIFECYCLE_PHASES,
   normalizeAgentActivityDisplayStatus,
   resolveLatestAgentActivityMessageDisplayStatus,
@@ -729,4 +730,34 @@ test("deriveSubmitAvailability treats an activeTurnId without a phase as a live 
     }),
     { state: "blocked", reason: "active_turn" }
   );
+});
+
+test("resolveSubmitAvailability supersedes stale wire blocks with derivable reasons", () => {
+  assert.deepEqual(
+    resolveSubmitAvailability({
+      turnLifecycle: { activeTurnId: null, phase: "settled" },
+      submitAvailability: { state: "blocked", reason: "active_turn" }
+    }),
+    { state: "available" }
+  );
+});
+
+test("resolveSubmitAvailability keeps unknown wire block reasons", () => {
+  assert.deepEqual(
+    resolveSubmitAvailability({
+      turnLifecycle: { activeTurnId: null, phase: "settled" },
+      submitAvailability: { state: "blocked", reason: "auth_required" }
+    }),
+    { state: "blocked", reason: "auth_required" }
+  );
+});
+
+test("resolveSubmitAvailability falls back to the wire value without a lifecycle", () => {
+  assert.deepEqual(
+    resolveSubmitAvailability({
+      submitAvailability: { state: "blocked", reason: "active_turn" }
+    }),
+    { state: "blocked", reason: "active_turn" }
+  );
+  assert.deepEqual(resolveSubmitAvailability({}), { state: "available" });
 });

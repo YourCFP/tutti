@@ -20,7 +20,7 @@ import {
 } from "../../../agentQueuedPromptRuntime";
 import { useAgentHostApi } from "../../../agentActivityHost";
 import {
-  deriveSubmitAvailability,
+  resolveSubmitAvailability,
   resolveAgentActivityCapability,
   resolveAgentActivityUsage,
   selectSessionDisplayStatuses
@@ -10786,10 +10786,7 @@ export function useAgentGUINodeController({
   // Derive from the turn lifecycle when present (ADR 0008); trust the wire
   // submitAvailability only for lifecycle-less control states.
   const activeSubmitBlocked = activeSessionState
-    ? (
-        deriveSubmitAvailability(activeSessionState) ??
-        activeSessionState.submitAvailability
-      )?.state === "blocked"
+    ? resolveSubmitAvailability(activeSessionState).state === "blocked"
     : false;
   const activeConversationBusy =
     agentActivityDisplayStatusBusy(activeActivityDisplayStatus) ||

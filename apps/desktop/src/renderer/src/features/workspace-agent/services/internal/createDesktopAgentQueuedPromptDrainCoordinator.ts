@@ -1,6 +1,7 @@
 import {
   deriveSubmitAvailability,
   isLiveTurnLifecyclePhase,
+  resolveSubmitAvailability,
   runtimeContextHasLiveBackgroundAgents
 } from "@tutti-os/agent-activity-core";
 import type {
@@ -461,18 +462,12 @@ function sessionCanReceiveInput(session: AgentActivitySession): boolean {
   if (sessionLooksBusy(session)) {
     return false;
   }
-  // The turn lifecycle is the source of truth (ADR 0008): when the record
-  // carries one, derive availability locally instead of trusting the wire
-  // submitAvailability — a dropped or stale patch can leave the wire copy
-  // contradicting the lifecycle, which would strand the queue forever.
-  const derived = deriveSubmitAvailability(session);
-  if (derived) {
-    return derived.state === "available";
-  }
-  // Records without a lifecycle (non-migrated providers, fresh sessions)
-  // keep the wire value as the only signal.
-  const submitState = session.submitAvailability?.state;
-  return !submitState || submitState === "available";
+  // The turn lifecycle is the source of truth (ADR 0008): derive
+  // availability locally instead of trusting the wire submitAvailability —
+  // a dropped or stale patch can leave the wire copy contradicting the
+  // lifecycle, which would strand the queue forever. Unknown wire block
+  // reasons and lifecycle-less records keep the wire value.
+  return resolveSubmitAvailability(session).state === "available";
 }
 
 function sessionLooksBusy(session: AgentActivitySession): boolean {

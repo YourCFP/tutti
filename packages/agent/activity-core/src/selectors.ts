@@ -207,6 +207,52 @@ export function deriveSubmitAvailability(
   return { state: "available" };
 }
 
+// The block reasons the local derivation models. A wire blocked value with
+// any other reason (e.g. auth_required) carries knowledge the derivation
+// does not have and must keep blocking even when the derivation says
+// available; a wire blocked value with one of THESE reasons is superseded by
+// the derivation (that is the stale-copy case).
+export const DERIVED_SUBMIT_BLOCK_REASONS: ReadonlySet<string> = new Set([
+  "active_turn",
+  "waiting",
+  "background_agent"
+]);
+
+export interface ResolveSubmitAvailabilityInput extends DeriveSubmitAvailabilityInput {
+  submitAvailability?: {
+    state?: string | null;
+    reason?: string | null;
+  } | null;
+}
+
+// Effective submit availability for decision consumers: derivation-first
+// (ADR 0008), wire fallback for lifecycle-less records, and unknown wire
+// block reasons always respected.
+export function resolveSubmitAvailability(
+  record: ResolveSubmitAvailabilityInput
+): { state: string; reason?: string } {
+  const wire = record.submitAvailability;
+  const derived = deriveSubmitAvailability(record);
+  if (!derived) {
+    return wire?.state
+      ? { state: wire.state, ...(wire.reason ? { reason: wire.reason } : {}) }
+      : { state: "available" };
+  }
+  if (derived.state === "blocked") {
+    return derived;
+  }
+  if (
+    wire?.state === "blocked" &&
+    !DERIVED_SUBMIT_BLOCK_REASONS.has(wire.reason ?? "")
+  ) {
+    return {
+      state: "blocked",
+      ...(wire.reason ? { reason: wire.reason } : {})
+    };
+  }
+  return derived;
+}
+
 // SOURCE OF TRUTH: packages/agent/daemon/runtime/controller.go
 // (sessionHasLiveBackgroundAgents) and claude_sdk_adapter.go
 // (claudeSDKBackgroundAgentStatusIsTerminal). count is running-only; an item
