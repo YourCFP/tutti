@@ -949,6 +949,9 @@ export const agentActivityUpdatedPayloadSchema = {
               type: "integer",
               minimum: 0
             },
+            runtimeContext: {
+              type: "object"
+            },
             submitAvailability: {
               type: "object",
               additionalProperties: false,
