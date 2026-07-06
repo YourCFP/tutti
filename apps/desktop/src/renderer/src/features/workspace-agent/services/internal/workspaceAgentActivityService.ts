@@ -112,6 +112,34 @@ export class WorkspaceAgentActivityService implements IWorkspaceAgentActivitySer
   private eventStreamWasDisconnected = false;
 
   constructor(dependencies: WorkspaceAgentActivityServiceDependencies) {
+    // Temporary instrumentation: surface activity-store anomalies (version
+    // regressions on unguarded write paths, stale-patch drops) in the desktop
+    // log so field exports show which channel overwrote what. The sink slot
+    // is process-global, so register once and take the workspace id from the
+    // event details (the store stamps it at the emit site) — a per-workspace
+    // closure would be overwritten by the next workspace and misattribute
+    // diagnostics.
+    setAgentActivityStoreDiagnosticSink((event, details) => {
+      const flatDetails: Record<string, string | number | boolean | null> = {};
+      for (const [key, value] of Object.entries(details)) {
+        flatDetails[key] =
+          value === null ||
+          typeof value === "string" ||
+          typeof value === "number" ||
+          typeof value === "boolean"
+            ? value
+            : JSON.stringify(value);
+      }
+      void dependencies.runtimeApi
+        .logTerminalDiagnostic({
+          details: flatDetails,
+          event: `agent.activity.store.${event}`,
+          level: "warn",
+          workspaceId:
+            typeof details.workspaceId === "string" ? details.workspaceId : null
+        })
+        .catch(() => {});
+    });
     this.dependencies = dependencies;
   }
 
@@ -810,29 +838,6 @@ export class WorkspaceAgentActivityService implements IWorkspaceAgentActivitySer
       tuttidClient: this.dependencies.tuttidClient,
       runtimeApi: this.dependencies.runtimeApi,
       agentProviderStatusService: this.dependencies.agentProviderStatusService
-    });
-    // Temporary instrumentation: surface activity-store anomalies (version
-    // regressions on unguarded write paths, stale-patch drops) in the desktop
-    // log so field exports show which channel overwrote what.
-    setAgentActivityStoreDiagnosticSink((event, details) => {
-      const flatDetails: Record<string, string | number | boolean | null> = {};
-      for (const [key, value] of Object.entries(details)) {
-        flatDetails[key] =
-          value === null ||
-          typeof value === "string" ||
-          typeof value === "number" ||
-          typeof value === "boolean"
-            ? value
-            : JSON.stringify(value);
-      }
-      void this.dependencies.runtimeApi
-        .logTerminalDiagnostic({
-          details: flatDetails,
-          event: `agent.activity.store.${event}`,
-          level: "warn",
-          workspaceId: normalizedWorkspaceId
-        })
-        .catch(() => {});
     });
     const controller = createAgentActivityController({
       adapter,

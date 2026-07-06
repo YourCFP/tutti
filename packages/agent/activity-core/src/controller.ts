@@ -790,6 +790,7 @@ function applyActivityUpdatedStatePatch(
   if (isStaleStatePatch(existingSession, canonicalStatePatch)) {
     reportAgentActivityStoreDiagnostic("state_patch_dropped_stale", {
       agentSessionId: canonicalPatchSessionId,
+      workspaceId: input.workspaceId,
       patchKey:
         canonicalStatePatch.lastEventUnixMs ??
         canonicalStatePatch.occurredAtUnixMs ??
@@ -967,6 +968,7 @@ function reportSessionVersionRegression(
   }
   reportAgentActivityStoreDiagnostic("session_version_regression", {
     agentSessionId: incoming.agentSessionId,
+    workspaceId: incoming.workspaceId,
     source,
     previousKey,
     nextKey,
