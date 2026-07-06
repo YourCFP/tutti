@@ -218,7 +218,7 @@ func (a *ClaudeCodeSDKAdapter) sendGoalCommandExec(
 	args := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(command), appServerSlashGoal))
 	a.mu.Lock()
 	previousArm := adapterSession.goalArmTurnID
-	if strings.EqualFold(args, "clear") {
+	if isGoalClearCommandArgs(args) {
 		adapterSession.goalArmTurnID = ""
 	} else {
 		adapterSession.goalArmTurnID = turnID

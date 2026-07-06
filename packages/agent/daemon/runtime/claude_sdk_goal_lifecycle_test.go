@@ -391,6 +391,43 @@ func TestClaudeSDKExecGoalControlSetDoesNotInterrupt(t *testing.T) {
 	}
 }
 
+// Every reserved clear keyword must take the full clear path — /goal reset
+// interrupts like clear and must not arm a goal turn as if it set a new
+// objective.
+func TestClaudeSDKGoalResetClearsWithoutArming(t *testing.T) {
+	t.Parallel()
+
+	adapter := NewClaudeCodeSDKAdapter(nil)
+	conn := newBlockingClaudeSDKConnection()
+	defer conn.Close()
+	session, adapterSession := newClaudeSDKLifecycleTestSession(t, adapter, conn)
+	adapter.applyLocalGoal(adapterSession, map[string]any{"objective": "ship it", "status": "active"})
+	adapter.registerClaudeSDKTurn(adapterSession, "turn-live", nil)
+
+	type goalExecResult struct {
+		handled bool
+		err     error
+	}
+	results := make(chan goalExecResult, 1)
+	go func() {
+		_, handled, err := adapter.ExecGoalControl(context.Background(), session, textPrompt("/goal reset"), "", "turn-goal")
+		results <- goalExecResult{handled, err}
+	}()
+	request := waitForClaudeSDKSentRequestMatching(t, conn, "exec", "/goal reset")
+	conn.pushEvent(claudeSDKSidecarEvent{ID: request.ID, Type: "ok"})
+	result := <-results
+	if result.err != nil || !result.handled {
+		t.Fatalf("ExecGoalControl handled=%v err=%v", result.handled, result.err)
+	}
+	assertClaudeSDKCancelBeforeGoalExec(t, conn.sentRequests(), "/goal reset")
+	adapter.mu.Lock()
+	armTurnID := adapterSession.goalArmTurnID
+	adapter.mu.Unlock()
+	if armTurnID != "" {
+		t.Fatalf("goal reset armed a goal turn: %q", armTurnID)
+	}
+}
+
 // The direct control API path (GoalControlClear) has the same queued-exec
 // hazard as the typed path and must interrupt the live turn first too.
 func TestClaudeSDKGoalControlClearInterruptsLiveTurn(t *testing.T) {
