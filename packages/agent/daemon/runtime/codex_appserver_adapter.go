@@ -163,6 +163,14 @@ type codexAppServerSession struct {
 	authState       string
 	authMessage     string
 	activeTurnID    string
+	// activeTurnStartConfirmed reports whether a turn/started notification
+	// confirmed activeTurnID. A turn/start issued while another turn is
+	// already running responds with a stub turn id that codex never starts
+	// (live-verified: TestLiveProtocolTurnStartDuringActiveTurn) — the input
+	// is steered into the running turn instead. An unconfirmed id therefore
+	// must not veto the running turn's terminal in settleActiveTurn. Guarded
+	// by the adapter mutex.
+	activeTurnStartConfirmed bool
 	// lastTurnID survives turn settlement so post-turn child lifecycle
 	// markers can carry a turn id (the activity store rejects turnless
 	// message updates).
@@ -1385,6 +1393,7 @@ func (a *CodexAppServerAdapter) settleTurnExternal(agentSessionID string, appTur
 	if appSession != nil && appSession.activeTurn == appTurn && !appTurn.phase.terminal() {
 		appTurn.phase = terminal.phase
 		appSession.activeTurnID = ""
+		appSession.activeTurnStartConfirmed = false
 		settled = true
 	}
 	emits := settled && appTurn.settleEmits
@@ -1892,11 +1901,26 @@ func (a *CodexAppServerAdapter) execSlashCommand(
 	switch command {
 	case appServerSlashCompact:
 		a.transitionActiveTurnPhase(session.AgentSessionID, appTurn, codexAppServerTurnPhaseCompacting)
+		// Emit the "Compacting context." banner up front instead of waiting for
+		// the server's contextCompaction item/started notification: Codex
+		// app-server frequently finishes thread/compact/start without ever
+		// streaming that notification, which used to leave the whole operation
+		// invisible until (if ever) an item/completed notice arrived. Tracking
+		// the messageId now means a later item/started reuses this same row
+		// (see appServerItemEvents) instead of appending a duplicate, and an
+		// immediate RPC failure or an interrupted/failed turn always has a
+		// pending banner to settle in place.
+		startMessageID := "compaction:" + turnID
+		normalizer.TrackCompactionNotice(startMessageID, false)
+		emitEvents([]activityshared.Event{appServerCompactionNoticeEvent(session, turnID, startMessageID, false)})
 		_, err := appSession.client.ThreadCompactStart(ctx, map[string]any{
 			"threadId": appSession.threadID,
 		}, a.appServerMessageHandler(appSession, session, turnID, normalizer, emitEvents, emitCommands))
 		if err != nil {
-			emitTerminal([]activityshared.Event{newTurnActivityEvent(session, EventTurnFailed, turnID, SessionStatusFailed, "", "", acpFailureMetadata(err))})
+			emitTerminal(append(
+				normalizer.settlePendingCompactionEvents(session, turnID, appServerCompactionInterruptedTitle),
+				newTurnActivityEvent(session, EventTurnFailed, turnID, SessionStatusFailed, "", "", acpFailureMetadata(err)),
+			))
 			return true, nil
 		}
 		// Block until the App Server signals turn/completed. The session-level
@@ -2102,6 +2126,8 @@ func (a *CodexAppServerAdapter) adoptServerInitiatedTurn(session Session, provid
 		return
 	}
 	a.setSessionActiveTurnID(session.AgentSessionID, providerTurnID)
+	// The adopted id comes from the turn/started notification itself.
+	a.confirmSessionActiveTurnStarted(session.AgentSessionID, providerTurnID)
 	slog.Info("agent session app-server goal turn adopted",
 		"event", "agent_session.app_server.goal.turn_adopted",
 		"agent_session_id", session.AgentSessionID,
@@ -2905,6 +2931,7 @@ func (a *CodexAppServerAdapter) endActiveTurn(agentSessionID string, turn *codex
 	}
 	appSession.activeTurn = nil
 	appSession.activeTurnID = ""
+	appSession.activeTurnStartConfirmed = false
 }
 
 func (a *CodexAppServerAdapter) sessionActiveTurn(agentSessionID string) *codexAppServerActiveTurn {
@@ -2969,6 +2996,9 @@ func (a *CodexAppServerAdapter) setSessionActiveTurnID(agentSessionID string, tu
 	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
 	if appSession != nil {
 		appSession.activeTurnID = strings.TrimSpace(turnID)
+		// The binding starts unconfirmed; a matching turn/started notification
+		// confirms it via confirmSessionActiveTurnStarted.
+		appSession.activeTurnStartConfirmed = false
 		if appSession.activeTurnID != "" {
 			appSession.lastTurnID = appSession.activeTurnID
 		}
@@ -2981,6 +3011,39 @@ func (a *CodexAppServerAdapter) setSessionActiveTurnID(agentSessionID string, tu
 		}
 	}
 	return false
+}
+
+// confirmSessionActiveTurnStarted marks the recorded provider turn id as
+// confirmed by a turn/started notification. Stub ids from a steered
+// turn/start never receive turn/started, so they stay unconfirmed and the
+// settle path may adopt the running turn's terminal for them. The
+// confirmation is scoped to the turn the notification named: a concurrent
+// rebinding (steered turn/start racing the read loop) must not get its stub
+// id confirmed by another turn's start.
+func (a *CodexAppServerAdapter) confirmSessionActiveTurnStarted(agentSessionID string, providerTurnID string) {
+	if a == nil {
+		return
+	}
+	providerTurnID = strings.TrimSpace(providerTurnID)
+	if providerTurnID == "" {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
+	if appSession != nil && strings.TrimSpace(appSession.activeTurnID) == providerTurnID {
+		appSession.activeTurnStartConfirmed = true
+	}
+}
+
+func (a *CodexAppServerAdapter) sessionActiveTurnStartConfirmed(agentSessionID string) bool {
+	if a == nil {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
+	return appSession != nil && appSession.activeTurnStartConfirmed
 }
 
 // sessionMarkerTurnID resolves the turn id to stamp on child lifecycle
