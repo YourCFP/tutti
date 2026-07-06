@@ -107,6 +107,7 @@ interface DesktopAgentGUIWorkbenchBodyProps {
   previewMode?: boolean;
   providerTargets?: readonly AgentGUIProviderTarget[];
   providerTargetsLoading?: boolean;
+  comingSoonAgentProviders?: readonly AgentGUIProvider[];
   defaultProviderTargetId?: string | null;
   contextMentionProviders: NonNullable<
     AgentGUIProps["contextMentionProviders"]
@@ -140,6 +141,16 @@ const DESKTOP_AGENT_GUI_AGENT_SETTINGS = {
   avoidGroupingEdits: false
 } satisfies NonNullable<AgentGUIProps["agentSettings"]>;
 const DESKTOP_AGENT_GUI_NOOP = (): void => {};
+function handleDesktopAgentGUIShowMessage(
+  message: string,
+  tone?: "info" | "warning" | "error"
+): void {
+  if (tone === "error") {
+    Toast.Error(message);
+    return;
+  }
+  Toast.tips(message);
+}
 const AGENT_PROBE_REFRESH_DEBOUNCE_MS = 300;
 const DESKTOP_AGENT_GUI_EMPTY_CONTEXT_MENTION_PROVIDERS =
   [] satisfies NonNullable<AgentGUIProps["contextMentionProviders"]>;
@@ -175,6 +186,7 @@ function areDesktopAgentGUIWorkbenchBodyPropsEqual(
     previous.previewMode === next.previewMode &&
     previous.providerTargets === next.providerTargets &&
     previous.providerTargetsLoading === next.providerTargetsLoading &&
+    previous.comingSoonAgentProviders === next.comingSoonAgentProviders &&
     previous.defaultProviderTargetId === next.defaultProviderTargetId &&
     previous.contextMentionProviders === next.contextMentionProviders &&
     previous.runtimeApi === next.runtimeApi &&
@@ -237,6 +249,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
   previewMode = false,
   providerTargets,
   providerTargetsLoading = false,
+  comingSoonAgentProviders,
   defaultProviderTargetId = null,
   contextMentionProviders,
   runtimeApi,
@@ -1077,6 +1090,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
         nodeId={context.node.id}
         providerTargets={providerTargetsLoading ? [] : providerTargets}
         providerTargetsLoading={providerTargetsLoading}
+        comingSoonProviders={comingSoonAgentProviders}
         providerReadinessGates={providerReadinessGates}
         defaultProviderTargetId={defaultProviderTargetId}
         workspaceAgentProbes={workspaceAgentProbes}
@@ -1111,7 +1125,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
               }
         }
         onResize={DESKTOP_AGENT_GUI_NOOP}
-        onShowMessage={DESKTOP_AGENT_GUI_NOOP}
+        onShowMessage={handleDesktopAgentGUIShowMessage}
         onUpdateNode={handleUpdateNode}
         onRememberComposerDefaults={handleRememberComposerDefaults}
         onOpenConversationWindow={
