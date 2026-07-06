@@ -159,9 +159,8 @@ import type {
 } from "./agentRichText/agentFileMentionExtension";
 import { formatAgentMentionMarkdown } from "./agentRichText/agentFileMentionExtension";
 import { createRichTextMentionHref } from "@tutti-os/ui-rich-text/core";
-import claudeCodeFlatFilledIconUrl from "../../app/renderer/assets/icons/agents/claudecode-flat-filled.svg";
-import codexFlatFilledIconUrl from "../../app/renderer/assets/icons/agents/codex-flat-filled.svg";
-import cursorFlatFilledIconUrl from "../../app/renderer/assets/icons/agents/cursor-flat-filled.svg";
+import { resolveAgentGuiSessionProviderIconUrl } from "../../agentGuiSessionProviderIconUrls";
+import { agentColorfulUrl } from "../../managedAgentIconAssets";
 
 /**
  * 把 @ 面板里的任务/应用 mention 解析为引用 picker 的定位目标(sourceId + 语义 params)。
@@ -233,11 +232,14 @@ function agentGUIProviderRailIconPresentation(
   iconUrl?: string | null
 ): AgentGUIProviderIconPresentation {
   const normalizedProvider = normalizeManagedAgentProvider(provider);
+  const providerRailIconUrl =
+    MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS[normalizedProvider] ?? null;
   return {
     provider: normalizedProvider,
     iconUrl:
+      (normalizedProvider === "cursor" ? providerRailIconUrl : null) ||
       iconUrl?.trim() ||
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS[normalizedProvider] ||
+      providerRailIconUrl ||
       resolveAgentGUIHeroIconUrl(normalizedProvider)
   };
 }
@@ -3576,6 +3578,19 @@ function AgentGUIAllProviderGridIcon({
   );
 }
 
+function AgentGUIUnifiedProviderIcon(): React.JSX.Element {
+  return (
+    <span aria-hidden="true" className={styles.providerRailAvatar}>
+      <img
+        alt=""
+        className={styles.providerRailAvatarImage}
+        draggable={false}
+        src={agentColorfulUrl}
+      />
+    </span>
+  );
+}
+
 function AgentGUILaunchpadIconGrid({
   activeProvider,
   icons
@@ -3705,7 +3720,7 @@ function EmptyHeroTitle({
                     aria-hidden="true"
                     className="size-4 shrink-0 rounded-[4px]"
                     src={
-                      agentGUIProviderIconPresentation(
+                      agentGUIProviderRailIconPresentation(
                         target.provider,
                         target.iconUrl
                       ).iconUrl
@@ -4467,24 +4482,15 @@ function agentGUILaunchpadIconPresentations(): readonly AgentGUIProviderIconPres
   return [
     agentGUIProviderRailIconPresentation("codex"),
     agentGUIProviderRailIconPresentation("claude-code"),
-    agentGUIProviderRailIconPresentation("tutti"),
-    agentGUIProviderRailIconPresentation("hermes")
+    agentGUIProviderRailIconPresentation("cursor"),
+    agentGUIProviderRailIconPresentation("tutti")
   ];
 }
 
 function agentGUIConversationProviderIconUrl(
   provider: string | undefined
 ): string | null {
-  switch (normalizeManagedAgentProvider(provider)) {
-    case "claude-code":
-      return claudeCodeFlatFilledIconUrl;
-    case "codex":
-      return codexFlatFilledIconUrl;
-    case "cursor":
-      return cursorFlatFilledIconUrl;
-    default:
-      return null;
-  }
+  return resolveAgentGuiSessionProviderIconUrl(provider);
 }
 
 function agentGUIProviderRailLabel(
@@ -4625,10 +4631,6 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
       );
     });
   }, [railProviderTargets]);
-  const launchpadIconPresentations = useMemo(
-    () => agentGUILaunchpadIconPresentations(),
-    []
-  );
   const selectedProviderTargetIsPlaceholder =
     selectedProviderTarget?.disabled === true;
   const allTileSelected =
@@ -4678,7 +4680,7 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
         disabled={previewMode}
         onClick={selectAllProviders}
       >
-        <AgentGUIAllProviderGridIcon icons={launchpadIconPresentations} />
+        <AgentGUIUnifiedProviderIcon />
       </button>
       <span aria-hidden="true" className={styles.providerRailSeparator} />
       {providerTargetsLoading

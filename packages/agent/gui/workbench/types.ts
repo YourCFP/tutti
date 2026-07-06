@@ -63,6 +63,7 @@ export interface AgentGuiWorkbenchState {
   conversationRailCollapsed?: boolean | null;
   conversationRailWidthPx?: number | null;
   lastActiveAgentSessionId: string | null;
+  lastActiveConversationTitle?: string | null;
 }
 
 export interface AgentGuiWorkbenchWorkspaceState {

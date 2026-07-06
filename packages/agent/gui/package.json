@@ -15,6 +15,7 @@
     "./mention-file-presentation": "./agent-gui/shared/mentionFilePresentation.ts",
     "./queued-prompt-runtime": "./agentQueuedPromptRuntimeCore.ts",
     "./agent-title-text": "./shared/utils/agentTitleText.ts",
+    "./agentGuiSessionProviderIconUrls": "./agentGuiSessionProviderIconUrls.ts",
     "./workspace-agent-generated-files": "./shared/workspaceAgentActivityListViewModel.ts",
     "./i18n": "./i18n/index.ts",
     "./workbench": "./workbench/index.ts",

@@ -24,6 +24,7 @@ import {
   type AgentActivityRuntimeSessionSection,
   type AgentActivityRuntimeSessionSectionsResult
 } from "../../agentActivityRuntime";
+import { agentColorfulUrl } from "../../managedAgentIconAssets";
 import {
   MANAGED_AGENT_ICON_URLS,
   MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS
@@ -622,10 +623,37 @@ describe("AgentGUINodeView layout persistence", () => {
     ).toBe(MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS["claude-code"]);
     expect(
       screen
+        .getByRole("tab", { name: "Cursor" })
+        .querySelector("img")
+        ?.getAttribute("src")
+    ).toBe(MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.cursor);
+    expect(
+      screen
         .getByRole("tab", { name: "Tutti" })
         .querySelector("img")
         ?.getAttribute("src")
     ).toBe(MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.tutti);
+  });
+
+  it("uses Cursor colorful artwork for the provider rail even when the target has a session icon", () => {
+    renderAgentGUINodeView({
+      viewModel: {
+        ...createViewModel(),
+        providerTargets: [
+          {
+            ...createLocalAgentGUIProviderTarget("cursor"),
+            iconUrl: "app://old-cursor-target-icon.png"
+          }
+        ]
+      }
+    });
+
+    expect(
+      screen
+        .getByRole("tab", { name: "Cursor" })
+        .querySelector("img")
+        ?.getAttribute("src")
+    ).toBe(MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.cursor);
   });
 
   it("shows provider names in tooltips for unlabeled provider rail icons", async () => {
@@ -758,7 +786,7 @@ describe("AgentGUINodeView layout persistence", () => {
     );
   });
 
-  it("renders the All tile launchpad icons in provider rail order", () => {
+  it("renders the All tile with the unified Agent icon", () => {
     renderAgentGUINodeView({
       viewModel: {
         ...createViewModel(),
@@ -771,22 +799,14 @@ describe("AgentGUINodeView layout persistence", () => {
     });
 
     const allTile = screen.getByRole("tab", { name: "All" });
-    const launchpadItems = Array.from(
-      allTile.querySelectorAll(".agent-gui-node__provider-rail-launchpad-item")
+    const allIcon = allTile.querySelector(
+      ".agent-gui-node__provider-rail-avatar-image"
     );
-    expect(
-      launchpadItems.map((item) =>
-        item.querySelector("img")?.getAttribute("src")
-      )
-    ).toEqual([
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.codex,
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS["claude-code"],
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.tutti,
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.hermes
-    ]);
+    expect(allIcon).not.toBeNull();
+    expect(allIcon).toHaveAttribute("src", agentColorfulUrl);
   });
 
-  it("keeps the selected All tile as a launchpad grid", () => {
+  it("keeps the selected All tile as the unified Agent icon", () => {
     renderAgentGUINodeView({
       viewModel: {
         ...createViewModel(),
@@ -799,12 +819,12 @@ describe("AgentGUINodeView layout persistence", () => {
     });
 
     const allTile = screen.getByRole("tab", { name: "All" });
-    const launchpadIcon = allTile.querySelector(
-      ".agent-gui-node__provider-rail-launchpad-icon"
+    const allIcon = allTile.querySelector(
+      ".agent-gui-node__provider-rail-avatar-image"
     );
-    expect(launchpadIcon).not.toBeNull();
-    expect(launchpadIcon).not.toHaveAttribute("data-scrollable");
-    expect(launchpadIcon?.children).toHaveLength(4);
+    expect(allIcon).not.toBeNull();
+    expect(allIcon).not.toHaveAttribute("data-scrollable");
+    expect(allIcon).toHaveAttribute("src", agentColorfulUrl);
   });
 
   it("renders the empty hero icon area with the All tile launchpad grid", () => {
@@ -833,8 +853,8 @@ describe("AgentGUINodeView layout persistence", () => {
     ).toEqual([
       MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.codex,
       MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS["claude-code"],
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.tutti,
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.hermes
+      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.cursor,
+      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.tutti
     ]);
     expect(
       Array.from(
@@ -1133,6 +1153,42 @@ describe("AgentGUINodeView layout persistence", () => {
 
     expect(trigger).toHaveClass("agent-gui-node__empty-hero-provider-select");
     expect(trigger).toHaveTextContent("Codex");
+  });
+
+  it("uses Cursor colorful artwork in the empty hero provider select", async () => {
+    const providerTargets = [
+      createLocalAgentGUIProviderTarget("codex"),
+      {
+        ...createLocalAgentGUIProviderTarget("cursor"),
+        iconUrl: "app://old-cursor-target-icon.png"
+      }
+    ];
+    renderAgentGUINodeView({
+      labels: {
+        ...createLabels(),
+        empty: "What can Cursor help you with?",
+        emptyProvider: "Cursor",
+        providerSwitchLabel: "Switch provider",
+        handoffConversation: "Handoff",
+        handoffConversationMenu: "Choose agent"
+      },
+      viewModel: {
+        ...createViewModel(),
+        selectedProviderTarget: providerTargets[1]!,
+        providerTargets
+      }
+    });
+
+    const trigger = screen.getByRole("combobox", {
+      name: "Switch provider"
+    });
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+
+    expect(
+      (await screen.findByRole("option", { name: "Cursor" })).querySelector(
+        "img"
+      )
+    ).toHaveAttribute("src", MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.cursor);
   });
 
   it("renders the composer from the selected provider target", () => {

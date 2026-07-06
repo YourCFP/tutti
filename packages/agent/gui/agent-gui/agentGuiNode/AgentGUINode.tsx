@@ -455,6 +455,8 @@ function agentGuiStateEquals(
         right.providerTargetRef
       ) &&
       left.lastActiveAgentSessionId === right.lastActiveAgentSessionId &&
+      (left.lastActiveConversationTitle ?? null) ===
+        (right.lastActiveConversationTitle ?? null) &&
       left.conversationRailWidthPx === right.conversationRailWidthPx &&
       left.conversationRailCollapsed === right.conversationRailCollapsed &&
       (left.composerOverrides?.model ?? null) ===

@@ -829,6 +829,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
           ...current,
           agentTargetId: request.agentTargetId ?? current.agentTargetId ?? null,
           lastActiveAgentSessionId: null,
+          lastActiveConversationTitle: null,
           provider: request.provider ?? current.provider,
           providerTargetId: null,
           providerTargetRef: null
@@ -839,7 +840,8 @@ function DesktopAgentGUIWorkbenchBodyImpl({
             ? current
             : {
                 ...current,
-                lastActiveAgentSessionId: null
+                lastActiveAgentSessionId: null,
+                lastActiveConversationTitle: null
               }
         );
       }

@@ -15,6 +15,7 @@ import {
   shouldAutoCollapseAgentGUIConversationRail
 } from "../agent-gui/agentGuiNode/model/agentGuiRailLayout.ts";
 import { agentGuiDockIconUrls } from "../dockIcons.ts";
+import { resolveAgentGuiSessionProviderIconUrl } from "../agentGuiSessionProviderIconUrls.ts";
 import { AgentGuiWorkbenchHeader } from "./header.ts";
 import {
   agentGuiWorkbenchDockIdentityFromIdentifier,
@@ -52,7 +53,8 @@ export const agentGuiWorkbenchDefaultNodeFrame: WorkbenchFrame = {
   y: 48
 };
 
-export const agentGuiWorkbenchDefaultUsableHeightRatio = 0.7;
+export const agentGuiWorkbenchDefaultUsableWidthRatio = 0.8;
+export const agentGuiWorkbenchDefaultUsableHeightRatio = 0.9;
 export const agentGuiWorkbenchCompactVisibleAreaRatio = 0.9;
 export const agentGuiWorkbenchNewWindowCascadeOffset = { x: 180, y: 88 };
 export const agentGuiWorkbenchProviderRailWidthPx = 52;
@@ -76,6 +78,11 @@ export interface AgentGuiWorkbenchConversationRailToggleDetail {
 
 export interface AgentGuiWorkbenchNewConversationDetail {
   instanceId: string;
+}
+
+export interface AgentGuiWorkbenchConversationIdentity {
+  iconUrl?: string | null;
+  title: string | null;
 }
 
 export interface AgentGuiWorkbenchContributionCopy {
@@ -146,6 +153,9 @@ export interface CreateAgentGuiWorkbenchContributionInput {
   resolveDockPopupTitle?: (
     state: AgentGuiWorkbenchState | null
   ) => string | null;
+  resolveDockPopupIdentity?: (
+    state: AgentGuiWorkbenchState | null
+  ) => AgentGuiWorkbenchConversationIdentity | null;
   resolveDockLaunchPayload?: (input: {
     dockEntryId?: string | null;
     payload: unknown;
@@ -172,6 +182,7 @@ export function createAgentGuiWorkbenchContribution(
       providerAvailability: input.providerAvailability,
       providerTargetsLoading: input.providerTargetsLoading,
       renderPreview: input.renderPreview,
+      resolveDockPopupIdentity: input.resolveDockPopupIdentity,
       resolveDockPopupTitle: input.resolveDockPopupTitle,
       sectionId: input.dockSectionId ?? "agents",
       targets: input.providerTargets,
@@ -239,8 +250,20 @@ export function createAgentGuiWorkbenchContribution(
             nodeState.conversationRailWidthPx,
             node.frame.width
           );
+          const conversationIdentity =
+            input.resolveDockPopupIdentity?.(workbenchState) ?? null;
           const conversationTitle =
-            input.resolveDockPopupTitle?.(workbenchState) ?? null;
+            conversationIdentity?.title ??
+            input.resolveDockPopupTitle?.(workbenchState) ??
+            workbenchState.lastActiveConversationTitle ??
+            null;
+          const conversationIconUrl =
+            conversationIdentity?.iconUrl ??
+            resolveAgentGuiSessionProviderIconUrl(provider) ??
+            resolveAgentGuiWorkbenchProviderIconUrl({
+              dockIconUrls: input.dockIconUrls,
+              provider
+            });
           const persistConversationRailCollapsed = (collapsed: boolean) => {
             nodeStateSource.writeNodeState({
               instanceId,
@@ -280,6 +303,7 @@ export function createAgentGuiWorkbenchContribution(
 
           return createElement(AgentGuiWorkbenchHeader, {
             copy,
+            conversationIconUrl,
             conversationTitle,
             conversationRailWidthPx,
             displayMode,
@@ -480,6 +504,7 @@ export interface BuildAgentGuiDockEntriesInput {
   providerAvailability?: AgentGuiWorkbenchProviderAvailability;
   providerTargetsLoading?: boolean;
   renderPreview?: CreateAgentGuiWorkbenchContributionInput["renderPreview"];
+  resolveDockPopupIdentity?: CreateAgentGuiWorkbenchContributionInput["resolveDockPopupIdentity"];
   resolveDockPopupTitle?: CreateAgentGuiWorkbenchContributionInput["resolveDockPopupTitle"];
   sectionId?: string;
   targets?: readonly AgentGUIProviderTarget[] | null;
@@ -498,14 +523,19 @@ export function buildAgentGuiDockEntries(
   return [
     createAgentGuiWorkbenchDockEntry({
       aggregateProviders: agentGuiWorkbenchDefaultDockProviders,
-      icon: createAgentGuiWorkbenchLaunchpadStyleDockIcon({
-        tileIconUrls: unifiedTileIconUrls
-      }),
+      icon: input.unifiedDockIconUrl
+        ? createAgentGuiWorkbenchUnifiedDockIcon({
+            iconUrl: input.unifiedDockIconUrl
+          })
+        : createAgentGuiWorkbenchLaunchpadStyleDockIcon({
+            tileIconUrls: unifiedTileIconUrls
+          }),
       label: input.label ?? agentGuiWorkbenchDefaultCopy.nodeTitle,
       launchPayload,
       order: 0,
       provider,
       renderPreview: input.renderPreview,
+      resolveDockPopupIdentity: input.resolveDockPopupIdentity,
       resolveDockPopupTitle: input.resolveDockPopupTitle,
       sectionId,
       visibility: "always"
@@ -556,30 +586,16 @@ export function resolveAgentGuiWorkbenchDefaultLaunchFrame(input: {
   const defaultHeight = Math.round(
     layoutFrame.height * agentGuiWorkbenchDefaultUsableHeightRatio
   );
-  const shouldUseCompactWidth = layoutFrame.width < input.frame.width;
-  const shouldUseCompactHeight =
-    layoutFrame.height <
-    input.frame.height / agentGuiWorkbenchCompactVisibleAreaRatio;
-
-  if (shouldUseCompactWidth || shouldUseCompactHeight) {
-    const width = shouldUseCompactWidth
-      ? Math.round(layoutFrame.width * agentGuiWorkbenchCompactVisibleAreaRatio)
-      : input.frame.width;
-    const height = Math.round(
-      layoutFrame.height * agentGuiWorkbenchCompactVisibleAreaRatio
-    );
-
-    return {
-      height,
-      width,
-      x: Math.round(layoutFrame.x + (layoutFrame.width - width) / 2),
-      y: Math.round(layoutFrame.y + (layoutFrame.height - height) / 2)
-    };
-  }
+  const defaultWidth = Math.round(
+    layoutFrame.width * agentGuiWorkbenchDefaultUsableWidthRatio
+  );
 
   return {
     ...input.frame,
-    height: defaultHeight
+    height: defaultHeight,
+    width: defaultWidth,
+    x: Math.round(layoutFrame.x + (layoutFrame.width - defaultWidth) / 2),
+    y: Math.round(layoutFrame.y + (layoutFrame.height - defaultHeight) / 2)
   };
 }
 
@@ -607,6 +623,7 @@ function createAgentGuiWorkbenchDockEntry(input: {
   order: number;
   provider: AgentGuiWorkbenchProvider;
   renderPreview?: CreateAgentGuiWorkbenchContributionInput["renderPreview"];
+  resolveDockPopupIdentity?: CreateAgentGuiWorkbenchContributionInput["resolveDockPopupIdentity"];
   resolveDockPopupTitle?: CreateAgentGuiWorkbenchContributionInput["resolveDockPopupTitle"];
   sectionId: string;
   visibility: WorkbenchHostDockEntry["visibility"];
@@ -633,14 +650,16 @@ function createAgentGuiWorkbenchDockEntry(input: {
             label: input.label,
             provider: input.provider,
             renderPreview: input.renderPreview,
+            resolveDockPopupIdentity: input.resolveDockPopupIdentity,
             resolveDockPopupTitle: input.resolveDockPopupTitle
           })
         : null,
     resolvePopupItem: ({ externalNodeState }) => {
+      const state = normalizeAgentGuiWorkbenchState(externalNodeState);
       const title =
-        input.resolveDockPopupTitle?.(
-          normalizeAgentGuiWorkbenchState(externalNodeState)
-        ) ?? null;
+        input.resolveDockPopupIdentity?.(state)?.title ??
+        input.resolveDockPopupTitle?.(state) ??
+        null;
       return {
         revision: `${input.provider}\n${title ?? ""}`,
         title
@@ -655,8 +674,17 @@ function createAgentGuiWorkbenchDockEntry(input: {
 function resolveAgentGuiUnifiedDockTileIconUrls(
   dockIconUrls: Partial<Record<AgentGuiWorkbenchProvider, string>> | undefined
 ): readonly string[] {
-  return agentGuiWorkbenchUnifiedDockTileProviders.map(
-    (provider) => dockIconUrls?.[provider] ?? agentGuiDockIconUrls[provider]
+  return agentGuiWorkbenchUnifiedDockTileProviders.map((provider) =>
+    resolveAgentGuiWorkbenchProviderIconUrl({ dockIconUrls, provider })
+  );
+}
+
+function resolveAgentGuiWorkbenchProviderIconUrl(input: {
+  dockIconUrls?: Partial<Record<AgentGuiWorkbenchProvider, string>>;
+  provider: AgentGuiWorkbenchProvider;
+}): string {
+  return (
+    input.dockIconUrls?.[input.provider] ?? agentGuiDockIconUrls[input.provider]
   );
 }
 
@@ -683,6 +711,24 @@ function createAgentGuiWorkbenchLaunchpadStyleDockIcon(input: {
         })
       )
     )
+  );
+}
+
+function createAgentGuiWorkbenchUnifiedDockIcon(input: {
+  iconUrl: string;
+}): ReactNode {
+  return createElement(
+    "span",
+    {
+      "aria-hidden": "true",
+      className:
+        "agent-gui-workbench-dock-icon agent-gui-workbench-dock-icon--single"
+    },
+    createElement("img", {
+      alt: "",
+      draggable: false,
+      src: input.iconUrl
+    })
   );
 }
 
@@ -924,11 +970,15 @@ function createAgentGuiWorkbenchPreviewContent(input: {
   renderPreview: NonNullable<
     CreateAgentGuiWorkbenchContributionInput["renderPreview"]
   >;
+  resolveDockPopupIdentity?: CreateAgentGuiWorkbenchContributionInput["resolveDockPopupIdentity"];
   resolveDockPopupTitle?: CreateAgentGuiWorkbenchContributionInput["resolveDockPopupTitle"];
 }): WorkbenchDockPreviewContent {
   const { externalNodeState, node } = input.item;
   const state = normalizeAgentGuiWorkbenchState(externalNodeState);
-  const title = input.resolveDockPopupTitle?.(state) ?? node.title;
+  const title =
+    input.resolveDockPopupIdentity?.(state)?.title ??
+    input.resolveDockPopupTitle?.(state) ??
+    node.title;
   const provider =
     input.provider ??
     agentGuiWorkbenchProviderFromIdentifier(node.data.instanceId) ??

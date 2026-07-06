@@ -148,9 +148,11 @@ Workspace Launchpad is a broad launcher surface, not a mirror of the dock
 entry list; it should show one generic Agent tile that resolves to the default
 or first ready provider instead of duplicating provider-specific Agent dock
 entries.
-Unified workbench chrome should keep the generic Agent title and use generic
-Agent artwork instead of provider-branded icons even when the underlying
-launch/session provider is Codex or Claude Code.
+Unified dock and launchpad chrome should keep the generic Agent title and
+generic Agent artwork instead of provider-branded entries. Agent window headers
+show the generic Agent title while the conversation rail is expanded. When the
+conversation rail is collapsed, that title area switches to the active session
+identity by showing the session's agent icon and conversation title.
 
 AgentGuiNode may expose provider target selection in multiple UI-local entry
 points, including the conversation rail target grid and the provider select next
