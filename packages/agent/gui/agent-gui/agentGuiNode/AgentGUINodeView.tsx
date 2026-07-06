@@ -557,6 +557,7 @@ interface AgentGUINodeViewProps {
   slashStatusLimitsLoading?: boolean;
   railConfigProvider?: string | null;
   railSlashStatusLimits?: readonly AgentComposerSlashStatusLimit[];
+  onAgentConfigMenuOpen?: () => void;
   previewMode?: boolean;
   onAgentProviderLogin?: (provider?: string | null) => void;
   actions: {
@@ -994,6 +995,7 @@ export function AgentGUINodeView({
   slashStatusLimitsLoading = false,
   railConfigProvider,
   railSlashStatusLimits,
+  onAgentConfigMenuOpen,
   previewMode = false,
   onAgentProviderLogin,
   actions,
@@ -1469,6 +1471,7 @@ export function AgentGUINodeView({
         onSelectConversationFilterTarget:
           actions.selectConversationFilterTarget,
         onOpenAgentEnvSetup: openAgentEnvSetup,
+        onAgentConfigMenuOpen,
         onRetryOpenclawGateway: retryOpenclawGateway,
         onSelectConversation: selectConversation,
         onToggleConversationPinned: toggleConversationPinned,
@@ -1490,6 +1493,7 @@ export function AgentGUINodeView({
         conversationRailCollapsed,
         createConversationDisabled,
         labels,
+        onAgentConfigMenuOpen,
         openAgentEnvSetup,
         openConversationWindow,
         openProjectFiles,
@@ -3927,6 +3931,7 @@ interface AgentGUIConversationRailPaneProps {
     source?: string;
   }) => void;
   onOpenAgentEnvSetup: () => void;
+  onAgentConfigMenuOpen?: () => void;
   onRetryOpenclawGateway: () => void;
   onSelectConversation: (agentSessionId: string) => void;
   onToggleConversationPinned: (agentSessionId: string, pinned: boolean) => void;
@@ -4026,6 +4031,7 @@ function agentGUIConversationRailStoreSnapshotsEqual(
       next.onSelectConversationFilterTarget &&
     current.onCreateConversation === next.onCreateConversation &&
     current.onOpenAgentEnvSetup === next.onOpenAgentEnvSetup &&
+    current.onAgentConfigMenuOpen === next.onAgentConfigMenuOpen &&
     current.onRetryOpenclawGateway === next.onRetryOpenclawGateway &&
     current.onSelectConversation === next.onSelectConversation &&
     current.onToggleConversationPinned === next.onToggleConversationPinned &&
@@ -5069,6 +5075,7 @@ const AgentGUIConversationRailPane = memo(
     sectionAgentTargetFallbackId,
     onCreateConversation,
     onOpenAgentEnvSetup,
+    onAgentConfigMenuOpen,
     onRetryOpenclawGateway,
     onSelectConversation,
     onToggleConversationPinned,
@@ -5402,7 +5409,18 @@ const AgentGUIConversationRailPane = memo(
         </ScrollArea>
         {railConfigProvider ? (
           <div className="shrink-0 px-2 py-1.5">
-            <Popover>
+            <Popover
+              onOpenChange={(open) => {
+                // Refresh the underlying probe on open, the same way the
+                // window-title info tooltip does (see AgentGUINode's
+                // handleAgentProbeInfoOpen) — otherwise a stale/empty fetch
+                // from before a provider finished installing sits here until
+                // something unrelated happens to refresh it.
+                if (open) {
+                  onAgentConfigMenuOpen?.();
+                }
+              }}
+            >
               <PopoverTrigger asChild>
                 <Button
                   type="button"
