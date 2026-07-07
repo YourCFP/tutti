@@ -3799,6 +3799,15 @@ export function useAgentGUINodeController({
     !providerTargetsLoading &&
     (providerTargets === undefined ||
       normalizedExplicitProviderTargets.length === 0);
+  const handoffProviderTargets = useMemo(
+    () =>
+      providerTargetsLoading
+        ? []
+        : normalizedExplicitProviderTargets.filter(
+            (target) => target.disabled !== true
+          ),
+    [normalizedExplicitProviderTargets, providerTargetsLoading]
+  );
   const selectedProviderTarget = useMemo(() => {
     const resolved = resolveAgentGUIProviderTarget({
       agentTargetId: data.agentTargetId,
@@ -11789,6 +11798,7 @@ export function useAgentGUINodeController({
         data: viewData,
         selectedProviderTarget: effectiveSelectedProviderTarget,
         providerTargets: normalizedProviderTargets,
+        handoffProviderTargets,
         providerTargetsLoading,
         providerRailMode,
         comingSoonProviders: normalizedComingSoonProviders,
@@ -11865,6 +11875,7 @@ export function useAgentGUINodeController({
       controllerActions,
       data,
       effectiveSelectedProviderTarget,
+      handoffProviderTargets,
       normalizedComingSoonProviders,
       normalizedProviderTargets,
       providerRailMode,

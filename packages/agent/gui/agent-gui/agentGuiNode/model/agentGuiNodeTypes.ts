@@ -171,6 +171,7 @@ export interface AgentGUINodeViewModel {
   data: AgentGUINodeData;
   selectedProviderTarget: AgentGUIProviderTarget;
   providerTargets: readonly AgentGUIProviderTarget[];
+  handoffProviderTargets: readonly AgentGUIProviderTarget[];
   providerTargetsLoading: boolean;
   /** How the rail composes its list — "exact" renders targets verbatim with no static injection. */
   providerRailMode: AgentGUIProviderRailMode;

@@ -179,6 +179,10 @@ a Codex panel before the draft prefill effect runs. The prefilled handoff panel
 must also scope the conversation rail to the selected target instead of opening
 on `All`; the target-specific rail selection is part of the handoff activation
 state, not a later user filter choice.
+The handoff menu is a launch surface, so its options must come from the
+host-provided, enabled provider targets. It must not use the provider rail's
+static catalog fallback or coming-soon placeholders, which are display chrome
+rather than proof that the user has configured a runnable agent.
 When provider selection happens from the empty-home composer or title control
 while the rail is already scoped to a provider target in multi-provider scope,
 it must update the rail conversation filter to the matching agent target so the

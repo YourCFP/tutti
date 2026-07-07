@@ -1153,6 +1153,78 @@ describe("AgentComposer", () => {
     expect(onHandoffConversation).toHaveBeenCalledWith(claudeTarget);
   });
 
+  it("omits targets that are not handoff-capable from the handoff menu", async () => {
+    const codexTarget = {
+      targetId: "local:codex",
+      agentTargetId: "local:codex",
+      provider: "codex" as const,
+      ref: { kind: "local-provider", provider: "codex" as const },
+      label: "Codex"
+    };
+    const claudeTarget = {
+      targetId: "local:claude-code",
+      agentTargetId: "local:claude-code",
+      provider: "claude-code" as const,
+      ref: { kind: "local-provider", provider: "claude-code" as const },
+      label: "Claude Code"
+    };
+    const cursorTarget = {
+      targetId: "local:cursor",
+      agentTargetId: "local:cursor",
+      provider: "cursor" as const,
+      ref: { kind: "local-provider", provider: "cursor" as const },
+      label: "Cursor"
+    };
+
+    render(
+      <AgentComposer
+        workspaceId="workspace-1"
+        currentUserId="user-1"
+        provider="codex"
+        selectedProviderTarget={codexTarget}
+        providerTargets={[codexTarget, claudeTarget, cursorTarget]}
+        handoffProviderTargets={[codexTarget, claudeTarget]}
+        providerSelectReadonly
+        onHandoffConversation={vi.fn()}
+        draftContent={createDraft("")}
+        availableCommands={[] satisfies readonly AgentHostAgentSessionCommand[]}
+        disabled={false}
+        submitDisabled={false}
+        placeholder="placeholder"
+        composerSettings={createComposerSettings()}
+        queuedPrompts={[]}
+        drainingQueuedPromptId={null}
+        canQueueWhileBusy={false}
+        showStopButton={false}
+        activePrompt={null}
+        isInterrupting={false}
+        isSendingTurn={false}
+        isSubmittingPrompt={false}
+        labels={createLabels()}
+        workspaceUserProjectI18n={workspaceUserProjectI18n}
+        onDraftContentChange={vi.fn()}
+        onSettingsChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onSendQueuedPromptNext={vi.fn()}
+        onRemoveQueuedPrompt={vi.fn()}
+        onEditQueuedPrompt={vi.fn()}
+        onInterruptCurrentTurn={vi.fn()}
+        onSubmitInteractivePrompt={vi.fn()}
+      />
+    );
+
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Handoff" }), {
+      key: "ArrowDown"
+    });
+
+    expect(
+      await screen.findByRole("option", { name: "Claude Code" })
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("option", { name: "Cursor" })
+    ).not.toBeInTheDocument();
+  });
+
   it("marks the handoff icon disabled with the handoff trigger", () => {
     const codexTarget = {
       targetId: "local:codex",

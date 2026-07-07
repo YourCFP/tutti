@@ -236,6 +236,7 @@ export interface AgentComposerProps {
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
   selectedProviderTarget?: AgentGUIProviderTarget | null;
   providerTargets?: readonly AgentGUIProviderTarget[];
+  handoffProviderTargets?: readonly AgentGUIProviderTarget[];
   providerSelectReadonly?: boolean;
   onProviderSelect?: (input: {
     provider: AgentGUIProvider;
@@ -999,6 +1000,7 @@ export function AgentComposer({
   workspaceAppIcons = EMPTY_WORKSPACE_APP_ICONS,
   selectedProviderTarget = null,
   providerTargets = [],
+  handoffProviderTargets,
   providerSelectReadonly = false,
   onProviderSelect,
   onHandoffConversation,
@@ -2540,11 +2542,15 @@ export function AgentComposer({
     )
       ? [selectedProviderSwitchTarget, ...enabledProviderSwitchTargets]
       : enabledProviderSwitchTargets;
+  const enabledHandoffProviderTargets = useMemo(
+    () =>
+      (handoffProviderTargets ?? providerMenuTargets).filter(
+        (target) => target.disabled !== true
+      ),
+    [handoffProviderTargets, providerMenuTargets]
+  );
   const handoffMenuTargets = selectedProviderSwitchTarget
-    ? providerMenuTargets.filter((target) => {
-        if (target.disabled === true) {
-          return false;
-        }
+    ? enabledHandoffProviderTargets.filter((target) => {
         if (target.targetId === selectedProviderSwitchTarget.targetId) {
           return false;
         }
@@ -2554,7 +2560,7 @@ export function AgentComposer({
         const targetAgentTargetId = target.agentTargetId ?? target.targetId;
         return targetAgentTargetId !== selectedAgentTargetId;
       })
-    : providerMenuTargets;
+    : enabledHandoffProviderTargets;
   const selectedProviderLabel =
     selectedProviderSwitchTarget?.label ??
     selectedProviderTarget?.label ??
