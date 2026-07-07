@@ -855,6 +855,160 @@ describe("useAgentGUINodeController", () => {
     );
   });
 
+  it("carries the home composer draft over to an agent with an empty input", async () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({ presences: [], sessions: [] })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn())
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData(null, "codex", {
+          agentTargetId: "local:codex"
+        }),
+        providerTargets: [
+          {
+            targetId: "local:codex",
+            agentTargetId: "local:codex",
+            provider: "codex",
+            ref: { kind: "local-provider", provider: "codex" },
+            label: "Codex"
+          },
+          {
+            targetId: "local:claude-code",
+            agentTargetId: "local:claude-code",
+            provider: "claude-code",
+            ref: { kind: "local-provider", provider: "claude-code" },
+            label: "Claude Code"
+          }
+        ],
+        onDataChange: vi.fn()
+      })
+    );
+
+    act(() => {
+      result.current.actions.updateDraftContent(draftContent("carry me over"));
+    });
+    expect(result.current.viewModel.draftPrompt).toBe("carry me over");
+
+    act(() => {
+      result.current.actions.selectHomeComposerAgentTarget({
+        provider: "claude-code",
+        providerTargetId: "local:claude-code"
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.viewModel.selectedProviderTarget.provider).toBe(
+        "claude-code"
+      );
+    });
+    // Empty target inherits the current input.
+    expect(result.current.viewModel.draftPrompt).toBe("carry me over");
+
+    // The target the user typed under keeps its own draft.
+    act(() => {
+      result.current.actions.selectHomeComposerAgentTarget({
+        provider: "codex",
+        providerTargetId: "local:codex"
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.viewModel.selectedProviderTarget.provider).toBe(
+        "codex"
+      );
+    });
+    expect(result.current.viewModel.draftPrompt).toBe("carry me over");
+  });
+
+  it("keeps an agent's own draft instead of overwriting it on switch", async () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({ presences: [], sessions: [] })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn())
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData(null, "codex", {
+          agentTargetId: "local:codex"
+        }),
+        providerTargets: [
+          {
+            targetId: "local:codex",
+            agentTargetId: "local:codex",
+            provider: "codex",
+            ref: { kind: "local-provider", provider: "codex" },
+            label: "Codex"
+          },
+          {
+            targetId: "local:claude-code",
+            agentTargetId: "local:claude-code",
+            provider: "claude-code",
+            ref: { kind: "local-provider", provider: "claude-code" },
+            label: "Claude Code"
+          }
+        ],
+        onDataChange: vi.fn()
+      })
+    );
+
+    // Give Claude Code its own draft first.
+    act(() => {
+      result.current.actions.selectHomeComposerAgentTarget({
+        provider: "claude-code",
+        providerTargetId: "local:claude-code"
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.viewModel.selectedProviderTarget.provider).toBe(
+        "claude-code"
+      );
+    });
+    act(() => {
+      result.current.actions.updateDraftContent(draftContent("claude draft"));
+    });
+
+    // Type something under Codex, then switch back to Claude Code.
+    act(() => {
+      result.current.actions.selectHomeComposerAgentTarget({
+        provider: "codex",
+        providerTargetId: "local:codex"
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.viewModel.selectedProviderTarget.provider).toBe(
+        "codex"
+      );
+    });
+    act(() => {
+      result.current.actions.updateDraftContent(draftContent("codex draft"));
+    });
+
+    act(() => {
+      result.current.actions.selectHomeComposerAgentTarget({
+        provider: "claude-code",
+        providerTargetId: "local:claude-code"
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.viewModel.selectedProviderTarget.provider).toBe(
+        "claude-code"
+      );
+    });
+    // Claude Code keeps its own draft; it is not clobbered by the Codex input.
+    expect(result.current.viewModel.draftPrompt).toBe("claude draft");
+  });
+
   it("syncs a scoped rail target when switching the empty composer provider", async () => {
     installAgentHostApi({
       list: vi.fn(async () => ({

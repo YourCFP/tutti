@@ -9,7 +9,6 @@ import {
   desktopManagedAgentProviders,
   ensureDesktopManagedAgentProviderStatuses,
   isDesktopManagedAgentProvider,
-  projectDesktopManagedAgentsState,
   projectDesktopManagedAgentsStateForAgentGUI
 } from "./desktopManagedAgentProviders.ts";
 
@@ -27,8 +26,8 @@ test("ensureDesktopManagedAgentProviderStatuses delegates managed provider loadi
   assert.deepEqual(calls, [[...desktopManagedAgentProviders]]);
 });
 
-test("projectDesktopManagedAgentsState derives AgentGUI managed state from provider status", () => {
-  const state = projectDesktopManagedAgentsState({
+test("projectDesktopManagedAgentsStateForAgentGUI derives AgentGUI managed state from provider status", () => {
+  const state = projectDesktopManagedAgentsStateForAgentGUI({
     capturedAt: "2026-06-02T08:00:00.000Z",
     defaultProvider: "codex",
     error: null,
@@ -57,18 +56,18 @@ test("projectDesktopManagedAgentsState derives AgentGUI managed state from provi
     ]
   });
 
-  assert.deepEqual(state.readyAgentIds, ["claude-code", "opencode"]);
-  assert.deepEqual(state.configSyncedAgentIds, [
+  assert.deepEqual(state?.readyAgentIds, ["claude-code", "opencode"]);
+  assert.deepEqual(state?.configSyncedAgentIds, [
     "claude-code",
     "codex",
     "opencode"
   ]);
-  assert.equal(state.metadataSynced, true);
-  assert.equal(state.items[0]?.agentId, "claude-code");
-  assert.equal(state.items[1]?.agentId, "codex");
-  assert.equal(state.items[1]?.decisionReason, "auth_required");
+  assert.equal(state?.metadataSynced, true);
+  assert.equal(state?.items[0]?.agentId, "claude-code");
+  assert.equal(state?.items[1]?.agentId, "codex");
+  assert.equal(state?.items[1]?.decisionReason, "auth_required");
   assert.equal(
-    state.items.find((item) => item.agentId === "opencode")?.decisionReason,
+    state?.items.find((item) => item.agentId === "opencode")?.decisionReason,
     "ready"
   );
 });

@@ -12,8 +12,8 @@ import type {
 export const desktopManagedAgentProviders = [
   "claude-code",
   "codex",
-  "tutti-agent",
   "cursor",
+  "tutti-agent",
   "opencode",
   "gemini",
   "hermes",
@@ -28,9 +28,13 @@ export function ensureDesktopManagedAgentProviderStatuses(
   });
 }
 
-export function projectDesktopManagedAgentsState(
+export function projectDesktopManagedAgentsStateForAgentGUI(
   snapshot: AgentProviderStatusSnapshot
-): AgentHostManagedAgentsState {
+): AgentHostManagedAgentsState | null {
+  if (!snapshot.capturedAt) {
+    return null;
+  }
+
   const statusByProvider = new Map<WorkspaceAgentProvider, AgentProviderStatus>(
     snapshot.statuses.map((status) => [status.provider, status])
   );
@@ -61,27 +65,17 @@ export function projectDesktopManagedAgentsState(
       toolId: `${provider}-cli`
     };
   });
-  const revision = snapshot.capturedAt ?? "pending";
+  const revision = snapshot.capturedAt;
 
   return {
     agentProfileRevision: `agent-provider-status:${revision}`,
     configSyncedAgentIds,
     readyAgentIds,
     items,
-    metadataSynced: Boolean(snapshot.capturedAt && !snapshot.error),
+    metadataSynced: !snapshot.error,
     toolCatalogRevision: `agent-provider-status:${revision}`,
     totalCount: items.length
   };
-}
-
-export function projectDesktopManagedAgentsStateForAgentGUI(
-  snapshot: AgentProviderStatusSnapshot
-): AgentHostManagedAgentsState | null {
-  if (!snapshot.capturedAt) {
-    return null;
-  }
-
-  return projectDesktopManagedAgentsState(snapshot);
 }
 
 export function isDesktopManagedAgentProvider(

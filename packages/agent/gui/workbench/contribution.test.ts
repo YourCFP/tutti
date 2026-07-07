@@ -1341,6 +1341,13 @@ describe("agent GUI workbench contribution copy", () => {
   it("renders the expanded workbench header as a rail titlebar plus detail title", () => {
     const contribution = createTestAgentGuiWorkbenchContribution({
       renderBody: () => null,
+      resolveDockPopupIdentity: (state) =>
+        state?.lastActiveAgentSessionId === "session-1"
+          ? {
+              iconUrl: "tutti-asset://agent/codex-session.png",
+              title: "Current session title"
+            }
+          : null,
       resolveDockPopupTitle: (state) =>
         state?.lastActiveAgentSessionId === "session-1"
           ? "Current session title"
@@ -1417,6 +1424,9 @@ describe("agent GUI workbench contribution copy", () => {
     expect(
       screen.getByTestId("agent-gui-window-detail-title")
     ).toHaveTextContent("Current session title");
+    expect(
+      screen.getByTestId("agent-gui-window-detail-title-icon")
+    ).toHaveAttribute("src", "tutti-asset://agent/codex-session.png");
     expect(
       screen.queryByRole("button", { name: "window actions" })
     ).not.toBeInTheDocument();

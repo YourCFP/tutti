@@ -143,6 +143,22 @@ export const zhCN = {
       openSessionUnavailableDescription: "这个 Agent 会话已不存在或无法打开。",
       openSessionUnavailableTitle: "会话不可用"
     },
+    accountMenu: {
+      title: "Tutti Agent",
+      member: "管理订阅",
+      creditsBalance: "积分余额",
+      accountCenter: "账号中心",
+      free: "Free",
+      signIn: "登录",
+      signOut: "退出登录",
+      loading: "加载中",
+      unavailable: "--",
+      dataUnavailable: "部分账号数据暂不可用",
+      rewardToastTitle: "新用户积分",
+      rewardToastCreditsUnit: "积分",
+      rewardToastDescription: "已添加到账户余额",
+      rewardToastClose: "关闭积分奖励通知"
+    },
     agentEnv: {
       configTitle: "{{provider}} 环境",
       wizardDescription:

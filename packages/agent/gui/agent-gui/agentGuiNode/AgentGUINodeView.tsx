@@ -165,7 +165,7 @@ import type {
 } from "./agentRichText/agentFileMentionExtension";
 import { formatAgentMentionMarkdown } from "./agentRichText/agentFileMentionExtension";
 import { createRichTextMentionHref } from "@tutti-os/ui-rich-text/core";
-import { resolveAgentGuiSessionProviderIconUrl } from "../../agentGuiSessionProviderIconUrls";
+import { resolveAgentGuiSessionProviderFlatIconUrl } from "../../agentGuiSessionProviderIconUrls";
 import { agentColorfulUrl } from "../../managedAgentIconAssets";
 
 type StatusDotTone = "neutral" | "green" | "blue" | "amber" | "red";
@@ -1506,6 +1506,9 @@ export function AgentGUINodeView({
       : railConfigProvider;
   const effectiveRailSlashStatusLimits =
     railSlashStatusLimits ?? slashStatusLimits;
+  const shouldShowProviderRailConfigMenu =
+    viewModel.conversationFilter.kind !== "all" &&
+    viewModel.selectedProviderTarget?.disabled !== true;
   const enabledProviderTargets = viewModel.providerTargets.filter(
     (target) =>
       target.disabled !== true &&
@@ -1542,9 +1545,6 @@ export function AgentGUINodeView({
         createConversationDisabled,
         openclawGateway,
         isCollapsed: conversationRailCollapsed,
-        railConfigProvider: effectiveRailConfigProvider,
-        slashStatusLimits: effectiveRailSlashStatusLimits,
-        selectedProviderTarget: viewModel.selectedProviderTarget,
         providerTargets: viewModel.providerTargets,
         providerTargetsLoading: viewModel.providerTargetsLoading,
         conversationFilter: viewModel.conversationFilter,
@@ -1553,9 +1553,6 @@ export function AgentGUINodeView({
         onUpdateConversationFilter: actions.updateConversationFilter,
         onSelectConversationFilterTarget:
           actions.selectConversationFilterTarget,
-        onOpenAgentEnvSetup: openAgentEnvSetup,
-        onOpenAgentSettings: openAgentSettings,
-        onAgentConfigMenuOpen,
         onRetryOpenclawGateway: retryOpenclawGateway,
         onSelectConversation: selectConversation,
         onToggleConversationPinned: toggleConversationPinned,
@@ -1577,9 +1574,6 @@ export function AgentGUINodeView({
         conversationRailCollapsed,
         createConversationDisabled,
         labels,
-        onAgentConfigMenuOpen,
-        openAgentEnvSetup,
-        openAgentSettings,
         openConversationWindow,
         openProjectFiles,
         openclawGateway,
@@ -1592,9 +1586,6 @@ export function AgentGUINodeView({
         selectConversation,
         selectProjectDirectory,
         sectionAgentTargetFallbackId,
-        effectiveRailConfigProvider,
-        effectiveRailSlashStatusLimits,
-        viewModel.selectedProviderTarget,
         viewModel.providerTargets,
         viewModel.providerTargetsLoading,
         toggleConversationPinned,
@@ -1674,6 +1665,21 @@ export function AgentGUINodeView({
               onUpdateConversationFilter={actions.updateConversationFilter}
               onRequestComposerFocus={requestComposerFocus}
             />
+            {shouldShowProviderRailConfigMenu ? (
+              <div
+                className={`${styles.providerRailFooter} nodrag tsh-desktop-no-drag`}
+                data-testid="agent-gui-config-footer"
+              >
+                <AgentGUIConfigMenu
+                  labels={labels}
+                  previewMode={previewMode}
+                  slashStatusLimits={effectiveRailSlashStatusLimits}
+                  onAgentConfigMenuOpen={onAgentConfigMenuOpen}
+                  onOpenAgentEnvSetup={openAgentEnvSetup}
+                  onOpenAgentSettings={openAgentSettings}
+                />
+              </div>
+            ) : null}
             {renderSidebarFooter ? (
               <div
                 className={`${styles.providerRailFooter} nodrag tsh-desktop-no-drag`}
@@ -4036,9 +4042,6 @@ interface AgentGUIConversationRailPaneProps {
   createConversationDisabled: boolean;
   openclawGateway: OpenclawGatewayViewModel | null;
   isCollapsed: boolean;
-  railConfigProvider: string | null;
-  slashStatusLimits: readonly AgentComposerSlashStatusLimit[];
-  selectedProviderTarget: AgentGUINodeViewModel["selectedProviderTarget"];
   providerTargets: AgentGUINodeViewModel["providerTargets"];
   providerTargetsLoading: AgentGUINodeViewModel["providerTargetsLoading"];
   conversationFilter: AgentGUINodeViewModel["conversationFilter"];
@@ -4051,9 +4054,6 @@ interface AgentGUIConversationRailPaneProps {
     projectPath?: string | null;
     source?: string;
   }) => void;
-  onOpenAgentEnvSetup: () => void;
-  onOpenAgentSettings: () => void;
-  onAgentConfigMenuOpen?: () => void;
   onRetryOpenclawGateway: () => void;
   onSelectConversation: (agentSessionId: string) => void;
   onToggleConversationPinned: (agentSessionId: string, pinned: boolean) => void;
@@ -4140,9 +4140,6 @@ function agentGUIConversationRailStoreSnapshotsEqual(
     current.createConversationDisabled === next.createConversationDisabled &&
     current.openclawGateway === next.openclawGateway &&
     current.isCollapsed === next.isCollapsed &&
-    current.railConfigProvider === next.railConfigProvider &&
-    current.slashStatusLimits === next.slashStatusLimits &&
-    current.selectedProviderTarget === next.selectedProviderTarget &&
     current.providerTargets === next.providerTargets &&
     current.providerTargetsLoading === next.providerTargetsLoading &&
     current.conversationFilter === next.conversationFilter &&
@@ -4152,9 +4149,6 @@ function agentGUIConversationRailStoreSnapshotsEqual(
     current.onSelectConversationFilterTarget ===
       next.onSelectConversationFilterTarget &&
     current.onCreateConversation === next.onCreateConversation &&
-    current.onOpenAgentEnvSetup === next.onOpenAgentEnvSetup &&
-    current.onOpenAgentSettings === next.onOpenAgentSettings &&
-    current.onAgentConfigMenuOpen === next.onAgentConfigMenuOpen &&
     current.onRetryOpenclawGateway === next.onRetryOpenclawGateway &&
     current.onSelectConversation === next.onSelectConversation &&
     current.onToggleConversationPinned === next.onToggleConversationPinned &&
@@ -4616,8 +4610,8 @@ function conversationProjectsRenderEqual(
 const agentGUIProviderRailOrder: readonly AgentGUIProvider[] = [
   "codex",
   "claude-code",
-  "tutti-agent",
   "cursor",
+  "tutti-agent",
   "opencode",
   "nexight",
   "hermes",
@@ -4656,7 +4650,7 @@ function agentGUILaunchpadIconPresentations(): readonly AgentGUIProviderIconPres
 function agentGUIConversationProviderIconUrl(
   provider: string | undefined
 ): string | null {
-  return resolveAgentGuiSessionProviderIconUrl(provider);
+  return resolveAgentGuiSessionProviderFlatIconUrl(provider);
 }
 
 function agentGUIProviderRailLabel(
@@ -5027,12 +5021,10 @@ const AgentGUIAccountRewardToast = memo(function AgentGUIAccountRewardToast({
 
   return (
     <div
-      className="nodrag relative mx-3 mb-1 w-[calc(100%-24px)] max-w-[calc(100%-24px)] overflow-hidden rounded-[14px] border border-cyan-100/55 bg-[linear-gradient(135deg,rgba(227,255,244,0.94),rgba(167,237,222,0.78)_44%,rgba(151,190,224,0.72))] p-2.5 pr-9 text-white shadow-[0_14px_28px_rgba(0,0,0,0.20),0_0_0_1px_rgba(255,255,255,0.22)_inset] [-webkit-app-region:no-drag]"
+      className="agent-gui-node__account-reward-toast nodrag relative mx-3 mb-1 w-[calc(100%-24px)] max-w-[calc(100%-24px)] overflow-hidden rounded-[14px] p-2.5 pr-9 text-white [-webkit-app-region:no-drag]"
       data-testid="agent-gui-account-reward-toast"
       role="status"
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(255,255,255,0.52),transparent_24%),radial-gradient(circle_at_86%_12%,rgba(255,255,255,0.32),transparent_22%)]" />
-      <div className="pointer-events-none absolute -bottom-9 left-[-8%] h-20 w-[116%] rounded-[50%] border-t border-white/28 bg-white/10" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent" />
       <div className="relative flex min-w-0 items-center gap-2.5">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[rgba(250,255,236,0.78)] text-emerald-400 shadow-[0_9px_18px_rgba(20,184,166,0.18),0_0_0_1px_rgba(255,255,255,0.5)_inset]">
@@ -5279,6 +5271,105 @@ function agentGUIAccountInitials(label: string): string {
     return "T";
   }
   return normalized.slice(0, 2).toUpperCase();
+}
+
+interface AgentGUIConfigMenuProps {
+  labels: AgentGUIViewLabels;
+  previewMode: boolean;
+  slashStatusLimits: readonly AgentComposerSlashStatusLimit[];
+  onAgentConfigMenuOpen?: () => void;
+  onOpenAgentEnvSetup: () => void;
+  onOpenAgentSettings: () => void;
+}
+
+function AgentGUIConfigMenu({
+  labels,
+  previewMode,
+  slashStatusLimits,
+  onAgentConfigMenuOpen,
+  onOpenAgentEnvSetup,
+  onOpenAgentSettings
+}: AgentGUIConfigMenuProps): React.JSX.Element {
+  return (
+    <Popover
+      onOpenChange={(open) => {
+        // Refresh the underlying probe on open, the same way the window-title
+        // info tooltip does; otherwise a stale/empty fetch can sit here until
+        // something unrelated refreshes it.
+        if (open) {
+          onAgentConfigMenuOpen?.();
+        }
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={labels.agentConfig}
+          className={`${styles.providerRailConfigButton} nodrag tsh-desktop-no-drag`}
+          title={labels.agentConfig}
+          disabled={previewMode}
+        >
+          <SettingsLinedIcon aria-hidden="true" width={18} height={18} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="end"
+        className="w-[300px] max-w-[calc(100vw-32px)] gap-3 p-1 text-xs"
+        data-testid="agent-gui-config-menu"
+      >
+        <div className="flex min-w-0 flex-col gap-3">
+          {slashStatusLimits.length > 0 ? (
+            <>
+              <div className="flex min-w-0 flex-col gap-2 p-2">
+                <span className="text-[13px] font-semibold leading-4">
+                  {labels.slashStatusLimits}
+                </span>
+                {slashStatusLimits.map((limit) => (
+                  <AgentUsageMeter
+                    key={limit.id}
+                    label={limit.label}
+                    value={`${limit.value}${limit.reset ? ` (${limit.reset})` : ""}`}
+                    percent={
+                      typeof limit.percentRemaining === "number" &&
+                      Number.isFinite(limit.percentRemaining)
+                        ? limit.percentRemaining
+                        : null
+                    }
+                  />
+                ))}
+              </div>
+              <div className="px-2">
+                <span className="block h-px bg-[var(--border-1)]" />
+              </div>
+            </>
+          ) : null}
+          <div className="flex min-w-0 flex-col gap-1">
+            <button
+              type="button"
+              data-testid="agent-gui-config-settings"
+              className="nodrag flex h-7 w-full items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] transition-colors hover:bg-[var(--transparency-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] disabled:text-[var(--text-tertiary)] [-webkit-app-region:no-drag]"
+              disabled={previewMode}
+              onClick={() => onOpenAgentSettings()}
+            >
+              <SettingsLinedIcon aria-hidden="true" width={16} height={16} />
+              <span>{labels.agentSettingsMenu}</span>
+            </button>
+            <button
+              type="button"
+              data-testid="agent-gui-config-env-setup"
+              className="nodrag flex h-7 w-full items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] transition-colors hover:bg-[var(--transparency-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] disabled:text-[var(--text-tertiary)] [-webkit-app-region:no-drag]"
+              disabled={previewMode}
+              onClick={() => onOpenAgentEnvSetup()}
+            >
+              <Wrench aria-hidden="true" size={16} strokeWidth={1.8} />
+              <span>{labels.agentEnvSetup}</span>
+            </button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 interface AgentGUIConversationRailInput {
@@ -5634,14 +5725,9 @@ const AgentGUIConversationRailPane = memo(
     createConversationDisabled,
     openclawGateway,
     isCollapsed,
-    slashStatusLimits,
-    selectedProviderTarget,
     conversationFilter,
     sectionAgentTargetFallbackId,
     onCreateConversation,
-    onOpenAgentEnvSetup,
-    onOpenAgentSettings,
-    onAgentConfigMenuOpen,
     onRetryOpenclawGateway,
     onSelectConversation,
     onToggleConversationPinned,
@@ -5983,100 +6069,6 @@ const AgentGUIConversationRailPane = memo(
             })
           )}
         </ScrollArea>
-        {selectedProviderTarget?.disabled === true ||
-        conversationFilter.kind === "all" ? null : (
-          <div className="shrink-0 px-2 py-1.5">
-            <Popover
-              onOpenChange={(open) => {
-                // Refresh the underlying probe on open, the same way the
-                // window-title info tooltip does (see AgentGUINode's
-                // handleAgentProbeInfoOpen) — otherwise a stale/empty fetch
-                // from before a provider finished installing sits here until
-                // something unrelated happens to refresh it.
-                if (open) {
-                  onAgentConfigMenuOpen?.();
-                }
-              }}
-            >
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="flex w-full items-center justify-start gap-2 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                  title={labels.agentConfig}
-                  disabled={previewMode}
-                >
-                  <SettingsLinedIcon
-                    aria-hidden="true"
-                    width={16}
-                    height={16}
-                  />
-                  <span>{labels.agentConfig}</span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent
-                side="top"
-                align="start"
-                className="w-[300px] max-w-[calc(100vw-32px)] gap-3 p-1 text-xs"
-                data-testid="agent-gui-config-menu"
-              >
-                <div className="flex min-w-0 flex-col gap-3">
-                  {slashStatusLimits.length > 0 ? (
-                    <>
-                      <div className="flex min-w-0 flex-col gap-2 p-2">
-                        <span className="text-[13px] font-semibold leading-4">
-                          {labels.slashStatusLimits}
-                        </span>
-                        {slashStatusLimits.map((limit) => (
-                          <AgentUsageMeter
-                            key={limit.id}
-                            label={limit.label}
-                            value={`${limit.value}${limit.reset ? ` (${limit.reset})` : ""}`}
-                            percent={
-                              typeof limit.percentRemaining === "number" &&
-                              Number.isFinite(limit.percentRemaining)
-                                ? limit.percentRemaining
-                                : null
-                            }
-                          />
-                        ))}
-                      </div>
-                      <div className="px-2">
-                        <span className="block h-px bg-[var(--border-1)]" />
-                      </div>
-                    </>
-                  ) : null}
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <button
-                      type="button"
-                      data-testid="agent-gui-config-settings"
-                      className="nodrag flex h-7 w-full items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] transition-colors hover:bg-[var(--transparency-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] disabled:text-[var(--text-tertiary)] [-webkit-app-region:no-drag]"
-                      disabled={previewMode}
-                      onClick={() => onOpenAgentSettings()}
-                    >
-                      <SettingsLinedIcon
-                        aria-hidden="true"
-                        width={16}
-                        height={16}
-                      />
-                      <span>{labels.agentSettingsMenu}</span>
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="agent-gui-config-env-setup"
-                      className="nodrag flex h-7 w-full items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] transition-colors hover:bg-[var(--transparency-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] disabled:text-[var(--text-tertiary)] [-webkit-app-region:no-drag]"
-                      disabled={previewMode}
-                      onClick={() => onOpenAgentEnvSetup()}
-                    >
-                      <Wrench aria-hidden="true" size={16} strokeWidth={1.8} />
-                      <span>{labels.agentEnvSetup}</span>
-                    </button>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-        )}
         {footer ? <div className="shrink-0 pb-2">{footer}</div> : null}
         <ConfirmationDialog
           cancelLabel={labels.cancel}
