@@ -191,6 +191,7 @@ const AGENT_GUI_STICK_TO_BOTTOM_THRESHOLD_PX = 24;
 const AGENT_GUI_TOP_HISTORY_PREFETCH_THRESHOLD_PX = 240;
 const AGENT_GUI_TOP_MASK_SCROLL_EPSILON_PX = 1;
 const AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE = 5;
+const AGENT_GUI_CONVERSATION_RAIL_LOADING_SKELETON_DELAY_MS = 300;
 const AGENT_GUI_CONVERSATION_RAIL_PROJECTION_PROVIDER: AgentGUIProvider =
   "codex";
 const AGENT_GUI_TIMELINE_SCROLL_AREA_CONTENT_STYLE: CSSProperties = {
@@ -268,6 +269,26 @@ const fallbackWorkspaceFileReferenceCopy: WorkspaceFileReferenceCopy = {
 
 function agentGuiPerfNowMs(): number {
   return globalThis.performance?.now?.() ?? Date.now();
+}
+
+function useDelayedBoolean(value: boolean, delayMs: number): boolean {
+  const [delayedValue, setDelayedValue] = useState(false);
+
+  useEffect(() => {
+    if (!value) {
+      setDelayedValue(false);
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setDelayedValue(true);
+    }, delayMs);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [delayMs, value]);
+
+  return delayedValue;
 }
 
 function roundAgentGuiPerfMs(value: number): number {
@@ -5227,18 +5248,22 @@ function useAgentGUIConversationRail({
   loadMoreSectionConversations: (section: ConversationSection) => void;
   runtimeSectionsEnabled: boolean;
   runtimeRailSections: ConversationSection[] | null;
+  runtimeRailSectionsPending: boolean;
   sectionPageStates: ReadonlyMap<string, ConversationRailSectionPageState>;
 } {
   const agentActivityRuntime = useAgentActivityRuntime();
   const [runtimeRailSections, setRuntimeRailSections] = useState<
     ConversationSection[] | null
   >(null);
+  const [runtimeRailSectionsPending, setRuntimeRailSectionsPending] =
+    useState(false);
   const [sectionPageStates, setSectionPageStates] = useState<
     ReadonlyMap<string, ConversationRailSectionPageState>
   >(() => new Map());
   const conversationsRef = useRef(conversations);
   const pagingRequestSequenceRef = useRef(0);
   const pagingAbortControllersRef = useRef(new Map<string, AbortController>());
+  const workspaceIdRef = useRef(workspaceId);
   const runtimeListSessionSections = agentActivityRuntime.listSessionSections;
   const runtimeListSessionSectionPage =
     agentActivityRuntime.listSessionSectionPage;
@@ -5274,12 +5299,16 @@ function useAgentGUIConversationRail({
   }, [conversations]);
 
   useEffect(() => {
+    const workspaceChanged = workspaceIdRef.current !== workspaceId;
+    workspaceIdRef.current = workspaceId;
     pagingRequestSequenceRef.current += 1;
     for (const controller of pagingAbortControllersRef.current.values()) {
       controller.abort();
     }
     pagingAbortControllersRef.current.clear();
-    setRuntimeRailSections(null);
+    if (workspaceChanged) {
+      setRuntimeRailSections(null);
+    }
     setSectionPageStates(new Map());
     return () => {
       pagingRequestSequenceRef.current += 1;
@@ -5303,10 +5332,12 @@ function useAgentGUIConversationRail({
 
   useEffect(() => {
     if (!runtimeSectionsEnabled || !runtimeListSessionSections) {
+      setRuntimeRailSectionsPending(false);
       return;
     }
     const requestSequence = pagingRequestSequenceRef.current;
     const abortController = new AbortController();
+    setRuntimeRailSectionsPending(true);
     void runtimeListSessionSections({
       agentTargetId: sectionAgentTargetId || undefined,
       limitPerSection: AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE,
@@ -5337,6 +5368,7 @@ function useAgentGUIConversationRail({
             sectionsWithSummaries ?? sections
           )
         );
+        setRuntimeRailSectionsPending(false);
         setSectionPageStates(() => {
           const next = new Map<string, ConversationRailSectionPageState>();
           for (const section of page.sections) {
@@ -5357,6 +5389,7 @@ function useAgentGUIConversationRail({
           return;
         }
         setRuntimeRailSections([]);
+        setRuntimeRailSectionsPending(false);
       });
     return () => {
       abortController.abort();
@@ -5512,6 +5545,7 @@ function useAgentGUIConversationRail({
     loadMoreSectionConversations,
     runtimeSectionsEnabled,
     runtimeRailSections,
+    runtimeRailSectionsPending,
     sectionPageStates
   };
 }
@@ -5574,6 +5608,7 @@ const AgentGUIConversationRailPane = memo(
       loadMoreSectionConversations,
       runtimeSectionsEnabled,
       runtimeRailSections,
+      runtimeRailSectionsPending,
       sectionPageStates
     } = useAgentGUIConversationRail({
       conversationFilter,
@@ -5699,7 +5734,17 @@ const AgentGUIConversationRailPane = memo(
       return counts;
     }, [displayConversations]);
     const isRuntimeRailLoading =
-      runtimeSectionsEnabled && runtimeRailSections === null;
+      runtimeSectionsEnabled &&
+      (runtimeRailSections === null || runtimeRailSectionsPending);
+    const isConversationRailListLoading =
+      isRuntimeRailLoading ||
+      (isLoadingConversations && conversations.length === 0);
+    const shouldShowConversationSkeleton = useDelayedBoolean(
+      isConversationRailListLoading,
+      AGENT_GUI_CONVERSATION_RAIL_LOADING_SKELETON_DELAY_MS
+    );
+    const shouldShowConversationEmptyState =
+      !isConversationRailListLoading && groupedConversations.length === 0;
     const registerConversationItemElement = useCallback(
       (itemId: string, element: HTMLDivElement | null) => {
         if (element) {
@@ -5786,12 +5831,11 @@ const AgentGUIConversationRailPane = memo(
           viewportRef={conversationListRef}
           viewportClassName={styles.conversationList}
         >
-          {isRuntimeRailLoading ||
-          (isLoadingConversations && conversations.length === 0) ? (
+          {shouldShowConversationSkeleton ? (
             <AgentConversationListSkeleton
               label={labels.loadingConversations}
             />
-          ) : groupedConversations.length === 0 ? (
+          ) : shouldShowConversationEmptyState ? (
             <div className={styles.emptyState}>
               <span>
                 {conversations.length === 0
