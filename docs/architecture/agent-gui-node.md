@@ -175,7 +175,10 @@ through the host launch callback, and the desktop workbench opens a new empty
 composer for that target via the existing draft prefill activation path. The
 prefill activation provider is authoritative for the new workbench panel's
 initial provider chrome, so choosing Codex from a Claude Code session must open
-a Codex panel before the draft prefill effect runs.
+a Codex panel before the draft prefill effect runs. The prefilled handoff panel
+must also scope the conversation rail to the selected target instead of opening
+on `All`; the target-specific rail selection is part of the handoff activation
+state, not a later user filter choice.
 When provider selection happens from the empty-home composer or title control
 while the rail is already scoped to a provider target in multi-provider scope,
 it must update the rail conversation filter to the matching agent target so the
@@ -205,6 +208,10 @@ Provider rail containers and tiles are interactive workbench chrome: they must
 explicitly release host/window drag regions with `nodrag` and
 `-webkit-app-region: no-drag`, otherwise clicks near the window edge can be
 captured as drag gestures before AgentGUI sees the provider filter action.
+Provider rail target ordering is also UI-local chrome state. Drag sorting may
+persist a workspace-scoped order in browser-local storage, but must not write
+that preference into controller state, session state, or durable AgentGUI node
+data. The aggregate `All` target stays fixed above provider-specific targets.
 Provider-scoped rail footer affordances, such as usage limits and environment
 setup, follow the rail's active provider filter target in multi-provider scope;
 when the rail filter is `All`, they should stay hidden because there is no
