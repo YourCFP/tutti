@@ -8682,6 +8682,60 @@ describe("useAgentGUINodeController", () => {
     });
   });
 
+  it("shows a host toast without an inline composer error when pinning a conversation fails", async () => {
+    const hostToastError = vi.fn();
+    const setSessionPinned = vi.fn(async () => {
+      throw new Error("pin failed");
+    });
+    installAgentHostApi({
+      list: vi.fn(async () => ({
+        presences: [],
+        sessions: [workspaceAgentSession("session-1")]
+      })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn()),
+      setSessionPinned,
+      toastApi: {
+        error: hostToastError
+      }
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData("session-1"),
+        onDataChange: vi.fn()
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversation?.id).toBe("session-1");
+    });
+
+    act(() => {
+      result.current.actions.toggleConversationPinned("session-1", true);
+    });
+
+    await waitFor(() => {
+      expect(setSessionPinned).toHaveBeenCalledWith({
+        workspaceId: "room-1",
+        agentSessionId: "session-1",
+        pinned: true
+      });
+    });
+    await waitFor(() => {
+      expect(hostToastError).toHaveBeenCalledWith("pin failed");
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(result.current.viewModel.detailError).toBeNull();
+    expect(
+      result.current.viewModel.activeConversation?.pinnedAtUnixMs
+    ).toBeNull();
+  });
+
   it("keeps a prompt title when session state reports the provider default runtime title", async () => {
     let resolveState:
       | ((
@@ -17750,10 +17804,11 @@ describe("useAgentGUINodeController", () => {
     });
   });
 
-  it("shows a toast when deleting a conversation fails", async () => {
+  it("shows a host toast without an inline composer error when deleting a conversation fails", async () => {
     const deleteSession = vi.fn(async () => {
       throw new Error("delete failed");
     });
+    const hostToastError = vi.fn();
     installAgentHostApi({
       list: vi.fn(async () => ({
         presences: [],
@@ -17761,7 +17816,10 @@ describe("useAgentGUINodeController", () => {
       })),
       listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
       subscribeEvents: vi.fn(() => vi.fn()),
-      deleteSession
+      deleteSession,
+      toastApi: {
+        error: hostToastError
+      }
     });
 
     const { result } = renderHook(() =>
@@ -17787,9 +17845,10 @@ describe("useAgentGUINodeController", () => {
     });
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("delete failed");
+      expect(hostToastError).toHaveBeenCalledWith("delete failed");
     });
-    expect(result.current.viewModel.detailError).toBe("delete failed");
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(result.current.viewModel.detailError).toBeNull();
   });
 
   it("batch deletes all conversations assigned to a project", async () => {
@@ -17973,6 +18032,7 @@ function installAgentHostApi({
   retainEventStream,
   releaseEventStream,
   onSessionEvent,
+  toastApi,
   userProjects,
   trackSettingsProjectChange,
   autoLoadRuntime = false
@@ -17998,6 +18058,11 @@ function installAgentHostApi({
   retainEventStream?: ReturnType<typeof vi.fn> | undefined;
   releaseEventStream?: ReturnType<typeof vi.fn> | undefined;
   onSessionEvent?: ReturnType<typeof vi.fn> | undefined;
+  toastApi?: {
+    error: (title: string, description?: string) => void;
+    info?: (title: string, description?: string) => void;
+    success?: (title: string, description?: string) => void;
+  };
   userProjects?: unknown;
   trackSettingsProjectChange?: ReturnType<typeof vi.fn> | undefined;
 }): void {
@@ -18055,6 +18120,7 @@ function installAgentHostApi({
       runtime: {
         warmupOpenclawGateway
       },
+      ...(toastApi ? { toast: toastApi } : {}),
       ...(userProjects ? { userProjects } : {}),
       workspaceAgents: {
         list,

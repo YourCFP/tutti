@@ -87,6 +87,7 @@ import {
   type AgentGUIConversationFilter
 } from "../model/agentGuiConversationFilter";
 import type {
+  AgentHostToastApi,
   AgentHostUserProject,
   AgentHostUserProjectsApi
 } from "../../../host/agentHostApi";
@@ -568,6 +569,17 @@ function reportAgentGUIRuntimeError(input: {
   } catch {
     // Diagnostic logging must never affect the Agent GUI recovery path.
   }
+}
+
+function showAgentGUIControllerErrorToast(
+  hostToast: AgentHostToastApi | null | undefined,
+  message: string
+): void {
+  if (hostToast?.error) {
+    hostToast.error(message);
+    return;
+  }
+  toast.error(message);
 }
 
 function reportAgentGUIConversationFilterTargetUnresolved(input: {
@@ -9828,7 +9840,7 @@ export function useAgentGUINodeController({
       const handleRemoveError = (error: unknown) => {
         const message = getAgentGUIErrorMessage(error);
         setListError(message);
-        toast.error(message);
+        showAgentGUIControllerErrorToast(agentHostApi.toast, message);
       };
       try {
         void Promise.resolve(remove({ path: normalizedPath }))
@@ -9844,7 +9856,7 @@ export function useAgentGUINodeController({
         handleRemoveError(error);
       }
     },
-    [agentHostApi.userProjects, setUserProjectsSnapshot]
+    [agentHostApi.toast, agentHostApi.userProjects, setUserProjectsSnapshot]
   );
 
   const requestDeleteProjectConversations = useCallback(
@@ -9970,8 +9982,7 @@ export function useAgentGUINodeController({
           runtime: agentActivityRuntime,
           workspaceId
         });
-        toast.error(message);
-        setDetailError(message);
+        showAgentGUIControllerErrorToast(agentHostApi.toast, message);
         if (activeConversationIdRef.current === target.id) {
           setIsLoadingMessages(false);
           setAgentSessionViewMessagesLoading(sessionViewRef(target.id), false);
@@ -9991,6 +10002,7 @@ export function useAgentGUINodeController({
     workspaceId,
     sessionViewRef,
     agentActivityRuntime,
+    agentHostApi.toast,
     agentQueuedPromptRuntime,
     removeConversations
   ]);
@@ -10150,8 +10162,7 @@ export function useAgentGUINodeController({
             }
           });
           setListError(message);
-          toast.error(message);
-          setDetailError(message);
+          showAgentGUIControllerErrorToast(agentHostApi.toast, message);
           if (
             activeDeletedConversationId &&
             activeConversationIdRef.current === activeDeletedConversationId
@@ -10180,6 +10191,7 @@ export function useAgentGUINodeController({
       sessionViewRef,
       setTransientConversation,
       removeConversations,
+      agentHostApi.toast,
       workspaceId
     ]
   );
@@ -10242,8 +10254,7 @@ export function useAgentGUINodeController({
             }
           });
           setListError(message);
-          toast.error(message);
-          setDetailError(message);
+          showAgentGUIControllerErrorToast(agentHostApi.toast, message);
           if (
             activeDeletedConversationId &&
             activeConversationIdRef.current === activeDeletedConversationId
@@ -10266,6 +10277,7 @@ export function useAgentGUINodeController({
       finalizeConversationBatchDeletion,
       isDeletingProjectConversations,
       sessionViewRef,
+      agentHostApi.toast,
       workspaceId
     ]
   );
@@ -10313,8 +10325,7 @@ export function useAgentGUINodeController({
             runtime: agentActivityRuntime,
             workspaceId
           });
-          toast.error(message);
-          setDetailError(message);
+          showAgentGUIControllerErrorToast(agentHostApi.toast, message);
           // Targeted revert of just this conversation's pin (rather than the
           // whole-list restore the arbitrary updater allowed), so a concurrent
           // update to another conversation is not clobbered on pin failure.
@@ -10331,7 +10342,7 @@ export function useAgentGUINodeController({
           );
         });
     },
-    [agentActivityRuntime, patchConversation, workspaceId]
+    [agentActivityRuntime, agentHostApi.toast, patchConversation, workspaceId]
   );
 
   const activeConversation = useMemo(() => {
