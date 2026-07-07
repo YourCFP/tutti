@@ -389,6 +389,18 @@ function composerTargetDataFromProviderTarget(input: {
   };
 }
 
+function isExplicitAgentGUIProviderTarget(
+  target: AgentGUIProviderTarget,
+  explicitTargets: readonly AgentGUIProviderTarget[]
+): boolean {
+  return explicitTargets.some(
+    (candidate) =>
+      candidate.provider === target.provider &&
+      candidate.targetId === target.targetId &&
+      agentGUIProviderTargetRefsEqual(candidate.ref, target.ref)
+  );
+}
+
 function composerTargetDataFromNodeData(
   data: AgentGUINodeData
 ): AgentGUIComposerTargetData {
@@ -8030,13 +8042,59 @@ export function useAgentGUINodeController({
     setIsLoadingMessages(false);
     setDetailError(null);
     const selectedTargetData = selectedComposerTargetDataRef.current;
-    const targetProvider =
-      prefillPromptRequest.provider ?? selectedTargetData.provider;
-    const targetAgentTargetId =
-      prefillPromptRequest.agentTargetId ?? selectedTargetData.agentTargetId;
+    const prefillTargetHinted =
+      Boolean(prefillPromptRequest.provider) ||
+      Boolean(prefillPromptRequest.agentTargetId);
+    const prefillTarget = prefillTargetHinted
+      ? resolveAgentGUIProviderTarget({
+          agentTargetId: prefillPromptRequest.agentTargetId,
+          defaultProviderTargetId,
+          provider:
+            prefillPromptRequest.provider ?? selectedTargetData.provider,
+          providerTargets: normalizedProviderTargets,
+          useStaticCatalog: shouldUseStaticProviderTargets
+        })
+      : null;
+    const targetData = prefillTarget
+      ? composerTargetDataFromProviderTarget({
+          current: dataRef.current,
+          isExplicit: isExplicitAgentGUIProviderTarget(
+            prefillTarget,
+            normalizedExplicitProviderTargets
+          ),
+          target: prefillTarget
+        })
+      : selectedTargetData;
+    if (prefillTarget) {
+      setHomeComposerTargetOverride(prefillTarget);
+      setConversationFilter(
+        targetData.agentTargetId
+          ? { kind: "agentTarget", agentTargetId: targetData.agentTargetId }
+          : { kind: "all" }
+      );
+      onDataChangeRef.current((current) => {
+        const nextTargetData = composerTargetDataFromProviderTarget({
+          current,
+          isExplicit: isExplicitAgentGUIProviderTarget(
+            prefillTarget,
+            normalizedExplicitProviderTargets
+          ),
+          target: prefillTarget
+        });
+        const nextData: AgentGUINodeData = {
+          ...nextTargetData.data,
+          lastActiveAgentSessionId: null
+        };
+        dataRef.current = nextData;
+        return nextData;
+      });
+    }
     setDraftBySessionId((current) => ({
       ...current,
-      [nodeDefaultDraftContentKey(targetProvider, targetAgentTargetId)]: {
+      [nodeDefaultDraftContentKey(
+        targetData.provider,
+        targetData.agentTargetId
+      )]: {
         ...emptyAgentComposerDraft(),
         prompt: draftPrompt
       }
@@ -8049,10 +8107,14 @@ export function useAgentGUINodeController({
   }, [
     activation,
     agentActivityRuntime,
+    defaultProviderTargetId,
     loadDraftComposerOptions,
+    normalizedExplicitProviderTargets,
+    normalizedProviderTargets,
     persistActiveConversation,
     prefillPromptRequest,
     previewMode,
+    shouldUseStaticProviderTargets,
     workspaceId
   ]);
 

@@ -175,7 +175,10 @@ through the host launch callback, and the desktop workbench opens a new empty
 composer for that target via the existing draft prefill activation path. The
 prefill activation provider is authoritative for the new workbench panel's
 initial provider chrome, so choosing Codex from a Claude Code session must open
-a Codex panel before the draft prefill effect runs.
+a Codex panel before the draft prefill effect runs. The prefilled handoff panel
+must also scope the conversation rail to the selected target instead of opening
+on `All`; the target-specific rail selection is part of the handoff activation
+state, not a later user filter choice.
 When provider selection happens from the empty-home composer or title control
 while the rail is already scoped to a provider target in multi-provider scope,
 it must update the rail conversation filter to the matching agent target so the
