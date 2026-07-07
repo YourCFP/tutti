@@ -954,7 +954,7 @@ func TestServiceListExternalAdapterCommandUsesRankedRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read captured npm registry: %v", err)
 	}
-	if got := string(registryBytes); got != "https://registry.npmmirror.com" {
+	if got := string(registryBytes); got != "https://repo.huaweicloud.com/repository/npm/" {
 		t.Fatalf("npm_config_registry = %q, want ranked mirror registry", got)
 	}
 }

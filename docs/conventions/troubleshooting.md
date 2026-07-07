@@ -230,6 +230,36 @@ Use this shape for new entries:
   [installer_codex_cli.go](../../services/tuttid/service/agentstatus/installer_codex_cli.go)
   [codex_platform.go](../../services/tuttid/service/agentstatus/codex_platform.go)
 
+### Tutti Agent npm install misses the platform package
+
+- Symptom:
+  The Tutti Agent provider setup reaches the login screen or reports the CLI as
+  installed, but `tutti-agent login` or `tutti-agent app-server` fails with
+  `Missing optional dependency @tutti-os/tutti-agent-<platform>`.
+- Quick checks:
+  Check the selected registry for both `@tutti-os/tutti-agent` and the exact
+  alias target version, such as
+  `@tutti-os/tutti-agent@0.0.1-darwin-arm64`. Do not treat a successful
+  aggregate package metadata fetch as proof that the platform tarball is
+  available.
+- Root cause:
+  `@tutti-os/tutti-agent` follows the Codex npm layout: a JavaScript launcher
+  plus per-platform optional dependencies expressed as npm aliases. npm can
+  complete the aggregate install even when a mirror has not synced the platform
+  optional dependency version.
+- Fix:
+  Keep the package layout aligned with Codex and use registries that carry the
+  platform optional dependency versions. The daemon default chain intentionally
+  excludes mirrors that only sync the aggregate package. Preserve
+  `TUTTI_AGENT_NPM_REGISTRY` as an explicit single-registry pin with no fallback.
+- Validation:
+  Install into a temporary prefix/cache and verify the provider probe, not only
+  npm's exit code. Confirm `tutti-agent app-server` can start far enough to pass
+  the daemon readiness probe.
+- References:
+  [npm_registry.go](../../services/tuttid/service/agentstatus/npm_registry.go)
+  [tutti_agent.go](../../services/tuttid/service/agentsidecar/tutti_agent.go)
+
 ### Dynamic CLI input rejects plausible flags
 
 - Symptom:
