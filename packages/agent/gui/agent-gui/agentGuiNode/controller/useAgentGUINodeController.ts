@@ -101,6 +101,7 @@ import type {
   OpenclawGatewayViewState
 } from "../model/agentGuiNodeTypes";
 import {
+  agentComposerDraftHasContent,
   agentPromptContentDisplayText,
   agentPromptContentHasImage,
   agentPromptContentToComposerDraft,
@@ -4964,11 +4965,26 @@ export function useAgentGUINodeController({
   }, [conversationListQuery, conversations, previewMode]);
   const persistActiveConversation = useCallback(
     (agentSessionId: string | null) => {
-      onDataChangeRef.current((current) =>
-        current.lastActiveAgentSessionId === agentSessionId
-          ? current
-          : { ...current, lastActiveAgentSessionId: agentSessionId }
-      );
+      onDataChangeRef.current((current) => {
+        // Clearing the active session (returning to the home/new-composer state)
+        // must also drop the persisted title. Otherwise the window/dock header
+        // falls back to `lastActiveConversationTitle` and keeps showing the
+        // previous session's title — including after switching to a different
+        // provider that has no active conversation.
+        const nextTitle =
+          agentSessionId === null ? null : current.lastActiveConversationTitle;
+        if (
+          current.lastActiveAgentSessionId === agentSessionId &&
+          (current.lastActiveConversationTitle ?? null) === (nextTitle ?? null)
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          lastActiveAgentSessionId: agentSessionId,
+          lastActiveConversationTitle: nextTitle
+        };
+      });
     },
     []
   );
@@ -11311,6 +11327,47 @@ export function useAgentGUINodeController({
         isExplicit: nextTargetIsExplicit,
         target: nextTarget
       });
+      // When switching to another agent from the home composer, carry the
+      // current input over to the target being switched to — but only if that
+      // target's own input box is still empty, so we never clobber a draft the
+      // user already started there.
+      if (activeConversationIdRef.current === null) {
+        const currentTargetData = selectedComposerTargetDataRef.current;
+        const currentDraftKey = nodeDefaultDraftContentKey(
+          currentTargetData.provider,
+          currentTargetData.agentTargetId
+        );
+        const nextDraftKey = nodeDefaultDraftContentKey(
+          nextTargetData.provider,
+          nextTargetData.agentTargetId
+        );
+        if (currentDraftKey !== nextDraftKey) {
+          const drafts = draftBySessionIdRef.current;
+          const currentDraft =
+            drafts[currentDraftKey] ?? EMPTY_AGENT_COMPOSER_DRAFT;
+          const nextDraft = readNodeDefaultDraftContent({
+            data: {
+              ...dataRef.current,
+              provider: nextTargetData.provider,
+              agentTargetId: nextTargetData.agentTargetId
+            },
+            drafts
+          });
+          if (
+            agentComposerDraftHasContent(currentDraft) &&
+            !agentComposerDraftHasContent(nextDraft)
+          ) {
+            draftBySessionIdRef.current = {
+              ...drafts,
+              [nextDraftKey]: currentDraft
+            };
+            setDraftBySessionId((current) => ({
+              ...current,
+              [nextDraftKey]: currentDraft
+            }));
+          }
+        }
+      }
       const shouldSyncScopedRailFilter =
         conversationFilterRef.current.kind === "agentTarget";
       setHomeComposerTargetOverride(nextTarget);

@@ -3,8 +3,8 @@ import type { AgentGuiWorkbenchProvider } from "./types.ts";
 export const agentGuiWorkbenchProviders = [
   "claude-code",
   "codex",
-  "tutti-agent",
   "cursor",
+  "tutti-agent",
   "hermes",
   "gemini",
   "openclaw"

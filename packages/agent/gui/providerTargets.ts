@@ -18,8 +18,8 @@ const agentGUIProviderTargetStaticLabels: Record<AgentGUIProvider, string> = {
 export const agentGUIDefaultTargetProviders = [
   "codex",
   "claude-code",
-  "tutti-agent",
   "cursor",
+  "tutti-agent",
   "hermes",
   "openclaw"
 ] as const satisfies readonly AgentGUIProvider[];

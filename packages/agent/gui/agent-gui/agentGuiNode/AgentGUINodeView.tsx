@@ -165,7 +165,7 @@ import type {
 } from "./agentRichText/agentFileMentionExtension";
 import { formatAgentMentionMarkdown } from "./agentRichText/agentFileMentionExtension";
 import { createRichTextMentionHref } from "@tutti-os/ui-rich-text/core";
-import { resolveAgentGuiSessionProviderIconUrl } from "../../agentGuiSessionProviderIconUrls";
+import { resolveAgentGuiSessionProviderFlatIconUrl } from "../../agentGuiSessionProviderIconUrls";
 import { agentColorfulUrl } from "../../managedAgentIconAssets";
 
 type StatusDotTone = "neutral" | "green" | "blue" | "amber" | "red";
@@ -4616,8 +4616,8 @@ function conversationProjectsRenderEqual(
 const agentGUIProviderRailOrder: readonly AgentGUIProvider[] = [
   "codex",
   "claude-code",
-  "tutti-agent",
   "cursor",
+  "tutti-agent",
   "nexight",
   "hermes",
   "openclaw",
@@ -4655,7 +4655,7 @@ function agentGUILaunchpadIconPresentations(): readonly AgentGUIProviderIconPres
 function agentGUIConversationProviderIconUrl(
   provider: string | undefined
 ): string | null {
-  return resolveAgentGuiSessionProviderIconUrl(provider);
+  return resolveAgentGuiSessionProviderFlatIconUrl(provider);
 }
 
 function agentGUIProviderRailLabel(
@@ -5026,12 +5026,10 @@ const AgentGUIAccountRewardToast = memo(function AgentGUIAccountRewardToast({
 
   return (
     <div
-      className="nodrag relative mx-3 mb-1 w-[calc(100%-24px)] max-w-[calc(100%-24px)] overflow-hidden rounded-[14px] border border-cyan-100/55 bg-[linear-gradient(135deg,rgba(227,255,244,0.94),rgba(167,237,222,0.78)_44%,rgba(151,190,224,0.72))] p-2.5 pr-9 text-white shadow-[0_14px_28px_rgba(0,0,0,0.20),0_0_0_1px_rgba(255,255,255,0.22)_inset] [-webkit-app-region:no-drag]"
+      className="agent-gui-node__account-reward-toast nodrag relative mx-3 mb-1 w-[calc(100%-24px)] max-w-[calc(100%-24px)] overflow-hidden rounded-[14px] p-2.5 pr-9 text-white [-webkit-app-region:no-drag]"
       data-testid="agent-gui-account-reward-toast"
       role="status"
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(255,255,255,0.52),transparent_24%),radial-gradient(circle_at_86%_12%,rgba(255,255,255,0.32),transparent_22%)]" />
-      <div className="pointer-events-none absolute -bottom-9 left-[-8%] h-20 w-[116%] rounded-[50%] border-t border-white/28 bg-white/10" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent" />
       <div className="relative flex min-w-0 items-center gap-2.5">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[rgba(250,255,236,0.78)] text-emerald-400 shadow-[0_9px_18px_rgba(20,184,166,0.18),0_0_0_1px_rgba(255,255,255,0.5)_inset]">

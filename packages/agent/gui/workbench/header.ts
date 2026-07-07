@@ -249,6 +249,15 @@ export function AgentGuiWorkbenchHeader({
             className: "agent-gui-workbench-header__detail-title",
             "data-testid": "agent-gui-window-detail-title"
           },
+          sessionIconUrl
+            ? createElement("img", {
+                alt: "",
+                className: "agent-gui-workbench-header__session-icon",
+                "data-testid": "agent-gui-window-detail-title-icon",
+                draggable: false,
+                src: sessionIconUrl
+              })
+            : null,
           createElement(
             "span",
             {

@@ -146,6 +146,22 @@ export const en = {
         "This agent session no longer exists or cannot be opened.",
       openSessionUnavailableTitle: "Session unavailable"
     },
+    accountMenu: {
+      title: "Tutti Agent",
+      member: "Manage subscription",
+      creditsBalance: "Credits",
+      accountCenter: "Account center",
+      free: "Free",
+      signIn: "Sign in",
+      signOut: "Sign out",
+      loading: "Loading",
+      unavailable: "--",
+      dataUnavailable: "Some account data is unavailable",
+      rewardToastTitle: "New user credits",
+      rewardToastCreditsUnit: "credits",
+      rewardToastDescription: "Added to account balance",
+      rewardToastClose: "Close credits reward notification"
+    },
     agentEnv: {
       configTitle: "{{provider}} environment",
       wizardDescription:
