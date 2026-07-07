@@ -348,9 +348,10 @@ function DesktopAgentGUIWorkbenchBodyImpl({
     workspaceAppMentionProvider
   ]);
   const provider = desktopAgentGUIProviderFromInstanceId(context.instanceId);
+  const requiredProviders = useMemo(() => [provider], [provider]);
   const managedAgentsState = useDesktopManagedAgentsState(
     agentProviderStatusService,
-    { ensureLoaded: !previewMode, requiredProviders: [provider] }
+    { ensureLoaded: !previewMode, requiredProviders }
   );
   const providerStatusSnapshot = useSyncExternalStore(
     agentProviderStatusService && !previewMode
