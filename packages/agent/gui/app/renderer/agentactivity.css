@@ -8432,9 +8432,44 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   width: 52px;
   min-width: 0;
   flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+  gap: 8px;
   padding: 0 0 12px;
   -webkit-app-region: no-drag;
+}
+
+.agent-gui-node__provider-rail-config-button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.agent-gui-node__provider-rail-config-button:hover:not(:disabled),
+.agent-gui-node__provider-rail-config-button[data-state="open"] {
+  background: var(--transparency-hover);
+  color: var(--text-primary);
+}
+
+.agent-gui-node__provider-rail-config-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--border-focus);
+}
+
+.agent-gui-node__provider-rail-config-button:disabled {
+  color: var(--text-tertiary);
+  cursor: not-allowed;
 }
 
 .agent-gui-node__provider-rail-tile {
