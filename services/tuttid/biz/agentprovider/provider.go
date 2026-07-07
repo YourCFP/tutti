@@ -11,11 +11,13 @@ const (
 	Nexight    = "nexight"
 	OpenClaw   = "openclaw"
 	OpenCode   = "opencode"
+	TuttiAgent = "tutti-agent"
 )
 
 var allProviders = []string{
 	ClaudeCode,
 	Codex,
+	TuttiAgent,
 	Cursor,
 	Nexight,
 	Gemini,
@@ -34,6 +36,8 @@ func Normalize(provider string) string {
 		return ClaudeCode
 	case Codex:
 		return Codex
+	case TuttiAgent:
+		return TuttiAgent
 	case "cursor-agent", "cursor-cli", Cursor:
 		return Cursor
 	case "gemini-cli", Gemini:
@@ -53,4 +57,13 @@ func Normalize(provider string) string {
 
 func IsSupported(provider string) bool {
 	return Normalize(provider) != ""
+}
+
+func SupportsComposerSettings(provider string) bool {
+	switch Normalize(provider) {
+	case ClaudeCode, Codex, Gemini, TuttiAgent:
+		return true
+	default:
+		return false
+	}
 }

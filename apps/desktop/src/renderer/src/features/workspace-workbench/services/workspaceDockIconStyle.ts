@@ -84,7 +84,8 @@ export function resolveWorkspaceDockIconSet(_input: {
     hermes: defaultHermesIconUrl,
     nexight: defaultTuttiIconUrl,
     openclaw: defaultOpenclawIconUrl,
-    opencode: defaultTuttiIconUrl
+    opencode: defaultTuttiIconUrl,
+    "tutti-agent": defaultTuttiIconUrl
   };
   return {
     agentUnified: defaultAgentUnifiedIconUrl,

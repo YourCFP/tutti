@@ -4,6 +4,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -17,17 +18,21 @@ import { proxy } from "valtio/vanilla";
 import {
   ChevronRight,
   ChevronsDown,
+  Coins,
+  Crown,
   ExternalLink,
+  Gift,
   Info,
-  Wrench
+  LogIn,
+  LogOut,
+  Settings,
+  Wrench,
+  X
 } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger
-} from "../../app/renderer/components/ui/popover";
 import { AgentUsageMeter } from "./AgentUsageMeter";
+import { AccountMembershipBadge } from "./AccountMembershipBadge";
 import { openAgentEnvPanel } from "../../shared/agentEnv/agentEnvPanelStore";
+import { openWorkspaceSettingsPanel } from "../../shared/workspaceSettingsPanel/workspaceSettingsPanelStore";
 import {
   createDisabledPlaceholderAgentGUIProviderTarget,
   createLocalAgentGUIProviderTarget
@@ -56,6 +61,14 @@ import {
   SelectTrigger,
   NewWorkspaceLinedIcon,
   ConfirmationDialog,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  StatusDot,
   toastVariants,
   cn
 } from "@tutti-os/ui-system";
@@ -68,22 +81,13 @@ import { Button } from "../../app/renderer/components/ui/button";
 import {
   CreateChatIcon,
   FolderIcon,
+  FolderOpenLinedIcon,
   MoreHorizontalIcon
 } from "@tutti-os/ui-system/icons";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from "../../app/renderer/components/ui/dropdown-menu";
 import { PinFilledIcon } from "../../app/renderer/components/icons/PinFilledIcon";
 import { PinLinedIcon } from "../../app/renderer/components/icons/PinLinedIcon";
 import { UnavailableChatIcon } from "../../app/renderer/components/icons/UnavailableChatIcon";
-import { EnvironmentLinedIcon } from "../../app/renderer/components/icons/EnvironmentLinedIcon";
-import {
-  StatusDot,
-  type StatusDotTone
-} from "../../app/renderer/components/StatusDot";
+import { SettingsLinedIcon } from "../../app/renderer/components/icons/SettingsLinedIcon";
 import { AgentConversationFlow } from "../../shared/agentConversation/components/AgentConversationFlow";
 import type { AgentConversationVM } from "../../shared/agentConversation/contracts/agentConversationVM";
 import type { AgentPromptContentBlock } from "../../shared/contracts/dto";
@@ -112,6 +116,7 @@ import type {
 import { formatAgentGUIConversationPlainTitle } from "./model/agentGuiProviderIdentity";
 import { CanvasNodeTrashLinedIcon } from "../shared/canvasNodeChromeIcons";
 import { AgentSessionChrome } from "./AgentSessionChrome";
+import type { AgentGUIAccountMenuState } from "./accountMenuState";
 import {
   AgentGoalBanner,
   isGoalBannerVisible,
@@ -151,6 +156,7 @@ import {
   type ConversationSection
 } from "./agentGuiNodeViewConversation";
 import { buildAgentGUIConversationSummaries } from "./model/agentGuiConversationModel";
+import { filterAgentGUIConversationSummaries } from "./model/agentGuiConversationFilter";
 import styles from "./AgentGUINode.styles";
 import type { AgentContextMentionProvider } from "./agentContextMentionProvider";
 import type {
@@ -159,9 +165,10 @@ import type {
 } from "./agentRichText/agentFileMentionExtension";
 import { formatAgentMentionMarkdown } from "./agentRichText/agentFileMentionExtension";
 import { createRichTextMentionHref } from "@tutti-os/ui-rich-text/core";
-import claudeCodeFlatFilledIconUrl from "../../app/renderer/assets/icons/agents/claudecode-flat-filled.svg";
-import codexFlatFilledIconUrl from "../../app/renderer/assets/icons/agents/codex-flat-filled.svg";
-import cursorFlatFilledIconUrl from "../../app/renderer/assets/icons/agents/cursor-flat-filled.svg";
+import { resolveAgentGuiSessionProviderIconUrl } from "../../agentGuiSessionProviderIconUrls";
+import { agentColorfulUrl } from "../../managedAgentIconAssets";
+
+type StatusDotTone = "neutral" | "green" | "blue" | "amber" | "red";
 
 /**
  * 把 @ 面板里的任务/应用 mention 解析为引用 picker 的定位目标(sourceId + 语义 params)。
@@ -185,6 +192,7 @@ const AGENT_GUI_STICK_TO_BOTTOM_THRESHOLD_PX = 24;
 const AGENT_GUI_TOP_HISTORY_PREFETCH_THRESHOLD_PX = 240;
 const AGENT_GUI_TOP_MASK_SCROLL_EPSILON_PX = 1;
 const AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE = 5;
+const AGENT_GUI_CONVERSATION_RAIL_LOADING_SKELETON_DELAY_MS = 300;
 const AGENT_GUI_CONVERSATION_RAIL_PROJECTION_PROVIDER: AgentGUIProvider =
   "codex";
 const AGENT_GUI_TIMELINE_SCROLL_AREA_CONTENT_STYLE: CSSProperties = {
@@ -222,9 +230,14 @@ function agentGUIProviderIconPresentation(
   iconUrl?: string | null
 ): AgentGUIProviderIconPresentation {
   const normalizedProvider = normalizeManagedAgentProvider(provider);
+  const providerRailIconUrl =
+    MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS[normalizedProvider] ?? null;
   return {
     provider: normalizedProvider,
-    iconUrl: iconUrl?.trim() || resolveAgentGUIHeroIconUrl(normalizedProvider)
+    iconUrl:
+      (normalizedProvider === "cursor" ? providerRailIconUrl : null) ||
+      iconUrl?.trim() ||
+      resolveAgentGUIHeroIconUrl(normalizedProvider)
   };
 }
 
@@ -233,11 +246,14 @@ function agentGUIProviderRailIconPresentation(
   iconUrl?: string | null
 ): AgentGUIProviderIconPresentation {
   const normalizedProvider = normalizeManagedAgentProvider(provider);
+  const providerRailIconUrl =
+    MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS[normalizedProvider] ?? null;
   return {
     provider: normalizedProvider,
     iconUrl:
+      (normalizedProvider === "cursor" ? providerRailIconUrl : null) ||
       iconUrl?.trim() ||
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS[normalizedProvider] ||
+      providerRailIconUrl ||
       resolveAgentGUIHeroIconUrl(normalizedProvider)
   };
 }
@@ -254,6 +270,26 @@ const fallbackWorkspaceFileReferenceCopy: WorkspaceFileReferenceCopy = {
 
 function agentGuiPerfNowMs(): number {
   return globalThis.performance?.now?.() ?? Date.now();
+}
+
+function useDelayedBoolean(value: boolean, delayMs: number): boolean {
+  const [delayedValue, setDelayedValue] = useState(false);
+
+  useEffect(() => {
+    if (!value) {
+      setDelayedValue(false);
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setDelayedValue(true);
+    }, delayMs);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [delayMs, value]);
+
+  return delayedValue;
 }
 
 function roundAgentGuiPerfMs(value: number): number {
@@ -354,7 +390,24 @@ export interface AgentGUIViewLabels {
   emptyProviderForProvider?: (provider: string) => string;
   conversations: string;
   newConversation: string;
+  accountMenuTitle: string;
+  accountMenuMember: string;
+  accountMenuUpgrade: string;
+  accountMenuCreditsBalance: string;
+  accountMenuAccountCenter: string;
+  accountMenuSettings: string;
+  accountMenuFree: string;
+  accountMenuSignIn: string;
+  accountMenuSignOut: string;
+  accountMenuLoading: string;
+  accountMenuUnavailable: string;
+  accountMenuDataUnavailable: string;
+  accountRewardToastTitle: string;
+  accountRewardToastCreditsUnit: string;
+  accountRewardToastDescription: string;
+  accountRewardToastClose: string;
   agentConfig: string;
+  agentSettingsMenu: string;
   agentEnvSetup: string;
   noConversations: string;
   emptyProjectConversations: string;
@@ -540,6 +593,9 @@ export interface AgentGUIViewLabels {
 
 interface AgentGUINodeViewProps {
   viewModel: AgentGUINodeViewModel;
+  renderSidebarFooter?: AgentGUISidebarFooterRenderer;
+  /** Renders the provider rail empty state in "exact" mode. See the type doc. */
+  renderProviderRailEmpty?: AgentGUIProviderRailEmptyRenderer;
   onLinkAction?: (action: WorkspaceLinkAction) => void;
   onHandoffConversation?: (input: {
     agentTargetId?: string | null;
@@ -558,6 +614,7 @@ interface AgentGUINodeViewProps {
   railConfigProvider?: string | null;
   railSlashStatusLimits?: readonly AgentComposerSlashStatusLimit[];
   onAgentConfigMenuOpen?: () => void;
+  accountMenuState?: AgentGUIAccountMenuState | null;
   previewMode?: boolean;
   onAgentProviderLogin?: (provider?: string | null) => void;
   actions: {
@@ -981,8 +1038,27 @@ function handoffProjectPathForConversation(
   );
 }
 
+export interface AgentGUISidebarFooterContext {
+  currentUserId?: string | null;
+  activeConversation: AgentGUINodeViewModel["activeConversation"];
+}
+
+export type AgentGUISidebarFooterRenderer = (
+  ctx: AgentGUISidebarFooterContext
+) => ReactNode;
+
+/**
+ * Renders the provider rail body when the rail is in "exact" mode and the
+ * host-provided target list is empty (and not loading). Lets the host fully own
+ * the empty state (e.g. a "no shared agents" message or a create-agent prompt)
+ * instead of the library falling back to the static local catalog.
+ */
+export type AgentGUIProviderRailEmptyRenderer = () => ReactNode;
+
 export function AgentGUINodeView({
   viewModel,
+  renderSidebarFooter,
+  renderProviderRailEmpty,
   onLinkAction,
   onHandoffConversation,
   capabilityMenuState,
@@ -996,6 +1072,7 @@ export function AgentGUINodeView({
   railConfigProvider,
   railSlashStatusLimits,
   onAgentConfigMenuOpen,
+  accountMenuState = null,
   previewMode = false,
   onAgentProviderLogin,
   actions,
@@ -1221,6 +1298,9 @@ export function AgentGUINodeView({
     localComposerFocusRequestSequence === 0
       ? composerFocusRequestSequence
       : (composerFocusRequestSequence ?? 0) + localComposerFocusRequestSequence;
+  const requestComposerFocus = useCallback(() => {
+    setLocalComposerFocusRequestSequence((current) => current + 1);
+  }, []);
   const requestCreateConversation = useCallback(
     (options?: { projectPath?: string | null; source?: string }) => {
       if (previewMode) {
@@ -1237,11 +1317,12 @@ export function AgentGUINodeView({
       } else {
         createConversationAction({ source: source ?? "rail_toolbar" });
       }
-      setLocalComposerFocusRequestSequence((current) => current + 1);
+      requestComposerFocus();
     },
     [
       createConversationAction,
       previewMode,
+      requestComposerFocus,
       viewModel.composerSettings.selectedProjectPath
     ]
   );
@@ -1437,11 +1518,13 @@ export function AgentGUINodeView({
         null
       : null;
   const openAgentEnvSetup = useCallback(() => {
-    if (!effectiveRailConfigProvider) {
-      return;
-    }
+    // In the "All" filter there is no single rail provider; pass it through as
+    // null so the env panel host falls back to the default provider.
     openAgentEnvPanel({ provider: effectiveRailConfigProvider, focus: null });
   }, [effectiveRailConfigProvider]);
+  const openAgentSettings = useCallback(() => {
+    openWorkspaceSettingsPanel({ section: "agent" });
+  }, []);
   const conversationRailStoreState =
     useMemo<AgentGUIConversationRailStoreSnapshot>(
       () => ({
@@ -1471,6 +1554,7 @@ export function AgentGUINodeView({
         onSelectConversationFilterTarget:
           actions.selectConversationFilterTarget,
         onOpenAgentEnvSetup: openAgentEnvSetup,
+        onOpenAgentSettings: openAgentSettings,
         onAgentConfigMenuOpen,
         onRetryOpenclawGateway: retryOpenclawGateway,
         onSelectConversation: selectConversation,
@@ -1495,6 +1579,7 @@ export function AgentGUINodeView({
         labels,
         onAgentConfigMenuOpen,
         openAgentEnvSetup,
+        openAgentSettings,
         openConversationWindow,
         openProjectFiles,
         openclawGateway,
@@ -1580,12 +1665,26 @@ export function AgentGUINodeView({
               selectedProviderTarget={viewModel.selectedProviderTarget}
               providerTargets={viewModel.providerTargets}
               providerTargetsLoading={viewModel.providerTargetsLoading}
+              providerRailMode={viewModel.providerRailMode}
+              renderProviderRailEmpty={renderProviderRailEmpty}
               comingSoonProviders={viewModel.comingSoonProviders}
               onSelectConversationFilterTarget={
                 actions.selectConversationFilterTarget
               }
               onUpdateConversationFilter={actions.updateConversationFilter}
+              onRequestComposerFocus={requestComposerFocus}
             />
+            {renderSidebarFooter ? (
+              <div
+                className={`${styles.providerRailFooter} nodrag tsh-desktop-no-drag`}
+                data-testid="agent-gui-sidebar-footer-slot"
+              >
+                {renderSidebarFooter({
+                  currentUserId: viewModel.currentUserId,
+                  activeConversation: viewModel.activeConversation
+                })}
+              </div>
+            ) : null}
           </aside>
         ) : null}
         <aside
@@ -1602,6 +1701,15 @@ export function AgentGUINodeView({
             storeState={conversationRailStoreState}
             userProjects={viewModel.userProjects}
             workspaceId={viewModel.workspaceId}
+            footer={
+              accountMenuState?.user ? (
+                <AgentGUIAccountRailMenu
+                  accountMenuState={accountMenuState}
+                  labels={labels}
+                  previewMode={previewMode}
+                />
+              ) : null
+            }
           />
         </aside>
         <div
@@ -3576,6 +3684,19 @@ function AgentGUIAllProviderGridIcon({
   );
 }
 
+function AgentGUIUnifiedProviderIcon(): React.JSX.Element {
+  return (
+    <span aria-hidden="true" className={styles.providerRailAvatar}>
+      <img
+        alt=""
+        className={styles.providerRailAvatarImage}
+        draggable={false}
+        src={agentColorfulUrl}
+      />
+    </span>
+  );
+}
+
 function AgentGUILaunchpadIconGrid({
   activeProvider,
   icons
@@ -3705,7 +3826,7 @@ function EmptyHeroTitle({
                     aria-hidden="true"
                     className="size-4 shrink-0 rounded-[4px]"
                     src={
-                      agentGUIProviderIconPresentation(
+                      agentGUIProviderRailIconPresentation(
                         target.provider,
                         target.iconUrl
                       ).iconUrl
@@ -3866,7 +3987,6 @@ const AgentGUIBottomDockPane = memo(function AgentGUIBottomDockPane({
           tokensUsed={goalTokensUsed ?? undefined}
           timeUsedSeconds={goalTimeUsedSeconds ?? undefined}
           labels={goalBannerLabels}
-          onEditObjective={(objective) => onGoalControl("set", objective)}
           onPauseGoal={
             goalPauseSupported ? () => onGoalControl("pause") : undefined
           }
@@ -3901,6 +4021,7 @@ const AgentGUIBottomDockPane = memo(function AgentGUIBottomDockPane({
 
 interface AgentGUIConversationRailPaneProps {
   conversations: AgentGUINodeViewModel["conversations"];
+  footer?: React.ReactNode;
   workspaceId: string;
   userProjects: AgentGUINodeViewModel["userProjects"];
   activeConversationId: string | null;
@@ -3931,6 +4052,7 @@ interface AgentGUIConversationRailPaneProps {
     source?: string;
   }) => void;
   onOpenAgentEnvSetup: () => void;
+  onOpenAgentSettings: () => void;
   onAgentConfigMenuOpen?: () => void;
   onRetryOpenclawGateway: () => void;
   onSelectConversation: (agentSessionId: string) => void;
@@ -4031,6 +4153,7 @@ function agentGUIConversationRailStoreSnapshotsEqual(
       next.onSelectConversationFilterTarget &&
     current.onCreateConversation === next.onCreateConversation &&
     current.onOpenAgentEnvSetup === next.onOpenAgentEnvSetup &&
+    current.onOpenAgentSettings === next.onOpenAgentSettings &&
     current.onAgentConfigMenuOpen === next.onAgentConfigMenuOpen &&
     current.onRetryOpenclawGateway === next.onRetryOpenclawGateway &&
     current.onSelectConversation === next.onSelectConversation &&
@@ -4049,6 +4172,7 @@ function agentGUIConversationRailStoreSnapshotsEqual(
 
 interface AgentGUIConversationRailStorePaneProps {
   conversations: AgentGUINodeViewModel["conversations"];
+  footer?: React.ReactNode;
   store: AgentGUIConversationRailStore;
   storeState: AgentGUIConversationRailStoreSnapshot;
   userProjects: AgentGUINodeViewModel["userProjects"];
@@ -4058,6 +4182,7 @@ interface AgentGUIConversationRailStorePaneProps {
 const AgentGUIConversationRailStorePane = memo(
   function AgentGUIConversationRailStorePane({
     conversations,
+    footer,
     store,
     storeState: _storeState,
     userProjects,
@@ -4069,6 +4194,7 @@ const AgentGUIConversationRailStorePane = memo(
       <AgentGUIConversationRailPane
         {...state}
         conversations={conversations}
+        footer={footer}
         userProjects={userProjects}
         workspaceId={workspaceId}
       />
@@ -4204,9 +4330,6 @@ function stabilizeConversationSectionItems(
   const stable = next.map((item, index) => {
     const previousItem = previous[index];
     if (previousItem && conversationSummariesRenderEqual(previousItem, item)) {
-      if (previousItem !== item) {
-        changed = true;
-      }
       return previousItem;
     }
     changed = true;
@@ -4226,33 +4349,87 @@ export function updateConversationSectionsFromSummaries(
   const summariesById = new Map(
     conversations.map((conversation) => [conversation.id, conversation])
   );
+  const summarySectionItemsById = new Map<
+    string,
+    AgentGUINodeViewModel["conversations"]
+  >();
+  for (const conversation of conversations) {
+    if ((conversation.pinnedAtUnixMs ?? 0) > 0) {
+      continue;
+    }
+    const sectionId = conversation.project
+      ? `project:${normalizeConversationProjectPath(conversation.project.path)}`
+      : "conversations";
+    const items = summarySectionItemsById.get(sectionId) ?? [];
+    items.push(conversation);
+    summarySectionItemsById.set(sectionId, items);
+  }
   const seenIds = new Set<string>();
   let changed = false;
   const nextSections = previous.map((section) => {
     let sectionChanged = false;
-    const items = section.items.map((item) => {
-      seenIds.add(item.id);
-      const summary = summariesById.get(item.id);
-      if (!summary) {
-        return item;
+    const summaryItems = summarySectionItemsById.get(section.id) ?? [];
+    const summaryIdsForSection = new Set(summaryItems.map((item) => item.id));
+    const items = section.items
+      .map((item) => {
+        seenIds.add(item.id);
+        const summary = summariesById.get(item.id);
+        if (!summary) {
+          return item;
+        }
+        const nextItem = section.project
+          ? {
+              ...summary,
+              project: section.project
+            }
+          : summary;
+        if (conversationSummariesRenderEqual(item, nextItem)) {
+          return item;
+        }
+        sectionChanged = true;
+        return nextItem;
+      })
+      .filter((item) => {
+        const summary = summariesById.get(item.id);
+        if (!summary || summaryIdsForSection.has(item.id)) {
+          return true;
+        }
+        sectionChanged = true;
+        return false;
+      });
+    const nextSection = sectionChanged
+      ? {
+          ...section,
+          items
+        }
+      : section;
+    if (section.kind === "pinned" || summaryItems.length === 0) {
+      if (sectionChanged) {
+        changed = true;
       }
-      const nextItem = {
-        ...summary,
-        project: item.project
-      };
-      if (conversationSummariesRenderEqual(item, nextItem)) {
-        return item;
+      return nextSection;
+    }
+    const summaryIds = new Set(summaryItems.map((item) => item.id));
+    const mergedItems = [
+      ...summaryItems.map((item) =>
+        section.project ? { ...item, project: section.project } : item
+      ),
+      ...items.filter((item) => !summaryIds.has(item.id))
+    ];
+    const stableItems = stabilizeConversationSectionItems(
+      section.items,
+      mergedItems
+    );
+    if (stableItems === section.items) {
+      if (sectionChanged) {
+        changed = true;
       }
-      sectionChanged = true;
-      return nextItem;
-    });
-    if (!sectionChanged) {
-      return section;
+      return nextSection;
     }
     changed = true;
     return {
-      ...section,
-      items
+      ...nextSection,
+      items: stableItems
     };
   });
 
@@ -4264,9 +4441,12 @@ export function updateConversationSectionsFromSummaries(
   // appear in the sidebar until the next full runtimeListSessionSections
   // refetch happens to include it, which -- because that refetch is keyed
   // off conversation membership -- may never happen again for the same id.
-  const newConversations = conversations.filter(
-    (conversation) =>
-      !seenIds.has(conversation.id) && (conversation.pinnedAtUnixMs ?? 0) <= 0
+  const existingSectionIds = new Set(nextSections.map((section) => section.id));
+  const newConversations = [...summarySectionItemsById.entries()].flatMap(
+    ([sectionId, items]) =>
+      existingSectionIds.has(sectionId)
+        ? []
+        : items.filter((conversation) => !seenIds.has(conversation.id))
   );
   if (newConversations.length === 0) {
     return changed ? nextSections : previous;
@@ -4285,7 +4465,7 @@ export function updateConversationSectionsFromSummaries(
     if (targetIndex !== -1 && target) {
       sectionsWithInsertions[targetIndex] = {
         ...target,
-        items: [conversation, ...target.items]
+        items: [...target.items, conversation]
       };
       continue;
     }
@@ -4436,6 +4616,7 @@ function conversationProjectsRenderEqual(
 const agentGUIProviderRailOrder: readonly AgentGUIProvider[] = [
   "codex",
   "claude-code",
+  "tutti-agent",
   "cursor",
   "nexight",
   "hermes",
@@ -4447,7 +4628,6 @@ const agentGUIProviderRailDefaultProviders = [
   "codex",
   "claude-code",
   "cursor",
-  "nexight",
   "hermes",
   "openclaw"
 ] as const satisfies readonly AgentGUIProvider[];
@@ -4467,24 +4647,15 @@ function agentGUILaunchpadIconPresentations(): readonly AgentGUIProviderIconPres
   return [
     agentGUIProviderRailIconPresentation("codex"),
     agentGUIProviderRailIconPresentation("claude-code"),
-    agentGUIProviderRailIconPresentation("tutti"),
-    agentGUIProviderRailIconPresentation("hermes")
+    agentGUIProviderRailIconPresentation("cursor"),
+    agentGUIProviderRailIconPresentation("tutti")
   ];
 }
 
 function agentGUIConversationProviderIconUrl(
   provider: string | undefined
 ): string | null {
-  switch (normalizeManagedAgentProvider(provider)) {
-    case "claude-code":
-      return claudeCodeFlatFilledIconUrl;
-    case "codex":
-      return codexFlatFilledIconUrl;
-    case "cursor":
-      return cursorFlatFilledIconUrl;
-    default:
-      return null;
-  }
+  return resolveAgentGuiSessionProviderIconUrl(provider);
 }
 
 function agentGUIProviderRailLabel(
@@ -4520,10 +4691,16 @@ function agentGUIProviderTargetMatchesConversationFilter(
 function agentGUIProviderRailTargets(
   providerTargets: AgentGUINodeViewModel["providerTargets"],
   providerTargetsLoading: boolean,
-  comingSoonProviders: AgentGUINodeViewModel["comingSoonProviders"]
+  comingSoonProviders: AgentGUINodeViewModel["comingSoonProviders"],
+  providerRailMode: AgentGUINodeViewModel["providerRailMode"]
 ): AgentGUINodeViewModel["providerTargets"] {
   if (providerTargetsLoading) {
     return [];
+  }
+  // Exact mode renders precisely the provided targets — no backfilling to the
+  // default provider catalog, no local/placeholder padding.
+  if (providerRailMode === "exact") {
+    return providerTargets;
   }
   const comingSoon = new Set(comingSoonProviders);
   const source =
@@ -4572,7 +4749,10 @@ interface AgentGUIProviderRailProps {
   selectedProviderTarget: AgentGUINodeViewModel["selectedProviderTarget"];
   providerTargets: AgentGUINodeViewModel["providerTargets"];
   providerTargetsLoading: AgentGUINodeViewModel["providerTargetsLoading"];
+  providerRailMode: AgentGUINodeViewModel["providerRailMode"];
+  renderProviderRailEmpty?: AgentGUIProviderRailEmptyRenderer;
   comingSoonProviders: AgentGUINodeViewModel["comingSoonProviders"];
+  onRequestComposerFocus: () => void;
   onSelectConversationFilterTarget: AgentGUINodeViewProps["actions"]["selectConversationFilterTarget"];
   onUpdateConversationFilter: (
     filter: AgentGUINodeViewModel["conversationFilter"]
@@ -4586,7 +4766,10 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
   selectedProviderTarget,
   providerTargets,
   providerTargetsLoading,
+  providerRailMode,
+  renderProviderRailEmpty,
   comingSoonProviders,
+  onRequestComposerFocus,
   onSelectConversationFilterTarget,
   onUpdateConversationFilter
 }: AgentGUIProviderRailProps): React.JSX.Element {
@@ -4596,12 +4779,23 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
       agentGUIProviderRailTargets(
         providerTargets,
         providerTargetsLoading,
-        comingSoonProviders
+        comingSoonProviders,
+        providerRailMode
       ),
-    [comingSoonProviders, providerTargets, providerTargetsLoading]
+    [
+      comingSoonProviders,
+      providerRailMode,
+      providerTargets,
+      providerTargetsLoading
+    ]
   );
   const providerTiles = useMemo(() => {
     const targets = [...railProviderTargets];
+    // Exact mode is host-orchestrated: preserve the caller's order verbatim
+    // (the built-in provider order would otherwise reshuffle across providers).
+    if (providerRailMode === "exact") {
+      return targets;
+    }
     const originalIndexByTarget = new Map<string, number>();
     targets.forEach((target, index) => {
       originalIndexByTarget.set(
@@ -4624,11 +4818,15 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
         ) ?? 0)
       );
     });
-  }, [railProviderTargets]);
-  const launchpadIconPresentations = useMemo(
-    () => agentGUILaunchpadIconPresentations(),
-    []
-  );
+  }, [providerRailMode, railProviderTargets]);
+  const visibleProviderTiles = useMemo(() => {
+    if (!providerTiles.some((target) => target.provider === "tutti-agent")) {
+      return providerTiles;
+    }
+    return providerTiles.filter(
+      (target) => target.provider !== "nexight" || target.disabled !== true
+    );
+  }, [providerTiles]);
   const selectedProviderTargetIsPlaceholder =
     selectedProviderTarget?.disabled === true;
   const allTileSelected =
@@ -4645,8 +4843,10 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
         });
       }
     }
+    onRequestComposerFocus();
   }, [
     onSelectConversationFilterTarget,
+    onRequestComposerFocus,
     onUpdateConversationFilter,
     railProviderTargets,
     selectedProviderTargetIsPlaceholder
@@ -4657,101 +4857,428 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
         provider: target.provider,
         providerTargetId: target.targetId
       });
+      onRequestComposerFocus();
     },
-    [onSelectConversationFilterTarget]
+    [onRequestComposerFocus, onSelectConversationFilterTarget]
   );
 
-  return (
-    <div
-      className={styles.providerRail}
-      role="tablist"
-      aria-label={labels.providerSwitchLabel}
-      aria-busy={providerTargetsLoading}
-    >
-      <button
-        type="button"
-        role="tab"
-        aria-label={labels.conversationFilterAll}
-        aria-selected={allTileSelected}
-        className={styles.providerRailTile}
-        data-selected={allTileSelected ? "true" : "false"}
-        disabled={previewMode}
-        onClick={selectAllProviders}
+  // Exact mode with no targets (and not loading): hand the rail body to the
+  // host-provided empty renderer instead of the static local catalog fallback.
+  if (
+    providerRailMode === "exact" &&
+    !providerTargetsLoading &&
+    visibleProviderTiles.length === 0 &&
+    renderProviderRailEmpty
+  ) {
+    return (
+      <div
+        className={styles.providerRail}
+        role="tablist"
+        aria-label={labels.providerSwitchLabel}
+        aria-busy={providerTargetsLoading}
+        data-empty="true"
       >
-        <AgentGUIAllProviderGridIcon icons={launchpadIconPresentations} />
-      </button>
-      <span aria-hidden="true" className={styles.providerRailSeparator} />
-      {providerTargetsLoading
-        ? [0, 1, 2].map((index) => (
+        {renderProviderRailEmpty()}
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.providerRail}>
+      <div
+        className="flex min-h-0 w-full flex-col items-center"
+        role="tablist"
+        aria-label={labels.providerSwitchLabel}
+        aria-busy={providerTargetsLoading}
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-label={labels.conversationFilterAll}
+          aria-selected={allTileSelected}
+          className={styles.providerRailTile}
+          data-selected={allTileSelected ? "true" : "false"}
+          disabled={previewMode}
+          onClick={selectAllProviders}
+        >
+          <AgentGUIUnifiedProviderIcon />
+          <span className={styles.providerRailTileLabel}>
+            {labels.conversationFilterAll}
+          </span>
+        </button>
+        <span aria-hidden="true" className={styles.providerRailSeparator} />
+        {providerTargetsLoading
+          ? [0, 1, 2].map((index) => (
+              <button
+                key={`provider-target-loading-${index}`}
+                type="button"
+                role="tab"
+                aria-selected="false"
+                className={styles.providerRailTile}
+                data-loading="true"
+                data-selected="false"
+                disabled
+              >
+                <span
+                  aria-hidden="true"
+                  className={styles.providerRailAvatar}
+                />
+              </button>
+            ))
+          : null}
+        {visibleProviderTiles.map((target) => {
+          const providerSelected =
+            target.disabled === true
+              ? selectedProviderTarget?.provider === target.provider &&
+                selectedProviderTarget?.targetId === target.targetId
+              : agentGUIProviderTargetMatchesConversationFilter(
+                  target,
+                  conversationFilter
+                );
+          const label = agentGUIProviderRailLabel(
+            target.provider,
+            target.label,
+            labels
+          );
+          const tile = (
             <button
-              key={`provider-target-loading-${index}`}
+              key={`${target.provider}:${target.targetId}`}
               type="button"
               role="tab"
-              aria-selected="false"
+              aria-label={label}
+              aria-selected={providerSelected}
               className={styles.providerRailTile}
-              data-loading="true"
-              data-selected="false"
-              disabled
+              data-disabled={target.disabled === true ? "true" : undefined}
+              data-provider-tile="true"
+              data-selected={providerSelected ? "true" : "false"}
+              disabled={previewMode}
+              onClick={() => selectAgentTargetTile(target)}
             >
-              <span aria-hidden="true" className={styles.providerRailAvatar} />
+              <span className={styles.providerRailAvatar}>
+                <AgentGUIProviderIconVisual
+                  ariaHidden
+                  imageClassName={styles.providerRailAvatarImage}
+                  icon={agentGUIProviderRailIconPresentation(
+                    target.provider,
+                    target.iconUrl
+                  )}
+                />
+              </span>
             </button>
-          ))
-        : null}
-      {providerTiles.map((target) => {
-        const providerSelected =
-          target.disabled === true
-            ? selectedProviderTarget?.provider === target.provider &&
-              selectedProviderTarget?.targetId === target.targetId
-            : agentGUIProviderTargetMatchesConversationFilter(
-                target,
-                conversationFilter
-              );
-        const label = agentGUIProviderRailLabel(
-          target.provider,
-          target.label,
-          labels
-        );
-        const tile = (
-          <button
-            key={`${target.provider}:${target.targetId}`}
-            type="button"
-            role="tab"
-            aria-label={label}
-            aria-selected={providerSelected}
-            className={styles.providerRailTile}
-            data-disabled={target.disabled === true ? "true" : undefined}
-            data-provider-tile="true"
-            data-selected={providerSelected ? "true" : "false"}
-            disabled={previewMode}
-            onClick={() => selectAgentTargetTile(target)}
-          >
-            <span className={styles.providerRailAvatar}>
-              <AgentGUIProviderIconVisual
-                ariaHidden
-                imageClassName={styles.providerRailAvatarImage}
-                icon={agentGUIProviderRailIconPresentation(
-                  target.provider,
-                  target.iconUrl
-                )}
-              />
-            </span>
-          </button>
-        );
-        if (previewMode) {
-          return tile;
-        }
-        return (
-          <Tooltip key={`${target.provider}:${target.targetId}:tooltip`}>
-            <TooltipTrigger asChild>{tile}</TooltipTrigger>
-            <TooltipContent side="right" sideOffset={-4}>
-              {label}
-            </TooltipContent>
-          </Tooltip>
-        );
-      })}
+          );
+          if (previewMode) {
+            return tile;
+          }
+          return (
+            <Tooltip key={`${target.provider}:${target.targetId}:tooltip`}>
+              <TooltipTrigger asChild>{tile}</TooltipTrigger>
+              <TooltipContent side="right" sideOffset={-4}>
+                {label}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </div>
     </div>
   );
 });
+
+interface AgentGUIAccountRailMenuProps {
+  accountMenuState: AgentGUIAccountMenuState;
+  labels: AgentGUIViewLabels;
+  previewMode: boolean;
+}
+
+interface AgentGUIAccountRewardToastProps {
+  toast: NonNullable<AgentGUIAccountMenuState["registrationCreditsToast"]>;
+  labels: Pick<
+    AgentGUIViewLabels,
+    | "accountRewardToastTitle"
+    | "accountRewardToastCreditsUnit"
+    | "accountRewardToastDescription"
+    | "accountRewardToastClose"
+  >;
+}
+
+const accountRewardToastAutoDismissMs = 120_000;
+
+const AgentGUIAccountRewardToast = memo(function AgentGUIAccountRewardToast({
+  toast,
+  labels
+}: AgentGUIAccountRewardToastProps): React.JSX.Element | null {
+  "use memo";
+  useEffect(() => {
+    if (!toast.visible) {
+      return;
+    }
+    const timeout = window.setTimeout(
+      toast.onDismiss,
+      toast.autoDismissMs ?? accountRewardToastAutoDismissMs
+    );
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [toast.autoDismissMs, toast.onDismiss, toast.visible]);
+
+  if (!toast.visible) {
+    return null;
+  }
+
+  return (
+    <div
+      className="nodrag relative mx-3 mb-1 w-[calc(100%-24px)] max-w-[calc(100%-24px)] overflow-hidden rounded-[14px] border border-cyan-100/55 bg-[linear-gradient(135deg,rgba(227,255,244,0.94),rgba(167,237,222,0.78)_44%,rgba(151,190,224,0.72))] p-2.5 pr-9 text-white shadow-[0_14px_28px_rgba(0,0,0,0.20),0_0_0_1px_rgba(255,255,255,0.22)_inset] [-webkit-app-region:no-drag]"
+      data-testid="agent-gui-account-reward-toast"
+      role="status"
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(255,255,255,0.52),transparent_24%),radial-gradient(circle_at_86%_12%,rgba(255,255,255,0.32),transparent_22%)]" />
+      <div className="pointer-events-none absolute -bottom-9 left-[-8%] h-20 w-[116%] rounded-[50%] border-t border-white/28 bg-white/10" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent" />
+      <div className="relative flex min-w-0 items-center gap-2.5">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[rgba(250,255,236,0.78)] text-emerald-400 shadow-[0_9px_18px_rgba(20,184,166,0.18),0_0_0_1px_rgba(255,255,255,0.5)_inset]">
+          <Gift aria-hidden="true" size={23} strokeWidth={2} />
+        </span>
+        <span
+          aria-hidden="true"
+          className="absolute left-[40px] top-0 h-2 w-2 rounded-full bg-white/85 shadow-[0_0_10px_rgba(255,255,255,0.7)]"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12px] font-semibold leading-4 text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.22)]">
+            {labels.accountRewardToastTitle}
+          </span>
+          <span className="block truncate text-[20px] font-semibold leading-6 text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.22)]">
+            +{toast.creditsLabel} {labels.accountRewardToastCreditsUnit}
+          </span>
+          <span className="block truncate text-[11px] font-medium leading-4 text-white/88 drop-shadow-[0_1px_3px_rgba(0,0,0,0.18)]">
+            {labels.accountRewardToastDescription}
+          </span>
+        </span>
+      </div>
+      <button
+        type="button"
+        aria-label={labels.accountRewardToastClose}
+        className="nodrag absolute right-2.5 top-2.5 grid h-6 w-6 place-items-center rounded-[7px] text-white/85 hover:bg-white/18 hover:text-white [-webkit-app-region:no-drag]"
+        onClick={toast.onDismiss}
+      >
+        <X aria-hidden="true" size={16} strokeWidth={2} />
+      </button>
+    </div>
+  );
+});
+
+const AgentGUIAccountRailMenu = memo(function AgentGUIAccountRailMenu({
+  accountMenuState,
+  labels,
+  previewMode
+}: AgentGUIAccountRailMenuProps): React.JSX.Element {
+  "use memo";
+  const userLabel = agentGUIAccountUserLabel(accountMenuState, labels);
+  const initials = agentGUIAccountInitials(userLabel);
+  const membershipLabel =
+    accountMenuState.membershipLabel.trim() || labels.accountMenuFree;
+  const creditsLabel =
+    accountMenuState.loading && !accountMenuState.creditsLabel
+      ? labels.accountMenuLoading
+      : (accountMenuState.creditsLabel ?? labels.accountMenuUnavailable);
+  const errorLabel =
+    accountMenuState.error ||
+    (accountMenuState.partialError ? labels.accountMenuDataUnavailable : null);
+  const openExternal = useCallback(
+    (url: string) => {
+      accountMenuState.onOpenExternal(url);
+    },
+    [accountMenuState]
+  );
+  return (
+    <div className="flex min-w-0 flex-col">
+      {accountMenuState.registrationCreditsToast ? (
+        <AgentGUIAccountRewardToast
+          labels={labels}
+          toast={accountMenuState.registrationCreditsToast}
+        />
+      ) : null}
+      <Popover onOpenChange={accountMenuState.onOpenChange}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={userLabel}
+            className="nodrag mx-2 mt-2 flex min-h-12 w-[calc(100%-16px)] min-w-0 items-center gap-2 rounded-[8px] px-2 text-left text-[var(--text-primary)] hover:bg-[var(--transparency-hover)] disabled:opacity-50 [-webkit-app-region:no-drag]"
+            data-account-menu-trigger="true"
+            disabled={previewMode}
+          >
+            <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--background-fronted)] text-[13px] font-semibold">
+              {accountMenuState.user?.avatar ? (
+                <img
+                  alt=""
+                  className="h-full w-full object-cover"
+                  src={accountMenuState.user.avatar}
+                />
+              ) : (
+                <span aria-hidden="true">{initials}</span>
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-semibold leading-4">
+                {userLabel}
+              </span>
+              <AccountMembershipBadge
+                className="mt-0.5"
+                label={membershipLabel}
+              />
+            </span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="right"
+          align="end"
+          sideOffset={8}
+          className="w-[232px] max-w-[calc(100vw-32px)] p-1 text-xs"
+          data-testid="agent-gui-account-menu"
+        >
+          <div className="flex min-w-0 flex-col">
+            <div className="flex min-w-0 items-center gap-2 px-2 py-2">
+              <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[8px] bg-[var(--background-fronted)] text-[13px] font-semibold text-[var(--text-primary)]">
+                {accountMenuState.user?.avatar ? (
+                  <img
+                    alt=""
+                    className="h-full w-full object-cover"
+                    src={accountMenuState.user.avatar}
+                  />
+                ) : (
+                  initials
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold text-[var(--text-primary)]">
+                  {userLabel}
+                </span>
+                <AccountMembershipBadge
+                  className="mt-1"
+                  label={membershipLabel}
+                />
+              </span>
+            </div>
+            <span
+              aria-hidden="true"
+              className="mx-2 h-px bg-[var(--border-1)]"
+            />
+            {accountMenuState.user ? (
+              <>
+                <button
+                  type="button"
+                  className="nodrag flex h-8 items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)] [-webkit-app-region:no-drag]"
+                  onClick={() => openExternal(accountMenuState.links.planUrl)}
+                >
+                  <Crown aria-hidden="true" size={15} strokeWidth={1.8} />
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {labels.accountMenuMember}
+                  </span>
+                  <span className="shrink-0 rounded-[6px] bg-[color-mix(in_srgb,var(--tutti-purple)_24%,transparent)] px-2 py-0.5 text-[12px] font-semibold text-[var(--tutti-purple)]">
+                    {labels.accountMenuUpgrade}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="nodrag flex h-8 items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)] [-webkit-app-region:no-drag]"
+                  onClick={() => openExternal(accountMenuState.links.usageUrl)}
+                >
+                  <Coins aria-hidden="true" size={15} strokeWidth={1.8} />
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {labels.accountMenuCreditsBalance}
+                  </span>
+                  <span className="truncate text-[var(--text-secondary)]">
+                    {creditsLabel}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="nodrag flex h-8 items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)] [-webkit-app-region:no-drag]"
+                  onClick={() =>
+                    openExternal(accountMenuState.links.settingsUrl)
+                  }
+                >
+                  <Settings aria-hidden="true" size={15} strokeWidth={1.8} />
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {labels.accountMenuAccountCenter}
+                  </span>
+                  <ExternalLink
+                    aria-hidden="true"
+                    size={14}
+                    strokeWidth={1.8}
+                  />
+                </button>
+                {accountMenuState.onSettings ? (
+                  <button
+                    type="button"
+                    className="nodrag flex h-8 items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)] [-webkit-app-region:no-drag]"
+                    onClick={accountMenuState.onSettings}
+                  >
+                    <Settings aria-hidden="true" size={15} strokeWidth={1.8} />
+                    <span className="min-w-0 flex-1 truncate text-left">
+                      {labels.accountMenuSettings}
+                    </span>
+                  </button>
+                ) : null}
+                {accountMenuState.onLogout ? (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className="mx-2 my-1 h-px bg-[var(--border-1)]"
+                    />
+                    <button
+                      type="button"
+                      className="nodrag flex h-8 items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)] [-webkit-app-region:no-drag]"
+                      onClick={accountMenuState.onLogout}
+                    >
+                      <LogOut aria-hidden="true" size={15} strokeWidth={1.8} />
+                      <span className="truncate">
+                        {labels.accountMenuSignOut}
+                      </span>
+                    </button>
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <button
+                type="button"
+                className="nodrag flex h-8 items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] hover:bg-[var(--transparency-hover)] [-webkit-app-region:no-drag]"
+                onClick={accountMenuState.onLogin}
+              >
+                <LogIn aria-hidden="true" size={15} strokeWidth={1.8} />
+                <span className="truncate">{labels.accountMenuSignIn}</span>
+              </button>
+            )}
+            {errorLabel ? (
+              <span className="px-2 py-1 text-[11px] leading-4 text-[var(--text-danger)]">
+                {errorLabel}
+              </span>
+            ) : null}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+});
+
+function agentGUIAccountUserLabel(
+  accountMenuState: AgentGUIAccountMenuState,
+  labels: Pick<AgentGUIViewLabels, "accountMenuTitle">
+): string {
+  const user = accountMenuState.user;
+  return (
+    user?.name?.trim() ||
+    user?.email?.trim() ||
+    user?.userId?.trim() ||
+    labels.accountMenuTitle
+  );
+}
+
+function agentGUIAccountInitials(label: string): string {
+  const normalized = label.trim();
+  if (!normalized) {
+    return "T";
+  }
+  return normalized.slice(0, 2).toUpperCase();
+}
 
 interface AgentGUIConversationRailInput {
   conversationFilter: AgentGUINodeViewModel["conversationFilter"];
@@ -4777,17 +5304,22 @@ function useAgentGUIConversationRail({
   loadMoreSectionConversations: (section: ConversationSection) => void;
   runtimeSectionsEnabled: boolean;
   runtimeRailSections: ConversationSection[] | null;
+  runtimeRailSectionsPending: boolean;
   sectionPageStates: ReadonlyMap<string, ConversationRailSectionPageState>;
 } {
   const agentActivityRuntime = useAgentActivityRuntime();
   const [runtimeRailSections, setRuntimeRailSections] = useState<
     ConversationSection[] | null
   >(null);
+  const [runtimeRailSectionsPending, setRuntimeRailSectionsPending] =
+    useState(false);
   const [sectionPageStates, setSectionPageStates] = useState<
     ReadonlyMap<string, ConversationRailSectionPageState>
   >(() => new Map());
+  const conversationsRef = useRef(conversations);
   const pagingRequestSequenceRef = useRef(0);
   const pagingAbortControllersRef = useRef(new Map<string, AbortController>());
+  const workspaceIdRef = useRef(workspaceId);
   const runtimeListSessionSections = agentActivityRuntime.listSessionSections;
   const runtimeListSessionSectionPage =
     agentActivityRuntime.listSessionSectionPage;
@@ -4819,12 +5351,20 @@ function useAgentGUIConversationRail({
   );
 
   useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  useEffect(() => {
+    const workspaceChanged = workspaceIdRef.current !== workspaceId;
+    workspaceIdRef.current = workspaceId;
     pagingRequestSequenceRef.current += 1;
     for (const controller of pagingAbortControllersRef.current.values()) {
       controller.abort();
     }
     pagingAbortControllersRef.current.clear();
-    setRuntimeRailSections(null);
+    if (workspaceChanged) {
+      setRuntimeRailSections(null);
+    }
     setSectionPageStates(new Map());
     return () => {
       pagingRequestSequenceRef.current += 1;
@@ -4848,10 +5388,12 @@ function useAgentGUIConversationRail({
 
   useEffect(() => {
     if (!runtimeSectionsEnabled || !runtimeListSessionSections) {
+      setRuntimeRailSectionsPending(false);
       return;
     }
     const requestSequence = pagingRequestSequenceRef.current;
     const abortController = new AbortController();
+    setRuntimeRailSectionsPending(true);
     void runtimeListSessionSections({
       agentTargetId: sectionAgentTargetId || undefined,
       limitPerSection: AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE,
@@ -4871,9 +5413,18 @@ function useAgentGUIConversationRail({
           sections: page.sections,
           workspaceId: page.workspaceId
         });
-        setRuntimeRailSections((current) =>
-          stabilizeConversationSections(current, sections)
+        const sectionsWithSummaries = updateConversationSectionsFromSummaries(
+          sections,
+          conversationsRef.current,
+          { sectionConversationsLabel: labels.sectionConversations }
         );
+        setRuntimeRailSections((current) =>
+          stabilizeConversationSections(
+            current,
+            sectionsWithSummaries ?? sections
+          )
+        );
+        setRuntimeRailSectionsPending(false);
         setSectionPageStates(() => {
           const next = new Map<string, ConversationRailSectionPageState>();
           for (const section of page.sections) {
@@ -4894,6 +5445,7 @@ function useAgentGUIConversationRail({
           return;
         }
         setRuntimeRailSections([]);
+        setRuntimeRailSectionsPending(false);
       });
     return () => {
       abortController.abort();
@@ -4901,6 +5453,7 @@ function useAgentGUIConversationRail({
   }, [
     conversationFilter,
     conversationMembershipKey,
+    labels.sectionConversations,
     runtimeListSessionSections,
     runtimeSectionsEnabled,
     sectionProjectionLabels,
@@ -4913,12 +5466,21 @@ function useAgentGUIConversationRail({
     if (!runtimeSectionsEnabled) {
       return;
     }
+    const filteredConversations = filterAgentGUIConversationSummaries(
+      conversations,
+      conversationFilter
+    );
     setRuntimeRailSections((current) =>
-      updateConversationSectionsFromSummaries(current, conversations, {
+      updateConversationSectionsFromSummaries(current, filteredConversations, {
         sectionConversationsLabel: labels.sectionConversations
       })
     );
-  }, [conversations, labels.sectionConversations, runtimeSectionsEnabled]);
+  }, [
+    conversationFilter,
+    conversations,
+    labels.sectionConversations,
+    runtimeSectionsEnabled
+  ]);
 
   const loadMoreSectionConversations = useCallback(
     (section: ConversationSection) => {
@@ -5048,6 +5610,7 @@ function useAgentGUIConversationRail({
     loadMoreSectionConversations,
     runtimeSectionsEnabled,
     runtimeRailSections,
+    runtimeRailSectionsPending,
     sectionPageStates
   };
 }
@@ -5055,6 +5618,7 @@ function useAgentGUIConversationRail({
 const AgentGUIConversationRailPane = memo(
   function AgentGUIConversationRailPane({
     conversations,
+    footer,
     workspaceId,
     userProjects,
     activeConversationId,
@@ -5069,12 +5633,13 @@ const AgentGUIConversationRailPane = memo(
     createConversationDisabled,
     openclawGateway,
     isCollapsed,
-    railConfigProvider,
     slashStatusLimits,
+    selectedProviderTarget,
     conversationFilter,
     sectionAgentTargetFallbackId,
     onCreateConversation,
     onOpenAgentEnvSetup,
+    onOpenAgentSettings,
     onAgentConfigMenuOpen,
     onRetryOpenclawGateway,
     onSelectConversation,
@@ -5108,6 +5673,7 @@ const AgentGUIConversationRailPane = memo(
       loadMoreSectionConversations,
       runtimeSectionsEnabled,
       runtimeRailSections,
+      runtimeRailSectionsPending,
       sectionPageStates
     } = useAgentGUIConversationRail({
       conversationFilter,
@@ -5233,7 +5799,17 @@ const AgentGUIConversationRailPane = memo(
       return counts;
     }, [displayConversations]);
     const isRuntimeRailLoading =
-      runtimeSectionsEnabled && runtimeRailSections === null;
+      runtimeSectionsEnabled &&
+      (runtimeRailSections === null || runtimeRailSectionsPending);
+    const isConversationRailListLoading =
+      isRuntimeRailLoading ||
+      (isLoadingConversations && conversations.length === 0);
+    const shouldShowConversationSkeleton = useDelayedBoolean(
+      isConversationRailListLoading,
+      AGENT_GUI_CONVERSATION_RAIL_LOADING_SKELETON_DELAY_MS
+    );
+    const shouldShowConversationEmptyState =
+      !isConversationRailListLoading && groupedConversations.length === 0;
     const registerConversationItemElement = useCallback(
       (itemId: string, element: HTMLDivElement | null) => {
         if (element) {
@@ -5320,12 +5896,11 @@ const AgentGUIConversationRailPane = memo(
           viewportRef={conversationListRef}
           viewportClassName={styles.conversationList}
         >
-          {isRuntimeRailLoading ||
-          (isLoadingConversations && conversations.length === 0) ? (
+          {shouldShowConversationSkeleton ? (
             <AgentConversationListSkeleton
               label={labels.loadingConversations}
             />
-          ) : groupedConversations.length === 0 ? (
+          ) : shouldShowConversationEmptyState ? (
             <div className={styles.emptyState}>
               <span>
                 {conversations.length === 0
@@ -5407,7 +5982,8 @@ const AgentGUIConversationRailPane = memo(
             })
           )}
         </ScrollArea>
-        {railConfigProvider ? (
+        {selectedProviderTarget?.disabled === true ||
+        conversationFilter.kind === "all" ? null : (
           <div className="shrink-0 px-2 py-1.5">
             <Popover
               onOpenChange={(open) => {
@@ -5429,7 +6005,7 @@ const AgentGUIConversationRailPane = memo(
                   title={labels.agentConfig}
                   disabled={previewMode}
                 >
-                  <EnvironmentLinedIcon
+                  <SettingsLinedIcon
                     aria-hidden="true"
                     width={16}
                     height={16}
@@ -5440,13 +6016,13 @@ const AgentGUIConversationRailPane = memo(
               <PopoverContent
                 side="top"
                 align="start"
-                className="w-[300px] max-w-[calc(100vw-32px)] gap-3 text-xs"
+                className="w-[300px] max-w-[calc(100vw-32px)] gap-3 p-1 text-xs"
                 data-testid="agent-gui-config-menu"
               >
                 <div className="flex min-w-0 flex-col gap-3">
                   {slashStatusLimits.length > 0 ? (
                     <>
-                      <div className="flex min-w-0 flex-col gap-2">
+                      <div className="flex min-w-0 flex-col gap-2 p-2">
                         <span className="text-[13px] font-semibold leading-4">
                           {labels.slashStatusLimits}
                         </span>
@@ -5464,24 +6040,43 @@ const AgentGUIConversationRailPane = memo(
                           />
                         ))}
                       </div>
-                      <span className="h-px bg-[var(--border-1)]" />
+                      <div className="px-2">
+                        <span className="block h-px bg-[var(--border-1)]" />
+                      </div>
                     </>
                   ) : null}
-                  <button
-                    type="button"
-                    data-testid="agent-gui-config-env-setup"
-                    className="nodrag -mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 rounded-[6px] px-2 py-1 text-[13px] text-[var(--text-primary)] transition-colors hover:bg-[var(--transparency-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] disabled:text-[var(--text-tertiary)] [-webkit-app-region:no-drag]"
-                    disabled={previewMode}
-                    onClick={() => onOpenAgentEnvSetup()}
-                  >
-                    <Wrench aria-hidden="true" size={16} strokeWidth={1.8} />
-                    <span>{labels.agentEnvSetup}</span>
-                  </button>
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <button
+                      type="button"
+                      data-testid="agent-gui-config-settings"
+                      className="nodrag flex h-7 w-full items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] transition-colors hover:bg-[var(--transparency-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] disabled:text-[var(--text-tertiary)] [-webkit-app-region:no-drag]"
+                      disabled={previewMode}
+                      onClick={() => onOpenAgentSettings()}
+                    >
+                      <SettingsLinedIcon
+                        aria-hidden="true"
+                        width={16}
+                        height={16}
+                      />
+                      <span>{labels.agentSettingsMenu}</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="agent-gui-config-env-setup"
+                      className="nodrag flex h-7 w-full items-center gap-2 rounded-[6px] px-2 text-[13px] text-[var(--text-primary)] transition-colors hover:bg-[var(--transparency-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] disabled:text-[var(--text-tertiary)] [-webkit-app-region:no-drag]"
+                      disabled={previewMode}
+                      onClick={() => onOpenAgentEnvSetup()}
+                    >
+                      <Wrench aria-hidden="true" size={16} strokeWidth={1.8} />
+                      <span>{labels.agentEnvSetup}</span>
+                    </button>
+                  </div>
                 </div>
               </PopoverContent>
             </Popover>
           </div>
-        ) : null}
+        )}
+        {footer ? <div className="shrink-0 pb-2">{footer}</div> : null}
         <ConfirmationDialog
           cancelLabel={labels.cancel}
           className={AGENT_GUI_CONFIRMATION_DIALOG_CLASS_NAME}
@@ -5622,9 +6217,23 @@ const AgentGUIConversationRailSection = memo(
     const visibleItemCount = isSectionCollapsed
       ? 0
       : Math.min(visibleItemLimit, section.items.length);
-    const visibleItems = isSectionCollapsed
-      ? []
-      : section.items.slice(0, visibleItemCount);
+    const visibleItems = useMemo(() => {
+      if (isSectionCollapsed) {
+        return [];
+      }
+      const baseItems = section.items.slice(0, visibleItemCount);
+      const activeId = activeConversationId?.trim() ?? "";
+      if (!activeId || baseItems.some((item) => item.id === activeId)) {
+        return baseItems;
+      }
+      const activeItem = section.items.find((item) => item.id === activeId);
+      return activeItem ? [...baseItems, activeItem] : baseItems;
+    }, [
+      activeConversationId,
+      isSectionCollapsed,
+      section.items,
+      visibleItemCount
+    ]);
     const canShowMore =
       !isSectionCollapsed &&
       (visibleItemCount < section.items.length || sectionHasMore);
@@ -5691,10 +6300,17 @@ const AgentGUIConversationRailSection = memo(
                 className={styles.conversationSectionChevron}
               />
               <span className={styles.conversationSectionLabel}>
-                <FolderIcon
-                  aria-hidden="true"
-                  className={styles.conversationSectionLabelIcon}
-                />
+                {isSectionCollapsed ? (
+                  <FolderIcon
+                    aria-hidden="true"
+                    className={styles.conversationSectionLabelIcon}
+                  />
+                ) : (
+                  <FolderOpenLinedIcon
+                    aria-hidden="true"
+                    className={styles.conversationSectionLabelIcon}
+                  />
+                )}
                 <span>{section.label}</span>
               </span>
             </button>

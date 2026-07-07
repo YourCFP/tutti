@@ -592,7 +592,7 @@ describe("useAgentGUINodeController", () => {
     expect(result.current.viewModel.providerReadinessGate).toBeNull();
   });
 
-  it("keeps the active conversation target stable while an empty rail target transition starts", async () => {
+  it("opens the selected target home composer when the active conversation is outside the new rail filter", async () => {
     const unactivate = vi.fn();
     installAgentHostApi({
       list: vi.fn(async () => ({
@@ -669,10 +669,11 @@ describe("useAgentGUINodeController", () => {
         agentTargetId: "local:claude-code"
       });
     });
-    expect(result.current.viewModel.activeConversationId).toBe("codex-session");
-    expect(result.current.viewModel.data.provider).toBe("codex");
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversationId).toBeNull();
+    });
     expect(result.current.viewModel.selectedProviderTarget.provider).toBe(
-      "codex"
+      "claude-code"
     );
     await waitFor(() => {
       expect(unactivate).toHaveBeenCalledWith({
@@ -2882,6 +2883,77 @@ describe("useAgentGUINodeController", () => {
     expect(result.current.viewModel.providerTargets.length).toBeGreaterThan(1);
   });
 
+  it("renders exactly the provided targets in exact rail mode (no placeholders or catalog padding)", () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({ presences: [], sessions: [] })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn())
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData(null),
+        providerRailMode: "exact",
+        providerTargets: [
+          {
+            targetId: "shared-agent:alice-codex",
+            provider: "codex",
+            ref: {
+              kind: "shared-agent",
+              provider: "codex",
+              sharedAgentId: "alice-codex"
+            },
+            label: "Alice's Codex"
+          },
+          {
+            targetId: "shared-agent:bob-claude",
+            provider: "claude-code",
+            ref: {
+              kind: "shared-agent",
+              provider: "claude-code",
+              sharedAgentId: "bob-claude"
+            },
+            label: "Bob's Claude"
+          }
+        ],
+        onDataChange: vi.fn()
+      })
+    );
+
+    expect(result.current.viewModel.providerRailMode).toBe("exact");
+    expect(
+      result.current.viewModel.providerTargets.map((target) => target.targetId)
+    ).toEqual(["shared-agent:alice-codex", "shared-agent:bob-claude"]);
+  });
+
+  it("keeps the provider rail empty in exact mode when no targets are provided", () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({ presences: [], sessions: [] })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn())
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData(null),
+        providerRailMode: "exact",
+        providerTargets: [],
+        onDataChange: vi.fn()
+      })
+    );
+
+    expect(result.current.viewModel.providerRailMode).toBe("exact");
+    expect(result.current.viewModel.providerTargets).toEqual([]);
+  });
+
   it("sends fallback local agent target ids without provider target refs when provider targets are omitted", async () => {
     const activate = vi.fn(
       async (input: AgentHostActivateAgentSessionInput) => ({
@@ -3762,9 +3834,18 @@ describe("useAgentGUINodeController", () => {
       list: vi.fn(async () => ({
         presences: [],
         sessions: [
-          workspaceAgentSession("session-1", { title: "2132" }),
-          workspaceAgentSession("session-2", { title: "hi" }),
-          workspaceAgentSession("session-3", { title: "这是什么?" })
+          workspaceAgentSession("session-1", {
+            title: "2132",
+            updatedAtUnixMs: 3_000
+          }),
+          workspaceAgentSession("session-2", {
+            title: "hi",
+            updatedAtUnixMs: 2_000
+          }),
+          workspaceAgentSession("session-3", {
+            title: "这是什么?",
+            updatedAtUnixMs: 1_000
+          })
         ]
       })),
       listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
@@ -4042,6 +4123,183 @@ describe("useAgentGUINodeController", () => {
     await waitFor(() => {
       expect(result.current.viewModel.activeConversationId).toBe("session-1");
     });
+  });
+
+  it("keeps an explicit open-session request even when the session is outside the loaded rail", async () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({
+        presences: [],
+        sessions: [workspaceAgentSession("recent-session")]
+      })),
+      listSessionTimeline: vi.fn(
+        async ({ agentSessionId }: { agentSessionId: string }) => ({
+          timelineItems:
+            agentSessionId === "old-session"
+              ? [
+                  timelineMessage({
+                    agentSessionId,
+                    id: 1,
+                    eventId: "old-session-message",
+                    role: "user",
+                    content: "open old session"
+                  })
+                ]
+              : []
+        })
+      ),
+      getState: vi.fn(async ({ agentSessionId }: { agentSessionId: string }) =>
+        agentSessionState(agentSessionId)
+      ),
+      subscribeEvents: vi.fn(() => vi.fn()),
+      userProjects: {
+        list: vi.fn(async () => ({
+          projects: [
+            {
+              id: "workspace-project",
+              label: "Workspace",
+              path: "/workspace"
+            }
+          ]
+        })),
+        subscribe: vi.fn(() => vi.fn())
+      }
+    });
+
+    const { result, rerender } = renderHook(
+      (props) =>
+        useAgentGUINodeController({
+          workspaceId: "room-1",
+          currentUserId: "user-1",
+          workspacePath: "/workspace",
+          avoidGroupingEdits: false,
+          ...props
+        }),
+      {
+        initialProps: {
+          data: agentGuiData("recent-session"),
+          onDataChange: vi.fn(),
+          openSessionRequest: null as {
+            agentSessionId: string;
+            sequence: number;
+          } | null
+        }
+      }
+    );
+
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversationId).toBe(
+        "recent-session"
+      );
+    });
+
+    rerender({
+      data: agentGuiData("recent-session"),
+      onDataChange: vi.fn(),
+      openSessionRequest: {
+        agentSessionId: "old-session",
+        sequence: 1
+      }
+    });
+
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversationId).toBe("old-session");
+    });
+
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(result.current.viewModel.activeConversationId).toBe("old-session");
+    expect(result.current.viewModel.activeConversation?.id).toBe("old-session");
+    await waitFor(() => {
+      expect(
+        result.current.viewModel.conversations.filter(
+          (conversation) => conversation.id === "old-session"
+        )
+      ).toHaveLength(1);
+    });
+    expect(
+      result.current.viewModel.conversations.find(
+        (conversation) => conversation.id === "old-session"
+      )?.project
+    ).toEqual({
+      id: "workspace-project",
+      label: "Workspace",
+      path: "/workspace"
+    });
+
+    rerender({
+      data: agentGuiData("recent-session"),
+      onDataChange: vi.fn(),
+      openSessionRequest: {
+        agentSessionId: "old-session",
+        sequence: 1
+      }
+    });
+    expect(
+      result.current.viewModel.conversations.some(
+        (conversation) => conversation.id === "old-session"
+      )
+    ).toBe(true);
+  });
+
+  it("keeps an explicit open-session request when restored state points at another session", async () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({
+        presences: [],
+        sessions: [workspaceAgentSession("gobang-session")]
+      })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      getState: vi.fn(async ({ agentSessionId }: { agentSessionId: string }) =>
+        agentSessionState(agentSessionId)
+      ),
+      subscribeEvents: vi.fn(() => vi.fn())
+    });
+
+    const { result, rerender } = renderHook(
+      (props) =>
+        useAgentGUINodeController({
+          workspaceId: "room-1",
+          currentUserId: "user-1",
+          workspacePath: "/workspace",
+          avoidGroupingEdits: false,
+          ...props
+        }),
+      {
+        initialProps: {
+          data: agentGuiData("gobang-session"),
+          onDataChange: vi.fn(),
+          openSessionRequest: null as {
+            agentSessionId: string;
+            sequence: number;
+          } | null
+        }
+      }
+    );
+
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversationId).toBe(
+        "gobang-session"
+      );
+    });
+
+    rerender({
+      data: agentGuiData("gobang-session"),
+      onDataChange: vi.fn(),
+      openSessionRequest: {
+        agentSessionId: "news-session",
+        sequence: 1
+      }
+    });
+
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversationId).toBe(
+        "news-session"
+      );
+    });
+
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(result.current.viewModel.activeConversationId).toBe("news-session");
+    expect(result.current.viewModel.activeConversation?.id).toBe(
+      "news-session"
+    );
   });
 
   it("keeps a switched conversation loading while its timeline request is pending", async () => {
@@ -16088,7 +16346,70 @@ describe("useAgentGUINodeController", () => {
       expect(exec).toHaveBeenCalledWith({
         workspaceId: "room-1",
         agentSessionId: "session-1",
+        guidance: true,
         ...promptContent("steer the current turn")
+      });
+    });
+    expect(result.current.viewModel.queuedPrompts).toEqual([]);
+  });
+
+  it("clears the goal with a visible /goal clear prompt that bypasses the queue", async () => {
+    const exec = vi.fn(async () => ({
+      agentSessionId: "session-1",
+      turnId: "turn-2",
+      accepted: true,
+      sessionStatus: "working" as const,
+      events: []
+    }));
+    installAgentHostApi({
+      list: vi.fn(async () => ({
+        presences: [],
+        sessions: [
+          workspaceAgentSession("session-1", {
+            effectiveStatus: "working",
+            turnPhase: "running"
+          })
+        ]
+      })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn()),
+      getState: vi.fn(async () =>
+        agentSessionState("session-1", {
+          status: "working",
+          turnLifecycle: { activeTurnId: "turn-1", phase: "running" },
+          submitAvailability: { state: "blocked", reason: "active_turn" }
+        })
+      ),
+      exec
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData("session-1"),
+        onDataChange: vi.fn()
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversationId).toBe("session-1");
+    });
+    await waitFor(() => {
+      expect(result.current.viewModel.canQueueWhileBusy).toBe(true);
+    });
+
+    act(() => {
+      result.current.actions.goalControl("clear");
+    });
+
+    await waitFor(() => {
+      expect(exec).toHaveBeenCalledWith({
+        workspaceId: "room-1",
+        agentSessionId: "session-1",
+        ...promptContent("/goal clear")
       });
     });
     expect(result.current.viewModel.queuedPrompts).toEqual([]);
@@ -17856,7 +18177,8 @@ function installAgentActivityRuntimeForHostMocks({
       const result = await exec({
         workspaceId: input.workspaceId,
         agentSessionId: input.agentSessionId,
-        content: input.content
+        content: input.content,
+        ...(input.guidance === true ? { guidance: true } : {})
       });
       const status =
         typeof result?.sessionStatus === "string"

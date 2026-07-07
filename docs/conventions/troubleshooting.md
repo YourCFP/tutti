@@ -43,6 +43,100 @@ Use this shape for new entries:
 
 ## Current Entries
 
+### App Factory job keeps loading after AgentGUI Stop
+
+- Symptom:
+  An App Center create-app job stays `generating` after the user stops the
+  linked AgentGUI turn. The AgentGUI transcript looks settled/canceled, but App
+  Center keeps showing the loading spinner.
+- Quick checks:
+  Inspect the App Factory job row and linked agent session. A common shape is
+  `app_factory_jobs.status = generating`,
+  `workspace_agent_sessions.status = active`, `current_phase = idle`, with the
+  latest assistant `tool_call` message `status = failed` and payload/error
+  fields such as `status: canceled`, `reason: interrupted`, or
+  `message: interrupted`.
+- Root cause:
+  AgentGUI sessions are resumable, so stopping one turn does not necessarily
+  make the durable session terminal. App Factory job lifecycle is a separate
+  projection: it must treat explicit canceled session/turn outcomes as job
+  cancellation, but it must not collapse every raw `interrupted` turn into a
+  canceled job because approval rejections and transient turn-level
+  interruptions can use the same vocabulary.
+- Fix:
+  Keep plain active-session `interrupted` turn outcomes non-terminal. Cancel an
+  active App Factory job only when the state carries an explicit canceled
+  outcome, or when accepted message updates contain the runtime's canceled
+  interrupted non-approval tool-call shape.
+- Validation:
+  Add App Factory service tests for plain `interrupted` staying non-terminal,
+  explicit `canceled` outcome canceling the job, canceled interrupted
+  non-approval tool calls canceling the job, and canceled approval updates being
+  ignored.
+- References:
+  [app_factory_agent_state.go](../../services/tuttid/service/workspace/app_factory_agent_state.go)
+  [app_factory_test.go](../../services/tuttid/service/workspace/app_factory_test.go)
+
+### AgentGUI Stop reports no active turn after cancel succeeds
+
+- Symptom:
+  Pressing Stop settles the AgentGUI turn as canceled, but the renderer also
+  logs a `workspace_operation_failed`/502 error whose daemon cause is
+  `agent session has no active turn`.
+- Quick checks:
+  Compare daemon `agent_session.cancel.adapter_failed` with nearby activity
+  state patches. If the same turn reports `turnPhase = settled` and
+  `outcome = canceled` at the same timestamp, the cancel result won the event
+  race while the synchronous cancel RPC still observed a stale controller turn
+  record.
+- Root cause:
+  The runtime controller and provider adapter keep separate active-turn views.
+  During cancel-after-settle races, the controller can still have a turn record
+  while the Codex app-server adapter has already cleared its active turn and
+  returns `ErrSessionNoActiveTurn`.
+- Fix:
+  Treat `ErrSessionNoActiveTurn` from the controller active-turn cancel path as
+  an idempotent settled-turn result: clear the stale controller turn record,
+  reconcile any still-blocked view, and return without surfacing a 502.
+- Validation:
+  Add controller coverage where `controller.turns` still has a record, the
+  stored session is already settled/canceled, and the adapter returns
+  `ErrSessionNoActiveTurn`.
+- References:
+  [controller.go](../../packages/agent/daemon/runtime/controller.go)
+  [controller_test.go](../../packages/agent/daemon/runtime/controller_test.go)
+
+### Claude composer model list stays stale after credential switch
+
+- Symptom:
+  After an external credential switcher rewrites Claude Code auth or config
+  files, the AgentGUI composer still shows the previous model list even though
+  `tuttid.log` contains `agent.model_catalog.invalidated` for `claude-code`.
+- Quick checks:
+  Search `tuttid.log` for `CLAUDE_MODEL_CATALOG_INVALIDATION_DEBUG`. If
+  `live_composer_models_invalidated` is followed by
+  `running_session_model_options_reused`, inspect that session's
+  `createdAtUnixMs` and `updatedAtUnixMs` against the invalidation timestamp.
+- Root cause:
+  Claude composer model discovery reuses model options from a live Claude
+  runtime session to avoid spawning overlapping credential-touching processes.
+  After a credential switch, a pre-switch runtime session can still carry the
+  old `runtimeContext.configOptions`; reusing it repopulates the just-cleared
+  live model cache with stale models.
+- Fix:
+  Track provider model-catalog invalidation time in `tuttid`. When loading
+  Claude composer options, skip running-session model options whose session
+  timestamp is older than the provider invalidation, and allow hidden live
+  discovery to query the current credentials.
+- Validation:
+  Add daemon service coverage where invalidation happens after a Claude session
+  has advertised old model options; the next composer options request must
+  start hidden discovery and return the freshly discovered model list. Run
+  `cd services/tuttid && go test ./service/agent`.
+- References:
+  [composer_live_model_discovery.go](../../services/tuttid/service/agent/composer_live_model_discovery.go)
+  [composer_live_model_cache.go](../../services/tuttid/service/agent/composer_live_model_cache.go)
+
 ### Claude SDK context window shows 200k for 1M models
 
 - Symptom:
@@ -168,7 +262,9 @@ Use this shape for new entries:
   `make dev-gui` exits during startup before the desktop window is usable. The
   early form reports `pnpm <version> installation did not succeed`; the later
   form reaches `start electron app...` and then `make` exits while desktop logs
-  say `secondary tutti instance detected`.
+  say `secondary tutti instance detected`. Another early form exits while
+  checking prerequisites because a stale `pnpm` shim reports that its bundled
+  `../node/bin/node` no longer exists.
 - Quick checks:
   Run `DEV_GUI_SKIP_START=1 make dev-gui` to isolate prerequisite setup from
   Electron startup. If full startup exits after `start electron app...`, inspect
@@ -177,15 +273,19 @@ Use this shape for new entries:
 - Root cause:
   Shells launched by tools can put another `pnpm` earlier on `PATH` than
   corepack's shim, so `corepack prepare` succeeds but the script still validates
-  the wrong `pnpm`. Electron's single-instance lock also follows Electron
+  the wrong `pnpm`. That earlier shim can also be a symlink into a relocated
+  runtime cache, so invoking `pnpm --version` fails before the script has a
+  chance to run Corepack. Electron's single-instance lock also follows Electron
   userData; if development and production share userData, a running production
   app makes the dev app quit as a secondary instance. Agent shells launched from
   the packaged app may inherit `TUTTI_ENV=production`, so `make dev-gui` must
   force the development environment instead of preserving that inherited value.
 - Fix:
-  Prefer the corepack shim directory before checking or running `pnpm`, and set
-  development Electron userData to an environment-specific path before
-  requesting the single-instance lock. Ensure the dev-gui script exports
+  Probe `pnpm --version` without letting a broken shim abort startup, discover
+  Corepack from the active or locally installed Node runtime, prefer that
+  Corepack shim directory before checking or running `pnpm`, and set development
+  Electron userData to an environment-specific path before requesting the
+  single-instance lock. Ensure the dev-gui script exports
   `TUTTI_ENV=development` before resolving pid files, installing the dev CLI, or
   launching Electron.
 - Validation:
@@ -198,6 +298,29 @@ Use this shape for new entries:
   [dev-gui.sh](../../tools/scripts/dev-gui.sh)
   [bootstrap.ts](../../apps/desktop/src/main/bootstrap.ts)
   [defaults.ts](../../apps/desktop/src/main/defaults.ts)
+
+### GitHub Actions pnpm setup fails with ERR_PNPM_BAD_PM_VERSION
+
+- Symptom:
+  GitHub Actions jobs fail in the `pnpm/action-setup` step with
+  `ERR_PNPM_BAD_PM_VERSION` or "Multiple versions of pnpm specified" after
+  `package.json` gains an integrity-pinned `packageManager` value such as
+  `pnpm@10.11.0+sha512...`.
+- Quick checks:
+  Inspect every workflow that uses `pnpm/action-setup`. If the workflow passes
+  `with.version` while the root `package.json` also declares `packageManager`,
+  the action sees two pnpm targets.
+- Root cause:
+  `pnpm/action-setup` reads `packageManager` from `package.json` by default.
+  Passing a separate `version` input duplicates the same version source, and an
+  integrity-pinned `packageManager` string makes the mismatch explicit.
+- Fix:
+  Keep `package.json` as the single pnpm version source. Remove the
+  `with.version` input from `pnpm/action-setup` steps instead of weakening the
+  root `packageManager` integrity pin.
+- Validation:
+  Search workflows for `pnpm/action-setup` and confirm no step still passes a
+  `version` input. Push a new commit to rerun the PR checks.
 
 ### macOS updates fail from a mounted DMG
 
@@ -258,6 +381,35 @@ Use this shape for new entries:
 - References:
   [apps.go](../../services/tuttid/service/workspace/apps.go)
   [apps_test.go](../../services/tuttid/service/workspace/apps_test.go)
+
+### Workspace app uninstall fails on cached manifest validation
+
+- Symptom:
+  App Center uninstall fails with a renderer `TuttidProtocolError` such as
+  `scan workspace app package version: app manifest references.listEndpoint is required when references is provided`.
+- Quick checks:
+  Inspect `tuttid.db` `app_packages.manifest_json` for the target app. A legacy
+  row may have `references` without `references.listEndpoint`, even when the
+  currently published catalog manifest is valid.
+- Root cause:
+  The unused remote built-in uninstall cleanup path needs durable file metadata
+  such as `package_dir`, but a full package-version read parses and validates
+  `manifest_json`. If an old cached package was valid under an older manifest
+  contract but invalid under the current one, cleanup can be blocked before it
+  deletes the installation.
+- Fix:
+  Keep normal package reads strict, but use a manifest-free file-record query
+  for the unused remote built-in uninstall cleanup path that only needs package
+  directories. Do not treat historical manifest validation failures as a reason
+  to prevent uninstall.
+- Validation:
+  Add SQLite coverage that file records can be listed for an invalid manifest
+  while full package-version reads still fail, plus App Center service coverage
+  for uninstalling an unused remote built-in app with an invalid cached package
+  version.
+- References:
+  [sqlite_apps.go](../../services/tuttid/data/workspace/sqlite_apps.go)
+  [app_packages.go](../../services/tuttid/service/workspace/app_packages.go)
 
 ### Workspace app update reopens the old dock window
 
@@ -683,6 +835,43 @@ delimited by ---`, and the composer skill picker may show partial or
   [daemon_app_mentions.go](../../services/tuttid/api/daemon_app_mentions.go)
   [desktopRichTextAtService.ts](../../apps/desktop/src/renderer/src/features/rich-text-at/services/internal/desktopRichTextAtService.ts)
   [desktopAgentProviderStatusService.ts](../../apps/desktop/src/renderer/src/features/workspace-agent/services/internal/desktopAgentProviderStatusService.ts)
+
+### Agent GUI provider tab shows fused or stale conversations
+
+- Symptom:
+  Switching the Agent GUI aggregation rail between All, Cursor, Codex, or Claude
+  leaves the middle list and right detail panel out of sync. A provider tab can
+  still show other providers' sessions, or the right panel keeps the previous
+  agent after the middle list already changed.
+- Quick checks:
+  Inspect `workspace_agent_sessions.agent_target_id` for legacy Cursor rows. Old
+  Cursor imports may be missing `agent_target_id` while still carrying
+  `provider=cursor`. Confirm the active `conversationFilter` in the controller
+  and the per-query `agentGuiConversationListStore` projection for the selected
+  `local:<provider>` target.
+- Root cause:
+  Conversation retention in `agentGuiConversationListStore` previously kept
+  every targetless session under any agent-target tab. The rail also merged
+  unfiltered store conversations into runtime sections, and filter switches did
+  not always re-project the shared list or clear an active conversation outside
+  the new filter.
+- Fix:
+  Match agent-target tabs with `matchesAgentGUIConversationSummaryFilter`, using
+  `session.provider` as a fallback for legacy `local:<provider>` targets.
+  Backfill Cursor `agent_target_id` in daemon storage, re-project the list store
+  when `conversationFilter` changes, filter rail merges in `AgentGUINodeView`,
+  and open the selected target home composer when the active conversation no
+  longer matches the tab.
+- Validation:
+  Run
+  `pnpm --dir packages/agent/gui exec vitest run --environment jsdom agent-gui/agentGuiNode/model/agentGuiConversationFilter.spec.ts contexts/workspace/presentation/renderer/agentGuiConversationList/agentGuiConversationListStore.spec.ts agent-gui/agentGuiNode/controller/useAgentGUINodeController.spec.tsx -t "opens the selected target home composer when the active conversation is outside the new rail filter"`,
+  then `cd services/tuttid && go test ./data/workspace/...`.
+- References:
+  [agentGuiConversationFilter.ts](../../packages/agent/gui/agent-gui/agentGuiNode/model/agentGuiConversationFilter.ts)
+  [agentGuiConversationListStore.ts](../../packages/agent/gui/contexts/workspace/presentation/renderer/agentGuiConversationList/agentGuiConversationListStore.ts)
+  [useAgentGUINodeController.ts](../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUINodeController.ts)
+  [AgentGUINodeView.tsx](../../packages/agent/gui/agent-gui/agentGuiNode/AgentGUINodeView.tsx)
+  [agent_store.go](../../services/tuttid/data/workspace/agent_store.go)
 
 ### Agent GUI no-project sessions appear under a user project
 

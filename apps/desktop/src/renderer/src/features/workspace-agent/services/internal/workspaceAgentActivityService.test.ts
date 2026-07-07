@@ -214,6 +214,64 @@ test("WorkspaceAgentActivityService composer options cache is agent target keyed
   );
 });
 
+test("WorkspaceAgentActivityService model catalog invalidation drops composer cache and notifies listeners", async () => {
+  const topicHandlers = new Map<string, (event: unknown) => void>();
+  let composerOptionCalls = 0;
+  const service = new WorkspaceAgentActivityService({
+    eventStreamClient: {
+      connect: async () => {},
+      dispose: () => {},
+      publishIntent: async () => {},
+      subscribe: (topic: string, listener: (event: unknown) => void) => {
+        topicHandlers.set(topic, listener);
+        return () => {};
+      },
+      subscribeConnectionState: () => () => {}
+    } as never,
+    tuttidClient: {
+      getAgentProviderComposerOptions: async (provider: string) => {
+        composerOptionCalls += 1;
+        return {
+          provider,
+          modelConfig: {
+            configurable: true,
+            options: [{ value: `model-${composerOptionCalls}` }]
+          },
+          runtimeContext: {}
+        };
+      }
+    } as unknown as TuttidClient,
+    runtimeApi: {
+      logTerminalDiagnostic: async () => {}
+    }
+  });
+
+  await service.getComposerOptions({ provider: "codex", workspaceId: "ws-1" });
+  await service.getComposerOptions({ provider: "codex", workspaceId: "ws-1" });
+  assert.equal(composerOptionCalls, 1);
+
+  const invalidationHandler = topicHandlers.get(
+    "agent.model.catalog.invalidated"
+  );
+  assert.ok(
+    invalidationHandler,
+    "service must subscribe to the model catalog invalidation topic"
+  );
+  const received: unknown[] = [];
+  service.onModelCatalogInvalidated((event) => {
+    received.push(event);
+  });
+  invalidationHandler({
+    payload: { providers: ["codex"], occurredAtUnixMs: 1000 }
+  });
+
+  assert.deepEqual(received, [
+    { providers: ["codex"], occurredAtUnixMs: 1000 }
+  ]);
+  await service.getComposerOptions({ provider: "codex", workspaceId: "ws-1" });
+  assert.equal(composerOptionCalls, 2);
+});
+
 test("WorkspaceAgentActivityService.importExternalSessions refreshes sessions and projects", async () => {
   const importCalls: unknown[] = [];
   let listCalls = 0;
@@ -260,6 +318,104 @@ test("WorkspaceAgentActivityService.importExternalSessions refreshes sessions an
   assert.equal(result.importedMessages, 2);
   assert.equal(listCalls, 1);
   assert.equal(projectRefreshCalls, 1);
+});
+
+test("WorkspaceAgentActivityService fetches combined reconcile state after messages", async () => {
+  const diagnostics: unknown[] = [];
+  const calls: string[] = [];
+  let messagesResolved = false;
+  const staleSession = workspaceAgentSession({
+    status: "running",
+    updatedAt: "2026-07-06T03:48:10.600Z",
+    turnLifecycle: {
+      activeTurnId: "turn-1",
+      phase: "running"
+    },
+    submitAvailability: { state: "blocked", reason: "active_turn" }
+  });
+  const finalSession = workspaceAgentSession({
+    status: "ready",
+    updatedAt: "2026-07-06T03:48:30.878Z",
+    currentPhase: "idle",
+    turnLifecycle: {
+      activeTurnId: null,
+      outcome: "completed",
+      phase: "settled"
+    },
+    submitAvailability: { state: "available" }
+  });
+  const service = new WorkspaceAgentActivityService({
+    tuttidClient: {
+      getWorkspaceAgentSession: async () => {
+        calls.push("getSession");
+        return messagesResolved ? finalSession : staleSession;
+      },
+      listWorkspaceAgentSessions: async () => ({
+        hasMore: false,
+        sessions: [staleSession],
+        workspaceId: "ws-1"
+      }),
+      listWorkspaceAgentSessionMessages: async () => {
+        calls.push("listMessages");
+        messagesResolved = true;
+        return {
+          hasMore: false,
+          latestVersion: 2,
+          messages: []
+        };
+      }
+    } as unknown as TuttidClient,
+    runtimeApi: {
+      logTerminalDiagnostic: async (payload) => {
+        diagnostics.push(payload);
+      }
+    }
+  });
+
+  await service.load("ws-1");
+  await (
+    service as unknown as {
+      reconcileAgentActivityUpdate(input: {
+        agentSessionId: string;
+        eventType: string;
+        workspaceId: string;
+      }): Promise<void>;
+    }
+  ).reconcileAgentActivityUpdate({
+    agentSessionId: "session-1",
+    eventType: "message_update",
+    workspaceId: "ws-1"
+  });
+
+  const session = service.getSnapshot("ws-1").sessions[0];
+  assert.deepEqual(calls, ["listMessages", "getSession"]);
+  assert.equal(session?.status, "ready");
+  assert.equal(session?.turnLifecycle?.phase, "settled");
+  assert.equal(session?.submitAvailability?.state, "available");
+  assert.deepEqual(
+    diagnostics
+      .filter(
+        (entry): entry is { details: { traceEvent?: string }; event: string } =>
+          typeof entry === "object" &&
+          entry !== null &&
+          (entry as { event?: unknown }).event ===
+            "agent.activity.reconcile.trace"
+      )
+      .map((entry) => entry.details.traceEvent)
+      .filter(
+        (traceEvent) =>
+          typeof traceEvent === "string" &&
+          traceEvent.startsWith("reconcile.combined")
+      ),
+    [
+      "reconcile.combined.messages_requested",
+      "reconcile.combined.messages_resolved",
+      "reconcile.combined.state_fetch.requested",
+      "reconcile.combined.state_fetch.resolved",
+      "reconcile.combined.state_upsert",
+      "reconcile.combined.state_upsert.applied"
+    ]
+  );
 });
 
 test("WorkspaceAgentActivityService.listAgentGeneratedFiles delegates to tuttid workspace aggregate", async () => {
@@ -437,17 +593,15 @@ test("WorkspaceAgentActivityService treats missing reconcile sessions as tombsto
     workspaceId: "ws-1"
   });
 
-  assert.deepEqual(diagnostics, [
-    {
-      details: {
-        agentSessionId: "ghost-session",
-        error: "workspace agent session not found"
-      },
-      event: "agent.activity.reconcile_session_missing",
-      level: "info",
-      workspaceId: "ws-1"
-    }
-  ]);
+  assert.deepEqual(diagnostics.at(-1), {
+    details: {
+      agentSessionId: "ghost-session",
+      error: "workspace agent session not found"
+    },
+    event: "agent.activity.reconcile_session_missing",
+    level: "info",
+    workspaceId: "ws-1"
+  });
 });
 
 test("WorkspaceAgentActivityService.submitPlanDecision runs planMode-off then sendInput for a codex implement decision", async () => {
@@ -531,10 +685,14 @@ test("WorkspaceAgentActivityService.submitPlanDecision routes a claude exit-plan
 });
 
 function workspaceAgentSession(overrides: {
+  currentPhase?: string;
   provider?: string;
   runtimeContext?: Record<string, unknown>;
   settings?: Record<string, unknown>;
   status: string;
+  submitAvailability?: Record<string, unknown>;
+  turnLifecycle?: Record<string, unknown>;
+  updatedAt?: string;
 }): Record<string, unknown> {
   return {
     id: "session-1",
@@ -546,8 +704,15 @@ function workspaceAgentSession(overrides: {
       ? { runtimeContext: overrides.runtimeContext }
       : {}),
     ...(overrides.settings ? { settings: overrides.settings } : {}),
+    ...(overrides.currentPhase ? { currentPhase: overrides.currentPhase } : {}),
+    ...(overrides.submitAvailability
+      ? { submitAvailability: overrides.submitAvailability }
+      : {}),
+    ...(overrides.turnLifecycle
+      ? { turnLifecycle: overrides.turnLifecycle }
+      : {}),
     visible: true,
     createdAt: "2026-06-16T00:00:00.000Z",
-    updatedAt: "2026-06-16T00:00:00.000Z"
+    updatedAt: overrides.updatedAt ?? "2026-06-16T00:00:00.000Z"
   };
 }

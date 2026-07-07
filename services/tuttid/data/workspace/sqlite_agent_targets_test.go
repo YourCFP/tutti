@@ -17,8 +17,8 @@ func TestSQLiteStoreSeedsSystemAgentTargets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAgentTargets() error = %v", err)
 	}
-	if len(targets) != 4 {
-		t.Fatalf("ListAgentTargets() len = %d, want 4", len(targets))
+	if len(targets) != 5 {
+		t.Fatalf("ListAgentTargets() len = %d, want 5", len(targets))
 	}
 	if targets[0].ID != agenttargetbiz.IDLocalCodex || targets[0].Provider != "codex" {
 		t.Fatalf("first target = %#v, want local codex", targets[0])
@@ -26,11 +26,14 @@ func TestSQLiteStoreSeedsSystemAgentTargets(t *testing.T) {
 	if targets[1].ID != agenttargetbiz.IDLocalClaudeCode || targets[1].Provider != "claude-code" {
 		t.Fatalf("second target = %#v, want local claude-code", targets[1])
 	}
-	if targets[2].ID != agenttargetbiz.IDLocalCursor || targets[2].Provider != "cursor" {
-		t.Fatalf("third target = %#v, want local cursor", targets[2])
+	if targets[2].ID != agenttargetbiz.IDLocalTuttiAgent || targets[2].Provider != "tutti-agent" {
+		t.Fatalf("third target = %#v, want local tutti-agent", targets[2])
 	}
-	if targets[3].ID != agenttargetbiz.IDLocalOpenCode || targets[3].Provider != "opencode" {
-		t.Fatalf("fourth target = %#v, want local opencode", targets[3])
+	if targets[3].ID != agenttargetbiz.IDLocalCursor || targets[3].Provider != "cursor" {
+		t.Fatalf("fourth target = %#v, want local cursor", targets[3])
+	}
+	if targets[4].ID != agenttargetbiz.IDLocalOpenCode || targets[4].Provider != "opencode" {
+		t.Fatalf("fifth target = %#v, want local opencode", targets[4])
 	}
 	for _, target := range targets {
 		if target.Source != agenttargetbiz.SourceSystem {

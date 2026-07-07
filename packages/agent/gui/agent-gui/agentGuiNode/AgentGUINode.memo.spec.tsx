@@ -205,6 +205,32 @@ describe("AgentGUINode memoization", () => {
 
     expect(agentGuiNodeViewSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("rerenders when the active conversation title changes", () => {
+    mockViewModel = createViewModel();
+    const props = createProps({
+      state: createState({
+        lastActiveAgentSessionId: "session-1",
+        lastActiveConversationTitle: "Old title"
+      })
+    });
+    const { rerender } = render(<AgentGUINode {...props} />);
+
+    expect(agentGuiNodeViewSpy).toHaveBeenCalledTimes(1);
+    agentGuiNodeViewSpy.mockClear();
+
+    rerender(
+      <AgentGUINode
+        {...props}
+        state={createState({
+          lastActiveAgentSessionId: "session-1",
+          lastActiveConversationTitle: "New title"
+        })}
+      />
+    );
+
+    expect(agentGuiNodeViewSpy).toHaveBeenCalledTimes(1);
+  });
 });
 
 function createProps(

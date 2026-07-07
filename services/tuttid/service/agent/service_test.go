@@ -702,6 +702,168 @@ func TestExternalSessionProjectPathUsesGitRoot(t *testing.T) {
 	}
 }
 
+// writeExternalImportGitWorktreeFixture creates a fake main git checkout and
+// a linked worktree of it, matching the on-disk layout `git worktree add`
+// produces (a `.git` *file* at the worktree root pointing at
+// "<main>/.git/worktrees/<name>", whose own `commondir` file points back at
+// the shared/main .git directory), so tests can exercise worktree-to-main
+// resolution without shelling out to a real git binary.
+func writeExternalImportGitWorktreeFixture(t *testing.T, root string, name string) (mainRoot string, worktreeRoot string) {
+	t.Helper()
+	mainRoot = filepath.Join(root, "main-checkout")
+	worktreeRoot = filepath.Join(root, "worktrees", name)
+	worktreeMetaDir := filepath.Join(mainRoot, ".git", "worktrees", name)
+	if err := os.MkdirAll(filepath.Join(mainRoot, ".git"), 0o755); err != nil {
+		t.Fatalf("create main .git dir error = %v", err)
+	}
+	if err := os.MkdirAll(worktreeMetaDir, 0o755); err != nil {
+		t.Fatalf("create worktree metadata dir error = %v", err)
+	}
+	if err := os.MkdirAll(worktreeRoot, 0o755); err != nil {
+		t.Fatalf("create worktree root error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(worktreeMetaDir, "commondir"), []byte("../..\n"), 0o644); err != nil {
+		t.Fatalf("write commondir error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(worktreeMetaDir, "gitdir"), []byte(filepath.Join(worktreeRoot, ".git")+"\n"), 0o644); err != nil {
+		t.Fatalf("write gitdir error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(worktreeRoot, ".git"), []byte("gitdir: "+worktreeMetaDir+"\n"), 0o644); err != nil {
+		t.Fatalf("write worktree .git pointer error = %v", err)
+	}
+	if canonical, ok := canonicalExistingDir(mainRoot); ok {
+		mainRoot = canonical
+	}
+	if canonical, ok := canonicalExistingDir(worktreeRoot); ok {
+		worktreeRoot = canonical
+	}
+	return mainRoot, worktreeRoot
+}
+
+func TestResolveExternalImportWorktreeCwdResolvesToMainCheckout(t *testing.T) {
+	root := t.TempDir()
+	mainRoot, worktreeRoot := writeExternalImportGitWorktreeFixture(t, root, "8db5-tsh")
+	nested := filepath.Join(worktreeRoot, "apps", "foo")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatalf("create nested worktree dir error = %v", err)
+	}
+
+	resolvedRoot, ok := resolveExternalImportWorktreeCwd(worktreeRoot)
+	if !ok || resolvedRoot != mainRoot {
+		t.Fatalf("resolveExternalImportWorktreeCwd(root) = %q, %v; want main checkout %q", resolvedRoot, ok, mainRoot)
+	}
+
+	resolvedNested, ok := resolveExternalImportWorktreeCwd(nested)
+	wantNested := filepath.Join(mainRoot, "apps", "foo")
+	if !ok || resolvedNested != wantNested {
+		t.Fatalf("resolveExternalImportWorktreeCwd(nested) = %q, %v; want %q", resolvedNested, ok, wantNested)
+	}
+
+	// A normal (non-worktree) checkout must be left unresolved: its `.git`
+	// is a real directory, not a worktree pointer file.
+	normalRoot := filepath.Join(root, "normal-repo")
+	if err := os.MkdirAll(filepath.Join(normalRoot, ".git"), 0o755); err != nil {
+		t.Fatalf("create normal repo .git dir error = %v", err)
+	}
+	if _, ok := resolveExternalImportWorktreeCwd(normalRoot); ok {
+		t.Fatalf("resolveExternalImportWorktreeCwd(normalRoot) resolved a normal checkout, want unresolved")
+	}
+}
+
+func TestExternalSessionProjectPathResolvesLinkedWorktreeToMainCheckout(t *testing.T) {
+	root := t.TempDir()
+	mainRoot, worktreeRoot := writeExternalImportGitWorktreeFixture(t, root, "8db5-tsh")
+
+	got, ok := externalSessionProjectPath(externalImportedSession{
+		Provider: "codex",
+		Cwd:      worktreeRoot,
+	})
+	if !ok || got != mainRoot {
+		t.Fatalf(
+			"externalSessionProjectPath() = %q, %v; want the main checkout root %q, not the ephemeral worktree path %q",
+			got, ok, mainRoot, worktreeRoot,
+		)
+	}
+}
+
+// TestServiceImportedCodexWorktreeSessionGroupsUnderExistingMainCheckoutProject
+// reproduces the reported bug: a Codex session that ran inside a per-task
+// worktree of the user's "tsh" project (e.g.
+// ~/.codex/worktrees/8db5/tsh, a linked worktree of ~/Documents/New
+// project/tsh) got imported and stranded in the ungrouped "对话" bucket
+// instead of being grouped under the already-registered "tsh" project,
+// because the worktree checkout's own `.git` file made it look like an
+// independent project root distinct from the main checkout. Once resolved,
+// the imported session's project path — and its persisted cwd, which the
+// GUI uses to group conversations under project folders — must match the
+// main checkout, not the worktree.
+func TestServiceImportedCodexWorktreeSessionGroupsUnderExistingMainCheckoutProject(t *testing.T) {
+	ctx := context.Background()
+	store := openAgentServiceSQLiteStore(t)
+	if err := store.Create(ctx, workspacebiz.Summary{ID: "ws-1", Name: "Workspace One"}); err != nil {
+		t.Fatalf("Create workspace error = %v", err)
+	}
+	root := t.TempDir()
+	mainRoot, worktreeRoot := writeExternalImportGitWorktreeFixture(t, root, "8db5-tsh")
+
+	home := filepath.Join(root, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("create home error = %v", err)
+	}
+	codexHome := filepath.Join(root, "codex-home")
+	t.Setenv("HOME", home)
+	t.Setenv("CODEX_HOME", codexHome)
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(root, "claude-home"))
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	writeAgentServiceJSONL(t, filepath.Join(codexHome, "sessions", "worktree-session.jsonl"),
+		map[string]any{
+			"timestamp": now,
+			"type":      "session_meta",
+			"payload":   map[string]any{"id": "worktree-session", "cwd": worktreeRoot},
+		},
+		map[string]any{"timestamp": now, "type": "response_item", "payload": map[string]any{
+			"type": "message", "id": "worktree-session-1", "role": "user",
+			"content": []any{map[string]any{"type": "input_text", "text": "Send greeting"}},
+		}},
+	)
+
+	service := NewService(newFakeRuntime())
+	projection := NewActivityProjection(store)
+	service.SessionReader = projection
+	service.MessageReader = projection
+	service.ExternalImportStore = store
+
+	// The user already has "tsh" registered as a project at the main
+	// checkout — the same setup as the report, where the real project
+	// existed and stayed empty ("暂无对话") while the worktree-run session
+	// surfaced in the general conversations list instead.
+	result, err := service.ImportExternalSessions(ctx, "ws-1", ExternalImportInput{
+		Projects: []ExternalImportProjectSelection{{Path: mainRoot}},
+	})
+	if err != nil {
+		t.Fatalf("ImportExternalSessions error = %v", err)
+	}
+	if result.ImportedSessions != 1 {
+		t.Fatalf("import result = %#v, want one imported session", result)
+	}
+	if len(result.ProjectPaths) != 1 || result.ProjectPaths[0] != mainRoot {
+		t.Fatalf(
+			"import result ProjectPaths = %#v, want [%q] (the main checkout), not the ephemeral worktree path %q",
+			result.ProjectPaths, mainRoot, worktreeRoot,
+		)
+	}
+	session, err := service.Get(ctx, "ws-1", externalImportedSessionID("codex", "worktree-session"))
+	if err != nil {
+		t.Fatalf("Get imported worktree session error = %v", err)
+	}
+	if session.Cwd != mainRoot {
+		t.Fatalf(
+			"session.Cwd = %q, want it resolved to the main checkout %q so the GUI groups the conversation under the existing project instead of the ungrouped bucket",
+			session.Cwd, mainRoot,
+		)
+	}
+}
+
 func TestServiceImportsHomeCwdAsNoProjectWithoutRegisteringUserHome(t *testing.T) {
 	ctx := context.Background()
 	store := openAgentServiceSQLiteStore(t)
@@ -1918,6 +2080,7 @@ func TestServiceSendInputPassesDisplayPromptToRuntime(t *testing.T) {
 	_, err := service.SendInput(context.Background(), "ws-1", "session-1", SendInput{
 		Content:       TextPromptContent("real repair prompt"),
 		DisplayPrompt: "Fix the app",
+		Guidance:      true,
 		Metadata: map[string]any{
 			"clientSubmitId":             "submit-1",
 			"clientSubmittedAtUnixMs":    int64(1234),
@@ -1937,6 +2100,9 @@ func TestServiceSendInputPassesDisplayPromptToRuntime(t *testing.T) {
 	}
 	if call.DisplayPrompt != "Fix the app" {
 		t.Fatalf("runtime display prompt = %q", call.DisplayPrompt)
+	}
+	if !call.Guidance {
+		t.Fatal("runtime guidance = false, want true")
 	}
 	if call.Metadata["clientSubmitId"] != "submit-1" ||
 		call.Metadata["clientSubmittedAtUnixMs"] != int64(1234) ||
@@ -2431,6 +2597,56 @@ func TestServiceGetsComposerOptionsFromCodexModelCatalog(t *testing.T) {
 	}
 }
 
+func TestServiceGetsComposerOptionsFromTuttiAgentModelCatalog(t *testing.T) {
+	runtime := newFakeRuntime()
+	service := NewService(runtime)
+	service.ModelCatalog = fakeModelCatalog{
+		result: AgentModelCatalogResult{
+			Provider: "tutti-agent",
+			Source:   "tutti-agent-cli",
+			Models: []AgentModelOption{
+				{ID: "gpt-5.4", DisplayName: "GPT-5.4", IsDefault: true},
+				{ID: "nova-micro", DisplayName: "Nova Micro"},
+			},
+		},
+	}
+
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		Provider: "tutti-agent",
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if options.EffectiveSettings.Model != "gpt-5.4" {
+		t.Fatalf("effectiveSettings.model = %q, want gpt-5.4", options.EffectiveSettings.Model)
+	}
+	if options.EffectiveSettings.ReasoningEffort != "high" {
+		t.Fatalf("effectiveSettings.reasoningEffort = %q, want high", options.EffectiveSettings.ReasoningEffort)
+	}
+	if options.ModelConfig.CurrentValue != "gpt-5.4" || len(options.ModelConfig.Options) != 2 {
+		t.Fatalf("modelConfig = %#v, want catalog-backed tutti-agent models", options.ModelConfig)
+	}
+	configOptions, ok := options.RuntimeContext["configOptions"].([]map[string]any)
+	if !ok || len(configOptions) < 3 {
+		t.Fatalf("configOptions = %#v", options.RuntimeContext["configOptions"])
+	}
+	if configOptions[0]["id"] != "model" || configOptions[0]["currentValue"] != "gpt-5.4" {
+		t.Fatalf("model option = %#v", configOptions[0])
+	}
+	if configOptions[1]["id"] != "reasoning_effort" {
+		t.Fatalf("reasoning option = %#v, want reasoning_effort id", configOptions[1])
+	}
+	if configOptions[2]["id"] != "service_tier" {
+		t.Fatalf("speed option = %#v, want service_tier id", configOptions[2])
+	}
+	if options.RuntimeContext["modelCatalogSource"] != "tutti-agent-cli" {
+		t.Fatalf("modelCatalogSource = %#v, want tutti-agent-cli", options.RuntimeContext["modelCatalogSource"])
+	}
+	if len(runtime.sessions) != 0 {
+		t.Fatalf("runtime sessions = %d, want no started sessions", len(runtime.sessions))
+	}
+}
+
 func TestServiceGetsComposerOptionsWithResolvedCodexDefaultModel(t *testing.T) {
 	runtime := newFakeRuntime()
 	service := NewService(runtime)
@@ -2819,6 +3035,69 @@ func TestGetComposerOptionsClaudeCodeSkipsDiscoveryBesideRunningSession(t *testi
 	}
 	if options.RuntimeContext["modelCatalogSource"] != "claude-static" {
 		t.Fatalf("modelCatalogSource = %#v, want claude-static", options.RuntimeContext["modelCatalogSource"])
+	}
+}
+
+func TestGetComposerOptionsClaudeCodeSkipsStaleRunningSessionModelsAfterInvalidation(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	runtime := newFakeRuntime()
+	runtime.sessions["ws-1:session-1"] = RuntimeSession{
+		ID:              "session-1",
+		WorkspaceID:     "ws-1",
+		Provider:        "claude-code",
+		Status:          "ready",
+		CreatedAtUnixMS: 100,
+		UpdatedAtUnixMS: 100,
+		RuntimeContext: map[string]any{
+			"configOptions": []any{
+				map[string]any{
+					"id":           "model",
+					"currentValue": "sonnet",
+					"options": []any{
+						map[string]any{"name": "Sonnet", "value": "sonnet"},
+						map[string]any{"name": "Opus", "value": "opus"},
+					},
+				},
+			},
+		},
+	}
+	runtime.startHook = func(input RuntimeStartInput, session RuntimeSession) RuntimeSession {
+		if input.Provider != "claude-code" {
+			t.Fatalf("start provider = %q, want claude-code", input.Provider)
+		}
+		session.RuntimeContext = map[string]any{
+			"configOptions": []any{
+				map[string]any{
+					"id":           "model",
+					"currentValue": "MiniMax-M2.7",
+					"options": []any{
+						map[string]any{"name": "MiniMax M2.7", "value": "MiniMax-M2.7"},
+					},
+				},
+			},
+		}
+		return session
+	}
+	service := NewService(runtime)
+	service.LiveModelDiscoveryDeleteDelay = time.Hour
+
+	service.InvalidateLiveComposerModels("claude-code")
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		Provider:    "claude-code",
+		WorkspaceID: "ws-1",
+		Cwd:         "/repo",
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if len(runtime.startCalls) != 1 {
+		t.Fatalf("start calls = %d, want hidden discovery after invalidation", len(runtime.startCalls))
+	}
+	if got := options.ModelConfig.CurrentValue; got != "MiniMax-M2.7" {
+		t.Fatalf("current model = %q, want MiniMax-M2.7", got)
+	}
+	if len(options.ModelConfig.Options) != 1 || options.ModelConfig.Options[0].Value != "MiniMax-M2.7" {
+		t.Fatalf("model options = %#v, want freshly discovered MiniMax model", options.ModelConfig.Options)
 	}
 }
 
@@ -3881,6 +4160,7 @@ func TestServiceListsActivePeersFromCanonicalSessionStatus(t *testing.T) {
 			"ws-1:session-1": {
 				ID:              "session-1",
 				WorkspaceID:     "ws-1",
+				UserID:          "user-1",
 				Provider:        "codex",
 				Status:          "working",
 				Title:           "Active work",
@@ -3890,6 +4170,7 @@ func TestServiceListsActivePeersFromCanonicalSessionStatus(t *testing.T) {
 			"ws-1:session-2": {
 				ID:              "session-2",
 				WorkspaceID:     "ws-1",
+				UserID:          "user-2",
 				Provider:        "claude",
 				Status:          "completed",
 				Title:           "Done",
@@ -3903,11 +4184,11 @@ func TestServiceListsActivePeersFromCanonicalSessionStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListActivePeers returned error: %v", err)
 	}
-	if len(peers.Agents) != 1 || peers.Agents[0].Session.ID != "session-1" {
+	if len(peers.Agents) != 1 {
 		t.Fatalf("peers = %#v", peers)
 	}
-	if peers.Agents[0].SelfRelation != "unknown" {
-		t.Fatalf("self relation = %q", peers.Agents[0].SelfRelation)
+	if peers.Agents[0].Session.ID != "session-1" || peers.Agents[0].SelfRelation != "unknown" {
+		t.Fatalf("peers = %#v", peers)
 	}
 	if peers.SelfKnown || !peers.MayIncludeSelf || peers.Warning != "SELF_IDENTITY_UNAVAILABLE" {
 		t.Fatalf("peer identity metadata = %#v", peers)

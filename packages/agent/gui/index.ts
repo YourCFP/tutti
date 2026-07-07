@@ -15,10 +15,12 @@ export {
 } from "./shared/agentCustomMentionKinds";
 export { AgentGUI } from "./AgentGUI";
 export type { AgentGUIProps } from "./AgentGUI";
+export type { AgentGUIAccountMenuState } from "./agent-gui/agentGuiNode/accountMenuState";
 export {
   agentGUIDefaultTargetProviders,
   createLocalAgentGUIProviderTarget,
   createLocalAgentGUIProviderTargets,
+  createSharedAgentGUIProviderTarget,
   localAgentGUIAgentTargetId,
   localAgentGUIProviderTargetId,
   normalizeAgentGUIProviderTargets,
@@ -26,6 +28,7 @@ export {
 } from "./providerTargets";
 export type {
   AgentGUIProvider,
+  AgentGUIProviderRailMode,
   AgentGUIProviderReadinessGate,
   AgentGUIProviderReadinessGateAction,
   AgentGUIProviderReadinessGateStatus,
@@ -43,6 +46,11 @@ export {
   resolveAgentGUIExpandedWindowFrame,
   shouldAutoCollapseAgentGUIConversationRail
 } from "./agent-gui/agentGuiNode/model/agentGuiRailLayout";
+export type {
+  AgentGUIProviderRailEmptyRenderer,
+  AgentGUISidebarFooterContext,
+  AgentGUISidebarFooterRenderer
+} from "./agent-gui/agentGuiNode/AgentGUINodeView";
 export {
   AGENT_CONTEXT_MENTION_PROVIDER_IDS,
   type AgentContextMentionProviderId,

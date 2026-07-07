@@ -81,6 +81,7 @@ type stubAgentSessionService struct {
 	listMessagesFn                  func(context.Context, string, string, agentservice.ListMessagesInput) (agentservice.SessionMessagesPage, error)
 	readAttachmentFn                func(context.Context, string, string, string) (agentservice.PromptAttachment, error)
 	scanExternalFn                  func(context.Context, agentservice.ExternalImportScanInput) (agentservice.ExternalImportScanResult, error)
+	sendInputFn                     func(context.Context, string, string, agentservice.SendInput) (agentservice.SendInputResult, error)
 	listGitBranchesFn               func(context.Context, string, string) (agentservice.GitBranches, error)
 	listGitBranchesForPathFn        func(context.Context, string, string) (agentservice.GitBranches, error)
 	resolveGitPatchSupportForPathFn func(context.Context, string, string) (agentservice.GitPatchSupport, error)
@@ -334,7 +335,10 @@ func (stubAgentSessionService) GoalControl(context.Context, string, string, stri
 	return agentservice.GoalControlSessionResult{}, nil
 }
 
-func (stubAgentSessionService) SendInput(context.Context, string, string, agentservice.SendInput) (agentservice.SendInputResult, error) {
+func (s stubAgentSessionService) SendInput(ctx context.Context, workspaceID string, agentSessionID string, input agentservice.SendInput) (agentservice.SendInputResult, error) {
+	if s.sendInputFn != nil {
+		return s.sendInputFn(ctx, workspaceID, agentSessionID, input)
+	}
 	return agentservice.SendInputResult{}, nil
 }
 
@@ -675,6 +679,54 @@ func TestDaemonAPIGeneratedRoutesListAgentSessionsForwardsQuery(t *testing.T) {
 		http.MethodGet,
 		"/v1/workspaces/ws-1/agent-sessions?searchQuery=mention&limit=30",
 		nil,
+	)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+}
+
+func TestDaemonAPIGeneratedRoutesSendAgentSessionInputForwardsGuidance(t *testing.T) {
+	mux := http.NewServeMux()
+	updatedAt := time.UnixMilli(1000)
+	RegisterRoutes(mux, NewRoutes(DaemonAPI{
+		AgentSessionService: stubAgentSessionService{
+			sendInputFn: func(_ context.Context, workspaceID string, agentSessionID string, input agentservice.SendInput) (agentservice.SendInputResult, error) {
+				if workspaceID != "ws-1" || agentSessionID != "agent-session-1" {
+					t.Fatalf("workspace/session = %q/%q", workspaceID, agentSessionID)
+				}
+				if !input.Guidance {
+					t.Fatal("input guidance = false, want true")
+				}
+				if len(input.Content) != 1 || input.Content[0].Text != "guide current turn" {
+					t.Fatalf("input content = %#v", input.Content)
+				}
+				return agentservice.SendInputResult{
+					Session: agentservice.Session{
+						ID:        agentSessionID,
+						Provider:  "codex",
+						Status:    "working",
+						Visible:   true,
+						CreatedAt: time.UnixMilli(1000),
+						UpdatedAt: &updatedAt,
+					},
+					TurnID: "turn-guidance",
+				}, nil
+			},
+		},
+	}))
+
+	recorder := performGeneratedRouteRequest(
+		t,
+		mux,
+		http.MethodPost,
+		"/v1/workspaces/ws-1/agent-sessions/agent-session-1/input",
+		map[string]any{
+			"content": []map[string]any{{
+				"type": "text",
+				"text": "guide current turn",
+			}},
+			"guidance": true,
+		},
 	)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusOK, recorder.Body.String())
@@ -1286,7 +1338,7 @@ func TestDaemonAPIGeneratedRoutesGetAgentProviderComposerOptions(t *testing.T) {
 
 	var response tuttigenerated.AgentProviderComposerOptionsResponse
 	decodeGeneratedRouteResponse(t, recorder, &response)
-	if response.Provider != tuttigenerated.WorkspaceAgentProviderCodex {
+	if response.Provider != tuttigenerated.Codex {
 		t.Fatalf("provider = %q, want codex", response.Provider)
 	}
 	if response.EffectiveSettings.Model == nil || *response.EffectiveSettings.Model != "gpt-5" {
@@ -1670,8 +1722,8 @@ func TestDaemonAPIGeneratedRoutesGetDesktopPreferences(t *testing.T) {
 	if response.Preferences.Locale != tuttigenerated.ZhCN {
 		t.Fatalf("locale = %q, want %q", response.Preferences.Locale, tuttigenerated.ZhCN)
 	}
-	if response.Preferences.DefaultAgentProvider != tuttigenerated.WorkspaceAgentProviderClaudeCode {
-		t.Fatalf("defaultAgentProvider = %q, want %q", response.Preferences.DefaultAgentProvider, tuttigenerated.WorkspaceAgentProviderClaudeCode)
+	if response.Preferences.DefaultAgentProvider != tuttigenerated.DesktopDefaultAgentProviderClaudeCode {
+		t.Fatalf("defaultAgentProvider = %q, want %q", response.Preferences.DefaultAgentProvider, tuttigenerated.DesktopDefaultAgentProviderClaudeCode)
 	}
 	if response.Preferences.AgentConversationDetailMode != tuttigenerated.General {
 		t.Fatalf("agentConversationDetailMode = %q, want %q", response.Preferences.AgentConversationDetailMode, tuttigenerated.General)
@@ -1789,8 +1841,8 @@ func TestDaemonAPIGeneratedRoutesListAgentTargets(t *testing.T) {
 
 	var response tuttigenerated.ListAgentTargetsResponse
 	decodeGeneratedRouteResponse(t, recorder, &response)
-	if len(response.Targets) != 4 {
-		t.Fatalf("targets len = %d, want 4", len(response.Targets))
+	if len(response.Targets) != 5 {
+		t.Fatalf("targets len = %d, want 5", len(response.Targets))
 	}
 	if response.Targets[0].Id != agenttargetbiz.IDLocalCodex ||
 		response.Targets[0].Provider != tuttigenerated.AgentTargetProviderCodex ||
@@ -1804,17 +1856,23 @@ func TestDaemonAPIGeneratedRoutesListAgentTargets(t *testing.T) {
 		response.Targets[1].LaunchRef.Provider != tuttigenerated.AgentTargetProviderClaudeCode {
 		t.Fatalf("second target = %#v, want local claude-code", response.Targets[1])
 	}
-	if response.Targets[2].Id != agenttargetbiz.IDLocalCursor ||
-		response.Targets[2].Provider != tuttigenerated.AgentTargetProviderCursor ||
+	if response.Targets[2].Id != agenttargetbiz.IDLocalTuttiAgent ||
+		response.Targets[2].Provider != tuttigenerated.AgentTargetProviderTuttiAgent ||
 		response.Targets[2].LaunchRef.Type != tuttigenerated.LocalCli ||
-		response.Targets[2].LaunchRef.Provider != tuttigenerated.AgentTargetProviderCursor {
-		t.Fatalf("third target = %#v, want local cursor", response.Targets[2])
+		response.Targets[2].LaunchRef.Provider != tuttigenerated.AgentTargetProviderTuttiAgent {
+		t.Fatalf("third target = %#v, want local tutti-agent", response.Targets[2])
 	}
-	if response.Targets[3].Id != agenttargetbiz.IDLocalOpenCode ||
-		response.Targets[3].Provider != tuttigenerated.AgentTargetProviderOpencode ||
+	if response.Targets[3].Id != agenttargetbiz.IDLocalCursor ||
+		response.Targets[3].Provider != tuttigenerated.AgentTargetProviderCursor ||
 		response.Targets[3].LaunchRef.Type != tuttigenerated.LocalCli ||
-		response.Targets[3].LaunchRef.Provider != tuttigenerated.AgentTargetProviderOpencode {
-		t.Fatalf("fourth target = %#v, want local opencode", response.Targets[3])
+		response.Targets[3].LaunchRef.Provider != tuttigenerated.AgentTargetProviderCursor {
+		t.Fatalf("fourth target = %#v, want local cursor", response.Targets[3])
+	}
+	if response.Targets[4].Id != agenttargetbiz.IDLocalOpenCode ||
+		response.Targets[4].Provider != tuttigenerated.AgentTargetProviderOpencode ||
+		response.Targets[4].LaunchRef.Type != tuttigenerated.LocalCli ||
+		response.Targets[4].LaunchRef.Provider != tuttigenerated.AgentTargetProviderOpencode {
+		t.Fatalf("fifth target = %#v, want local opencode", response.Targets[4])
 	}
 }
 

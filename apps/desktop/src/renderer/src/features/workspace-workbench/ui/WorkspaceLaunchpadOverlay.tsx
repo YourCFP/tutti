@@ -36,6 +36,7 @@ import {
 } from "@renderer/features/workspace-app-center";
 import { useDesktopPreferencesService } from "@renderer/features/desktop-preferences";
 import { useTranslation } from "@renderer/i18n";
+import { useWorkspaceSettingsService } from "./useWorkspaceSettingsService.ts";
 import {
   isWorkspaceAgentGuiComingSoonProvider,
   workspaceAgentGuiProviders
@@ -78,6 +79,7 @@ export function WorkspaceLaunchpadOverlay({
   const { service: appCenterService, state: appCenterState } =
     useWorkspaceAppCenterService();
   const agentProviderStatusService = useService(IAgentProviderStatusService);
+  const { state: workspaceSettingsState } = useWorkspaceSettingsService();
   const reporterService = useService(IReporterService);
   const agentProviderSnapshot = useSyncExternalStore(
     (listener) => agentProviderStatusService.subscribe(listener),
@@ -86,17 +88,25 @@ export function WorkspaceLaunchpadOverlay({
   );
   const { t } = useTranslation();
   const { state: desktopPreferencesState } = useDesktopPreferencesService();
-  const hiddenAgentProviders = useMemo<ReadonlySet<WorkspaceAgentProvider>>(
-    () =>
-      new Set<WorkspaceAgentProvider>([
-        ...(desktopPreferencesState.enableCursorAgent ? [] : ["cursor"]),
-        ...(desktopPreferencesState.enableOpenCodeAgent ? [] : ["opencode"])
-      ] as WorkspaceAgentProvider[]),
-    [
-      desktopPreferencesState.enableCursorAgent,
-      desktopPreferencesState.enableOpenCodeAgent
-    ]
-  );
+  const hiddenAgentProviders = useMemo<
+    ReadonlySet<WorkspaceAgentProvider>
+  >(() => {
+    const hidden: WorkspaceAgentProvider[] = [];
+    if (!desktopPreferencesState.enableCursorAgent) {
+      hidden.push("cursor");
+    }
+    if (!desktopPreferencesState.enableOpenCodeAgent) {
+      hidden.push("opencode");
+    }
+    if (workspaceSettingsState.tuttiAgentSwitchEnabled !== true) {
+      hidden.push("tutti-agent");
+    }
+    return new Set<WorkspaceAgentProvider>(hidden);
+  }, [
+    desktopPreferencesState.enableCursorAgent,
+    desktopPreferencesState.enableOpenCodeAgent,
+    workspaceSettingsState.tuttiAgentSwitchEnabled
+  ]);
   const wasOpenRef = useRef(false);
   const launchpadAnalytics = useMemo(
     () =>
@@ -123,7 +133,6 @@ export function WorkspaceLaunchpadOverlay({
       ),
     [agentProviderSnapshot.statuses]
   );
-
   const items = useMemo(
     () =>
       buildWorkbenchLaunchpadItems<WorkspaceAgentProvider>({

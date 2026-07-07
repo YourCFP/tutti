@@ -67,6 +67,24 @@ export const preferencesDesktopPreferencesSchema = {
             }
           }
         },
+        "tutti-agent": {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            model: {
+              type: "string"
+            },
+            permissionModeId: {
+              type: "string"
+            },
+            reasoningEffort: {
+              type: "string"
+            },
+            speed: {
+              type: "string"
+            }
+          }
+        },
         cursor: {
           type: "object",
           additionalProperties: false,
@@ -208,6 +226,9 @@ export const preferencesDesktopPreferencesSchema = {
         codex: {
           type: "boolean"
         },
+        "tutti-agent": {
+          type: "boolean"
+        },
         cursor: {
           type: "boolean"
         },
@@ -246,16 +267,7 @@ export const preferencesDesktopPreferencesSchema = {
     },
     defaultAgentProvider: {
       type: "string",
-      enum: [
-        "claude-code",
-        "codex",
-        "cursor",
-        "nexight",
-        "gemini",
-        "hermes",
-        "openclaw",
-        "opencode"
-      ]
+      enum: ["claude-code", "codex"]
     },
     dockIconStyle: {
       type: "string",
@@ -695,7 +707,6 @@ export const agentActivityUpdatedPayloadSchema = {
         },
         data: {
           type: "object",
-          additionalProperties: false,
           required: [
             "workspaceId",
             "agentSessionId",
@@ -743,7 +754,6 @@ export const agentActivityUpdatedPayloadSchema = {
         },
         data: {
           type: "object",
-          additionalProperties: false,
           required: [
             "workspaceId",
             "agentSessionId",
@@ -788,7 +798,6 @@ export const agentActivityUpdatedPayloadSchema = {
         },
         data: {
           type: "object",
-          additionalProperties: false,
           required: [
             "workspaceId",
             "agentSessionId",
@@ -821,7 +830,6 @@ export const agentActivityUpdatedPayloadSchema = {
               type: "array",
               items: {
                 type: "object",
-                additionalProperties: false,
                 required: [
                   "agentSessionId",
                   "id",
@@ -913,7 +921,6 @@ export const agentActivityUpdatedPayloadSchema = {
         },
         data: {
           type: "object",
-          additionalProperties: false,
           required: [
             "workspaceId",
             "agentSessionId",
@@ -975,9 +982,24 @@ export const agentActivityUpdatedPayloadSchema = {
               type: "integer",
               minimum: 0
             },
+            runtimeContext: {
+              type: "object"
+            },
+            submitAvailability: {
+              type: "object",
+              required: ["state"],
+              properties: {
+                state: {
+                  type: "string",
+                  minLength: 1
+                },
+                reason: {
+                  type: "string"
+                }
+              }
+            },
             turn: {
               type: "object",
-              additionalProperties: false,
               required: ["turnId"],
               properties: {
                 turnId: {
@@ -998,6 +1020,19 @@ export const agentActivityUpdatedPayloadSchema = {
                 completedAtUnixMs: {
                   type: "integer",
                   minimum: 0
+                },
+                submitAvailability: {
+                  type: "object",
+                  required: ["state"],
+                  properties: {
+                    state: {
+                      type: "string",
+                      minLength: 1
+                    },
+                    reason: {
+                      type: "string"
+                    }
+                  }
                 }
               }
             }
@@ -1028,6 +1063,26 @@ export const agentActivityUpdatedPayloadSchema = {
       ]
     },
     data: true
+  }
+} as const;
+
+export const agentModelCatalogInvalidatedPayloadSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["providers", "occurredAtUnixMs"],
+  properties: {
+    providers: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "string",
+        minLength: 1
+      }
+    },
+    occurredAtUnixMs: {
+      type: "integer",
+      minimum: 0
+    }
   }
 } as const;
 
@@ -1118,6 +1173,24 @@ export const preferencesDesktopUpdateRequestedPayloadSchema = {
               }
             },
             codex: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                model: {
+                  type: "string"
+                },
+                permissionModeId: {
+                  type: "string"
+                },
+                reasoningEffort: {
+                  type: "string"
+                },
+                speed: {
+                  type: "string"
+                }
+              }
+            },
+            "tutti-agent": {
               type: "object",
               additionalProperties: false,
               properties: {
@@ -1276,6 +1349,9 @@ export const preferencesDesktopUpdateRequestedPayloadSchema = {
             codex: {
               type: "boolean"
             },
+            "tutti-agent": {
+              type: "boolean"
+            },
             cursor: {
               type: "boolean"
             },
@@ -1314,16 +1390,7 @@ export const preferencesDesktopUpdateRequestedPayloadSchema = {
         },
         defaultAgentProvider: {
           type: "string",
-          enum: [
-            "claude-code",
-            "codex",
-            "cursor",
-            "nexight",
-            "gemini",
-            "hermes",
-            "openclaw",
-            "opencode"
-          ]
+          enum: ["claude-code", "codex"]
         },
         dockIconStyle: {
           type: "string",
@@ -1487,6 +1554,24 @@ export const preferencesDesktopUpdatedPayloadSchema = {
                 }
               }
             },
+            "tutti-agent": {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                model: {
+                  type: "string"
+                },
+                permissionModeId: {
+                  type: "string"
+                },
+                reasoningEffort: {
+                  type: "string"
+                },
+                speed: {
+                  type: "string"
+                }
+              }
+            },
             cursor: {
               type: "object",
               additionalProperties: false,
@@ -1628,6 +1713,9 @@ export const preferencesDesktopUpdatedPayloadSchema = {
             codex: {
               type: "boolean"
             },
+            "tutti-agent": {
+              type: "boolean"
+            },
             cursor: {
               type: "boolean"
             },
@@ -1666,16 +1754,7 @@ export const preferencesDesktopUpdatedPayloadSchema = {
         },
         defaultAgentProvider: {
           type: "string",
-          enum: [
-            "claude-code",
-            "codex",
-            "cursor",
-            "nexight",
-            "gemini",
-            "hermes",
-            "openclaw",
-            "opencode"
-          ]
+          enum: ["claude-code", "codex"]
         },
         dockIconStyle: {
           type: "string",
@@ -2506,6 +2585,7 @@ export const businessEventServerFrameSchema = {
 
 export const businessEventPayloadSchemas = {
   "agent.activity.updated": agentActivityUpdatedPayloadSchema,
+  "agent.model.catalog.invalidated": agentModelCatalogInvalidatedPayloadSchema,
   "analytics.debug.reported": analyticsDebugReportedPayloadSchema,
   "preferences.desktop.update.requested":
     preferencesDesktopUpdateRequestedPayloadSchema,

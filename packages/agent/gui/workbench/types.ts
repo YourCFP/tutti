@@ -3,6 +3,7 @@ import type { AgentGUIProviderTargetRef } from "../types";
 export type AgentGuiWorkbenchProvider =
   | "claude-code"
   | "codex"
+  | "tutti-agent"
   | "cursor"
   | "nexight"
   | "gemini"
@@ -64,6 +65,7 @@ export interface AgentGuiWorkbenchState {
   conversationRailCollapsed?: boolean | null;
   conversationRailWidthPx?: number | null;
   lastActiveAgentSessionId: string | null;
+  lastActiveConversationTitle?: string | null;
 }
 
 export interface AgentGuiWorkbenchWorkspaceState {

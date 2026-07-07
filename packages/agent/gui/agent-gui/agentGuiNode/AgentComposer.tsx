@@ -22,28 +22,24 @@ import type {
   AgentGUIProviderSkillOption,
   AgentGUIQueuedPromptVM
 } from "./model/agentGuiNodeTypes";
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent
-} from "../../app/renderer/components/ui/popover";
-import { Spinner } from "../../app/renderer/components/ui/spinner";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
-} from "../../app/renderer/components/ui/tooltip";
 import { ZoomableImage } from "../../app/renderer/components/ZoomableImage";
 import type { AgentConversationPromptVM } from "../../shared/agentConversation/contracts/agentConversationVM";
 import { AgentUsageMeter, agentUsageBarColor } from "./AgentUsageMeter";
 import { cn } from "../../app/renderer/lib/utils";
 import {
   Button,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
   Select,
   SelectContent,
   SelectItem,
-  SelectTrigger
+  SelectTrigger,
+  Spinner,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
 } from "@tutti-os/ui-system";
 import { ListChecks, Target, X } from "lucide-react";
 import {
@@ -163,6 +159,7 @@ import {
   MANAGED_AGENT_ICON_FALLBACK_URL,
   MANAGED_AGENT_ICON_URLS
 } from "../../shared/managedAgentIcons";
+import { cursorColorfulUrl } from "../../managedAgentIconAssets";
 import { normalizeManagedAgentProvider } from "../../shared/managedAgentProviders";
 import type { AgentGUIProvider, AgentGUIProviderTarget } from "../../types";
 
@@ -801,6 +798,9 @@ function resolveComposerProviderIconUrl(provider: AgentGUIProvider): string {
 function resolveComposerProviderTargetIconUrl(
   target: AgentGUIProviderTarget
 ): string {
+  if (normalizeManagedAgentProvider(target.provider) === "cursor") {
+    return cursorColorfulUrl;
+  }
   return target.iconUrl ?? resolveComposerProviderIconUrl(target.provider);
 }
 

@@ -15,6 +15,8 @@ import type {
   AgentActivityRuntime,
   AgentQueuedPromptRuntime,
   AgentGUIProvider,
+  AgentGUIProviderRailMode,
+  AgentGUIProviderRailEmptyRenderer,
   AgentGUIProviderReadinessGateAction,
   AgentGUIProviderTarget,
   AgentGUIProps,
@@ -29,6 +31,7 @@ import {
 import type { IWorkspaceAppCenterService } from "@renderer/features/workspace-app-center";
 import type { WorkspaceLinkAction } from "@contexts/workspace/presentation/renderer/actions/workspaceLinkActions";
 import { requestWorkspaceAgentGuiLaunch } from "../services/workspaceAgentGuiLaunchCoordinator.ts";
+import { registerWorkspaceAgentGuiOpenSession } from "../../workspace-workbench/services/workspaceAgentGuiOpenSessionCoordinator.ts";
 import {
   workbenchFocusInputActivationType,
   type WorkbenchDockPreviewCache,
@@ -38,6 +41,7 @@ import { useTranslation } from "@renderer/i18n";
 import type { IAgentProviderStatusService } from "../services/agentProviderStatusService.interface";
 import { useDesktopPreferencesService } from "@renderer/features/desktop-preferences/ui/useDesktopPreferencesService";
 import { Toast } from "@renderer/lib/toast";
+import { isDesktopAgentProvider } from "@shared/preferences";
 import type { DesktopComputerUseApi, DesktopRuntimeApi } from "@preload/types";
 import {
   desktopComputerUseStatusesEqual,
@@ -80,6 +84,9 @@ import {
 } from "./desktopAgentGUIWorkbenchStateHelpers.ts";
 import { useDesktopManagedAgentsState } from "./useDesktopManagedAgentsState.ts";
 import { projectDesktopAgentProviderReadinessGates } from "../services/internal/desktopAgentProviderReadinessGate.ts";
+import { useAccountService } from "../../workspace-workbench/ui/useAccountService.ts";
+import { useWorkspaceWorkbenchHostService } from "../../workspace-workbench/ui/useWorkspaceWorkbenchHostService.ts";
+import { useWorkspaceSettingsService } from "../../workspace-workbench/ui/useWorkspaceSettingsService.ts";
 
 export const DESKTOP_AGENT_GUI_CONVERSATION_RAIL_TOGGLE_EVENT =
   AGENT_GUI_WORKBENCH_CONVERSATION_RAIL_TOGGLE_EVENT;
@@ -107,6 +114,10 @@ interface DesktopAgentGUIWorkbenchBodyProps {
   previewMode?: boolean;
   providerTargets?: readonly AgentGUIProviderTarget[];
   providerTargetsLoading?: boolean;
+  /** "exact" renders only the provided targets (no static catalog). Defaults to "catalog". */
+  providerRailMode?: AgentGUIProviderRailMode;
+  /** Host-owned empty state for the provider rail in "exact" mode. */
+  renderProviderRailEmpty?: AgentGUIProviderRailEmptyRenderer;
   comingSoonAgentProviders?: readonly AgentGUIProvider[];
   defaultProviderTargetId?: string | null;
   contextMentionProviders: NonNullable<
@@ -140,6 +151,11 @@ function resolveComputerUseAuthorizationState(
 const DESKTOP_AGENT_GUI_AGENT_SETTINGS = {
   avoidGroupingEdits: false
 } satisfies NonNullable<AgentGUIProps["agentSettings"]>;
+const debugRegistrationCreditsToastStorageKey =
+  "tutti.agentGui.debugRegistrationCreditsToast";
+const debugRegistrationCreditsToastID =
+  "debug:registrationCreditsToastShown:local";
+const registrationCreditsToastAutoDismissMs = 120_000;
 const DESKTOP_AGENT_GUI_NOOP = (): void => {};
 function handleDesktopAgentGUIShowMessage(
   message: string,
@@ -151,6 +167,26 @@ function handleDesktopAgentGUIShowMessage(
   }
   Toast.tips(message);
 }
+
+function readDebugRegistrationCreditsToastEnabled(): boolean {
+  try {
+    return (
+      window.localStorage.getItem(debugRegistrationCreditsToastStorageKey) ===
+      "1"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function clearDebugRegistrationCreditsToast(): void {
+  try {
+    window.localStorage.removeItem(debugRegistrationCreditsToastStorageKey);
+  } catch {
+    // Ignore storage access failures; this is a local debug-only switch.
+  }
+}
+
 const AGENT_PROBE_REFRESH_DEBOUNCE_MS = 300;
 const DESKTOP_AGENT_GUI_EMPTY_CONTEXT_MENTION_PROVIDERS =
   [] satisfies NonNullable<AgentGUIProps["contextMentionProviders"]>;
@@ -186,6 +222,8 @@ function areDesktopAgentGUIWorkbenchBodyPropsEqual(
     previous.previewMode === next.previewMode &&
     previous.providerTargets === next.providerTargets &&
     previous.providerTargetsLoading === next.providerTargetsLoading &&
+    previous.providerRailMode === next.providerRailMode &&
+    previous.renderProviderRailEmpty === next.renderProviderRailEmpty &&
     previous.comingSoonAgentProviders === next.comingSoonAgentProviders &&
     previous.defaultProviderTargetId === next.defaultProviderTargetId &&
     previous.contextMentionProviders === next.contextMentionProviders &&
@@ -249,6 +287,8 @@ function DesktopAgentGUIWorkbenchBodyImpl({
   previewMode = false,
   providerTargets,
   providerTargetsLoading = false,
+  providerRailMode = "catalog",
+  renderProviderRailEmpty,
   comingSoonAgentProviders,
   defaultProviderTargetId = null,
   contextMentionProviders,
@@ -267,6 +307,15 @@ function DesktopAgentGUIWorkbenchBodyImpl({
   const { i18n, locale } = useTranslation();
   const { service: desktopPreferencesService, state: desktopPreferencesState } =
     useDesktopPreferencesService();
+  const { service: accountService, state: accountState } = useAccountService();
+  const workbenchHostService = useWorkspaceWorkbenchHostService();
+  const { service: workspaceSettingsService } = useWorkspaceSettingsService();
+  const previousAccountLoginStatusRef = useRef<string | null>(null);
+  const previousAccountUserIdRef = useRef<string | null>(null);
+  const [
+    debugRegistrationCreditsToastEnabled,
+    setDebugRegistrationCreditsToastEnabled
+  ] = useState(readDebugRegistrationCreditsToastEnabled);
   const [computerUseStatus, setComputerUseStatus] =
     useState<DesktopComputerUseStatus | null>(null);
   const appCenterState = useSnapshot(appCenterService.store);
@@ -452,13 +501,151 @@ function DesktopAgentGUIWorkbenchBodyImpl({
       if (!isDesktopManagedAgentProvider(loginProvider)) {
         return;
       }
+      if (loginProvider === "tutti-agent") {
+        void accountService.startLogin();
+        return;
+      }
       void agentProviderStatusService?.runAction(loginProvider, "login", {
         workbenchHost: context.host,
         workspaceId
       });
     },
-    [agentProviderStatusService, context.host, workspaceId]
+    [accountService, agentProviderStatusService, context.host, workspaceId]
   );
+  const accountUserId = accountState.user?.user_id ?? null;
+  useEffect(() => {
+    void accountService.refreshUserInfo();
+    void accountService.refreshProductSummary();
+  }, [accountService]);
+  const accountMenuState = useMemo<AgentGUIProps["accountMenuState"]>(() => {
+    const summary = accountState.productSummary;
+    const summaryUser = summary?.user ?? null;
+    const user = summaryUser ?? accountState.user;
+    const membershipLabel =
+      summary?.membership?.display_name?.trim() ||
+      summary?.membership?.tier_key?.trim() ||
+      "";
+    const availableCredits = summary?.credits?.available_credits;
+    const creditsLabel =
+      typeof availableCredits === "number" && Number.isFinite(availableCredits)
+        ? new Intl.NumberFormat(locale).format(availableCredits)
+        : null;
+    const debugRegistrationCreditsReward =
+      user && debugRegistrationCreditsToastEnabled
+        ? {
+            id: debugRegistrationCreditsToastID,
+            grant_no: "debug-registration-credits-toast",
+            credits: 500,
+            created_at: new Date().toISOString()
+          }
+        : null;
+    const registrationCreditsReward =
+      summary?.registration_credits_reward ?? debugRegistrationCreditsReward;
+    const registrationCreditsLabel =
+      typeof registrationCreditsReward?.credits === "number" &&
+      Number.isFinite(registrationCreditsReward.credits)
+        ? new Intl.NumberFormat(locale).format(
+            registrationCreditsReward.credits
+          )
+        : null;
+    const links = summary?.links ?? {
+      plan_url: "https://tutti.sh/profile/plan",
+      usage_url: "https://tutti.sh/profile/usage",
+      settings_url: "https://tutti.sh/profile/settings"
+    };
+    return {
+      user: user
+        ? {
+            userId: user.user_id,
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar
+          }
+        : null,
+      membershipLabel,
+      creditsLabel,
+      loading: accountState.productSummaryLoading,
+      error: user ? null : accountState.productSummaryError,
+      partialError: summary?.partial_error != null,
+      registrationCreditsToast:
+        registrationCreditsReward && registrationCreditsLabel
+          ? {
+              id: registrationCreditsReward.id,
+              creditsLabel: registrationCreditsLabel,
+              visible: true,
+              autoDismissMs: registrationCreditsToastAutoDismissMs,
+              onDismiss() {
+                if (
+                  registrationCreditsReward.id ===
+                  debugRegistrationCreditsToastID
+                ) {
+                  clearDebugRegistrationCreditsToast();
+                  setDebugRegistrationCreditsToastEnabled(false);
+                  return;
+                }
+                void accountService.dismissRegistrationCreditsReward(
+                  registrationCreditsReward.id
+                );
+              }
+            }
+          : null,
+      links: {
+        planUrl: links.plan_url,
+        usageUrl: links.usage_url,
+        settingsUrl: links.settings_url
+      },
+      onOpenChange(open) {
+        if (open) {
+          void accountService.refreshUserInfo();
+          void accountService.refreshProductSummary({ force: true });
+        }
+      },
+      onLogin() {
+        void accountService.startLogin();
+      },
+      onLogout() {
+        void accountService.logout();
+      },
+      onSettings() {
+        workspaceSettingsService.openPanel(
+          { id: workspaceId },
+          {
+            section: "account"
+          }
+        );
+      },
+      onOpenExternal(url) {
+        void workbenchHostService.openExternal(url);
+      }
+    };
+  }, [
+    accountService,
+    accountState.productSummary,
+    accountState.productSummaryError,
+    accountState.productSummaryLoading,
+    accountState.user,
+    debugRegistrationCreditsToastEnabled,
+    locale,
+    workbenchHostService,
+    workspaceId,
+    workspaceSettingsService
+  ]);
+  useEffect(() => {
+    const previousLoginStatus = previousAccountLoginStatusRef.current;
+    const previousUserId = previousAccountUserIdRef.current;
+    previousAccountLoginStatusRef.current = accountState.loginStatus;
+    previousAccountUserIdRef.current = accountUserId;
+    const loginCompletedChanged =
+      previousLoginStatus === "completed" ||
+      accountState.loginStatus === "completed";
+    const signedInUserChanged =
+      previousUserId !== accountUserId &&
+      (previousUserId !== null || accountUserId !== null);
+    if (!loginCompletedChanged && !signedInUserChanged) {
+      return;
+    }
+    void agentProviderStatusService?.refresh(["tutti-agent"]);
+  }, [accountState.loginStatus, accountUserId, agentProviderStatusService]);
   const handleProviderReadinessGateAction = useCallback(
     (
       actionProvider: AgentGUIProvider,
@@ -471,12 +658,16 @@ function DesktopAgentGUIWorkbenchBodyImpl({
         void agentProviderStatusService?.refresh([actionProvider]);
         return;
       }
+      if (actionProvider === "tutti-agent" && action === "login") {
+        void accountService.startLogin();
+        return;
+      }
       void agentProviderStatusService?.runAction(actionProvider, action, {
         workbenchHost: context.host,
         workspaceId
       });
     },
-    [agentProviderStatusService, context.host, workspaceId]
+    [accountService, agentProviderStatusService, context.host, workspaceId]
   );
   const providerReadinessGates = useMemo(
     () =>
@@ -529,8 +720,9 @@ function DesktopAgentGUIWorkbenchBodyImpl({
   const hasExplicitConversationRailCollapsedState =
     hasDesktopAgentGUIConversationRailCollapsedState(rawWorkbenchStateSource);
   const preferredConversationRailCollapsed =
+    isDesktopAgentProvider(nodeProvider) &&
     desktopPreferencesState.agentGuiConversationRailCollapsedByProvider[
-      provider
+      nodeProvider
     ] === true;
   // Single source of truth: derive the node state directly from the workbench
   // external store (plus a pure provider-default overlay). There is no local
@@ -560,6 +752,20 @@ function DesktopAgentGUIWorkbenchBodyImpl({
   ]);
   const nodeStateRef = useRef(nodeState);
   nodeStateRef.current = nodeState;
+  // Lets the waiting-decision toast know this session's conversation is
+  // already visible, so it can skip a redundant in-app interruption.
+  useEffect(() => {
+    const agentSessionId = workbenchState.lastActiveAgentSessionId?.trim();
+    if (previewMode || !agentSessionId || context.node.isMinimized) {
+      return undefined;
+    }
+    return registerWorkspaceAgentGuiOpenSession(workspaceId, agentSessionId);
+  }, [
+    context.node.isMinimized,
+    previewMode,
+    workbenchState.lastActiveAgentSessionId,
+    workspaceId
+  ]);
   const [agentProbeDemandBySource, setAgentProbeDemandBySource] = useState<
     Record<string, string>
   >({});
@@ -600,7 +806,11 @@ function DesktopAgentGUIWorkbenchBodyImpl({
       nodeStateRef.current = next;
       const previousRailCollapsed = current.conversationRailCollapsed === true;
       const nextRailCollapsed = next.conversationRailCollapsed === true;
-      if (!previewMode && previousRailCollapsed !== nextRailCollapsed) {
+      if (
+        !previewMode &&
+        previousRailCollapsed !== nextRailCollapsed &&
+        isDesktopAgentProvider(next.provider)
+      ) {
         void desktopPreferencesService
           .rememberAgentGuiConversationRailCollapsed(
             next.provider,
@@ -796,6 +1006,12 @@ function DesktopAgentGUIWorkbenchBodyImpl({
       // Persistence is owned by handleUpdateNode (the single writer).
       onStateChange: DESKTOP_AGENT_GUI_NOOP,
       provider,
+      resolveAgentTargetProvider: (agentTargetId) =>
+        resolveDesktopAgentGUIProviderForAgentTarget(
+          agentTargetId,
+          providerTargets,
+          provider
+        ),
       workspaceId,
       updateNodeState: handleUpdateNode
     });
@@ -807,6 +1023,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
     handleOpenSessionActivationError,
     handleUpdateNode,
     provider,
+    providerTargets,
     workspaceId
   ]);
 
@@ -829,6 +1046,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
           ...current,
           agentTargetId: request.agentTargetId ?? current.agentTargetId ?? null,
           lastActiveAgentSessionId: null,
+          lastActiveConversationTitle: null,
           provider: request.provider ?? current.provider,
           providerTargetId: null,
           providerTargetRef: null
@@ -839,7 +1057,8 @@ function DesktopAgentGUIWorkbenchBodyImpl({
             ? current
             : {
                 ...current,
-                lastActiveAgentSessionId: null
+                lastActiveAgentSessionId: null,
+                lastActiveConversationTitle: null
               }
         );
       }
@@ -1090,8 +1309,11 @@ function DesktopAgentGUIWorkbenchBodyImpl({
         nodeId={context.node.id}
         providerTargets={providerTargetsLoading ? [] : providerTargets}
         providerTargetsLoading={providerTargetsLoading}
+        providerRailMode={providerRailMode}
+        renderProviderRailEmpty={renderProviderRailEmpty}
         comingSoonProviders={comingSoonAgentProviders}
         providerReadinessGates={providerReadinessGates}
+        accountMenuState={accountMenuState}
         defaultProviderTargetId={defaultProviderTargetId}
         workspaceAgentProbes={workspaceAgentProbes}
         onAgentProbeDemandChange={

@@ -1751,6 +1751,55 @@ func TestClaudeCodeSDKAdapterApplySessionSettingsSpeedSendsSidecarAndUpdatesRunt
 	}
 }
 
+func TestClaudeCodeSDKAdapterGuideActiveTurnSendsSidecarGuide(t *testing.T) {
+	adapter := NewClaudeCodeSDKAdapter(nil)
+	session := standardTestSession(ProviderClaudeCode)
+	conn := newBlockingClaudeSDKConnection()
+	defer conn.Close()
+	adapterSession := &claudeSDKAdapterSession{
+		conn:             conn,
+		reader:           &claudeSDKLineReader{conn: conn},
+		pendingRequests:  make(map[string]*pendingACPRequest),
+		pendingResponses: make(map[string]chan claudeSDKSidecarEvent),
+		liveState:        newClaudeSDKLiveState(),
+	}
+	adapter.storeSession(session.AgentSessionID, adapterSession)
+
+	type guidanceResult struct {
+		events []activityshared.Event
+		err    error
+	}
+	results := make(chan guidanceResult, 1)
+	go func() {
+		events, err := adapter.GuideActiveTurn(context.Background(), session, textPrompt("guide current turn"), "", "turn-guidance", nil, nil)
+		results <- guidanceResult{events: events, err: err}
+	}()
+
+	request := waitForClaudeSDKSentRequest(t, conn, "guide")
+	if _, ok := request.Payload["turnId"]; ok || request.Payload["prompt"] != "guide current turn" {
+		t.Fatalf("guide payload = %#v", request.Payload)
+	}
+	conn.pushEvent(claudeSDKSidecarEvent{ID: request.ID, Type: "ok"})
+
+	var events []activityshared.Event
+	select {
+	case result := <-results:
+		if result.err != nil {
+			t.Fatalf("GuideActiveTurn: %v", result.err)
+		}
+		events = result.events
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for GuideActiveTurn")
+	}
+	messages := eventsOfType(events, activityshared.EventMessageAppended)
+	if len(messages) != 1 {
+		t.Fatalf("guidance events = %#v, want one message", events)
+	}
+	if guidance, ok := messages[0].Payload.Metadata["guidance"].(bool); !ok || !guidance {
+		t.Fatalf("guidance metadata = %#v, want guidance=true", messages[0].Payload.Metadata)
+	}
+}
+
 func TestClaudeCodeSDKAdapterApplyPermissionModeSendsSidecar(t *testing.T) {
 	adapter := NewClaudeCodeSDKAdapter(nil)
 	session := standardTestSession(ProviderClaudeCode)
@@ -2536,6 +2585,49 @@ func TestClaudeCodeSDKAdapterMapsToolLifecycleAndFileMetadata(t *testing.T) {
 	completedMetadata := payloadMap(completed[0].Payload.Metadata, "metadata")
 	if toolResponse := payloadMap(completedMetadata, "claudeToolResponse"); payloadMap(toolResponse, "structuredPatch") == nil {
 		t.Fatalf("completed metadata = %#v, want structuredPatch", completed[0].Payload.Metadata)
+	}
+}
+
+func TestClaudeSDKLineReaderExitErrorIncludesCapturedStderrTail(t *testing.T) {
+	// Regression: previously, any sidecar stderr not matching the
+	// auth-refresh-debug marker was silently discarded (logClaudeSDKSidecarDebugStderr),
+	// so if the sidecar crashed with an uncaught exception, its stack trace
+	// never reached the resulting error or the logs — the exit surfaced as a
+	// bare "claude sdk sidecar exited with code N" black box. The reader must
+	// now quote the captured stderr tail, mirroring acpClient.readLoop's
+	// handling of the Codex ACP transport.
+	exitCode := 1
+	conn := &scriptedClaudeSDKConnection{
+		frames: []ProcessFrame{
+			{Stderr: []byte("TypeError: something went wrong\n    at main (main.ts:1:1)\n")},
+			{ExitCode: &exitCode},
+		},
+	}
+	reader := &claudeSDKLineReader{conn: conn}
+
+	_, err := reader.next(context.Background())
+	if err == nil {
+		t.Fatal("next() err = nil, want exit error")
+	}
+	if !strings.Contains(err.Error(), "exited with code 1") {
+		t.Fatalf("next() err = %q, want it to mention the exit code", err.Error())
+	}
+	if !strings.Contains(err.Error(), "TypeError: something went wrong") {
+		t.Fatalf("next() err = %q, want it to quote the captured stderr tail", err.Error())
+	}
+}
+
+func TestClaudeSDKLineReaderExitErrorOmitsColonWhenNoStderr(t *testing.T) {
+	exitCode := -1
+	conn := &scriptedClaudeSDKConnection{
+		frames: []ProcessFrame{{ExitCode: &exitCode}},
+	}
+	reader := &claudeSDKLineReader{conn: conn}
+
+	_, err := reader.next(context.Background())
+	want := "claude sdk sidecar exited with code -1"
+	if err == nil || err.Error() != want {
+		t.Fatalf("next() err = %v, want %q", err, want)
 	}
 }
 

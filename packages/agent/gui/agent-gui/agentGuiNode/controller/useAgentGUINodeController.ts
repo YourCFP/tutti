@@ -20,6 +20,7 @@ import {
 } from "../../../agentQueuedPromptRuntime";
 import { useAgentHostApi } from "../../../agentActivityHost";
 import {
+  resolveSubmitAvailability,
   resolveAgentActivityCapability,
   resolveAgentActivityUsage,
   selectSessionDisplayStatuses
@@ -41,6 +42,7 @@ import type {
   AgentModelCatalogInvalidatedEvent,
   AgentActivityStreamEvent,
   AgentActivityMessageUpdate,
+  AgentSession,
   AgentSessionCommand,
   AgentSessionComposerSettings,
   AgentSessionPermissionConfig,
@@ -53,6 +55,7 @@ import { AGENT_PROVIDER_LABEL } from "../../../contexts/settings/domain/agentSet
 import type {
   AgentGUINodeData,
   AgentGUIProvider,
+  AgentGUIProviderRailMode,
   AgentGUIProviderReadinessGate,
   AgentGUIProviderTarget
 } from "../../../types";
@@ -79,6 +82,7 @@ import {
 import {
   createAgentGUIConversationFilterState,
   filterAgentGUIConversationSummaries,
+  matchesAgentGUIConversationSummaryFilter,
   normalizeAgentGUIConversationFilter,
   type AgentGUIConversationFilter
 } from "../model/agentGuiConversationFilter";
@@ -206,6 +210,9 @@ const ACTIVITY_STREAM_STATE_RELOAD_DEBOUNCE_MS = 150;
 const AGENT_GUI_DETAIL_MESSAGES_PAGE_SIZE = 100;
 const AGENT_GUI_DETAIL_MISSING_USER_BACKFILL_PAGE_LIMIT = 3;
 const AGENT_GUI_SUBMIT_RETARGET_EARLY_MESSAGE_TOLERANCE_MS = 5_000;
+// The literal goal-clear command every adapter parses (see the daemon's
+// claudeGoalSlashPromptUpdate / ExecGoalControl); sent as a visible prompt.
+const GOAL_CLEAR_PROMPT = "/goal clear";
 
 function mergeAgentModelCatalogInvalidationEvents(
   events: AgentModelCatalogInvalidatedEvent[]
@@ -3637,6 +3644,12 @@ interface UseAgentGUINodeControllerInput {
   data: AgentGUINodeData;
   providerTargets?: readonly AgentGUIProviderTarget[];
   providerTargetsLoading?: boolean;
+  /**
+   * Controls how the provider rail composes its list. Defaults to "catalog"
+   * (static local catalog + placeholders + coming-soon). Use "exact" to render
+   * only the provided targets with no static injection or fallback.
+   */
+  providerRailMode?: AgentGUIProviderRailMode;
   /** Providers gated by the host (feature-gated) — rendered as coming-soon placeholders. */
   comingSoonProviders?: readonly AgentGUIProvider[];
   providerReadinessGates?: Partial<
@@ -3681,6 +3694,7 @@ export function useAgentGUINodeController({
   data,
   providerTargets,
   providerTargetsLoading = false,
+  providerRailMode = "catalog",
   comingSoonProviders,
   providerReadinessGates = null,
   defaultProviderTargetId = null,
@@ -3702,24 +3716,31 @@ export function useAgentGUINodeController({
         : emptyComingSoonProviders,
     [comingSoonProviders]
   );
-  const normalizedExplicitProviderTargets = useMemo(
-    () =>
-      applyComingSoonProviderTargets(
-        normalizeAgentGUIProviderTargets(providerTargets, {
-          includeDisabledPlaceholders: true,
-          useStaticCatalog: false
-        }),
-        normalizedComingSoonProviders
-      ),
-    [normalizedComingSoonProviders, providerTargets]
-  );
+  const isExactProviderRailMode = providerRailMode === "exact";
+  const normalizedExplicitProviderTargets = useMemo(() => {
+    // Exact mode: render precisely the provided targets — no disabled
+    // placeholders (nexight/hermes/openclaw) and no coming-soon markers.
+    const normalized = normalizeAgentGUIProviderTargets(providerTargets, {
+      includeDisabledPlaceholders: !isExactProviderRailMode,
+      useStaticCatalog: false
+    });
+    return isExactProviderRailMode
+      ? normalized
+      : applyComingSoonProviderTargets(
+          normalized,
+          normalizedComingSoonProviders
+        );
+  }, [isExactProviderRailMode, normalizedComingSoonProviders, providerTargets]);
   const normalizedProviderTargets = useMemo(() => {
     if (providerTargetsLoading) {
       return [];
     }
+    // Exact mode never falls back to the static local catalog — an empty list
+    // stays empty so the host can render its own empty state.
     if (
-      providerTargets === undefined ||
-      normalizedExplicitProviderTargets.length === 0
+      !isExactProviderRailMode &&
+      (providerTargets === undefined ||
+        normalizedExplicitProviderTargets.length === 0)
     ) {
       return applyComingSoonProviderTargets(
         normalizeAgentGUIProviderTargets(null, {
@@ -3730,12 +3751,14 @@ export function useAgentGUINodeController({
     }
     return normalizedExplicitProviderTargets;
   }, [
+    isExactProviderRailMode,
     normalizedExplicitProviderTargets,
     normalizedComingSoonProviders,
     providerTargets,
     providerTargetsLoading
   ]);
   const shouldUseStaticProviderTargets =
+    !isExactProviderRailMode &&
     !providerTargetsLoading &&
     (providerTargets === undefined ||
       normalizedExplicitProviderTargets.length === 0);
@@ -4397,6 +4420,8 @@ export function useAgentGUINodeController({
   const handledOpenSessionSequenceRef = useRef<number | null>(null);
   const pendingOpenSessionRequestRef =
     useRef<AgentGUIOpenSessionRequest | null>(null);
+  const explicitlyOpenedConversationIdsRef = useRef(new Set<string>());
+  const railPinnedTransientConversationIdsRef = useRef(new Set<string>());
   const selectedConversationNotFoundRetryIdsRef = useRef(new Set<string>());
   const selectedConversationNotFoundRetryTimerRef = useRef<number | null>(null);
   const sessionStateSnapshotCauseBySessionIdRef = useRef<
@@ -4422,7 +4447,8 @@ export function useAgentGUINodeController({
     (
       agentSessionId: string,
       content: AgentPromptContentBlock[],
-      displayPrompt?: string
+      displayPrompt?: string,
+      options?: { guidance?: boolean }
     ) => void
   >(() => {});
   const reloadSelectedConversationRef = useRef<
@@ -4552,6 +4578,93 @@ export function useAgentGUINodeController({
       setTransientConversationState(next);
     },
     []
+  );
+
+  const conversationSummaryFromRuntimeSession = useCallback(
+    (session: AgentActivitySession): AgentGUIConversationSummary => {
+      const updatedAtUnixMs = session.updatedAtUnixMs ?? Date.now();
+      const projectedSession: AgentSession = {
+        workspaceId: session.workspaceId,
+        agentSessionId: session.agentSessionId,
+        agentTargetId: session.agentTargetId ?? null,
+        provider: session.provider as AgentSession["provider"],
+        providerSessionId: session.providerSessionId ?? session.agentSessionId,
+        resumable: session.resumable,
+        cwd: session.cwd,
+        status: session.status,
+        title: session.title,
+        pinnedAtUnixMs: session.pinnedAtUnixMs ?? null,
+        createdAtUnixMs: session.createdAtUnixMs ?? updatedAtUnixMs,
+        updatedAtUnixMs
+      };
+      return conversationSummaryFromAgentSession(projectedSession, {
+        isNoProjectPath: isNoProjectPathRef.current,
+        userProjects: userProjectsRef.current
+      });
+    },
+    []
+  );
+
+  const ensureTransientOpenSessionConversation = useCallback(
+    (agentSessionId: string) => {
+      const normalizedAgentSessionId = agentSessionId.trim();
+      if (!normalizedAgentSessionId) {
+        return;
+      }
+      if (
+        resolveConversationSummaryById(
+          conversationsRef.current,
+          normalizedAgentSessionId,
+          transientConversationRef.current
+        )
+      ) {
+        return;
+      }
+      const snapshotSession = agentActivitySnapshotRef.current.sessions.find(
+        (session) =>
+          session.agentSessionId.trim() === normalizedAgentSessionId &&
+          session.visible !== false
+      );
+      if (snapshotSession) {
+        setTransientConversation(
+          conversationSummaryFromRuntimeSession(snapshotSession)
+        );
+        return;
+      }
+      void agentActivityRuntime
+        .getSession(workspaceId, normalizedAgentSessionId)
+        .then((session) => {
+          const shouldKeepTransient =
+            explicitlyOpenedConversationIdsRef.current.has(
+              normalizedAgentSessionId
+            ) ||
+            railPinnedTransientConversationIdsRef.current.has(
+              normalizedAgentSessionId
+            );
+          if (
+            !isMountedRef.current ||
+            activeConversationIdRef.current !== normalizedAgentSessionId ||
+            !shouldKeepTransient ||
+            resolveConversationSummaryById(
+              conversationsRef.current,
+              normalizedAgentSessionId,
+              transientConversationRef.current
+            )
+          ) {
+            return;
+          }
+          setTransientConversation(
+            conversationSummaryFromRuntimeSession(session)
+          );
+        })
+        .catch(() => {});
+    },
+    [
+      agentActivityRuntime,
+      conversationSummaryFromRuntimeSession,
+      setTransientConversation,
+      workspaceId
+    ]
   );
 
   // NOTE: project metadata is intentionally NOT written back into the shared
@@ -5069,6 +5182,8 @@ export function useAgentGUINodeController({
             ? { ...current, hasUnreadCompletion: false }
             : current
         );
+      } else if (transientConversationRef.current) {
+        setTransientConversation(null);
       }
       persistActiveConversation(normalized);
     },
@@ -5077,7 +5192,8 @@ export function useAgentGUINodeController({
       clearSelectedConversationNotFoundRetry,
       conversationListQuery,
       markSelectedConversationDetailPending,
-      persistActiveConversation
+      persistActiveConversation,
+      setTransientConversation
     ]
   );
 
@@ -5231,6 +5347,8 @@ export function useAgentGUINodeController({
         id,
         transientConversationRef.current
       ) !== null;
+    const resolveCanonicalId = (id: string) =>
+      resolveConversationSummaryById(conversations, id, null) !== null;
 
     const inSnapshot = (id: string) =>
       agentActivitySnapshotRef.current.sessions.some(
@@ -5240,30 +5358,12 @@ export function useAgentGUINodeController({
     // Open session request takes highest priority
     if (hasExplicitOpenSessionRequest) {
       const requestedId = pendingOpenSessionRequest!.agentSessionId.trim();
-      if (resolveId(requestedId)) {
-        pendingOpenSessionRequestRef.current = null;
-        selectConversation(requestedId, { reloadConversations: false });
-        return;
-      }
       if (!hasLoadedConversations) return;
-      if (inSnapshot(requestedId)) return;
-      if (intent.tag !== "resolving" || intent.id !== requestedId) {
-        setIntent({ tag: "resolving", id: requestedId });
-        void syncConversationListProjection(requestedId);
-        return;
-      }
-      if (!isAgentGUIConversationListRefreshing(conversationListQuery)) {
-        pendingOpenSessionRequestRef.current = null;
-        const fallback = selectAgentGUIConversationId(
-          conversations,
-          activeConversationIdRef.current
-        );
-        if (fallback) {
-          selectConversation(fallback, { reloadConversations: false });
-        } else {
-          setIntent({ tag: "home" });
-        }
-      }
+      explicitlyOpenedConversationIdsRef.current.add(requestedId);
+      railPinnedTransientConversationIdsRef.current.add(requestedId);
+      pendingOpenSessionRequestRef.current = null;
+      selectConversation(requestedId, { reloadConversations: false });
+      ensureTransientOpenSessionConversation(requestedId);
       return;
     }
 
@@ -5274,7 +5374,29 @@ export function useAgentGUINodeController({
 
       case "active":
         // Only demote when list is fully loaded, to avoid races during reload.
-        if (resolveId(intent.id) || !hasLoadedConversations) return;
+        if (resolveCanonicalId(intent.id)) {
+          explicitlyOpenedConversationIdsRef.current.delete(intent.id);
+          railPinnedTransientConversationIdsRef.current.delete(intent.id);
+          return;
+        }
+        if (resolveId(intent.id)) {
+          return;
+        }
+        if (!hasLoadedConversations) return;
+        if (
+          inSnapshot(intent.id) &&
+          activeConversationIdRef.current === intent.id
+        ) {
+          railPinnedTransientConversationIdsRef.current.add(intent.id);
+          ensureTransientOpenSessionConversation(intent.id);
+          return;
+        }
+        if (
+          explicitlyOpenedConversationIdsRef.current.has(intent.id) &&
+          activeConversationIdRef.current === intent.id
+        ) {
+          return;
+        }
         // Session was removed from list after load — re-check
         setIntent({ tag: "requested", id: intent.id });
         return;
@@ -5291,7 +5413,14 @@ export function useAgentGUINodeController({
           selectConversation(intent.id, { reloadConversations: false });
           return;
         }
-        if (inSnapshot(intent.id)) return;
+        if (inSnapshot(intent.id)) {
+          if (activeConversationIdRef.current === intent.id) {
+            railPinnedTransientConversationIdsRef.current.add(intent.id);
+            ensureTransientOpenSessionConversation(intent.id);
+            setIntent({ tag: "active", id: intent.id });
+          }
+          return;
+        }
         setIntent({ tag: "resolving", id: intent.id });
         void syncConversationListProjection(intent.id);
         return;
@@ -5319,6 +5448,7 @@ export function useAgentGUINodeController({
     intent,
     conversations,
     hasLoadedConversations,
+    ensureTransientOpenSessionConversation,
     openSessionRequest,
     previewMode,
     syncConversationListProjection,
@@ -7016,6 +7146,7 @@ export function useAgentGUINodeController({
       dataRef.current.lastActiveAgentSessionId
     );
   }, [
+    conversationFilter,
     currentUserId,
     data.provider,
     previewMode,
@@ -8034,7 +8165,8 @@ export function useAgentGUINodeController({
     (
       agentSessionId: string,
       content: AgentPromptContentBlock[],
-      displayPrompt?: string
+      displayPrompt?: string,
+      options?: { guidance?: boolean }
     ) => {
       const normalizedContent = normalizeAgentPromptContentBlocks(content);
       if (!agentSessionId || normalizedContent.length === 0) {
@@ -8164,6 +8296,7 @@ export function useAgentGUINodeController({
             content: normalizedContent,
             displayPrompt:
               displayPrompt && displayPrompt.trim() ? displayPrompt : null,
+            ...(options?.guidance === true ? { guidance: true } : {}),
             metadata: agentSubmitTraceMetadata(submitTrace)
           });
         })
@@ -8408,7 +8541,7 @@ export function useAgentGUINodeController({
       agentSessionId: string,
       normalizedContent: AgentPromptContentBlock[],
       displayPromptText?: string,
-      options?: { bypassLocalQueue?: boolean }
+      options?: { bypassLocalQueue?: boolean; guidance?: boolean }
     ) => {
       if (isSessionMarkedNonResumable(agentSessionId)) {
         setDetailError(
@@ -8431,8 +8564,21 @@ export function useAgentGUINodeController({
         );
         return;
       }
+      // Read the queue before resuming: resumeQueue wakes the drain
+      // coordinator, which immediately races to send the queued head. A
+      // direct send issued alongside that drain loses the daemon's
+      // single-active-turn slot and the prompt is dropped, so when prompts
+      // are already queued the explicit send must join the queue behind them
+      // instead of racing the drain.
+      const hasQueuedPrompts =
+        agentQueuedPromptRuntime.getSessionSnapshot({
+          workspaceId,
+          agentSessionId
+        }).prompts.length > 0;
+      // Any explicit user send lifts a user-stop hold on the queue.
+      agentQueuedPromptRuntime.resumeQueue({ workspaceId, agentSessionId });
       if (
-        shouldQueuePromptLocally(agentSessionId) &&
+        (hasQueuedPrompts || shouldQueuePromptLocally(agentSessionId)) &&
         options?.bypassLocalQueue !== true
       ) {
         queuePromptLocally(
@@ -8442,23 +8588,31 @@ export function useAgentGUINodeController({
         );
         return;
       }
-      executePrompt(agentSessionId, normalizedContent, displayPromptText);
+      executePrompt(agentSessionId, normalizedContent, displayPromptText, {
+        guidance: options?.guidance === true
+      });
     },
     [
       activation,
+      agentQueuedPromptRuntime,
       executePrompt,
       isSessionMarkedNonResumable,
       queuePromptLocally,
-      shouldQueuePromptLocally
+      shouldQueuePromptLocally,
+      workspaceId
     ]
   );
 
   // Goal control commands (/goal clear|paused|active) act on the running
   // thread immediately; the local prompt queue would defer them until the
   // turn ends, defeating their purpose (e.g. stopping a runaway goal).
-  // Goal banner controls act directly on the session's goal (like the stop
-  // button acts on the turn): a dedicated control API, no prompt, no queue,
-  // no transcript entry — matching the codex desktop goal bar.
+  // Clearing sends a visible "/goal clear" prompt so the transcript shows
+  // what was sent: executePrompt skips the local queue (and its resume
+  // side effect), and mid-turn the daemon steers the command as a
+  // thread-level exec instead of opening a competing turn. The remaining
+  // controls (set/pause/resume) stay on the dedicated control API — no
+  // prompt, no queue, no transcript entry — matching the codex desktop
+  // goal bar.
   const goalControl = useCallback(
     (action: AgentActivityGoalControlAction, objective?: string) => {
       if (previewMode) {
@@ -8469,6 +8623,14 @@ export function useAgentGUINodeController({
         return;
       }
       setDetailError(null);
+      if (action === "clear") {
+        executePrompt(
+          agentSessionId,
+          textPromptContent(GOAL_CLEAR_PROMPT),
+          GOAL_CLEAR_PROMPT
+        );
+        return;
+      }
       void agentActivityRuntime
         .goalControl({
           workspaceId,
@@ -8485,6 +8647,7 @@ export function useAgentGUINodeController({
     },
     [
       agentActivityRuntime,
+      executePrompt,
       isCurrentConversation,
       previewMode,
       setDetailError,
@@ -8589,10 +8752,7 @@ export function useAgentGUINodeController({
       }
       const activeTurnId =
         activeSessionState?.turnLifecycle?.activeTurnId?.trim() ?? "";
-      const canSteerActiveTurn =
-        activeTurnId !== "" ||
-        activeSessionState?.submitAvailability?.reason === "active_turn";
-      if (!canSteerActiveTurn) {
+      if (activeTurnId === "") {
         return;
       }
       const displayPromptText =
@@ -8601,7 +8761,7 @@ export function useAgentGUINodeController({
         agentSessionId,
         normalizedContent,
         displayPromptText,
-        { bypassLocalQueue: true }
+        { bypassLocalQueue: true, guidance: true }
       );
     },
     [
@@ -8740,6 +8900,15 @@ export function useAgentGUINodeController({
         ...current,
         [agentSessionId]: true
       }));
+      // A user stop means "stop everything": hold the queued prompts instead
+      // of letting the drainer fire the next one the moment the session
+      // becomes available. An explicit user send (submit or send-now on a
+      // queued item) lifts the hold.
+      agentQueuedPromptRuntime.suspendQueue({
+        workspaceId,
+        agentSessionId,
+        reason: "user_stop"
+      });
       setDetailError(null);
       void Promise.resolve()
         .then(() => {
@@ -8829,6 +8998,7 @@ export function useAgentGUINodeController({
         });
     },
     [
+      agentQueuedPromptRuntime,
       interruptingSessionIds,
       isCurrentConversation,
       syncConversationListProjection,
@@ -10171,19 +10341,14 @@ export function useAgentGUINodeController({
     null
   );
   const visibleConversations = useMemo(() => {
-    // Merge in the transient (optimistic pre-activation, or not-yet-synced)
-    // conversation unconditionally, not just while the initial conversation
-    // list is still loading: activeConversation (see
-    // resolveConversationSummaryById) already falls back to it
-    // unconditionally, and the sidebar must stay in sync with the main pane
-    // so a newly started conversation appears in both at once instead of
-    // only after the real backend record lands in `conversations`.
-    // mergeVisibleConversations already no-ops once the real conversation
-    // with a matching id is present, so this never duplicates an entry.
-    const source = mergeVisibleConversations(
-      conversations,
-      transientConversationRef.current
-    );
+    const transient = transientConversationRef.current;
+    const source =
+      transient &&
+      (isLoadingConversations ||
+        explicitlyOpenedConversationIdsRef.current.has(transient.id) ||
+        railPinnedTransientConversationIdsRef.current.has(transient.id))
+        ? mergeVisibleConversations(conversations, transient)
+        : conversations;
     const mapped = source.map((conversation) => {
       const withRuntime = mergeConversationSummaryWithRuntimeSession({
         conversation,
@@ -10683,8 +10848,11 @@ export function useAgentGUINodeController({
   const activeHasPendingSubmittedTurn = activeConversationId
     ? Boolean(pendingTurnIdBySessionIdRef.current[activeConversationId])
     : false;
-  const activeSubmitBlocked =
-    activeSessionState?.submitAvailability?.state === "blocked";
+  // Derive from the turn lifecycle when present (ADR 0008); trust the wire
+  // submitAvailability only for lifecycle-less control states.
+  const activeSubmitBlocked = activeSessionState
+    ? resolveSubmitAvailability(activeSessionState).state === "blocked"
+    : false;
   const activeConversationBusy =
     agentActivityDisplayStatusBusy(activeActivityDisplayStatus) ||
     activeHasPendingSubmittedTurn ||
@@ -11237,12 +11405,22 @@ export function useAgentGUINodeController({
         ? { kind: "agentTarget" as const, agentTargetId }
         : { kind: "all" as const };
       setConversationFilter(nextFilter);
-      // Keep the home composer chip in sync with the selected tab. Active
-      // conversations keep owning their target until the target-filtered list
-      // has initialized and proven empty.
-      if (activeConversationIdRef.current === null) {
-        selectHomeComposerAgentTarget(input);
+      const activeId = activeConversationIdRef.current;
+      if (activeId) {
+        const activeSummary = resolveConversationSummaryById(
+          conversationsRef.current,
+          activeId,
+          transientConversationRef.current
+        );
+        if (
+          activeSummary &&
+          !matchesAgentGUIConversationSummaryFilter(activeSummary, nextFilter)
+        ) {
+          selectHomeComposerAgentTarget(input);
+        }
+        return;
       }
+      selectHomeComposerAgentTarget(input);
     },
     [
       agentActivityRuntime,
@@ -11455,6 +11633,7 @@ export function useAgentGUINodeController({
         selectedProviderTarget: effectiveSelectedProviderTarget,
         providerTargets: normalizedProviderTargets,
         providerTargetsLoading,
+        providerRailMode,
         comingSoonProviders: normalizedComingSoonProviders,
         conversationFilter,
         conversations: visibleConversations,
@@ -11531,6 +11710,7 @@ export function useAgentGUINodeController({
       effectiveSelectedProviderTarget,
       normalizedComingSoonProviders,
       normalizedProviderTargets,
+      providerRailMode,
       providerReadinessGate,
       providerTargetsLoading,
       detailError,

@@ -8,6 +8,7 @@ import (
 const (
 	ProviderClaudeCode = "claude-code"
 	ProviderCodex      = "codex"
+	ProviderTuttiAgent = "tutti-agent"
 	ProviderCursor     = "cursor"
 	ProviderNexight    = "nexight"
 	ProviderGemini     = "gemini"
@@ -103,6 +104,7 @@ type ExecInput struct {
 	Content        []PromptContentBlock
 	DisplayPrompt  string
 	Metadata       map[string]any
+	Guidance       bool
 }
 
 type CancelInput struct {

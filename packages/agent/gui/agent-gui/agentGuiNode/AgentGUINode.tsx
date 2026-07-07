@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo } from "react";
+import { memo, type ReactNode, useCallback, useEffect, useMemo } from "react";
 import { createWorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
 import { createWorkspaceFileManagerI18nRuntime } from "@tutti-os/workspace-file-manager";
 import type { WorkspaceFileEntry } from "@tutti-os/workspace-file-manager/services";
@@ -22,6 +22,7 @@ import type { WorkspaceLinkAction } from "../../actions/workspaceLinkActions";
 import type {
   AgentGUINodeData,
   AgentGUIProvider,
+  AgentGUIProviderRailMode,
   AgentGUIProviderReadinessGate,
   AgentGUIProviderTarget,
   NodeFrame,
@@ -46,9 +47,12 @@ import type {
 import {
   AgentGUINodeView,
   type AgentGUIViewLabels,
+  type AgentGUISidebarFooterContext,
+  type AgentGUIProviderRailEmptyRenderer,
   type AgentMentionReferenceTargetResolver,
   type AgentWorkspaceReferenceInitialTargetResolver
 } from "./AgentGUINodeView";
+import type { AgentGUIAccountMenuState } from "./accountMenuState";
 import {
   normalizeAgentGUIProviderIdentity,
   resolveAgentGUIDockConversationTitle,
@@ -189,8 +193,18 @@ export interface AgentGUINodeProps {
     capability: AgentComposerCapabilitySettingsTarget
   ) => void;
   onAgentProviderLogin?: (provider: AgentProvider) => void;
+  accountMenuState?: AgentGUIAccountMenuState | null;
   providerTargets?: readonly AgentGUIProviderTarget[];
   providerTargetsLoading?: boolean;
+  /**
+   * Controls how the provider rail composes its list. "catalog" (default) adds
+   * the static local catalog + placeholders + coming-soon; "exact" renders only
+   * the provided targets and shows `renderProviderRailEmpty` when empty.
+   */
+  providerRailMode?: AgentGUIProviderRailMode;
+  /** Host-owned empty state for the provider rail in "exact" mode. */
+  renderProviderRailEmpty?: AgentGUIProviderRailEmptyRenderer;
+  renderSidebarFooter?: (ctx: AgentGUISidebarFooterContext) => ReactNode;
   comingSoonProviders?: readonly AgentGUIProvider[];
   providerReadinessGates?: Partial<
     Record<AgentGUIProvider, AgentGUIProviderReadinessGate | null>
@@ -455,6 +469,8 @@ function agentGuiStateEquals(
         right.providerTargetRef
       ) &&
       left.lastActiveAgentSessionId === right.lastActiveAgentSessionId &&
+      (left.lastActiveConversationTitle ?? null) ===
+        (right.lastActiveConversationTitle ?? null) &&
       left.conversationRailWidthPx === right.conversationRailWidthPx &&
       left.conversationRailCollapsed === right.conversationRailCollapsed &&
       (left.composerOverrides?.model ?? null) ===
@@ -566,8 +582,12 @@ function areAgentGUINodePropsEqual(
     previous.onHandoffConversation === next.onHandoffConversation &&
     previous.onCapabilitySettingsRequest === next.onCapabilitySettingsRequest &&
     previous.onAgentProviderLogin === next.onAgentProviderLogin &&
+    previous.accountMenuState === next.accountMenuState &&
     previous.providerTargets === next.providerTargets &&
     previous.providerTargetsLoading === next.providerTargetsLoading &&
+    previous.renderSidebarFooter === next.renderSidebarFooter &&
+    previous.providerRailMode === next.providerRailMode &&
+    previous.renderProviderRailEmpty === next.renderProviderRailEmpty &&
     previous.comingSoonProviders === next.comingSoonProviders &&
     previous.providerReadinessGates === next.providerReadinessGates &&
     previous.defaultProviderTargetId === next.defaultProviderTargetId &&
@@ -624,8 +644,12 @@ export const AgentGUINode = memo(function AgentGUINode({
   capabilityMenuState,
   onCapabilitySettingsRequest,
   onAgentProviderLogin,
+  accountMenuState = null,
   providerTargets,
   providerTargetsLoading = false,
+  providerRailMode = "catalog",
+  renderProviderRailEmpty,
+  renderSidebarFooter,
   comingSoonProviders,
   providerReadinessGates = null,
   defaultProviderTargetId = null,
@@ -799,6 +823,7 @@ export const AgentGUINode = memo(function AgentGUINode({
     prefillPromptRequest,
     providerTargets,
     providerTargetsLoading,
+    providerRailMode,
     comingSoonProviders,
     providerReadinessGates,
     defaultProviderTargetId,
@@ -1082,7 +1107,34 @@ export const AgentGUINode = memo(function AgentGUINode({
         resolveAgentGUIProviderDisplayLabel(provider, fallbackAgentTitle),
       conversations: t("agentHost.agentGui.conversations"),
       newConversation: t("agentHost.agentGui.newConversation"),
+      accountMenuTitle: t("agentHost.agentGui.accountMenuTitle"),
+      accountMenuMember: t("agentHost.agentGui.accountMenuMember"),
+      accountMenuUpgrade: t("agentHost.agentGui.accountMenuUpgrade"),
+      accountMenuCreditsBalance: t(
+        "agentHost.agentGui.accountMenuCreditsBalance"
+      ),
+      accountMenuAccountCenter: t(
+        "agentHost.agentGui.accountMenuAccountCenter"
+      ),
+      accountMenuSettings: t("agentHost.agentGui.accountMenuSettings"),
+      accountMenuFree: t("agentHost.agentGui.accountMenuFree"),
+      accountMenuSignIn: t("agentHost.agentGui.accountMenuSignIn"),
+      accountMenuSignOut: t("agentHost.agentGui.accountMenuSignOut"),
+      accountMenuLoading: t("agentHost.agentGui.accountMenuLoading"),
+      accountMenuUnavailable: t("agentHost.agentGui.accountMenuUnavailable"),
+      accountMenuDataUnavailable: t(
+        "agentHost.agentGui.accountMenuDataUnavailable"
+      ),
+      accountRewardToastTitle: t("agentHost.agentGui.accountRewardToastTitle"),
+      accountRewardToastCreditsUnit: t(
+        "agentHost.agentGui.accountRewardToastCreditsUnit"
+      ),
+      accountRewardToastDescription: t(
+        "agentHost.agentGui.accountRewardToastDescription"
+      ),
+      accountRewardToastClose: t("agentHost.agentGui.accountRewardToastClose"),
       agentConfig: t("agentHost.agentGui.agentConfig"),
+      agentSettingsMenu: t("agentHost.agentGui.agentSettingsMenu"),
       agentEnvSetup: t("agentHost.agentGui.agentEnvSetup"),
       noConversations: t("agentHost.agentGui.noConversations"),
       emptyProjectConversations: t(
@@ -1674,6 +1726,8 @@ export const AgentGUINode = memo(function AgentGUINode({
         return (
           <AgentGUINodeView
             viewModel={viewModel}
+            renderSidebarFooter={renderSidebarFooter}
+            renderProviderRailEmpty={renderProviderRailEmpty}
             actions={viewActions}
             isActive={isActive}
             composerFocusRequestSequence={composerFocusRequestSequence}
@@ -1694,6 +1748,7 @@ export const AgentGUINode = memo(function AgentGUINode({
             onAgentProviderLogin={
               onAgentProviderLogin ? handleAgentProviderLogin : undefined
             }
+            accountMenuState={accountMenuState}
             conversationRailCollapsed={isRenderedConversationRailCollapsed}
             conversationRailWidthPx={clampAgentGUIConversationRailWidthPx(
               state.conversationRailWidthPx,

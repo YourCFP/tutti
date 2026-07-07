@@ -7,10 +7,11 @@ import {
   type JSX
 } from "react";
 import { MessageSquareMoreIcon } from "../../../app/renderer/components/icons/MessageSquareMoreIcon";
-import { Spinner } from "../../../app/renderer/components/ui/spinner";
 import { translate } from "../../../i18n/index";
 import {
+  Button,
   ShortcutBadge,
+  Spinner,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -927,16 +928,22 @@ function FullAskUserPromptSurface({
           }}
         />
         <div className={styles.interactivePromptActions}>
-          <button
-            type="button"
-            disabled={isSubmitting || index === 0}
-            onClick={() => setIndex((current) => Math.max(current - 1, 0))}
-          >
-            {labels.previousQuestion}
-          </button>
-          {isLast ? (
-            <button
+          {prompt.questions.length > 1 ? (
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
+              disabled={isSubmitting || index === 0}
+              onClick={() => setIndex((current) => Math.max(current - 1, 0))}
+            >
+              {labels.previousQuestion}
+            </Button>
+          ) : null}
+          {isLast ? (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
               disabled={
                 isSubmitting ||
                 Object.keys(payload.answersByQuestionId).length === 0
@@ -950,10 +957,12 @@ function FullAskUserPromptSurface({
               }
             >
               {labels.submitAnswers}
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
               type="button"
+              variant="default"
+              size="sm"
               disabled={isSubmitting || !canAdvance}
               onClick={() =>
                 setIndex((current) =>
@@ -962,7 +971,7 @@ function FullAskUserPromptSurface({
               }
             >
               {labels.nextQuestion}
-            </button>
+            </Button>
           )}
         </div>
       </div>

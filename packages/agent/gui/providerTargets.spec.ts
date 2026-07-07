@@ -3,6 +3,7 @@ import {
   agentGUIProviderTargetRefsEqual,
   createLocalAgentGUIProviderTarget,
   createLocalAgentGUIProviderTargets,
+  createSharedAgentGUIProviderTarget,
   normalizeAgentGUIProviderTargets,
   resolveAgentGUIProviderTarget
 } from "./providerTargets";
@@ -24,8 +25,8 @@ describe("agent gui provider targets", () => {
     ).toEqual([
       "local:codex",
       "local:claude-code",
+      "local:tutti-agent",
       "local:cursor",
-      "local:nexight",
       "local:hermes",
       "local:openclaw",
       "local:opencode"
@@ -85,12 +86,6 @@ describe("agent gui provider targets", () => {
         provider: "claude-code"
       },
       {
-        agentTargetId: "local:nexight",
-        disabled: true,
-        label: "Tutti Agent",
-        provider: "nexight"
-      },
-      {
         agentTargetId: "local:hermes",
         disabled: true,
         label: "Hermes",
@@ -137,6 +132,72 @@ describe("agent gui provider targets", () => {
     ]);
   });
 
+  it("creates shared agent targets with owner and availability metadata", () => {
+    expect(
+      createSharedAgentGUIProviderTarget({
+        provider: "codex",
+        sharedAgentId: " agent-1 ",
+        agentTargetId: " cp-target-1 ",
+        label: "Alice's Codex",
+        ownerLabel: " Alice ",
+        iconUrl: " app://alice.png ",
+        unavailableReason: " owner_offline ",
+        disabled: true,
+        ref: {
+          ownerUserId: "user-1"
+        }
+      })
+    ).toEqual({
+      targetId: "shared-agent:agent-1",
+      agentTargetId: "cp-target-1",
+      provider: "codex",
+      ref: {
+        kind: "shared-agent",
+        provider: "codex",
+        sharedAgentId: "agent-1",
+        ownerUserId: "user-1"
+      },
+      label: "Alice's Codex",
+      ownerLabel: "Alice",
+      iconUrl: "app://alice.png",
+      unavailableReason: "owner_offline",
+      disabled: true
+    });
+  });
+
+  it("drops whitespace-only optional target metadata during normalization", () => {
+    const [target] = normalizeAgentGUIProviderTargets(
+      [
+        {
+          targetId: " shared-agent:agent-1 ",
+          provider: "codex",
+          ref: {
+            kind: " shared-agent ",
+            provider: "codex",
+            sharedAgentId: "agent-1"
+          },
+          label: " Alice's Codex ",
+          description: " ",
+          ownerLabel: " ",
+          iconUrl: " ",
+          unavailableReason: " "
+        }
+      ],
+      { useStaticCatalog: false }
+    );
+
+    expect(target).toEqual({
+      targetId: "shared-agent:agent-1",
+      provider: "codex",
+      ref: {
+        kind: "shared-agent",
+        provider: "codex",
+        sharedAgentId: "agent-1"
+      },
+      label: "Alice's Codex"
+    });
+  });
+
   it("keeps same target ids for different real providers", () => {
     const targets = normalizeAgentGUIProviderTargets([
       {
@@ -181,8 +242,8 @@ describe("agent gui provider targets", () => {
     ).toEqual([
       { disabled: false, provider: "codex" },
       { disabled: false, provider: "claude-code" },
+      { disabled: false, provider: "tutti-agent" },
       { disabled: false, provider: "cursor" },
-      { disabled: true, provider: "nexight" },
       { disabled: true, provider: "hermes" },
       { disabled: true, provider: "openclaw" },
       { disabled: false, provider: "opencode" }

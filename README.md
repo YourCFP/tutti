@@ -237,6 +237,10 @@ No. Tutti is useful for coding, design, content, app workflows, and any work whe
  </picture>
 </a>
 
+## Contributors
+
+[![Contributors](https://contrib.rocks/image?repo=tutti-os/tutti)](https://github.com/tutti-os/tutti/graphs/contributors)
+
 ## Getting Started
 
 ### Download
@@ -260,5 +264,3 @@ To report a security vulnerability, see [SECURITY.md](SECURITY.md).
 ## License
 
 Tutti is licensed under the [Apache License 2.0](LICENSE).
-
-> Note: this codebase uses the internal codename `tutti` — you will see it in directory and binary names such as `services/tuttid`.

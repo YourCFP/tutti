@@ -8,6 +8,7 @@ export type BusinessEventScopeName = "global" | "desktop" | "workspace";
 
 export type BusinessEventTopic =
   | "agent.activity.updated"
+  | "agent.model.catalog.invalidated"
   | "analytics.debug.reported"
   | "preferences.desktop.update.requested"
   | "preferences.desktop.updated"
@@ -48,6 +49,12 @@ export interface PreferencesDesktopPreferencesV1 {
       speed?: string;
     };
     codex?: {
+      model?: string;
+      permissionModeId?: string;
+      reasoningEffort?: string;
+      speed?: string;
+    };
+    "tutti-agent"?: {
       model?: string;
       permissionModeId?: string;
       reasoningEffort?: string;
@@ -102,6 +109,7 @@ export interface PreferencesDesktopPreferencesV1 {
   agentGuiConversationRailCollapsedByProvider: {
     "claude-code"?: boolean;
     codex?: boolean;
+    "tutti-agent"?: boolean;
     cursor?: boolean;
     nexight?: boolean;
     gemini?: boolean;
@@ -113,15 +121,7 @@ export interface PreferencesDesktopPreferencesV1 {
   agentDockLayout: "legacySplit" | "unified";
   appCatalogChannel: "production" | "staging";
   browserUseConnectionMode?: "isolated" | "autoConnect";
-  defaultAgentProvider:
-    | "claude-code"
-    | "codex"
-    | "cursor"
-    | "nexight"
-    | "gemini"
-    | "hermes"
-    | "openclaw"
-    | "opencode";
+  defaultAgentProvider: "claude-code" | "codex";
   dockIconStyle: "default" | "flat";
   dockPlacement: "bottom" | "left";
   fileDefaultOpenersByExtension: Record<
@@ -292,6 +292,11 @@ export type AgentActivityUpdatedPayloadV1 =
         lastError?: string;
         startedAtUnixMs?: number;
         endedAtUnixMs?: number;
+        runtimeContext?: Record<string, unknown>;
+        submitAvailability?: {
+          state: string;
+          reason?: string;
+        };
         turn?: {
           turnId: string;
           phase?: string;
@@ -299,9 +304,18 @@ export type AgentActivityUpdatedPayloadV1 =
           fileChanges?: unknown;
           startedAtUnixMs?: number;
           completedAtUnixMs?: number;
+          submitAvailability?: {
+            state: string;
+            reason?: string;
+          };
         };
       };
     };
+
+export interface AgentModelCatalogInvalidatedPayloadV1 {
+  providers: readonly string[];
+  occurredAtUnixMs: number;
+}
 
 export interface AnalyticsDebugReportedPayloadV1 {
   events: readonly {
@@ -362,6 +376,12 @@ export type AgentActivityUpdatedEventV1 = BusinessEventEnvelopeV1<
   1
 >;
 
+export type AgentModelCatalogInvalidatedEventV1 = BusinessEventEnvelopeV1<
+  "agent.model.catalog.invalidated",
+  AgentModelCatalogInvalidatedPayloadV1,
+  1
+>;
+
 export type AnalyticsDebugReportedEventV1 = BusinessEventEnvelopeV1<
   "analytics.debug.reported",
   AnalyticsDebugReportedPayloadV1,
@@ -409,6 +429,7 @@ export type ClientToServerEventTopic = "preferences.desktop.update.requested";
 
 export type ServerToClientEventTopic =
   | "agent.activity.updated"
+  | "agent.model.catalog.invalidated"
   | "analytics.debug.reported"
   | "preferences.desktop.updated"
   | "workspace.app.updated"
@@ -420,6 +441,7 @@ export type ClientToServerEventV1 = PreferencesDesktopUpdateRequestedEventV1;
 
 export type ServerToClientEventV1 =
   | AgentActivityUpdatedEventV1
+  | AgentModelCatalogInvalidatedEventV1
   | AnalyticsDebugReportedEventV1
   | PreferencesDesktopUpdatedEventV1
   | WorkspaceAppUpdatedEventV1

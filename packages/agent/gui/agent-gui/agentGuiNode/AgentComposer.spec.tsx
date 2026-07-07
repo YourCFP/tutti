@@ -14,6 +14,7 @@ import {
 } from "@tutti-os/workspace-user-project/i18n";
 import { AgentComposer } from "./AgentComposer";
 import { textPromptContent } from "./controller/agentGuiController.promptHelpers";
+import { cursorColorfulUrl } from "../../managedAgentIconAssets";
 import {
   resetAgentActivityRuntimeForTests,
   setAgentActivityRuntimeForTests,
@@ -97,7 +98,8 @@ async function openUsagePopoverByHover(usageChip: HTMLElement): Promise<void> {
   });
 }
 
-vi.mock("../../app/renderer/components/ui/popover", async () => {
+vi.mock("@tutti-os/ui-system", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tutti-os/ui-system")>();
   const React = await import("react");
   interface MockPopoverContextValue {
     onOpenChange?: (open: boolean) => void;
@@ -121,6 +123,7 @@ vi.mock("../../app/renderer/components/ui/popover", async () => {
     side?: string;
   };
   return {
+    ...actual,
     Popover: ({
       children,
       onOpenChange,
@@ -1302,6 +1305,73 @@ describe("AgentComposer", () => {
     expect(
       screen.queryByRole("option", { name: "OpenClaw" })
     ).not.toBeInTheDocument();
+  });
+
+  it("uses Cursor colorful artwork for Cursor in the provider switch menu", async () => {
+    const codexTarget = {
+      targetId: "local:codex",
+      agentTargetId: "local:codex",
+      provider: "codex" as const,
+      ref: { kind: "local-provider", provider: "codex" as const },
+      label: "Codex"
+    };
+    const cursorTarget = {
+      targetId: "local:cursor",
+      agentTargetId: "local:cursor",
+      provider: "cursor" as const,
+      ref: { kind: "local-provider", provider: "cursor" as const },
+      label: "Cursor",
+      iconUrl: "app://old-cursor-target-icon.png"
+    };
+
+    render(
+      <AgentComposer
+        workspaceId="workspace-1"
+        currentUserId="user-1"
+        provider="cursor"
+        selectedProviderTarget={cursorTarget}
+        providerTargets={[codexTarget, cursorTarget]}
+        providerSelectLabel="切换 Provider"
+        draftContent={createDraft("")}
+        availableCommands={[] satisfies readonly AgentHostAgentSessionCommand[]}
+        disabled={false}
+        submitDisabled={false}
+        placeholder="placeholder"
+        composerSettings={createComposerSettings()}
+        queuedPrompts={[]}
+        drainingQueuedPromptId={null}
+        canQueueWhileBusy={false}
+        showStopButton={false}
+        activePrompt={null}
+        isInterrupting={false}
+        isSendingTurn={false}
+        isSubmittingPrompt={false}
+        labels={createLabels()}
+        workspaceUserProjectI18n={workspaceUserProjectI18n}
+        onDraftContentChange={vi.fn()}
+        onSettingsChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onSendQueuedPromptNext={vi.fn()}
+        onRemoveQueuedPrompt={vi.fn()}
+        onEditQueuedPrompt={vi.fn()}
+        onInterruptCurrentTurn={vi.fn()}
+        onSubmitInteractivePrompt={vi.fn()}
+      />
+    );
+
+    const trigger = screen.getByRole("combobox", { name: "切换 Provider" });
+    expect(trigger.querySelector("img")).toHaveAttribute(
+      "src",
+      cursorColorfulUrl
+    );
+
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+
+    expect(
+      (await screen.findByRole("option", { name: "Cursor" })).querySelector(
+        "img"
+      )
+    ).toHaveAttribute("src", cursorColorfulUrl);
   });
 
   it("matches the browser-use slash capability by its English alias", async () => {

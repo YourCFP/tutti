@@ -40,6 +40,30 @@ func (e AccountLoginStatusValue) Valid() bool {
 	}
 }
 
+// Defines values for AccountProductSummaryPartialErrorScope.
+const (
+	AccountProductSummaryPartialErrorScopeCredits    AccountProductSummaryPartialErrorScope = "credits"
+	AccountProductSummaryPartialErrorScopeLinks      AccountProductSummaryPartialErrorScope = "links"
+	AccountProductSummaryPartialErrorScopeMembership AccountProductSummaryPartialErrorScope = "membership"
+	AccountProductSummaryPartialErrorScopeUnknown    AccountProductSummaryPartialErrorScope = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the AccountProductSummaryPartialErrorScope enum.
+func (e AccountProductSummaryPartialErrorScope) Valid() bool {
+	switch e {
+	case AccountProductSummaryPartialErrorScopeCredits:
+		return true
+	case AccountProductSummaryPartialErrorScopeLinks:
+		return true
+	case AccountProductSummaryPartialErrorScopeMembership:
+		return true
+	case AccountProductSummaryPartialErrorScopeUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentPromptContentBlockMimeType.
 const (
 	AgentPromptContentBlockMimeTypeImagejpeg AgentPromptContentBlockMimeType = "image/jpeg"
@@ -300,25 +324,25 @@ func (e AgentProviderCapabilityOptionKind) Valid() bool {
 
 // Defines values for AgentProviderCapabilityOptionStatus.
 const (
-	AuthRequired  AgentProviderCapabilityOptionStatus = "authRequired"
-	Available     AgentProviderCapabilityOptionStatus = "available"
-	Disabled      AgentProviderCapabilityOptionStatus = "disabled"
-	SetupRequired AgentProviderCapabilityOptionStatus = "setupRequired"
-	Unsupported   AgentProviderCapabilityOptionStatus = "unsupported"
+	AgentProviderCapabilityOptionStatusAuthRequired  AgentProviderCapabilityOptionStatus = "authRequired"
+	AgentProviderCapabilityOptionStatusAvailable     AgentProviderCapabilityOptionStatus = "available"
+	AgentProviderCapabilityOptionStatusDisabled      AgentProviderCapabilityOptionStatus = "disabled"
+	AgentProviderCapabilityOptionStatusSetupRequired AgentProviderCapabilityOptionStatus = "setupRequired"
+	AgentProviderCapabilityOptionStatusUnsupported   AgentProviderCapabilityOptionStatus = "unsupported"
 )
 
 // Valid indicates whether the value is a known member of the AgentProviderCapabilityOptionStatus enum.
 func (e AgentProviderCapabilityOptionStatus) Valid() bool {
 	switch e {
-	case AuthRequired:
+	case AgentProviderCapabilityOptionStatusAuthRequired:
 		return true
-	case Available:
+	case AgentProviderCapabilityOptionStatusAvailable:
 		return true
-	case Disabled:
+	case AgentProviderCapabilityOptionStatusDisabled:
 		return true
-	case SetupRequired:
+	case AgentProviderCapabilityOptionStatusSetupRequired:
 		return true
-	case Unsupported:
+	case AgentProviderCapabilityOptionStatusUnsupported:
 		return true
 	default:
 		return false
@@ -397,6 +421,7 @@ const (
 	AgentTargetProviderCodex      AgentTargetProvider = "codex"
 	AgentTargetProviderCursor     AgentTargetProvider = "cursor"
 	AgentTargetProviderOpencode   AgentTargetProvider = "opencode"
+	AgentTargetProviderTuttiAgent AgentTargetProvider = "tutti-agent"
 )
 
 // Valid indicates whether the value is a known member of the AgentTargetProvider enum.
@@ -409,6 +434,8 @@ func (e AgentTargetProvider) Valid() bool {
 	case AgentTargetProviderCursor:
 		return true
 	case AgentTargetProviderOpencode:
+		return true
+	case AgentTargetProviderTuttiAgent:
 		return true
 	default:
 		return false
@@ -667,6 +694,24 @@ func (e DesktopBrowserUseConnectionMode) Valid() bool {
 	case AutoConnect:
 		return true
 	case Isolated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DesktopDefaultAgentProvider.
+const (
+	DesktopDefaultAgentProviderClaudeCode DesktopDefaultAgentProvider = "claude-code"
+	DesktopDefaultAgentProviderCodex      DesktopDefaultAgentProvider = "codex"
+)
+
+// Valid indicates whether the value is a known member of the DesktopDefaultAgentProvider enum.
+func (e DesktopDefaultAgentProvider) Valid() bool {
+	switch e {
+	case DesktopDefaultAgentProviderClaudeCode:
+		return true
+	case DesktopDefaultAgentProviderCodex:
 		return true
 	default:
 		return false
@@ -1086,34 +1131,37 @@ func (e WorkbenchSnapshotNodeDisplayMode) Valid() bool {
 
 // Defines values for WorkspaceAgentProvider.
 const (
-	WorkspaceAgentProviderClaudeCode WorkspaceAgentProvider = "claude-code"
-	WorkspaceAgentProviderCodex      WorkspaceAgentProvider = "codex"
-	WorkspaceAgentProviderCursor     WorkspaceAgentProvider = "cursor"
-	WorkspaceAgentProviderGemini     WorkspaceAgentProvider = "gemini"
-	WorkspaceAgentProviderHermes     WorkspaceAgentProvider = "hermes"
-	WorkspaceAgentProviderNexight    WorkspaceAgentProvider = "nexight"
-	WorkspaceAgentProviderOpenclaw   WorkspaceAgentProvider = "openclaw"
-	WorkspaceAgentProviderOpencode   WorkspaceAgentProvider = "opencode"
+	ClaudeCode WorkspaceAgentProvider = "claude-code"
+	Codex      WorkspaceAgentProvider = "codex"
+	Cursor     WorkspaceAgentProvider = "cursor"
+	Gemini     WorkspaceAgentProvider = "gemini"
+	Hermes     WorkspaceAgentProvider = "hermes"
+	Nexight    WorkspaceAgentProvider = "nexight"
+	Openclaw   WorkspaceAgentProvider = "openclaw"
+	Opencode   WorkspaceAgentProvider = "opencode"
+	TuttiAgent WorkspaceAgentProvider = "tutti-agent"
 )
 
 // Valid indicates whether the value is a known member of the WorkspaceAgentProvider enum.
 func (e WorkspaceAgentProvider) Valid() bool {
 	switch e {
-	case WorkspaceAgentProviderClaudeCode:
+	case ClaudeCode:
 		return true
-	case WorkspaceAgentProviderCodex:
+	case Codex:
 		return true
-	case WorkspaceAgentProviderCursor:
+	case Cursor:
 		return true
-	case WorkspaceAgentProviderGemini:
+	case Gemini:
 		return true
-	case WorkspaceAgentProviderHermes:
+	case Hermes:
 		return true
-	case WorkspaceAgentProviderNexight:
+	case Nexight:
 		return true
-	case WorkspaceAgentProviderOpenclaw:
+	case Openclaw:
 		return true
-	case WorkspaceAgentProviderOpencode:
+	case Opencode:
+		return true
+	case TuttiAgent:
 		return true
 	default:
 		return false
@@ -1735,6 +1783,14 @@ func (e ListWorkspaceAgentSessionMessagesParamsOrder) Valid() bool {
 	}
 }
 
+// AccountCreditsSummary defines model for AccountCreditsSummary.
+type AccountCreditsSummary struct {
+	AvailableCredits         *int64  `json:"available_credits"`
+	ExpiringCreditsWithin24h *int64  `json:"expiring_credits_within_24h,omitempty"`
+	NextExpireAt             *string `json:"next_expire_at,omitempty"`
+	RefreshedAt              *string `json:"refreshed_at,omitempty"`
+}
+
 // AccountLoginStartResponse defines model for AccountLoginStartResponse.
 type AccountLoginStartResponse struct {
 	AttemptId string `json:"attempt_id"`
@@ -1753,6 +1809,52 @@ type AccountLoginStatusResponse struct {
 
 // AccountLoginStatusValue defines model for AccountLoginStatusValue.
 type AccountLoginStatusValue string
+
+// AccountMembershipSummary defines model for AccountMembershipSummary.
+type AccountMembershipSummary struct {
+	AccessStatus      *string `json:"access_status,omitempty"`
+	BillingPeriod     *string `json:"billing_period,omitempty"`
+	CancelAtPeriodEnd *bool   `json:"cancel_at_period_end,omitempty"`
+	CurrentPeriodEnd  *string `json:"current_period_end,omitempty"`
+	DisplayName       string  `json:"display_name"`
+	Status            *string `json:"status,omitempty"`
+	TierKey           string  `json:"tier_key"`
+}
+
+// AccountProductSummaryLinks defines model for AccountProductSummaryLinks.
+type AccountProductSummaryLinks struct {
+	PlanUrl     string `json:"plan_url"`
+	SettingsUrl string `json:"settings_url"`
+	UsageUrl    string `json:"usage_url"`
+}
+
+// AccountProductSummaryPartialError defines model for AccountProductSummaryPartialError.
+type AccountProductSummaryPartialError struct {
+	Code    string                                 `json:"code"`
+	Message *string                                `json:"message,omitempty"`
+	Scope   AccountProductSummaryPartialErrorScope `json:"scope"`
+}
+
+// AccountProductSummaryPartialErrorScope defines model for AccountProductSummaryPartialError.Scope.
+type AccountProductSummaryPartialErrorScope string
+
+// AccountProductSummaryResponse defines model for AccountProductSummaryResponse.
+type AccountProductSummaryResponse struct {
+	Credits                   *AccountCreditsSummary             `json:"credits"`
+	Links                     AccountProductSummaryLinks         `json:"links"`
+	Membership                *AccountMembershipSummary          `json:"membership"`
+	PartialError              *AccountProductSummaryPartialError `json:"partial_error,omitempty"`
+	RegistrationCreditsReward *AccountRegistrationCreditsReward  `json:"registration_credits_reward,omitempty"`
+	User                      *AccountUserInfo                   `json:"user"`
+}
+
+// AccountRegistrationCreditsReward defines model for AccountRegistrationCreditsReward.
+type AccountRegistrationCreditsReward struct {
+	CreatedAt string `json:"created_at"`
+	Credits   int64  `json:"credits"`
+	GrantNo   string `json:"grant_no"`
+	Id        string `json:"id"`
+}
 
 // AccountUserInfo defines model for AccountUserInfo.
 type AccountUserInfo struct {
@@ -2438,9 +2540,12 @@ type CreateWorkspaceAgentSessionRequest struct {
 	// ProviderTargetRef Deprecated opaque host-owned provider target reference. It is not launch authority; the daemon derives the trusted provider target ref from the stored agent target identified by agentTargetId.
 	ProviderTargetRef *map[string]interface{} `json:"providerTargetRef,omitempty"`
 	ReasoningEffort   *string                 `json:"reasoningEffort,omitempty"`
-	Speed             *string                 `json:"speed,omitempty"`
-	Title             *string                 `json:"title,omitempty"`
-	Visible           *bool                   `json:"visible,omitempty"`
+
+	// RuntimeContext Optional durable runtime context hints for session classification and provider startup.
+	RuntimeContext *map[string]interface{} `json:"runtimeContext,omitempty"`
+	Speed          *string                 `json:"speed,omitempty"`
+	Title          *string                 `json:"title,omitempty"`
+	Visible        *bool                   `json:"visible,omitempty"`
 }
 
 // CreateWorkspaceAppFactoryJobRequest defines model for CreateWorkspaceAppFactoryJobRequest.
@@ -2555,6 +2660,7 @@ type DesktopAgentComposerDefaultsByProvider struct {
 	Nexight    *DesktopAgentComposerDefaults `json:"nexight,omitempty"`
 	Openclaw   *DesktopAgentComposerDefaults `json:"openclaw,omitempty"`
 	Opencode   *DesktopAgentComposerDefaults `json:"opencode,omitempty"`
+	TuttiAgent *DesktopAgentComposerDefaults `json:"tutti-agent,omitempty"`
 }
 
 // DesktopAgentConversationDetailMode defines model for DesktopAgentConversationDetailMode.
@@ -2573,6 +2679,7 @@ type DesktopAgentGuiConversationRailCollapsedByProvider struct {
 	Nexight    *bool `json:"nexight,omitempty"`
 	Openclaw   *bool `json:"openclaw,omitempty"`
 	Opencode   *bool `json:"opencode,omitempty"`
+	TuttiAgent *bool `json:"tutti-agent,omitempty"`
 }
 
 // DesktopAppCatalogChannel defines model for DesktopAppCatalogChannel.
@@ -2580,6 +2687,9 @@ type DesktopAppCatalogChannel string
 
 // DesktopBrowserUseConnectionMode defines model for DesktopBrowserUseConnectionMode.
 type DesktopBrowserUseConnectionMode string
+
+// DesktopDefaultAgentProvider defines model for DesktopDefaultAgentProvider.
+type DesktopDefaultAgentProvider string
 
 // DesktopDockIconStyle defines model for DesktopDockIconStyle.
 type DesktopDockIconStyle string
@@ -2608,7 +2718,7 @@ type DesktopPreferences struct {
 	AgentGuiConversationRailCollapsedByProvider DesktopAgentGuiConversationRailCollapsedByProvider `json:"agentGuiConversationRailCollapsedByProvider"`
 	AppCatalogChannel                           DesktopAppCatalogChannel                           `json:"appCatalogChannel"`
 	BrowserUseConnectionMode                    *DesktopBrowserUseConnectionMode                   `json:"browserUseConnectionMode,omitempty"`
-	DefaultAgentProvider                        WorkspaceAgentProvider                             `json:"defaultAgentProvider"`
+	DefaultAgentProvider                        DesktopDefaultAgentProvider                        `json:"defaultAgentProvider"`
 	DockIconStyle                               DesktopDockIconStyle                               `json:"dockIconStyle"`
 	DockPlacement                               DesktopDockPlacement                               `json:"dockPlacement"`
 	EnableCursorAgent                           bool                                               `json:"enableCursorAgent"`
@@ -2650,6 +2760,11 @@ type DesktopWorkbenchWindowSnapping struct {
 
 // DesktopWorkbenchWindowSnappingShortcutPreset defines model for DesktopWorkbenchWindowSnappingShortcutPreset.
 type DesktopWorkbenchWindowSnappingShortcutPreset string
+
+// DismissAccountRegistrationCreditsRewardRequest defines model for DismissAccountRegistrationCreditsRewardRequest.
+type DismissAccountRegistrationCreditsRewardRequest struct {
+	RewardId string `json:"reward_id"`
+}
 
 // ExportWorkspaceAppRequest defines model for ExportWorkspaceAppRequest.
 type ExportWorkspaceAppRequest struct {
@@ -3166,6 +3281,9 @@ type SendWorkspaceAgentSessionInputRequest struct {
 
 	// DisplayPrompt Optional display-only text shown in the conversation (e.g. a folder bundle rendered as one chip while content carries the expanded files).
 	DisplayPrompt *string `json:"displayPrompt,omitempty"`
+
+	// Guidance When true, send this input as guidance to the currently active turn instead of starting a new turn.
+	Guidance *bool `json:"guidance,omitempty"`
 
 	// Metadata Optional client-provided diagnostic metadata, such as submit trace ids. This metadata is not provider prompt content.
 	Metadata *map[string]interface{} `json:"metadata,omitempty"`
@@ -4222,6 +4340,9 @@ type ListWorkspaceIssueTasksParams struct {
 type AttachWorkspaceTerminalParams struct {
 	AfterSeq *TerminalAfterSeq `form:"afterSeq,omitempty" json:"afterSeq,omitempty"`
 }
+
+// DismissAccountRegistrationCreditsRewardJSONRequestBody defines body for DismissAccountRegistrationCreditsReward for application/json ContentType.
+type DismissAccountRegistrationCreditsRewardJSONRequestBody = DismissAccountRegistrationCreditsRewardRequest
 
 // GetAgentProviderComposerOptionsJSONRequestBody defines body for GetAgentProviderComposerOptions for application/json ContentType.
 type GetAgentProviderComposerOptionsJSONRequestBody = GetAgentProviderComposerOptionsRequest

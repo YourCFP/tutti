@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS workspace_agent_sessions (
   workspace_id TEXT NOT NULL,
   agent_session_id TEXT NOT NULL,
   origin TEXT NOT NULL DEFAULT '',
+  user_id TEXT NOT NULL DEFAULT '',
   agent_target_id TEXT,
   provider TEXT NOT NULL DEFAULT '',
   provider_session_id TEXT NOT NULL DEFAULT '',
@@ -176,6 +177,59 @@ func (s *Store) applyWorkspaceAgentActivityV5(ctx context.Context) error {
 	return s.recordMigration(ctx, schemaMigrationWorkspaceAgentActivityV5)
 }
 
+func (s *Store) applyWorkspaceAgentActivityV6(ctx context.Context) error {
+	applied, err := s.hasMigration(ctx, schemaMigrationWorkspaceAgentActivityV6)
+	if err != nil {
+		return err
+	}
+
+	hasUserID, err := s.hasColumn(ctx, "workspace_agent_sessions", "user_id")
+	if err != nil {
+		return err
+	}
+
+	if !hasUserID {
+		if _, err := s.db.ExecContext(ctx, `ALTER TABLE workspace_agent_sessions ADD COLUMN user_id TEXT NOT NULL DEFAULT '';`); err != nil {
+			return fmt.Errorf("migrate workspace agent activity to v6 user id: %w", err)
+		}
+	}
+	if applied {
+		return nil
+	}
+	return s.recordMigration(ctx, schemaMigrationWorkspaceAgentActivityV6)
+}
+
+// workspaceAgentActivityV7BackfillProviders are the providers whose
+// TargetIDBackfillByProvider entry shipped after the one-time v5 backfill was
+// already recorded on existing databases. v5 never replays (its marker is
+// claimed from the legacy ledger), so without this step legacy sessions of a
+// later-added provider keep an empty agent_target_id forever — and the
+// server-side paged section queries, which filter strictly by
+// agent_target_id, silently exclude them from the provider's tab.
+var workspaceAgentActivityV7BackfillProviders = []string{"cursor"}
+
+func (s *Store) applyWorkspaceAgentActivityV7(ctx context.Context) error {
+	applied, err := s.hasMigration(ctx, schemaMigrationWorkspaceAgentActivityV7)
+	if err != nil {
+		return err
+	}
+	if applied {
+		return nil
+	}
+
+	for _, provider := range workspaceAgentActivityV7BackfillProviders {
+		targetID := s.opts.TargetIDBackfillByProvider[provider]
+		if targetID == "" {
+			continue
+		}
+		if err := s.backfillAgentTargetIDForProvider(ctx, provider, targetID); err != nil {
+			return err
+		}
+	}
+
+	return s.recordMigration(ctx, schemaMigrationWorkspaceAgentActivityV7)
+}
+
 func (s *Store) backfillSystemAgentTargetIDs(ctx context.Context) error {
 	providers := make([]string, 0, len(s.opts.TargetIDBackfillByProvider))
 	for provider := range s.opts.TargetIDBackfillByProvider {
@@ -183,14 +237,21 @@ func (s *Store) backfillSystemAgentTargetIDs(ctx context.Context) error {
 	}
 	sort.Strings(providers)
 	for _, provider := range providers {
-		if _, err := s.db.ExecContext(ctx, `
+		if err := s.backfillAgentTargetIDForProvider(ctx, provider, s.opts.TargetIDBackfillByProvider[provider]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) backfillAgentTargetIDForProvider(ctx context.Context, provider string, targetID string) error {
+	if _, err := s.db.ExecContext(ctx, `
 UPDATE workspace_agent_sessions
 SET agent_target_id = ?
 WHERE (agent_target_id IS NULL OR TRIM(agent_target_id) = '')
   AND provider = ?
-`, s.opts.TargetIDBackfillByProvider[provider], provider); err != nil {
-			return fmt.Errorf("backfill %s agent target ids: %w", provider, err)
-		}
+`, targetID, provider); err != nil {
+		return fmt.Errorf("backfill %s agent target ids: %w", provider, err)
 	}
 	return nil
 }
