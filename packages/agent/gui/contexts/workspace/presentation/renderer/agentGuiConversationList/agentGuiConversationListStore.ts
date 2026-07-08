@@ -16,7 +16,6 @@ import {
   type AgentGUIConversationSummary
 } from "../../../../../agent-gui/agentGuiNode/model/agentGuiConversationModel";
 import {
-  matchesAgentGUIConversationSummaryFilter,
   normalizeAgentGUIConversationFilter,
   type AgentGUIConversationFilter
 } from "../../../../../agent-gui/agentGuiNode/model/agentGuiConversationFilter";
@@ -172,19 +171,14 @@ function conversationFilterKey(filter: AgentGUIConversationFilter): string {
   return `agent-target:${normalized.agentTargetId}`;
 }
 
-/**
- * A conversation may only be retained (pinned/carried over) in a query state
- * whose agent-target filter it matches. Legacy sessions without agentTargetId
- * may still match a local system target through provider identity.
- */
-function conversationRetainableForQueryFilter(
+function conversationMatchesQueryFilter(
   conversation: AgentGUIConversationSummary | undefined,
   filter: AgentGUIConversationFilter
 ): boolean {
   if (!conversation || filter.kind !== "agentTarget") {
     return true;
   }
-  return matchesAgentGUIConversationSummaryFilter(conversation, filter);
+  return (conversation.agentTargetId?.trim() ?? "") === filter.agentTargetId;
 }
 
 export function createAgentGUIConversationListQueryKey(
@@ -1416,7 +1410,12 @@ async function refreshAgentGUIConversationListQuery(
         : workspaceAgentSnapshot,
       provider: state.query.provider,
       sessionMessagesById: sessionMessagesByIdForSummaries
-    });
+    }).filter((conversation) =>
+      conversationMatchesQueryFilter(
+        conversation,
+        state.query.conversationFilter
+      )
+    );
     const conversationsToDecorate = canApplyDirtySessionProjection
       ? new Set<string>([
           ...dirtySessionIds,
@@ -1438,15 +1437,6 @@ async function refreshAgentGUIConversationListQuery(
           : [];
       })
     );
-    const snapshotSessionProviderById = new Map(
-      workspaceAgentSnapshot.sessions.flatMap((session) => {
-        const agentSessionId = session.agentSessionId.trim();
-        const provider = session.provider?.trim() ?? "";
-        return agentSessionId && provider
-          ? [[agentSessionId, provider] as const]
-          : [];
-      })
-    );
     const retainableForQueryFilter = (agentSessionId: string): boolean => {
       const filter = state.query.conversationFilter;
       if (filter.kind !== "agentTarget") {
@@ -1456,17 +1446,10 @@ async function refreshAgentGUIConversationListQuery(
       // stale current summary.
       const snapshotAgentTargetId =
         snapshotSessionAgentTargetIdById.get(agentSessionId);
-      const snapshotProvider = snapshotSessionProviderById.get(agentSessionId);
-      if (snapshotAgentTargetId || snapshotProvider) {
-        return matchesAgentGUIConversationSummaryFilter(
-          {
-            agentTargetId: snapshotAgentTargetId ?? null,
-            provider: snapshotProvider ?? null
-          },
-          filter
-        );
+      if (snapshotAgentTargetId) {
+        return snapshotAgentTargetId === filter.agentTargetId;
       }
-      return conversationRetainableForQueryFilter(
+      return conversationMatchesQueryFilter(
         currentConversationsById.get(agentSessionId),
         filter
       );

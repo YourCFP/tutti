@@ -166,7 +166,7 @@ describe("agentGuiConversationListStore", () => {
     });
   });
 
-  it("does not retain other-provider legacy sessions under a cursor agent target filter", async () => {
+  it("does not retain provider-only sessions under an agent target filter", async () => {
     const cursorQuery: AgentGUIConversationListQuery = {
       conversationFilter: {
         kind: "agentTarget",
@@ -185,13 +185,13 @@ describe("agentGuiConversationListStore", () => {
           provider: "cursor",
           title: "Cursor tagged"
         }),
-        runtimeSession("cursor-legacy", 2_500, {
+        runtimeSession("cursor-provider-only", 2_500, {
           provider: "cursor",
-          title: "Cursor legacy"
+          title: "Cursor provider only"
         }),
-        runtimeSession("codex-legacy", 2_000, {
+        runtimeSession("codex-provider-only", 2_000, {
           provider: "codex",
-          title: "Codex legacy"
+          title: "Codex provider only"
         })
       ]
     };
@@ -209,7 +209,7 @@ describe("agentGuiConversationListStore", () => {
         getAgentGUIConversationListQuerySnapshot(
           cursorQuery
         )?.conversations.map((item) => item.id)
-      ).toEqual(["cursor-tagged", "cursor-legacy"]);
+      ).toEqual(["cursor-tagged"]);
     });
   });
 
