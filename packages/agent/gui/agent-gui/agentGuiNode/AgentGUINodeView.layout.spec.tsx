@@ -4628,6 +4628,9 @@ function createNoopAgentActivityRuntime(): AgentActivityRuntime {
     async deleteSession() {
       return { removed: true };
     },
+    async renameSession(input) {
+      return createRuntimeSession(input.workspaceId, input.agentSessionId);
+    },
     async activateSession(input) {
       return {
         session: createRuntimeSession(
@@ -4836,7 +4839,8 @@ function createActions(): AgentGUINodeViewProps["actions"] {
     confirmDeleteConversations: vi.fn(),
     requestDeleteConversation: vi.fn(),
     cancelDeleteConversation: vi.fn(),
-    confirmDeleteConversation: vi.fn()
+    confirmDeleteConversation: vi.fn(),
+    renameConversation: vi.fn()
   };
 }
 
@@ -5220,6 +5224,11 @@ function createLabels(): AgentGUIViewLabels {
     showMoreConversations: "showMoreConversations",
     showLessConversations: "showLessConversations",
     deleteSession: "deleteSession",
+    renameSession: "renameSession",
+    renameSessionTitle: "renameSessionTitle",
+    renameSessionDescription: "renameSessionDescription",
+    renameSessionPlaceholder: "renameSessionPlaceholder",
+    renameSessionSave: "renameSessionSave",
     pinSession: "pinSession",
     unpinSession: "unpinSession",
     markSessionUnread: "markSessionUnread",

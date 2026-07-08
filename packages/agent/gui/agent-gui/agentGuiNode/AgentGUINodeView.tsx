@@ -63,14 +63,14 @@ import {
   SelectTrigger,
   NewWorkspaceLinedIcon,
   ConfirmationDialog,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -503,6 +503,11 @@ export interface AgentGUIViewLabels {
   showLessConversations: string;
   deleteSession: string;
   pinSession: string;
+  renameSession: string;
+  renameSessionTitle: string;
+  renameSessionDescription: string;
+  renameSessionPlaceholder: string;
+  renameSessionSave: string;
   unpinSession: string;
   markSessionUnread: string;
   deleteSessionTitle: string;
@@ -710,6 +715,10 @@ interface AgentGUINodeViewProps {
     retryOpenclawGateway: () => void;
     toggleConversationPinned: (agentSessionId: string, pinned: boolean) => void;
     markConversationUnread: (agentSessionId: string) => void;
+    renameConversation: (
+      agentSessionId: string,
+      title: string
+    ) => Promise<void>;
     removeProject: (path: string) => void;
     confirmDeleteProjectConversations: (path?: string) => void;
     confirmDeleteConversations: (agentSessionIds: string[]) => void;
@@ -1591,6 +1600,27 @@ export function AgentGUINodeView({
   const openAgentSettings = useCallback(() => {
     openWorkspaceSettingsPanel({ section: "agent" });
   }, []);
+  const [renameConversationTarget, setRenameConversationTarget] = useState<
+    AgentGUINodeViewModel["conversations"][number] | null
+  >(null);
+  const [renameConversationDialogOpen, setRenameConversationDialogOpen] =
+    useState(false);
+  const requestRenameConversation = useCallback(
+    (agentSessionId: string) => {
+      const target =
+        viewModel.conversations.find(
+          (conversation) => conversation.id === agentSessionId
+        ) ??
+        (viewModel.activeConversation?.id === agentSessionId
+          ? viewModel.activeConversation
+          : null);
+      if (target) {
+        setRenameConversationTarget(target);
+        setRenameConversationDialogOpen(true);
+      }
+    },
+    [viewModel.activeConversation, viewModel.conversations]
+  );
   const conversationRailStoreState =
     useMemo<AgentGUIConversationRailStoreSnapshot>(
       () => ({
@@ -1624,6 +1654,7 @@ export function AgentGUINodeView({
         onConfirmDeleteProjectConversations: confirmDeleteProjectConversations,
         onConfirmDeleteConversations: confirmDeleteConversations,
         onRequestDeleteConversation: requestDeleteConversation,
+        onRequestRenameConversation: requestRenameConversation,
         onCancelDeleteConversation: cancelDeleteConversation,
         onConfirmDeleteConversation: confirmDeleteConversation,
         onOpenProjectFiles: openProjectFiles,
@@ -1647,6 +1678,7 @@ export function AgentGUINodeView({
         removeProject,
         requestCreateConversation,
         requestDeleteConversation,
+        requestRenameConversation,
         retryOpenclawGateway,
         selectConversation,
         selectProjectDirectory,
@@ -1900,11 +1932,146 @@ export function AgentGUINodeView({
           onConfirm={confirmWorkspaceReferencePicker}
         />
       )}
+      <AgentGUIRenameConversationDialog
+        conversation={renameConversationTarget}
+        open={renameConversationDialogOpen && renameConversationTarget !== null}
+        labels={labels}
+        uiLanguage={uiLanguage}
+        onOpenChange={(open) => {
+          setRenameConversationDialogOpen(open);
+          if (!open) {
+            setRenameConversationTarget(null);
+          }
+        }}
+        onRename={actions.renameConversation}
+      />
     </AgentTargetPresentationProvider>
   );
 
   return previewMode ? content : <TooltipProvider>{content}</TooltipProvider>;
 }
+
+interface AgentGUIRenameConversationDialogProps {
+  conversation: AgentGUINodeViewModel["conversations"][number] | null;
+  open: boolean;
+  labels: AgentGUIViewLabels;
+  uiLanguage: UiLanguage;
+  onOpenChange: (open: boolean) => void;
+  onRename: (agentSessionId: string, title: string) => Promise<void>;
+}
+
+const AgentGUIRenameConversationDialog = memo(
+  function AgentGUIRenameConversationDialog({
+    conversation,
+    open,
+    labels,
+    uiLanguage,
+    onOpenChange,
+    onRename
+  }: AgentGUIRenameConversationDialogProps): React.JSX.Element {
+    "use memo";
+    const [title, setTitle] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+    const inputRef = useRef<HTMLInputElement | null>(null);
+    const trimmedTitle = title.trim();
+    useEffect(() => {
+      if (!open || !conversation) {
+        setTitle("");
+        setIsSaving(false);
+        return;
+      }
+      setTitle(conversationPlainTitle(conversation, labels, uiLanguage));
+    }, [conversation, labels, open, uiLanguage]);
+    useEffect(() => {
+      if (!open) {
+        return;
+      }
+      const timer = window.setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }, [open, conversation?.id]);
+    const closeRenameDialog = useCallback(() => {
+      if (!isSaving) {
+        onOpenChange(false);
+      }
+    }, [isSaving, onOpenChange]);
+    const confirmRename = useCallback(() => {
+      if (!conversation || isSaving || !trimmedTitle) {
+        return;
+      }
+      setIsSaving(true);
+      void onRename(conversation.id, trimmedTitle)
+        .then(() => {
+          onOpenChange(false);
+        })
+        .catch(() => {
+          inputRef.current?.focus();
+        })
+        .finally(() => {
+          setIsSaving(false);
+        });
+    }, [conversation, isSaving, onOpenChange, onRename, trimmedTitle]);
+    return (
+      <ConfirmationDialog
+        cancelLabel={labels.cancel}
+        className="sm:max-w-[480px]"
+        confirmBusy={isSaving}
+        confirmDisabled={!trimmedTitle}
+        confirmLabel={labels.renameSessionSave}
+        description={labels.renameSessionDescription}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              disabled={isSaving}
+              size="dialog"
+              type="button"
+              variant="ghost"
+              onClick={closeRenameDialog}
+              onPointerUp={(event) => {
+                if (event.button === 0) {
+                  closeRenameDialog();
+                }
+              }}
+            >
+              {labels.cancel}
+            </Button>
+            <Button
+              className="shadow-none"
+              disabled={isSaving || !trimmedTitle}
+              size="dialog"
+              type="button"
+              variant="default"
+              onClick={confirmRename}
+            >
+              {labels.renameSessionSave}
+            </Button>
+          </div>
+        }
+        open={open}
+        title={labels.renameSessionTitle}
+        onConfirm={confirmRename}
+        onOpenChange={onOpenChange}
+      >
+        <input
+          ref={inputRef}
+          aria-label={labels.renameSessionTitle}
+          className="h-10 w-full rounded-md border border-border bg-background px-3 text-[14px] font-medium leading-5 text-text-primary shadow-none outline-none transition-colors placeholder:text-text-tertiary focus:border-primary"
+          placeholder={labels.renameSessionPlaceholder}
+          value={title}
+          onChange={(event) => setTitle(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              confirmRename();
+            }
+          }}
+        />
+      </ConfirmationDialog>
+    );
+  }
+);
 
 interface AgentGUIDetailPaneProps {
   viewModel: AgentGUINodeViewModel;
@@ -4252,6 +4419,7 @@ interface AgentGUIConversationRailPaneProps {
   onConfirmDeleteProjectConversations: (path?: string) => void;
   onConfirmDeleteConversations: (agentSessionIds: string[]) => void;
   onRequestDeleteConversation: (agentSessionId: string) => void;
+  onRequestRenameConversation: (agentSessionId: string) => void;
   onCancelDeleteConversation: () => void;
   onConfirmDeleteConversation: () => void;
 }
@@ -4348,6 +4516,7 @@ function agentGUIConversationRailStoreSnapshotsEqual(
     current.onConfirmDeleteProjectConversations ===
       next.onConfirmDeleteProjectConversations &&
     current.onRequestDeleteConversation === next.onRequestDeleteConversation &&
+    current.onRequestRenameConversation === next.onRequestRenameConversation &&
     current.onCancelDeleteConversation === next.onCancelDeleteConversation &&
     current.onConfirmDeleteConversation === next.onConfirmDeleteConversation
   );
@@ -6298,6 +6467,7 @@ const AgentGUIConversationRailPane = memo(
     onConfirmDeleteProjectConversations,
     onConfirmDeleteConversations,
     onRequestDeleteConversation,
+    onRequestRenameConversation,
     onCancelDeleteConversation,
     onConfirmDeleteConversation
   }: AgentGUIConversationRailPaneProps): React.JSX.Element {
@@ -6605,6 +6775,7 @@ const AgentGUIConversationRailPane = memo(
                     onCreateConversation={onCreateConversation}
                     onLoadMoreConversations={loadMoreSectionConversations}
                     onRequestDeleteConversation={onRequestDeleteConversation}
+                    onRequestRenameConversation={onRequestRenameConversation}
                     onSelectConversation={onSelectConversation}
                     setPendingProjectAction={setPendingProjectAction}
                     onToggleConversationPinned={onToggleConversationPinned}
@@ -6720,6 +6891,7 @@ interface AgentGUIConversationRailSectionProps {
   onOpenProjectFiles?: ((action: WorkspaceLinkAction) => void) | null;
   onOpenConversationWindow?: (agentSessionId: string) => void;
   onRequestDeleteConversation: (agentSessionId: string) => void;
+  onRequestRenameConversation: (agentSessionId: string) => void;
   onCancelDeleteConversation: () => void;
   onConfirmDeleteConversation: () => void;
 }
@@ -6752,6 +6924,7 @@ const AgentGUIConversationRailSection = memo(
     onOpenProjectFiles,
     onOpenConversationWindow,
     onRequestDeleteConversation,
+    onRequestRenameConversation,
     onCancelDeleteConversation,
     onConfirmDeleteConversation
   }: AgentGUIConversationRailSectionProps): React.JSX.Element {
@@ -7103,6 +7276,7 @@ const AgentGUIConversationRailSection = memo(
                 onCancelDeleteConversation={onCancelDeleteConversation}
                 onConfirmDeleteConversation={onConfirmDeleteConversation}
                 onRequestDeleteConversation={onRequestDeleteConversation}
+                onRequestRenameConversation={onRequestRenameConversation}
                 onSelectConversation={onSelectConversation}
                 onToggleConversationPinned={onToggleConversationPinned}
                 onMarkConversationUnread={onMarkConversationUnread}
@@ -7154,6 +7328,7 @@ interface AgentGUIConversationRailItemProps {
   onMarkConversationUnread: (agentSessionId: string) => void;
   onOpenConversationWindow?: (agentSessionId: string) => void;
   onRequestDeleteConversation: (agentSessionId: string) => void;
+  onRequestRenameConversation: (agentSessionId: string) => void;
   onCancelDeleteConversation: () => void;
   onConfirmDeleteConversation: () => void;
 }
@@ -7174,6 +7349,7 @@ const AgentGUIConversationRailItem = memo(
     onMarkConversationUnread,
     onOpenConversationWindow,
     onRequestDeleteConversation,
+    onRequestRenameConversation,
     onCancelDeleteConversation,
     onConfirmDeleteConversation
   }: AgentGUIConversationRailItemProps): React.JSX.Element {
@@ -7217,6 +7393,14 @@ const AgentGUIConversationRailItem = memo(
     const handleRequestDelete = useCallback(() => {
       onRequestDeleteConversation(item.id);
     }, [item.id, onRequestDeleteConversation]);
+    const handleRequestRename = useCallback(() => {
+      onRequestRenameConversation(item.id);
+    }, [item.id, onRequestRenameConversation]);
+    const handleContextMenuRename = useCallback(() => {
+      window.setTimeout(() => {
+        handleRequestRename();
+      }, 0);
+    }, [handleRequestRename]);
     const row = (
       <div
         ref={setItemElement}
@@ -7231,6 +7415,10 @@ const AgentGUIConversationRailItem = memo(
           type="button"
           className={styles.conversationSelect}
           onClick={handleSelect}
+          onDoubleClick={(event) => {
+            event.preventDefault();
+            handleRequestRename();
+          }}
         >
           <span className={styles.conversationTitleRow}>
             {providerIconUrl ? (
@@ -7345,6 +7533,18 @@ const AgentGUIConversationRailItem = memo(
         <ContextMenuContent
           className={`${styles.composerMenuContent} nodrag [-webkit-app-region:no-drag]`}
         >
+          <ContextMenuItem
+            className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
+            onClick={handleContextMenuRename}
+            onPointerUp={(event) => {
+              if (event.button === 0) {
+                handleContextMenuRename();
+              }
+            }}
+            onSelect={handleContextMenuRename}
+          >
+            <span>{labels.renameSession}</span>
+          </ContextMenuItem>
           <ContextMenuItem
             className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
             disabled={!canMarkUnread}
