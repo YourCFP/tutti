@@ -6854,6 +6854,7 @@ describe("useAgentGUINodeController", () => {
       list: vi.fn(async () => snapshotWithSession("session-1")),
       listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
       subscribeEvents: vi.fn(() => vi.fn()),
+      getComposerOptions: vi.fn(async () => imageCapableComposerOptions()),
       exec
     });
 
@@ -13964,10 +13965,18 @@ describe("useAgentGUINodeController", () => {
         subscribeEvents: vi.fn(() => vi.fn()),
         getComposerOptions: vi.fn(async () => ({
           provider,
+          models: [
+            {
+              value: "gpt-5",
+              label: "GPT-5",
+              supportsImageInput: true
+            }
+          ],
           runtimeContext:
             backendPromptImagesSupported === null
-              ? {}
+              ? { model: "gpt-5" }
               : {
+                  model: "gpt-5",
                   capabilities: backendPromptImagesSupported
                     ? ["imageInput"]
                     : []
@@ -13994,6 +14003,97 @@ describe("useAgentGUINodeController", () => {
       unmount();
     }
   );
+
+  it("disables prompt images when the selected model does not support image input", async () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({ presences: [], sessions: [] })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn()),
+      getComposerOptions: vi.fn(async () => ({
+        provider: "opencode",
+        models: [
+          {
+            value: "text-only",
+            label: "Text Only",
+            supportsImageInput: false
+          }
+        ],
+        runtimeContext: {
+          capabilities: ["imageInput"],
+          model: "text-only"
+        }
+      }))
+    });
+
+    const { result, unmount } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData(null, "opencode"),
+        onDataChange: vi.fn()
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.viewModel.promptImagesSupported).toBe(false);
+    });
+    unmount();
+  });
+
+  it("uses the draft-selected model for prompt image support before runtime context catches up", async () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({ presences: [], sessions: [] })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn()),
+      getComposerOptions: vi.fn(async () => ({
+        provider: "opencode",
+        models: [
+          {
+            value: "openai/gpt-5.5",
+            label: "OpenAI/GPT-5.5",
+            supportsImageInput: true
+          },
+          {
+            value: "opencode/deepseek-v4-flash-free",
+            label: "DeepSeek V4 Flash Free",
+            supportsImageInput: false
+          }
+        ],
+        runtimeContext: {
+          capabilities: ["imageInput"],
+          model: "openai/gpt-5.5"
+        }
+      }))
+    });
+
+    const { result, unmount } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData(null, "opencode"),
+        onDataChange: vi.fn()
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.viewModel.promptImagesSupported).toBe(true);
+    });
+
+    act(() => {
+      result.current.actions.updateComposerSettings({
+        model: "opencode/deepseek-v4-flash-free"
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.viewModel.promptImagesSupported).toBe(false);
+    });
+    unmount();
+  });
 
   it("localizes known composer-options permission labels before contract fallback", async () => {
     setAgentGuiI18nTestLocale("zh-CN");
@@ -15970,6 +16070,7 @@ describe("useAgentGUINodeController", () => {
       list: vi.fn(async () => snapshotWithSession("session-1")),
       listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
       subscribeEvents: vi.fn(() => vi.fn()),
+      getComposerOptions: vi.fn(async () => imageCapableComposerOptions()),
       exec
     });
 
@@ -16702,6 +16803,7 @@ describe("useAgentGUINodeController", () => {
       ),
       listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
       subscribeEvents: vi.fn(() => vi.fn()),
+      getComposerOptions: vi.fn(async () => imageCapableComposerOptions()),
       exec
     });
 
@@ -17025,6 +17127,7 @@ describe("useAgentGUINodeController", () => {
       list: vi.fn(async () => snapshotWithSession("session-1")),
       listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
       subscribeEvents: vi.fn(() => vi.fn()),
+      getComposerOptions: vi.fn(async () => imageCapableComposerOptions()),
       exec
     });
 
@@ -17107,6 +17210,7 @@ describe("useAgentGUINodeController", () => {
       list: vi.fn(async () => snapshotWithSession("session-1")),
       listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
       subscribeEvents: vi.fn(() => vi.fn()),
+      getComposerOptions: vi.fn(async () => imageCapableComposerOptions()),
       exec
     });
 
@@ -17256,7 +17360,8 @@ describe("useAgentGUINodeController", () => {
     installAgentHostApi({
       list: vi.fn(async () => snapshotWithWaitingSession("session-1")),
       listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
-      subscribeEvents: vi.fn(() => vi.fn())
+      subscribeEvents: vi.fn(() => vi.fn()),
+      getComposerOptions: vi.fn(async () => imageCapableComposerOptions())
     });
 
     const { result } = renderHook(() =>
@@ -18792,11 +18897,16 @@ function settingOptionsFromRuntimeOptions(
         option?.label ?? option?.name ?? option?.displayName
       ) ?? optionValue;
     const description = normalizeConfigOptionValue(option?.description);
+    const supportsImageInput =
+      typeof option?.supportsImageInput === "boolean"
+        ? option.supportsImageInput
+        : undefined;
     return [
       {
         value: optionValue,
         label,
-        ...(description ? { description } : {})
+        ...(description ? { description } : {}),
+        ...(supportsImageInput !== undefined ? { supportsImageInput } : {})
       }
     ];
   });
@@ -19283,6 +19393,30 @@ function agentGuiData(
     provider,
     lastActiveAgentSessionId,
     ...overrides
+  };
+}
+
+function imageCapableComposerOptions(
+  provider = "codex"
+): Record<string, unknown> {
+  return {
+    provider,
+    modelConfig: {
+      configurable: true,
+      currentValue: "gpt-5",
+      options: [
+        {
+          id: "gpt-5",
+          label: "GPT-5",
+          value: "gpt-5",
+          supportsImageInput: true
+        }
+      ]
+    },
+    runtimeContext: {
+      capabilities: ["imageInput"],
+      model: "gpt-5"
+    }
   };
 }
 

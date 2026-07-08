@@ -52,10 +52,11 @@ func normalizePromptContent(content []PromptContentBlock) ([]PromptContentBlock,
 			if !supportedPromptImageMimeType(mimeType) {
 				return nil, "", ErrInvalidArgument
 			}
-			if strings.TrimSpace(block.Data) == "" && strings.TrimSpace(block.AttachmentID) == "" {
+			data := strings.TrimSpace(block.Data)
+			path := strings.TrimSpace(block.Path)
+			if data == "" && strings.TrimSpace(block.AttachmentID) == "" && path == "" {
 				return nil, "", ErrInvalidArgument
 			}
-			data := strings.TrimSpace(block.Data)
 			if data != "" {
 				if _, err := base64.StdEncoding.DecodeString(data); err != nil {
 					return nil, "", ErrInvalidArgument
@@ -68,6 +69,7 @@ func normalizePromptContent(content []PromptContentBlock) ([]PromptContentBlock,
 				Data:         data,
 				AttachmentID: strings.TrimSpace(block.AttachmentID),
 				Name:         strings.TrimSpace(block.Name),
+				Path:         path,
 			})
 		case "skill", "mention":
 			name := strings.TrimSpace(block.Name)
@@ -105,7 +107,9 @@ func (s PromptAttachmentStore) PersistRequestContent(workspaceID, agentSessionID
 	}
 	out := make([]PromptContentBlock, 0, len(content))
 	for _, block := range content {
-		if block.Type != "image" || strings.TrimSpace(block.Data) == "" {
+		dataBase64 := strings.TrimSpace(block.Data)
+		sourcePath := strings.TrimSpace(block.Path)
+		if block.Type != "image" || (dataBase64 == "" && sourcePath == "") {
 			out = append(out, block)
 			continue
 		}
@@ -114,15 +118,19 @@ func (s PromptAttachmentStore) PersistRequestContent(workspaceID, agentSessionID
 		if err != nil {
 			return nil, err
 		}
-		data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(block.Data))
-		if err != nil {
-			return nil, ErrInvalidArgument
-		}
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			return nil, fmt.Errorf("create agent prompt attachment directory: %w", err)
 		}
-		if err := os.WriteFile(path, data, 0o600); err != nil {
-			return nil, fmt.Errorf("write agent prompt attachment: %w", err)
+		if dataBase64 != "" {
+			data, err := base64.StdEncoding.DecodeString(dataBase64)
+			if err != nil {
+				return nil, ErrInvalidArgument
+			}
+			if err := os.WriteFile(path, data, 0o600); err != nil {
+				return nil, fmt.Errorf("write agent prompt attachment: %w", err)
+			}
+		} else if err := copyPromptAttachmentSource(sourcePath, path); err != nil {
+			return nil, err
 		}
 		out = append(out, PromptContentBlock{
 			Type:         "image",
@@ -132,6 +140,27 @@ func (s PromptAttachmentStore) PersistRequestContent(workspaceID, agentSessionID
 		})
 	}
 	return out, nil
+}
+
+func copyPromptAttachmentSource(sourcePath, destinationPath string) error {
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return ErrInvalidArgument
+		}
+		return fmt.Errorf("stat agent prompt attachment source: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return ErrInvalidArgument
+	}
+	data, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return fmt.Errorf("read agent prompt attachment source: %w", err)
+	}
+	if err := os.WriteFile(destinationPath, data, 0o600); err != nil {
+		return fmt.Errorf("write agent prompt attachment: %w", err)
+	}
+	return nil
 }
 
 func (s PromptAttachmentStore) HydrateRuntimeContent(workspaceID, agentSessionID string, content []PromptContentBlock) ([]PromptContentBlock, error) {

@@ -3807,7 +3807,7 @@ describe("AgentComposer", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("uploads pasted images immediately and submits the staged path", async () => {
+  it("uploads pasted images immediately and submits staged path", async () => {
     type UploadResult = AgentActivityRuntimeUploadPromptContentResult;
     let resolveUpload: (result: UploadResult) => void = () => undefined;
     const uploadPromptContent = vi.fn(
@@ -3886,14 +3886,14 @@ describe("AgentComposer", () => {
         {
           type: "image",
           mimeType: "image/png",
-          path: "/var/cache/tsh/local-assets/workspace-1/user-1/screen.png",
+          path: "/var/cache/tsh/local-assets/workspace-1/screen.png",
           name: "screen.png"
         }
       ]
     });
     await waitFor(() =>
       expect(draftContent.images[0]).toMatchObject({
-        path: "/var/cache/tsh/local-assets/workspace-1/user-1/screen.png",
+        path: "/var/cache/tsh/local-assets/workspace-1/screen.png",
         uploading: false
       })
     );
@@ -3906,7 +3906,7 @@ describe("AgentComposer", () => {
       {
         type: "image",
         mimeType: "image/png",
-        path: "/var/cache/tsh/local-assets/workspace-1/user-1/screen.png",
+        path: "/var/cache/tsh/local-assets/workspace-1/screen.png",
         name: "screen.png"
       }
     ]);

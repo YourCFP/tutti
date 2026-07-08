@@ -911,7 +911,8 @@ test("desktop agent activity adapter flattens grouped runtime config options", a
                       {
                         value: "sonnet",
                         name: "Sonnet",
-                        description: "Best for everyday tasks"
+                        description: "Best for everyday tasks",
+                        supportsImageInput: true
                       }
                     ]
                   }
@@ -936,7 +937,8 @@ test("desktop agent activity adapter flattens grouped runtime config options", a
     {
       value: "sonnet",
       label: "Sonnet",
-      description: "Best for everyday tasks"
+      description: "Best for everyday tasks",
+      supportsImageInput: true
     }
   ]);
 });

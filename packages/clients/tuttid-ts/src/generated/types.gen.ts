@@ -968,6 +968,7 @@ export type AgentProviderComposerConfigOptionValue = {
   value: string;
   label: string;
   description?: string;
+  supportsImageInput?: boolean;
 };
 
 export type AgentProviderComposerConfig = {
