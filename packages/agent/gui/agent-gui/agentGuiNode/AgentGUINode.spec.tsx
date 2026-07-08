@@ -23,6 +23,7 @@ import { AgentActivityHostProvider } from "../../agentActivityHost";
 import type { AgentActivityRuntime } from "../../agentActivityRuntime";
 import { AgentGUINode } from "./AgentGUINode";
 import { getAgentEnvPanelStore } from "../../shared/agentEnv/agentEnvPanelStore";
+import { getWorkspaceSettingsPanelStore } from "../../shared/workspaceSettingsPanel/workspaceSettingsPanelStore";
 import {
   resolveAgentGUIHeroIconUrl,
   shouldEmphasizeEmptyHeroProvider
@@ -731,6 +732,9 @@ describe("AgentGUINode", () => {
     agentEnvPanelStore.open = false;
     agentEnvPanelStore.provider = null;
     agentEnvPanelStore.focus = null;
+    const workspaceSettingsPanelStore = getWorkspaceSettingsPanelStore();
+    workspaceSettingsPanelStore.section = null;
+    workspaceSettingsPanelStore.requestSequence = 0;
     mockCreateConversation.mockClear();
     mockSelectConversation.mockClear();
     mockSubmitPrompt.mockClear();
@@ -954,7 +958,7 @@ describe("AgentGUINode", () => {
     expect(screen.getByText("暂未接入用量")).toBeInTheDocument();
   });
 
-  it("hides the rail config entry for the unified All provider filter", () => {
+  it("opens Agent settings directly for the unified All provider filter", () => {
     mockViewModel = createViewModel({
       conversationFilter: { kind: "all" },
       providerTargets: [
@@ -965,7 +969,13 @@ describe("AgentGUINode", () => {
 
     renderAgentGUINode();
 
-    expect(screen.queryByTitle("agentHost.agentGui.agentConfig")).toBeNull();
+    fireEvent.click(screen.getByTitle("agentHost.agentGui.agentSettingsMenu"));
+
+    expect(screen.queryByTestId("agent-gui-config-menu")).toBeNull();
+    expect(getWorkspaceSettingsPanelStore()).toMatchObject({
+      section: "agent",
+      requestSequence: 1
+    });
   });
 
   it("renders rail config usage from the unified provider filter target", async () => {
@@ -1778,7 +1788,7 @@ describe("AgentGUINode", () => {
     expect(getComposerEditor()).toBeTruthy();
   });
 
-  it("shows OpenClaw gateway startup and disables new sessions while starting", () => {
+  it("hides OpenClaw gateway startup while disabling new sessions until ready", () => {
     mockViewModel = createViewModel({
       data: {
         provider: "openclaw",
@@ -1791,8 +1801,8 @@ describe("AgentGUINode", () => {
     renderAgentGUINode({ workbenchWindowZIndex: 41 });
 
     expect(
-      screen.getByText("agentHost.agentGui.openclawGatewayStarting")
-    ).toBeTruthy();
+      screen.queryByText("agentHost.agentGui.openclawGatewayStarting")
+    ).toBeNull();
     const newConversationButton = getChromeNewConversationButton();
     fireEvent.click(newConversationButton);
 
@@ -2005,11 +2015,14 @@ describe("AgentGUINode", () => {
 
     renderAgentGUINode();
 
+    const emptyHeading = screen.getByRole("heading", {
+      name: "What can help you with?"
+    });
     expect(
-      screen.getByRole("heading", {
-        name: "What can Claude Code help you with?"
+      within(emptyHeading).getByRole("combobox", {
+        name: "agentHost.agentGui.providerSwitchLabel"
       })
-    ).toBeTruthy();
+    ).toHaveTextContent("Claude Code");
     const iconEffect = document.querySelector(
       ".agent-gui-node__empty-hero-icon-effect"
     );

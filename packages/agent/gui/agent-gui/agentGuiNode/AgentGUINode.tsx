@@ -239,6 +239,7 @@ export interface AgentGUINodeProps {
   workspaceAgentProbes?: WorkspaceDesktopAgentProbesState | null;
   onAgentProbeDemandChange?: WorkspaceDesktopAgentProbeDemandChange;
   onAgentProbeRefreshRequest?: WorkspaceDesktopAgentProbeRefreshRequest;
+  providerAuthAccountLabels?: Partial<Record<string, string>>;
   managedAgentsState?: AgentHostManagedAgentsState | null;
   contextMentionProviders?: readonly AgentContextMentionProvider[];
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
@@ -604,6 +605,7 @@ function areAgentGUINodePropsEqual(
     previous.workspaceAgentProbes === next.workspaceAgentProbes &&
     previous.onAgentProbeDemandChange === next.onAgentProbeDemandChange &&
     previous.onAgentProbeRefreshRequest === next.onAgentProbeRefreshRequest &&
+    previous.providerAuthAccountLabels === next.providerAuthAccountLabels &&
     previous.managedAgentsState === next.managedAgentsState &&
     previous.contextMentionProviders === next.contextMentionProviders &&
     previous.workspaceAppIcons === next.workspaceAppIcons &&
@@ -672,6 +674,7 @@ export const AgentGUINode = memo(function AgentGUINode({
   workspaceAgentProbes,
   onAgentProbeDemandChange,
   onAgentProbeRefreshRequest,
+  providerAuthAccountLabels,
   managedAgentsState,
   contextMentionProviders,
   workspaceAppIcons,
@@ -1059,6 +1062,7 @@ export const AgentGUINode = memo(function AgentGUINode({
       slashStatusBaseUrl: t("agentHost.agentGui.slashStatusBaseUrl"),
       slashStatusContext: t("agentHost.agentGui.slashStatusContext"),
       slashStatusLimits: t("agentHost.agentGui.slashStatusLimits"),
+      slashStatusAccount: t("agentHost.agentGui.slashStatusAccount"),
       slashStatusClose: t("agentHost.agentGui.slashStatusClose"),
       slashStatusContextValue: (input: {
         percentLeft: number;
@@ -1494,12 +1498,16 @@ export const AgentGUINode = memo(function AgentGUINode({
       fileMentionEmpty: t("agentHost.agentGui.fileMentionEmpty"),
       fileMentionError: t("agentHost.agentGui.fileMentionError"),
       fileMentionTabHint: t("agentHost.agentGui.fileMentionTabHint"),
+      fileDropHint: t("agentHost.agentGui.fileDropHint"),
       mentionPalette: t("agentHost.agentGui.mentionPalette"),
       removeMention: t("common.remove"),
       addReference: t("agentHost.agentGui.addReference"),
       addContent: t("agentHost.agentGui.addContent"),
       referenceWorkspaceFiles: t("agentHost.issue.referenceWorkspaceFiles"),
       handoffConversation: t("agentHost.agentGui.handoffConversation"),
+      handoffConversationTooltip: t(
+        "agentHost.agentGui.handoffConversationTooltip"
+      ),
       handoffConversationMenu: t("agentHost.agentGui.handoffConversationMenu")
     }),
     [displayProviderLabel, fallbackAgentTitle, t]
@@ -1797,6 +1805,7 @@ export const AgentGUINode = memo(function AgentGUINode({
             slashStatusUsageCapturedAtUnixMs={slashStatusUsageCapturedAtUnixMs}
             slashStatusUsageDidFail={slashStatusUsageDidFail}
             slashStatusUsageAttempted={slashStatusUsageAttempted}
+            providerAuthAccountLabels={providerAuthAccountLabels}
             onAgentConfigMenuOpen={handleAgentConfigMenuOpen}
             onAgentUsageRefresh={handleAgentUsageRefresh}
             previewMode={previewMode}

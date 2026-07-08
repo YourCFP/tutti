@@ -555,6 +555,7 @@ export interface AgentGUIViewLabels {
   slashStatusBaseUrl: string;
   slashStatusContext: string;
   slashStatusLimits: string;
+  slashStatusAccount: string;
   slashStatusClose: string;
   slashStatusContextValue: (input: {
     percentLeft: number;
@@ -586,12 +587,14 @@ export interface AgentGUIViewLabels {
   fileMentionEmpty: string;
   fileMentionError: string;
   fileMentionTabHint: string;
+  fileDropHint: string;
   mentionPalette: string;
   removeMention: string;
   addReference: string;
   addContent: string;
   referenceWorkspaceFiles: string;
   handoffConversation: string;
+  handoffConversationTooltip: string;
   handoffConversationMenu: string;
   projectLocked: string;
   projectMissingDescription: string;
@@ -626,6 +629,7 @@ interface AgentGUINodeViewProps {
   isAgentProviderReady: boolean;
   slashStatusLimits?: readonly AgentComposerSlashStatusLimit[];
   slashStatusLimitsLoading?: boolean;
+  providerAuthAccountLabels?: Partial<Record<string, string>>;
   railConfigProvider?: string | null;
   railSlashStatusLimits?: readonly AgentComposerSlashStatusLimit[];
   /** Capture time of the usage/limits shown in the rail config menu (for the
@@ -658,7 +662,8 @@ interface AgentGUINodeViewProps {
     selectConversation: (agentSessionId: string) => void;
     submitPrompt: (
       content: AgentPromptContentBlock[],
-      displayPrompt?: string
+      displayPrompt?: string,
+      options?: Parameters<AgentComposerProps["onSubmit"]>[2]
     ) => void;
     goalControl: (
       action: AgentActivityGoalControlAction,
@@ -1095,6 +1100,7 @@ export function AgentGUINodeView({
   isAgentProviderReady,
   slashStatusLimits = [],
   slashStatusLimitsLoading = false,
+  providerAuthAccountLabels,
   railConfigProvider,
   railSlashStatusLimits,
   slashStatusUsageCapturedAtUnixMs = null,
@@ -1293,7 +1299,9 @@ export function AgentGUINodeView({
   const isOpenclawGatewayBlocking =
     openclawGateway !== null && openclawGateway.status !== "ready";
   const createConversationDisabled =
-    viewModel.isCreatingConversation || isOpenclawGatewayBlocking;
+    viewModel.isCreatingConversation ||
+    viewModel.selectedProviderTarget.disabled === true ||
+    isOpenclawGatewayBlocking;
   const createConversationAction = useStableEventCallback(
     actions.createConversation
   );
@@ -1536,9 +1544,25 @@ export function AgentGUINodeView({
       : railConfigProvider;
   const effectiveRailSlashStatusLimits =
     railSlashStatusLimits ?? slashStatusLimits;
-  const shouldShowProviderRailConfigMenu =
-    viewModel.conversationFilter.kind !== "all" &&
+  const shouldShowProviderRailConfigButton =
+    viewModel.conversationFilter.kind === "all" ||
     viewModel.selectedProviderTarget?.disabled !== true;
+  const shouldShowProviderRailConfigMenu =
+    shouldShowProviderRailConfigButton &&
+    viewModel.conversationFilter.kind !== "all";
+  const effectiveProviderAuthAccountLabel = useMemo(() => {
+    const provider =
+      (effectiveRailConfigProvider ?? viewModel.data.provider)?.trim() ?? "";
+    if (!provider) {
+      return null;
+    }
+    const label = providerAuthAccountLabels?.[provider]?.trim();
+    return label || null;
+  }, [
+    effectiveRailConfigProvider,
+    providerAuthAccountLabels,
+    viewModel.data.provider
+  ]);
   const enabledProviderTargets = viewModel.providerTargets.filter(
     (target) =>
       target.disabled !== true &&
@@ -1696,26 +1720,44 @@ export function AgentGUINodeView({
               onUpdateConversationFilter={actions.updateConversationFilter}
               onRequestComposerFocus={requestComposerFocus}
             />
-            {shouldShowProviderRailConfigMenu ? (
+            {shouldShowProviderRailConfigButton ? (
               <div
                 className={`${styles.providerRailFooter} nodrag tsh-desktop-no-drag`}
                 data-testid="agent-gui-config-footer"
               >
-                <AgentGUIConfigMenu
-                  labels={labels}
-                  previewMode={previewMode}
-                  slashStatusLimits={effectiveRailSlashStatusLimits}
-                  slashStatusLimitsLoading={slashStatusLimitsLoading}
-                  slashStatusUsageCapturedAtUnixMs={
-                    slashStatusUsageCapturedAtUnixMs
-                  }
-                  slashStatusUsageDidFail={slashStatusUsageDidFail}
-                  slashStatusUsageAttempted={slashStatusUsageAttempted}
-                  onAgentConfigMenuOpen={onAgentConfigMenuOpen}
-                  onAgentUsageRefresh={onAgentUsageRefresh}
-                  onOpenAgentEnvSetup={openAgentEnvSetup}
-                  onOpenAgentSettings={openAgentSettings}
-                />
+                {shouldShowProviderRailConfigMenu ? (
+                  <AgentGUIConfigMenu
+                    labels={labels}
+                    previewMode={previewMode}
+                    slashStatusLimits={effectiveRailSlashStatusLimits}
+                    slashStatusLimitsLoading={slashStatusLimitsLoading}
+                    slashStatusUsageCapturedAtUnixMs={
+                      slashStatusUsageCapturedAtUnixMs
+                    }
+                    slashStatusUsageDidFail={slashStatusUsageDidFail}
+                    slashStatusUsageAttempted={slashStatusUsageAttempted}
+                    providerAuthAccountLabel={effectiveProviderAuthAccountLabel}
+                    onAgentConfigMenuOpen={onAgentConfigMenuOpen}
+                    onAgentUsageRefresh={onAgentUsageRefresh}
+                    onOpenAgentEnvSetup={openAgentEnvSetup}
+                    onOpenAgentSettings={openAgentSettings}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    aria-label={labels.agentSettingsMenu}
+                    className={`${styles.providerRailConfigButton} nodrag tsh-desktop-no-drag`}
+                    title={labels.agentSettingsMenu}
+                    disabled={previewMode}
+                    onClick={openAgentSettings}
+                  >
+                    <SettingsLinedIcon
+                      aria-hidden="true"
+                      width={18}
+                      height={18}
+                    />
+                  </button>
+                )}
               </div>
             ) : null}
             {renderSidebarFooter ? (
@@ -1808,6 +1850,7 @@ export function AgentGUINodeView({
             resolveDroppedFileReferences={resolveDroppedFileReferences}
             selectProjectDirectory={selectProjectDirectory}
             onRequestGitBranches={onRequestGitBranches}
+            onRequestComposerFocus={requestComposerFocus}
             contextMentionProviders={contextMentionProviders}
             workspaceAppIcons={effectiveWorkspaceAppIcons}
             workspaceUserProjectI18n={workspaceUserProjectI18n}
@@ -1878,6 +1921,7 @@ interface AgentGUIDetailPaneProps {
   resolveDroppedFileReferences?: AgentComposerProps["resolveDroppedFileReferences"];
   selectProjectDirectory?: () => Promise<{ path: string } | null>;
   onRequestGitBranches?: AgentComposerGitBranchLoader | null;
+  onRequestComposerFocus: () => void;
   contextMentionProviders?: readonly AgentContextMentionProvider[];
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
 }
@@ -1971,6 +2015,7 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   resolveDroppedFileReferences = null,
   selectProjectDirectory,
   onRequestGitBranches,
+  onRequestComposerFocus,
   contextMentionProviders,
   workspaceAppIcons = EMPTY_WORKSPACE_APP_ICONS
 }: AgentGUIDetailPaneProps): React.JSX.Element {
@@ -1987,6 +2032,18 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   const pendingPrependScrollAnchorRef = useRef<{
     conversationId: string;
     scrollHeight: number;
+    scrollTop: number;
+  } | null>(null);
+  // Remembers, per conversation, the last scroll position the user left off at
+  // so switching back to a conversation the user had manually scrolled away
+  // from restores that position instead of snapping to the bottom.
+  const timelineScrollPositionsRef = useRef<
+    Map<string, { scrollTop: number; atBottom: boolean }>
+  >(new Map());
+  // Deferred restore target used when a conversation is switched to while its
+  // content is still loading (skeleton) and scrollHeight is not yet final.
+  const pendingRestoreScrollRef = useRef<{
+    conversationId: string;
     scrollTop: number;
   } | null>(null);
   const [isTimelineScrolledToTop, setIsTimelineScrolledToTop] = useState(true);
@@ -2392,6 +2449,7 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       slashStatusBaseUrl: labels.slashStatusBaseUrl,
       slashStatusContext: labels.slashStatusContext,
       slashStatusLimits: labels.slashStatusLimits,
+      slashStatusAccount: labels.slashStatusAccount,
       slashStatusClose: labels.slashStatusClose,
       slashStatusContextValue: labels.slashStatusContextValue,
       slashStatusContextUnavailable: labels.slashStatusContextUnavailable,
@@ -2408,12 +2466,14 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       fileMentionEmpty: labels.fileMentionEmpty,
       fileMentionError: labels.fileMentionError,
       fileMentionTabHint: labels.fileMentionTabHint,
+      fileDropHint: labels.fileDropHint,
       mentionPalette: labels.mentionPalette,
       removeMention: labels.removeMention,
       addReference: labels.addReference,
       addContent: labels.addContent,
       referenceWorkspaceFiles: labels.referenceWorkspaceFiles,
       handoffConversation: labels.handoffConversation,
+      handoffConversationTooltip: labels.handoffConversationTooltip,
       handoffConversationMenu: labels.handoffConversationMenu,
       providerSwitchLabel: labels.providerSwitchLabel,
       projectLocked: labels.projectLocked,
@@ -2434,7 +2494,9 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       labels.fileMentionLoading,
       labels.fileMentionPalette,
       labels.fileMentionTabHint,
+      labels.fileDropHint,
       labels.handoffConversation,
+      labels.handoffConversationTooltip,
       labels.handoffConversationMenu,
       labels.inheritedUnavailable,
       labels.loadingConversation,
@@ -2553,6 +2615,16 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   const updateComposerSettings = useStableEventCallback(
     actions.updateComposerSettings
   );
+  const selectHomeComposerAgentTarget = useStableEventCallback(
+    actions.selectHomeComposerAgentTarget
+  );
+  const selectHomeComposerAgentTargetAndFocus = useCallback(
+    (input: Parameters<typeof selectHomeComposerAgentTarget>[0]) => {
+      selectHomeComposerAgentTarget(input);
+      onRequestComposerFocus();
+    },
+    [onRequestComposerFocus, selectHomeComposerAgentTarget]
+  );
   const submitPrompt = useStableEventCallback(actions.submitPrompt);
   const goalControl = useStableEventCallback(actions.goalControl);
   const submitGuidancePrompt = useStableEventCallback(
@@ -2666,7 +2738,7 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
         !canSwitchComposerProvider || viewModel.activeConversationId !== null,
       onProviderSelect:
         canSwitchComposerProvider && viewModel.activeConversationId === null
-          ? actions.selectHomeComposerAgentTarget
+          ? selectHomeComposerAgentTargetAndFocus
           : undefined,
       disabled: composerDisabled,
       disabledReason: composerDisabledReason,
@@ -2743,7 +2815,6 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     [
       canQueueWhileBusy,
       backgroundAgentStatusText,
-      actions.selectHomeComposerAgentTarget,
       capabilityMenuState,
       canSwitchComposerProvider,
       composerDisabled,
@@ -2758,6 +2829,7 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       isComposerSending,
       labels.followupPlaceholder,
       labels.handoffConversation,
+      labels.handoffConversationTooltip,
       labels.handoffConversationMenu,
       labels.initialPlaceholder,
       labels.promptTips,
@@ -2791,6 +2863,7 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       viewModel.activeConversationId,
       viewModel.availableCommands,
       viewModel.availableSkills,
+      viewModel.activeConversationId,
       viewModel.compactSupported,
       viewModel.composerSettings,
       viewModel.currentUserId,
@@ -2809,7 +2882,8 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       viewModel.workspaceId,
       viewModel.workspacePath,
       workspaceUserProjectI18n,
-      workspaceAppIcons
+      workspaceAppIcons,
+      selectHomeComposerAgentTargetAndFocus
     ]
   );
   const emptyHeroComposerProps = useMemo<AgentComposerProps>(
@@ -2901,16 +2975,58 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       submittedPromptScrollConversationRef.current === activeConversationId;
     let nextScrollTop = timeline.scrollTop;
 
+    const savedScrollPosition = shouldScrollSubmittedPromptToBottom
+      ? undefined
+      : timelineScrollPositionsRef.current.get(activeConversationId);
+
     if (
       !anchor ||
       anchor.conversationId !== activeConversationId ||
       shouldScrollSubmittedPromptToBottom
     ) {
-      setTimelineScrollTopInstantly(timeline, maxScrollTop);
-      nextScrollTop = maxScrollTop;
+      if (
+        savedScrollPosition &&
+        !savedScrollPosition.atBottom &&
+        !showTimelineSkeleton
+      ) {
+        // Returning to a conversation the user had manually scrolled away
+        // from: restore that position instead of snapping to the bottom.
+        nextScrollTop = Math.min(maxScrollTop, savedScrollPosition.scrollTop);
+        timeline.scrollTop = nextScrollTop;
+        pendingRestoreScrollRef.current = null;
+      } else if (savedScrollPosition && !savedScrollPosition.atBottom) {
+        // Content isn't rendered yet (skeleton) so scrollHeight is not final:
+        // defer the restore until the real messages have laid out.
+        pendingRestoreScrollRef.current = {
+          conversationId: activeConversationId,
+          scrollTop: savedScrollPosition.scrollTop
+        };
+        setTimelineScrollTopInstantly(timeline, maxScrollTop);
+        nextScrollTop = maxScrollTop;
+      } else {
+        setTimelineScrollTopInstantly(timeline, maxScrollTop);
+        nextScrollTop = maxScrollTop;
+        pendingRestoreScrollRef.current = null;
+      }
       submittedPromptScrollConversationRef.current = null;
       if (shouldScrollSubmittedPromptToBottom) {
         pendingPrependScrollAnchorRef.current = null;
+      }
+    } else if (
+      pendingRestoreScrollRef.current?.conversationId === activeConversationId
+    ) {
+      if (showTimelineSkeleton) {
+        // Still loading: keep pinned to the bottom until content is ready so
+        // the deferred restore can target the final scrollHeight.
+        setTimelineScrollTopInstantly(timeline, maxScrollTop);
+        nextScrollTop = maxScrollTop;
+      } else {
+        nextScrollTop = Math.min(
+          maxScrollTop,
+          pendingRestoreScrollRef.current.scrollTop
+        );
+        timeline.scrollTop = nextScrollTop;
+        pendingRestoreScrollRef.current = null;
       }
     } else if (prependAnchor?.conversationId === activeConversationId) {
       const nextScrollHeight = timeline.scrollHeight;
@@ -3078,13 +3194,24 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
         scrollTop,
         clientHeight: timeline.clientHeight
       };
+      const atBottom =
+        timeline.scrollHeight - scrollTop - timeline.clientHeight <=
+        AGENT_GUI_STICK_TO_BOTTOM_THRESHOLD_PX;
       setIsTimelineScrolledToTop(
         scrollTop <= AGENT_GUI_TOP_MASK_SCROLL_EPSILON_PX
       );
-      setIsTimelineScrolledToBottom(
-        timeline.scrollHeight - scrollTop - timeline.clientHeight <=
-          AGENT_GUI_STICK_TO_BOTTOM_THRESHOLD_PX
-      );
+      setIsTimelineScrolledToBottom(atBottom);
+      // Remember where the user left off so returning to this conversation can
+      // restore the position. Skip while a deferred restore is pending so the
+      // synchronous jump-to-bottom (during skeleton) doesn't clobber it.
+      if (
+        pendingRestoreScrollRef.current?.conversationId !== activeConversationId
+      ) {
+        timelineScrollPositionsRef.current.set(activeConversationId, {
+          scrollTop,
+          atBottom
+        });
+      }
       if (
         viewModel.hasOlderMessages &&
         !viewModel.isLoadingOlderMessages &&
@@ -3219,7 +3346,7 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
               onProviderSelect={
                 canSwitchComposerProvider &&
                 viewModel.activeConversationId === null
-                  ? actions.selectHomeComposerAgentTarget
+                  ? selectHomeComposerAgentTargetAndFocus
                   : undefined
               }
               providerTargets={composerProviderTargets}
@@ -3478,21 +3605,23 @@ const AgentGUIEmptyHeroPane = memo(function AgentGUIEmptyHeroPane({
   return (
     <div className={styles.emptyHero}>
       <div className={styles.emptyHeroBody}>
-        {heroIconPresentations.length > 1 ? (
-          <AgentGUIAllProviderGridIcon
-            key={heroIconAnimationKey}
-            activeProvider={provider}
-            className={styles.emptyHeroLaunchpadIcon}
-            icons={heroIconPresentations}
-          />
-        ) : (
-          <AgentGUIProviderIconVisual
-            key={heroIconAnimationKey}
-            ariaHidden
-            imageClassName={styles.emptyHeroIconEffect}
-            icon={heroIconPresentations[0]!}
-          />
-        )}
+        <div className={styles.emptyHeroIconSlot}>
+          {heroIconPresentations.length > 1 ? (
+            <AgentGUIAllProviderGridIcon
+              key={heroIconAnimationKey}
+              activeProvider={provider}
+              className={styles.emptyHeroLaunchpadIcon}
+              icons={heroIconPresentations}
+            />
+          ) : (
+            <AgentGUIProviderIconVisual
+              key={heroIconAnimationKey}
+              ariaHidden
+              imageClassName={styles.emptyHeroIconEffect}
+              icon={heroIconPresentations[0]!}
+            />
+          )}
+        </div>
         <h2 className={styles.emptyHeroTitle}>
           <EmptyHeroTitle
             label={emptyLabel}
@@ -3603,7 +3732,7 @@ const AgentGUIProviderReadinessGatePane = memo(
           <p className={styles.emptyProviderGateDescription}>
             {content.description}
           </p>
-          {pendingLabel ? (
+          {pendingLabel && !action ? (
             <div
               className={styles.emptyProviderGateStatus}
               data-testid="agent-gui-provider-readiness-gate-pending"
@@ -4714,6 +4843,17 @@ function agentGUIProviderRailLabel(
   return targetLabel;
 }
 
+function agentGUIProviderRailAriaLabel(
+  label: string,
+  badgeLabel: string | null | undefined
+): string {
+  const normalizedBadgeLabel = badgeLabel?.trim() ?? "";
+  if (!normalizedBadgeLabel || normalizedBadgeLabel === label) {
+    return label;
+  }
+  return `${label}, ${normalizedBadgeLabel}`;
+}
+
 function agentGUIProviderTargetMatchesConversationFilter(
   target: AgentGUINodeViewModel["providerTargets"][number],
   filter: AgentGUINodeViewModel["conversationFilter"]
@@ -5240,12 +5380,16 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
             target.label,
             labels
           );
+          const ariaLabel = agentGUIProviderRailAriaLabel(
+            label,
+            target.badge?.label
+          );
           const tile = (
             <button
               key={`${target.provider}:${target.targetId}`}
               type="button"
               role="tab"
-              aria-label={label}
+              aria-label={ariaLabel}
               aria-selected={providerSelected}
               className={styles.providerRailTile}
               data-disabled={target.disabled === true ? "true" : undefined}
@@ -5280,6 +5424,16 @@ const AgentGUIProviderRail = memo(function AgentGUIProviderRail({
                     target.iconUrl
                   )}
                 />
+                {target.badge?.iconUrl ? (
+                  <span aria-hidden="true" className={styles.providerRailBadge}>
+                    <img
+                      alt=""
+                      className={styles.providerRailBadgeImage}
+                      draggable={false}
+                      src={target.badge.iconUrl}
+                    />
+                  </span>
+                ) : null}
               </span>
             </button>
           );
@@ -5603,6 +5757,7 @@ interface AgentGUIConfigMenuProps {
   slashStatusUsageCapturedAtUnixMs: number | null;
   slashStatusUsageDidFail: boolean;
   slashStatusUsageAttempted: boolean;
+  providerAuthAccountLabel?: string | null;
   onAgentConfigMenuOpen?: () => void;
   onAgentUsageRefresh?: () => void;
   onOpenAgentEnvSetup: () => void;
@@ -5617,6 +5772,7 @@ function AgentGUIConfigMenu({
   slashStatusUsageCapturedAtUnixMs,
   slashStatusUsageDidFail,
   slashStatusUsageAttempted,
+  providerAuthAccountLabel,
   onAgentConfigMenuOpen,
   onAgentUsageRefresh,
   onOpenAgentEnvSetup,
@@ -5651,6 +5807,25 @@ function AgentGUIConfigMenu({
         data-testid="agent-gui-config-menu"
       >
         <div className="flex min-w-0 flex-col gap-3">
+          {providerAuthAccountLabel ? (
+            <>
+              <div className="flex min-w-0 flex-col gap-2 p-2">
+                <span className="text-[13px] font-semibold leading-4">
+                  {labels.slashStatusAccount}
+                </span>
+                <span className="text-[13px] leading-5 text-[var(--text-secondary)]">
+                  {providerAuthAccountLabel}
+                </span>
+              </div>
+              {slashStatusLimits.length > 0 ||
+              slashStatusUsageAttempted ||
+              slashStatusLimitsLoading ? (
+                <div className="px-2">
+                  <span className="block h-px bg-[var(--border-1)]" />
+                </div>
+              ) : null}
+            </>
+          ) : null}
           {slashStatusLimits.length > 0 ||
           slashStatusUsageAttempted ||
           slashStatusLimitsLoading ? (
@@ -6316,17 +6491,7 @@ const AgentGUIConversationRailPane = memo(
             <span>{labels.newConversation}</span>
           </Button>
         </div>
-        {openclawGateway?.status === "starting" ? (
-          <div className={styles.gatewayStatus} data-state="starting">
-            <StatusDot
-              tone="blue"
-              pulse
-              size="sm"
-              ariaLabel={labels.openclawGatewayStarting}
-            />
-            <span>{labels.openclawGatewayStarting}</span>
-          </div>
-        ) : openclawGateway?.status === "failed" ? (
+        {openclawGateway?.status === "failed" ? (
           <div className={styles.gatewayStatus} data-state="failed">
             <span>{openclawGateway.error || labels.openclawGatewayFailed}</span>
             <button

@@ -387,7 +387,7 @@ describe("useAgentGUINodeController", () => {
     expect(onRememberComposerDefaults).not.toHaveBeenCalled();
   });
 
-  it("selects a rail target by updating the filter and empty composer provider", async () => {
+  it("selects a rail target by reopening the latest matching conversation", async () => {
     installAgentHostApi({
       list: vi.fn(async () => ({
         presences: [],
@@ -458,27 +458,209 @@ describe("useAgentGUINodeController", () => {
         agentTargetId: "local:claude-code"
       });
     });
-    expect(result.current.viewModel.data.provider).toBe("claude-code");
-    expect(result.current.viewModel.selectedProviderTarget.provider).toBe(
-      "claude-code"
-    );
-    expect(result.current.viewModel.data.agentTargetId).toBe(
-      "local:claude-code"
-    );
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversation?.id).toBe(
+        "claude-session"
+      );
+    });
+    expect(result.current.viewModel.data.provider).toBe("codex");
+    expect(result.current.viewModel.data.agentTargetId).toBe("local:codex");
     const currentData = agentGuiData(null, "codex", {
       agentTargetId: "local:codex",
       composerOverrides: { model: "gpt-5" }
     });
-    const nextData = onDataChange.mock.calls
-      .map(([updater]) => updater(currentData))
-      .find((candidate) => candidate.provider === "claude-code");
+    const nextData = onDataChange.mock.calls.reduce(
+      (current, [updater]) => updater(current),
+      currentData
+    );
     expect(nextData).toMatchObject({
       provider: "claude-code",
       agentTargetId: "local:claude-code",
-      composerOverrides: null
+      composerOverrides: null,
+      lastActiveAgentSessionId: "claude-session"
     });
-    expect(nextData?.providerTargetId ?? null).toBeNull();
-    expect(nextData?.providerTargetRef ?? null).toBeNull();
+  });
+
+  it("keeps a fresh empty composer when reselecting the already-active rail target", async () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({
+        presences: [],
+        sessions: [
+          workspaceAgentSession("codex-session", {
+            provider: "codex",
+            title: "Codex session",
+            updatedAtUnixMs: 3
+          })
+        ]
+      })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn())
+    });
+    const onDataChange = vi.fn();
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData(null, "codex", {
+          agentTargetId: "local:codex"
+        }),
+        providerTargets: [
+          {
+            targetId: "local:codex",
+            agentTargetId: "local:codex",
+            provider: "codex",
+            ref: { kind: "local-provider", provider: "codex" },
+            label: "Codex"
+          },
+          {
+            targetId: "local:claude-code",
+            agentTargetId: "local:claude-code",
+            provider: "claude-code",
+            ref: { kind: "local-provider", provider: "claude-code" },
+            label: "Claude Code"
+          }
+        ],
+        onDataChange
+      })
+    );
+
+    await waitFor(() => {
+      expect(
+        result.current.viewModel.conversations.map((item) => item.id)
+      ).toEqual(["codex-session"]);
+    });
+
+    // Switching into Codex from All reopens its latest conversation.
+    act(() => {
+      result.current.actions.selectConversationFilterTarget({
+        provider: "codex",
+        providerTargetId: "local:codex"
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversation?.id).toBe(
+        "codex-session"
+      );
+    });
+
+    // Starting a fresh conversation under the same, still-selected target
+    // clears the active conversation but keeps the scoped filter.
+    act(() => {
+      result.current.actions.selectHomeComposerAgentTarget({
+        provider: "codex",
+        providerTargetId: "local:codex"
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversationId).toBeNull();
+    });
+    act(() => {
+      result.current.actions.updateDraftContent(
+        draftContent("draft in progress")
+      );
+    });
+    expect(result.current.viewModel.draftPrompt).toBe("draft in progress");
+
+    // Re-clicking the same, already-selected Codex tile must not discard
+    // the fresh composer by jumping back into the old conversation.
+    act(() => {
+      result.current.actions.selectConversationFilterTarget({
+        provider: "codex",
+        providerTargetId: "local:codex"
+      });
+    });
+
+    expect(result.current.viewModel.activeConversationId).toBeNull();
+    expect(result.current.viewModel.draftPrompt).toBe("draft in progress");
+  });
+
+  it("selects an empty composer when a rail target has no matching conversation", async () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({
+        presences: [],
+        sessions: [
+          workspaceAgentSession("codex-session", {
+            agentTargetId: "local:codex",
+            provider: "codex",
+            title: "Codex session",
+            updatedAtUnixMs: 3
+          })
+        ]
+      })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn())
+    });
+    const onDataChange = vi.fn();
+    const initialData = agentGuiData(null, "codex", {
+      agentTargetId: "local:codex",
+      composerOverrides: { model: "gpt-5" }
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: initialData,
+        providerTargets: [
+          {
+            targetId: "local:codex",
+            agentTargetId: "local:codex",
+            provider: "codex",
+            ref: { kind: "local-provider", provider: "codex" },
+            label: "Codex"
+          },
+          {
+            targetId: "local:claude-code",
+            agentTargetId: "local:claude-code",
+            provider: "claude-code",
+            ref: { kind: "local-provider", provider: "claude-code" },
+            label: "Claude Code"
+          }
+        ],
+        onDataChange
+      })
+    );
+
+    await waitFor(() => {
+      expect(
+        result.current.viewModel.conversations.map((item) => item.id)
+      ).toEqual(["codex-session"]);
+    });
+    onDataChange.mockClear();
+
+    act(() => {
+      result.current.actions.selectConversationFilterTarget({
+        provider: "claude-code",
+        providerTargetId: "local:claude-code"
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.viewModel.conversationFilter).toEqual({
+        kind: "agentTarget",
+        agentTargetId: "local:claude-code"
+      });
+    });
+    expect(result.current.viewModel.activeConversation).toBeNull();
+    expect(result.current.viewModel.data.provider).toBe("claude-code");
+    expect(result.current.viewModel.data.agentTargetId).toBe(
+      "local:claude-code"
+    );
+    const nextData = onDataChange.mock.calls.reduce(
+      (current, [updater]) => updater(current),
+      initialData
+    );
+    expect(nextData).toMatchObject({
+      provider: "claude-code",
+      agentTargetId: "local:claude-code",
+      composerOverrides: null,
+      lastActiveAgentSessionId: null
+    });
   });
 
   it("resets the empty composer provider when switching the rail filter back to All", async () => {
@@ -592,7 +774,7 @@ describe("useAgentGUINodeController", () => {
     expect(result.current.viewModel.providerReadinessGate).toBeNull();
   });
 
-  it("opens the selected target home composer when the active conversation is outside the new rail filter", async () => {
+  it("opens the matching rail target conversation when the active conversation is outside the new rail filter", async () => {
     const unactivate = vi.fn();
     installAgentHostApi({
       list: vi.fn(async () => ({
@@ -670,10 +852,12 @@ describe("useAgentGUINodeController", () => {
       });
     });
     await waitFor(() => {
-      expect(result.current.viewModel.activeConversationId).toBeNull();
+      expect(result.current.viewModel.activeConversationId).toBe(
+        "claude-session"
+      );
     });
     expect(result.current.viewModel.selectedProviderTarget.provider).toBe(
-      "claude-code"
+      "codex"
     );
     await waitFor(() => {
       expect(unactivate).toHaveBeenCalledWith({
@@ -688,7 +872,7 @@ describe("useAgentGUINodeController", () => {
     expect(appliedData).toMatchObject({
       provider: "claude-code",
       agentTargetId: "local:claude-code",
-      lastActiveAgentSessionId: null
+      lastActiveAgentSessionId: "claude-session"
     });
   });
 
@@ -1133,7 +1317,64 @@ describe("useAgentGUINodeController", () => {
     );
   });
 
-  it("selects provider-only rail targets for the empty composer", async () => {
+  it("moves the empty home composer to the first ready provider while startup detection continues", async () => {
+    installAgentHostApi({
+      list: vi.fn(async () => ({ presences: [], sessions: [] })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn())
+    });
+    const onDataChange = vi.fn();
+    const initialData = agentGuiData(null, "codex");
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: initialData,
+        providerTargets: [
+          {
+            targetId: "local:codex",
+            agentTargetId: "local:codex",
+            provider: "codex",
+            ref: { kind: "local", provider: "codex" },
+            label: "Codex"
+          },
+          {
+            targetId: "local:claude-code",
+            agentTargetId: "local:claude-code",
+            provider: "claude-code",
+            ref: { kind: "local", provider: "claude-code" },
+            label: "Claude Code"
+          }
+        ],
+        providerReadinessGates: {
+          codex: { status: "checking" },
+          "claude-code": null
+        },
+        onDataChange
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.viewModel.selectedProviderTarget.provider).toBe(
+        "claude-code"
+      );
+    });
+    const nextData = onDataChange.mock.calls.reduce(
+      (current, [updater]) => updater(current),
+      initialData
+    );
+    expect(nextData).toMatchObject({
+      agentTargetId: "local:claude-code",
+      provider: "claude-code"
+    });
+    expect(nextData.providerTargetId ?? null).toBeNull();
+    expect(result.current.viewModel.providerReadinessGate).toBeNull();
+  });
+
+  it("selects target-backed rail targets for the empty composer", async () => {
     installAgentHostApi({
       list: vi.fn(async () => ({ presences: [], sessions: [] })),
       listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
@@ -1480,8 +1721,7 @@ describe("useAgentGUINodeController", () => {
       expect(activate).toHaveBeenCalledWith(
         expect.objectContaining({
           mode: "new",
-          agentTargetId: "local:codex",
-          provider: "codex"
+          agentTargetId: "local:codex"
         })
       );
     });
@@ -2834,9 +3074,7 @@ describe("useAgentGUINodeController", () => {
       expect(activate).toHaveBeenCalledWith(
         expect.objectContaining({
           mode: "new",
-          agentTargetId: "agent-target-1",
-          provider: "codex",
-          providerTargetRef: null
+          agentTargetId: "agent-target-1"
         })
       );
     });
@@ -2949,7 +3187,7 @@ describe("useAgentGUINodeController", () => {
     });
   });
 
-  it("falls back to local provider targets for new conversation submit when provider targets are explicitly empty", async () => {
+  it("blocks new conversation submit when provider targets fall back to the static catalog", async () => {
     const activate = vi.fn(
       async (input: AgentHostActivateAgentSessionInput) => ({
         session: agentSession(input.agentSessionId, {
@@ -2977,20 +3215,14 @@ describe("useAgentGUINodeController", () => {
       })
     );
 
-    expect(result.current.viewModel.canSubmit).toBe(true);
-
     act(() => {
       result.current.actions.submitPrompt(promptBlocks("start without target"));
     });
 
     await waitFor(() => {
-      expect(activate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentTargetId: "local:codex",
-          mode: "new",
-          provider: "codex",
-          providerTargetRef: null
-        })
+      expect(activate).not.toHaveBeenCalled();
+      expect(result.current.viewModel.detailError).toBe(
+        "Select an available agent target before starting a session."
       );
     });
   });
@@ -3145,9 +3377,7 @@ describe("useAgentGUINodeController", () => {
       expect(activate).toHaveBeenCalledWith(
         expect.objectContaining({
           mode: "new",
-          agentTargetId: "local:codex",
-          provider: "codex",
-          providerTargetRef: null
+          agentTargetId: "local:codex"
         })
       );
     });
@@ -6945,7 +7175,6 @@ describe("useAgentGUINodeController", () => {
 
     expect(activate).toHaveBeenCalledWith(
       expect.objectContaining({
-        provider: "codex",
         title: "hello from hero"
       })
     );
@@ -8636,6 +8865,60 @@ describe("useAgentGUINodeController", () => {
         result.current.viewModel.activeConversation?.pinnedAtUnixMs
       ).toBeNull();
     });
+  });
+
+  it("shows a host toast without an inline composer error when pinning a conversation fails", async () => {
+    const hostToastError = vi.fn();
+    const setSessionPinned = vi.fn(async () => {
+      throw new Error("pin failed");
+    });
+    installAgentHostApi({
+      list: vi.fn(async () => ({
+        presences: [],
+        sessions: [workspaceAgentSession("session-1")]
+      })),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn()),
+      setSessionPinned,
+      toastApi: {
+        error: hostToastError
+      }
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData("session-1"),
+        onDataChange: vi.fn()
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversation?.id).toBe("session-1");
+    });
+
+    act(() => {
+      result.current.actions.toggleConversationPinned("session-1", true);
+    });
+
+    await waitFor(() => {
+      expect(setSessionPinned).toHaveBeenCalledWith({
+        workspaceId: "room-1",
+        agentSessionId: "session-1",
+        pinned: true
+      });
+    });
+    await waitFor(() => {
+      expect(hostToastError).toHaveBeenCalledWith("pin failed");
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(result.current.viewModel.detailError).toBeNull();
+    expect(
+      result.current.viewModel.activeConversation?.pinnedAtUnixMs
+    ).toBeNull();
   });
 
   it("keeps a prompt title when session state reports the provider default runtime title", async () => {
@@ -11306,7 +11589,6 @@ describe("useAgentGUINodeController", () => {
         expect.objectContaining({
           mode: "new",
           workspaceId: "room-1",
-          provider: "codex",
           ...initialPromptContent("first prompt"),
           settings: {
             model: "gpt-5",
@@ -17811,10 +18093,11 @@ describe("useAgentGUINodeController", () => {
     });
   });
 
-  it("shows a toast when deleting a conversation fails", async () => {
+  it("shows a host toast without an inline composer error when deleting a conversation fails", async () => {
     const deleteSession = vi.fn(async () => {
       throw new Error("delete failed");
     });
+    const hostToastError = vi.fn();
     installAgentHostApi({
       list: vi.fn(async () => ({
         presences: [],
@@ -17822,7 +18105,10 @@ describe("useAgentGUINodeController", () => {
       })),
       listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
       subscribeEvents: vi.fn(() => vi.fn()),
-      deleteSession
+      deleteSession,
+      toastApi: {
+        error: hostToastError
+      }
     });
 
     const { result } = renderHook(() =>
@@ -17848,9 +18134,10 @@ describe("useAgentGUINodeController", () => {
     });
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("delete failed");
+      expect(hostToastError).toHaveBeenCalledWith("delete failed");
     });
-    expect(result.current.viewModel.detailError).toBe("delete failed");
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(result.current.viewModel.detailError).toBeNull();
   });
 
   it("batch deletes all conversations assigned to a project", async () => {
@@ -18034,6 +18321,7 @@ function installAgentHostApi({
   retainEventStream,
   releaseEventStream,
   onSessionEvent,
+  toastApi,
   userProjects,
   trackSettingsProjectChange,
   autoLoadRuntime = false
@@ -18059,6 +18347,11 @@ function installAgentHostApi({
   retainEventStream?: ReturnType<typeof vi.fn> | undefined;
   releaseEventStream?: ReturnType<typeof vi.fn> | undefined;
   onSessionEvent?: ReturnType<typeof vi.fn> | undefined;
+  toastApi?: {
+    error: (title: string, description?: string) => void;
+    info?: (title: string, description?: string) => void;
+    success?: (title: string, description?: string) => void;
+  };
   userProjects?: unknown;
   trackSettingsProjectChange?: ReturnType<typeof vi.fn> | undefined;
 }): void {
@@ -18116,6 +18409,7 @@ function installAgentHostApi({
       runtime: {
         warmupOpenclawGateway
       },
+      ...(toastApi ? { toast: toastApi } : {}),
       ...(userProjects ? { userProjects } : {}),
       workspaceAgents: {
         list,
@@ -18344,9 +18638,7 @@ function installAgentActivityRuntimeForHostMocks({
         agentSessionId: input.agentSessionId,
         ...(input.mode === "new"
           ? {
-              provider: input.provider,
               agentTargetId: input.agentTargetId,
-              providerTargetRef: input.providerTargetRef,
               cwd: input.cwd,
               initialContent: input.initialContent,
               title: input.title,
@@ -18403,7 +18695,8 @@ function installAgentActivityRuntimeForHostMocks({
         mode: "new",
         workspaceId: input.workspaceId,
         agentSessionId: input.agentSessionId ?? createTestAgentSessionId(),
-        provider: input.provider,
+        provider:
+          input.agentTargetId === "local:claude-code" ? "claude-code" : "codex",
         agentTargetId: input.agentTargetId,
         cwd: input.cwd ?? undefined,
         title: input.title ?? undefined,
@@ -18719,7 +19012,10 @@ function installNoopAgentActivityRuntimeForTests(): void {
           input.workspaceId,
           {
             agentSessionId: input.agentSessionId ?? createTestAgentSessionId(),
-            provider: input.provider,
+            provider:
+              input.agentTargetId === "local:claude-code"
+                ? "claude-code"
+                : "codex",
             status: "ready"
           }
         ),
