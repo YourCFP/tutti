@@ -858,7 +858,7 @@ describe("AgentGUINodeView layout persistence", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("orders provider rail tiles as Codex, Claude Code, Cursor, OpenCode, Tutti, Hermes, OpenClaw without visible provider labels", () => {
+  it("orders provider rail tiles as Codex, Claude Code, Cursor, Tutti, OpenCode, Hermes, OpenClaw without visible provider labels", () => {
     renderAgentGUINodeView({
       viewModel: {
         ...createViewModel(),
@@ -891,8 +891,8 @@ describe("AgentGUINodeView layout persistence", () => {
       "Codex",
       "Claude Code",
       "Cursor",
-      "OpenCode",
       "Tutti",
+      "Open Code",
       "Hermes",
       "OpenClaw"
     ]);
@@ -901,7 +901,9 @@ describe("AgentGUINodeView layout persistence", () => {
     expect(screen.getByRole("tab", { name: "Claude Code" })).toHaveTextContent(
       ""
     );
-    expect(screen.getByRole("tab", { name: "OpenCode" })).toHaveTextContent("");
+    expect(screen.getByRole("tab", { name: "Open Code" })).toHaveTextContent(
+      ""
+    );
     expect(screen.getByRole("tab", { name: "Tutti" })).toHaveTextContent("");
     expect(screen.getByRole("tab", { name: "Hermes" })).toHaveTextContent("");
     expect(screen.getByRole("tab", { name: "OpenClaw" })).toHaveTextContent("");
@@ -1234,26 +1236,24 @@ describe("AgentGUINodeView layout persistence", () => {
       ".agent-gui-node__empty-hero-launchpad-icon .agent-gui-node__provider-rail-launchpad-icon"
     );
     expect(heroIconGrid).not.toBeNull();
-    expect(heroIconGrid?.children).toHaveLength(4);
+    const items = Array.from(
+      heroIconGrid?.querySelectorAll(
+        ".agent-gui-node__provider-rail-launchpad-item"
+      ) ?? []
+    );
+    expect(items.length).toBeGreaterThan(1);
+    // The launchpad splits its icons around the selected agent so it stays
+    // centered; exactly one icon is active and it renders first (leading rail
+    // empty for the codex selection here).
     expect(
-      Array.from(
-        heroIconGrid?.querySelectorAll(
-          ".agent-gui-node__provider-rail-launchpad-item"
-        ) ?? []
-      ).map((item) => item.querySelector("img")?.getAttribute("src"))
-    ).toEqual([
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.codex,
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS["claude-code"],
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.cursor,
-      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.tutti
-    ]);
-    expect(
-      Array.from(
-        heroIconGrid?.querySelectorAll(
-          ".agent-gui-node__provider-rail-launchpad-item"
-        ) ?? []
-      ).map((item) => item.getAttribute("data-provider-active"))
-    ).toEqual(["true", "false", "false", "false"]);
+      items.filter(
+        (item) => item.getAttribute("data-provider-active") === "true"
+      )
+    ).toHaveLength(1);
+    expect(items[0]?.getAttribute("data-provider-active")).toBe("true");
+    expect(items[0]?.querySelector("img")?.getAttribute("src")).toBe(
+      MANAGED_AGENT_PROVIDER_RAIL_ICON_URLS.codex
+    );
   });
 
   it("remounts the empty hero icon when switching provider targets", () => {
@@ -1615,7 +1615,7 @@ describe("AgentGUINodeView layout persistence", () => {
       "Codex",
       "Claude Code",
       "Cursor",
-      "OpenCode",
+      "Open Code",
       "Tutti Agent",
       "Hermes",
       "OpenClaw"
@@ -4701,8 +4701,8 @@ describe("AgentGUINodeView provider readiness gate", () => {
     });
 
     expect(
-      screen.getByTestId("agent-gui-provider-readiness-gate")
-    ).toHaveTextContent("providerGateInstallTitle");
+      screen.getByTestId("agent-gui-provider-readiness-gate-description")
+    ).toHaveTextContent("providerGateInstallDescription");
     expect(screen.queryByTestId("agent-gui-provider-setup-notice")).toBeNull();
     expect(screen.queryByTestId("agent-composer")).toBeNull();
 
@@ -4725,8 +4725,8 @@ describe("AgentGUINodeView provider readiness gate", () => {
     });
 
     expect(
-      screen.getByTestId("agent-gui-provider-readiness-gate")
-    ).toHaveTextContent("providerGateLoginTitle");
+      screen.getByTestId("agent-gui-provider-readiness-gate-description")
+    ).toHaveTextContent("providerGateLoginDescription");
 
     const action = screen.getByTestId(
       "agent-gui-provider-readiness-gate-action"

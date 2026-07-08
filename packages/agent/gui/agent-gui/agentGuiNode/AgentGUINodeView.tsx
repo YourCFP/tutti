@@ -260,6 +260,11 @@ export function resolveAgentGUIHeroIconUrl(
   );
 }
 
+// Providers whose colorful provider-rail art is also the intended hero glyph
+// (their square "manage" avatar differs from the branded icon we show on the
+// empty hero).
+const HERO_USES_PROVIDER_RAIL_ICON = new Set(["cursor", "opencode"]);
+
 function agentGUIProviderIconPresentation(
   provider: string | undefined,
   iconUrl?: string | null
@@ -270,7 +275,9 @@ function agentGUIProviderIconPresentation(
   return {
     provider: normalizedProvider,
     iconUrl:
-      (normalizedProvider === "cursor" ? providerRailIconUrl : null) ||
+      (HERO_USES_PROVIDER_RAIL_ICON.has(normalizedProvider)
+        ? providerRailIconUrl
+        : null) ||
       iconUrl?.trim() ||
       resolveAgentGUIHeroIconUrl(normalizedProvider)
   };
@@ -286,7 +293,9 @@ function agentGUIProviderRailIconPresentation(
   return {
     provider: normalizedProvider,
     iconUrl:
-      (normalizedProvider === "cursor" ? providerRailIconUrl : null) ||
+      (HERO_USES_PROVIDER_RAIL_ICON.has(normalizedProvider)
+        ? providerRailIconUrl
+        : null) ||
       iconUrl?.trim() ||
       providerRailIconUrl ||
       resolveAgentGUIHeroIconUrl(normalizedProvider)
@@ -3682,6 +3691,17 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
                 provider={emptyHeroProvider}
                 gate={emptyProviderReadinessGate}
                 showAllProviders={viewModel.conversationFilter.kind === "all"}
+                emptyLabel={emptyHeroLabel}
+                emptyProvider={emptyHeroProviderLabel}
+                providerTargets={composerProviderTargets}
+                selectedProviderTarget={viewModel.selectedProviderTarget}
+                onProviderSelect={
+                  canSwitchComposerProvider &&
+                  viewModel.activeConversationId === null
+                    ? selectHomeComposerAgentTargetAndFocus
+                    : undefined
+                }
+                providerSelectLabel={labels.providerSwitchLabel}
                 labels={labels}
               />
             )
@@ -4028,6 +4048,14 @@ interface AgentGUIProviderReadinessGatePaneProps {
   provider: AgentGUINodeViewModel["data"]["provider"];
   gate: AgentGUIProviderReadinessGate;
   showAllProviders?: boolean;
+  // Shared empty-hero title props so the not-installed / not-logged-in gate
+  // keeps the same main title and agent-switch dropdown as the ready state.
+  emptyLabel: string;
+  emptyProvider: string;
+  providerTargets: readonly AgentGUIProviderTarget[];
+  selectedProviderTarget: AgentGUIProviderTarget | null;
+  onProviderSelect?: AgentGUINodeViewProps["actions"]["selectHomeComposerAgentTarget"];
+  providerSelectLabel: string;
   labels: Pick<
     AgentGUIViewLabels,
     | "providerGateCheckingTitle"
@@ -4056,6 +4084,12 @@ const AgentGUIProviderReadinessGatePane = memo(
     provider,
     gate,
     showAllProviders = false,
+    emptyLabel,
+    emptyProvider,
+    providerTargets,
+    selectedProviderTarget,
+    onProviderSelect,
+    providerSelectLabel,
     labels
   }: AgentGUIProviderReadinessGatePaneProps): React.JSX.Element {
     "use memo";
@@ -4073,6 +4107,10 @@ const AgentGUIProviderReadinessGatePane = memo(
       showAllProviders: showAllProvidersChecking
     });
     const action = providerGateAction(gate.status);
+    // Not-installed / not-logged-in gates keep the ready state's main title and
+    // agent-switch dropdown; only the body (description + button) differs.
+    const useSharedHeroTitle =
+      gate.status === "not_installed" || gate.status === "auth_required";
     const pendingLabel =
       pendingAction === "install"
         ? labels.providerGatePendingInstall
@@ -4089,8 +4127,9 @@ const AgentGUIProviderReadinessGatePane = memo(
           data-testid="agent-gui-provider-readiness-gate"
           role="status"
         >
-          {showAllProvidersChecking ? (
+          {showAllProviders ? (
             <AgentGUIAllProviderGridIcon
+              activeProvider={provider}
               className={styles.emptyHeroLaunchpadIcon}
               icons={launchpadIconPresentations}
             />
@@ -4103,8 +4142,24 @@ const AgentGUIProviderReadinessGatePane = memo(
               alt=""
             />
           )}
-          <h2 className={styles.emptyHeroTitle}>{content.title}</h2>
-          <p className={styles.emptyProviderGateDescription}>
+          <h2 className={styles.emptyHeroTitle}>
+            {useSharedHeroTitle ? (
+              <EmptyHeroTitle
+                label={emptyLabel}
+                providerLabel={emptyProvider}
+                providerSelectLabel={providerSelectLabel}
+                providerTargets={providerTargets}
+                selectedProviderTarget={selectedProviderTarget}
+                onProviderSelect={onProviderSelect}
+              />
+            ) : (
+              content.title
+            )}
+          </h2>
+          <p
+            className={styles.emptyProviderGateDescription}
+            data-testid="agent-gui-provider-readiness-gate-description"
+          >
             {content.description}
           </p>
           {pendingLabel && !action ? (
@@ -4253,6 +4308,15 @@ function AgentGUIUnifiedProviderIcon({
   );
 }
 
+// Opacity applied to a hero launchpad icon based on how far it sits from the
+// centered (selected) agent — neighbours fade out toward both edges.
+function agentGUIHeroStripOpacity(distance: number): number {
+  if (distance <= 0) {
+    return 1;
+  }
+  return Math.max(0.15, 1 - distance * 0.4);
+}
+
 function AgentGUILaunchpadIconGrid({
   activeProvider,
   icons
@@ -4263,24 +4327,53 @@ function AgentGUILaunchpadIconGrid({
   const normalizedActiveProvider = activeProvider
     ? normalizeManagedAgentProvider(activeProvider)
     : null;
+  const activeIndex =
+    normalizedActiveProvider === null
+      ? -1
+      : icons.findIndex(
+          (icon) =>
+            normalizeManagedAgentProvider(icon.provider) ===
+            normalizedActiveProvider
+        );
+  const renderItem = (
+    icon: AgentGUIProviderIconPresentation,
+    distance: number,
+    isActive: boolean
+  ): React.JSX.Element => (
+    <span
+      key={`${icon.provider}:${icon.iconUrl}`}
+      className={styles.providerRailLaunchpadItem}
+      data-provider-active={
+        normalizedActiveProvider === null ? undefined : isActive
+      }
+      style={{ opacity: agentGUIHeroStripOpacity(distance) }}
+    >
+      <AgentGUIProviderIconVisual imageClassName="" icon={icon} />
+    </span>
+  );
+  if (activeIndex < 0) {
+    return (
+      <span aria-hidden="true" className={styles.providerRailLaunchpadIcon}>
+        {icons.map((icon) => renderItem(icon, 0, false))}
+      </span>
+    );
+  }
+  // Keep the icons left-to-right, but split them around the selected agent so
+  // the active icon always stays dead-center. The leading/trailing rails share
+  // equal flex width, so the center never drifts with uneven side counts.
   return (
     <span aria-hidden="true" className={styles.providerRailLaunchpadIcon}>
-      {icons.map((icon) => {
-        return (
-          <span
-            key={`${icon.provider}:${icon.iconUrl}`}
-            className={styles.providerRailLaunchpadItem}
-            data-provider-active={
-              normalizedActiveProvider === null
-                ? undefined
-                : normalizeManagedAgentProvider(icon.provider) ===
-                  normalizedActiveProvider
-            }
-          >
-            <AgentGUIProviderIconVisual imageClassName="" icon={icon} />
-          </span>
-        );
-      })}
+      <span className={styles.providerRailLaunchpadSide} data-side="leading">
+        {icons
+          .slice(0, activeIndex)
+          .map((icon, index) => renderItem(icon, activeIndex - index, false))}
+      </span>
+      {renderItem(icons[activeIndex]!, 0, true)}
+      <span className={styles.providerRailLaunchpadSide} data-side="trailing">
+        {icons
+          .slice(activeIndex + 1)
+          .map((icon, index) => renderItem(icon, index + 1, false))}
+      </span>
     </span>
   );
 }
@@ -5266,9 +5359,9 @@ const agentGUIProviderRailOrder: readonly AgentGUIProvider[] = [
   "codex",
   "claude-code",
   "cursor",
-  "opencode",
   "tutti-agent",
   "nexight",
+  "opencode",
   "hermes",
   "openclaw"
 ];
@@ -5293,11 +5386,15 @@ function agentGUIProviderRailOrderIndex(provider: AgentGUIProvider): number {
 }
 
 function agentGUILaunchpadIconPresentations(): readonly AgentGUIProviderIconPresentation[] {
+  // Keep this order aligned with the left provider rail (`agentGUIProviderRailOrder`).
   return [
     agentGUIProviderRailIconPresentation("codex"),
     agentGUIProviderRailIconPresentation("claude-code"),
     agentGUIProviderRailIconPresentation("cursor"),
-    agentGUIProviderRailIconPresentation("tutti")
+    agentGUIProviderRailIconPresentation("tutti"),
+    agentGUIProviderRailIconPresentation("opencode"),
+    agentGUIProviderRailIconPresentation("hermes"),
+    agentGUIProviderRailIconPresentation("openclaw")
   ];
 }
 

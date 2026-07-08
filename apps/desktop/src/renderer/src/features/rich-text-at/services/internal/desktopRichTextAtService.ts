@@ -1235,7 +1235,7 @@ function resolveAgentSessionProviderLabel(provider?: string | null): string {
     case "openclaw":
       return "OpenClaw";
     case "opencode":
-      return "OpenCode";
+      return "Open Code";
     default:
       return provider?.trim() || "";
   }

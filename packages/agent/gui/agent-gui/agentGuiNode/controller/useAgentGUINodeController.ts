@@ -8257,6 +8257,24 @@ export function useAgentGUINodeController({
       setIsLoadingMessages(false);
       setDetailError(null);
       persistActiveConversation(null);
+      // Leaving an existing conversation to start a fresh one must present an
+      // empty composer: a home draft the user just submitted stays visible
+      // during the async session-create round trip (the eager clear is skipped
+      // there so the box isn't left blank mid-flight), and without this reset
+      // that already-sent text would reappear in the fresh composer. Only clear
+      // when we are actually leaving a conversation (`previous` set) — starting
+      // at home and merely switching project/target while composing a new
+      // conversation must preserve the in-progress draft.
+      const homeDraftKeysToClear = new Set<string>();
+      if (previous) {
+        const selectedTargetData = selectedComposerTargetDataRef.current;
+        homeDraftKeysToClear.add(
+          nodeDefaultDraftContentKey(
+            selectedTargetData.provider,
+            selectedTargetData.agentTargetId
+          )
+        );
+      }
       // Starting a new conversation from a target tab should compose for that
       // tab's target, not for whatever target the node last remembered.
       const filter = conversationFilterRef.current;
@@ -8274,8 +8292,33 @@ export function useAgentGUINodeController({
           (filterTarget.agentTargetId?.trim() ?? "") === filter.agentTargetId
         ) {
           setHomeComposerTargetOverride(filterTarget);
+          if (previous) {
+            homeDraftKeysToClear.add(
+              nodeDefaultDraftContentKey(
+                filterTarget.provider,
+                filterTarget.agentTargetId
+              )
+            );
+          }
         }
       }
+      const clearHomeDrafts = (
+        current: Record<string, AgentComposerDraft>
+      ): Record<string, AgentComposerDraft> => {
+        let next: Record<string, AgentComposerDraft> | null = null;
+        for (const key of homeDraftKeysToClear) {
+          const existing = current[key];
+          if (existing && agentComposerDraftHasContent(existing)) {
+            next = next ?? { ...current };
+            next[key] = emptyAgentComposerDraft();
+          }
+        }
+        return next ?? current;
+      };
+      draftBySessionIdRef.current = clearHomeDrafts(
+        draftBySessionIdRef.current
+      );
+      setDraftBySessionId(clearHomeDrafts);
       loadDraftComposerOptions();
     },
     [

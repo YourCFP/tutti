@@ -6318,6 +6318,80 @@ describe("useAgentGUINodeController", () => {
     expect(exec).not.toHaveBeenCalled();
   });
 
+  it("clears a submitted home draft when the user starts another new session mid-flight", async () => {
+    let resolveActivation:
+      | ((value: AgentHostActivateAgentSessionResult) => void)
+      | undefined;
+    const activate = vi.fn((input: AgentHostActivateAgentSessionInput) => {
+      if (input.mode === "existing") {
+        return Promise.resolve({
+          session: agentSession(input.agentSessionId),
+          activation: { mode: input.mode, status: "attached" as const }
+        });
+      }
+      return new Promise<AgentHostActivateAgentSessionResult>((resolve) => {
+        resolveActivation = resolve;
+      });
+    });
+    installAgentHostApi({
+      list: vi.fn(async () => snapshotWithSession("session-1")),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn()),
+      activate,
+      exec: vi.fn(async () => ({ turnId: "turn-1" }))
+    });
+
+    const { result } = renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData("session-1"),
+        onDataChange: vi.fn()
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.viewModel.activeConversationId).toBe("session-1");
+    });
+
+    // Submit from the home composer. Session creation is async: the home draft
+    // that carried the just-sent text is only cleared once the create resolves.
+    act(() => {
+      result.current.actions.createConversation();
+    });
+    act(() => {
+      result.current.actions.updateDraftContent(draftContent("already sent"));
+      result.current.actions.submitPrompt(promptBlocks("already sent"));
+    });
+    await waitFor(() => {
+      expect(activate).toHaveBeenCalledWith(
+        expect.objectContaining({ mode: "new" })
+      );
+    });
+
+    // Clicking "new session" before the create resolves must present an empty
+    // composer rather than re-showing the already-sent home draft text.
+    act(() => {
+      result.current.actions.createConversation();
+    });
+    expect(result.current.viewModel.activeConversationId).toBeNull();
+    expect(result.current.viewModel.draftPrompt).toBe("");
+
+    // The in-flight create resolving later must not resurrect the old draft.
+    const createdId = activate.mock.calls[0]![0].agentSessionId;
+    act(() => {
+      resolveActivation?.({
+        session: agentSession(createdId),
+        activation: { mode: "new", status: "attached" }
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.viewModel.draftPrompt).toBe("");
+    });
+  });
+
   it("renders live assistant messages for a newly created session with only an optimistic prompt in detail", async () => {
     let resolveActivation:
       | ((value: AgentHostActivateAgentSessionResult) => void)

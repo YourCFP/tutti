@@ -1999,7 +1999,7 @@ describe("AgentGUINode", () => {
     expect(emptyHeading).toBeTruthy();
     expect(iconEffect).toBeNull();
     expect(launchpadIcon).not.toBeNull();
-    expect(launchpadIcon?.children).toHaveLength(4);
+    expect(launchpadIcon?.children).toHaveLength(7);
     expect(
       document.querySelector(".agent-gui-node__timeline-centered")
     ).toContainElement(emptyHeading);
