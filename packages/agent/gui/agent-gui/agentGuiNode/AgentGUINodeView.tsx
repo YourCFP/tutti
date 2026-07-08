@@ -5034,8 +5034,7 @@ const agentGUIProviderRailOrder: readonly AgentGUIProvider[] = [
   "opencode",
   "nexight",
   "hermes",
-  "openclaw",
-  "gemini"
+  "openclaw"
 ];
 
 const agentGUIProviderRailDefaultProviders = [
