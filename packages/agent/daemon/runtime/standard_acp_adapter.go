@@ -267,6 +267,29 @@ func seedStandardACPInitialCommands(state *acpLiveState, provider string) {
 	}
 }
 
+func standardACPAdapterOwnedCommands(provider string) []AgentSessionCommand {
+	switch strings.TrimSpace(provider) {
+	case ProviderOpenCode:
+		return opencodeACPCommands()
+	default:
+		return nil
+	}
+}
+
+func mergeStandardACPAdapterOwnedCommands(
+	commands []AgentSessionCommand,
+	provider string,
+) []AgentSessionCommand {
+	ownedCommands := standardACPAdapterOwnedCommands(provider)
+	if len(ownedCommands) == 0 {
+		return commands
+	}
+	merged := make([]AgentSessionCommand, 0, len(commands)+len(ownedCommands))
+	merged = append(merged, commands...)
+	merged = append(merged, ownedCommands...)
+	return dedupeAgentSessionCommands(merged)
+}
+
 func (a *standardACPAdapter) Provider() string {
 	if a == nil {
 		return ""
@@ -2868,7 +2891,16 @@ func (a *standardACPAdapter) applyACPUpdate(agentSessionID string, raw json.RawM
 	if session == nil {
 		return nil
 	}
-	return applyACPUpdateToLiveState(&session.acpLiveState, agentSessionID, raw)
+	snapshot := applyACPUpdateToLiveState(&session.acpLiveState, agentSessionID, raw)
+	if snapshot == nil {
+		return nil
+	}
+	session.acpLiveState.availableCommands = mergeStandardACPAdapterOwnedCommands(
+		session.acpLiveState.availableCommands,
+		a.config.provider,
+	)
+	mergedSnapshot, _ := commandSnapshotFromACPLiveState(agentSessionID, session.acpLiveState)
+	return &mergedSnapshot
 }
 
 func (a *standardACPAdapter) storePendingApproval(pending *pendingACPApproval) {

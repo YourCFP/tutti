@@ -4317,6 +4317,66 @@ func TestOpenCodeAdapterStartExposesReviewCommandBaseline(t *testing.T) {
 	}
 }
 
+func TestOpenCodeCommandUpdatePreservesAdapterOwnedCompactCommand(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("OpenCode", "opencode-session-commands")
+	adapter := NewOpenCodeAdapter(transport)
+	controller := NewController([]Adapter{adapter}, nil)
+	session := standardTestSession(ProviderOpenCode)
+
+	started, err := controller.Start(context.Background(), StartInput{
+		RoomID:           session.RoomID,
+		AgentSessionID:   session.AgentSessionID,
+		Provider:         session.Provider,
+		CWD:              session.CWD,
+		PermissionModeID: session.PermissionModeID,
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	stream, unsubscribe, ok := controller.Subscribe(started.Session.RoomID, started.Session.AgentSessionID)
+	if !ok {
+		t.Fatal("Subscribe ok=false, want live session stream")
+	}
+	defer unsubscribe()
+
+	transport.conn.sendAvailableCommandEntries([]map[string]any{{
+		"name":        "review",
+		"description": "Review from OpenCode",
+	}})
+
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case event := <-stream:
+			if event.EventType != StreamEventAvailableCommands {
+				continue
+			}
+			snapshot, ok := event.Data.(AgentSessionCommandSnapshot)
+			if !ok {
+				t.Fatalf("event data = %#v, want AgentSessionCommandSnapshot", event.Data)
+			}
+			names := agentSessionCommandNames(snapshot.Commands)
+			for _, want := range []string{"compact", "review"} {
+				if !containsString(names, want) {
+					t.Fatalf("commands = %#v, want %q", names, want)
+				}
+			}
+
+			state := adapter.SessionState(started.Session)
+			capabilities, _ := state.RuntimeContext["capabilities"].([]string)
+			if !containsString(capabilities, CapabilityCompact) || !containsString(capabilities, "review") {
+				t.Fatalf("capabilities = %#v, want compact+review", capabilities)
+			}
+			return
+		case <-deadline:
+			t.Fatal("OpenCode available_commands_update was not published")
+		}
+	}
+}
+
 func TestControllerPublishesIdleStandardACPCommandUpdatesAfterStart(t *testing.T) {
 	t.Parallel()
 
