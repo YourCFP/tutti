@@ -15,6 +15,7 @@ const (
 
 const DisabledReasonProviderTemporarilyUnsupported = "provider_temporarily_unsupported"
 const codexServiceTierOverride = `service_tier="fast"`
+const tuttiAgentRequiredVersion = "0.0.2"
 
 type ProviderSpec struct {
 	Provider                     string
@@ -118,10 +119,14 @@ func DefaultRegistry() Registry {
 			// is an interactive TUI and fails headless.
 			AdapterBinaryNames: []string{"tutti-agent"},
 			AdapterCommand:     []string{"tutti-agent", "app-server"},
-			AuthStatusCommand:  []string{"login", "status"},
-			AuthMarkerPaths:    []string{"~/.tutti-agent/auth.json"},
-			Install:            tuttiAgentInstallerSpec(),
-			LoginArgs:          []string{"login"},
+			AdapterPackage: AdapterPackageRequirement{
+				Name:    "@tutti-os/tutti-agent",
+				Version: tuttiAgentRequiredVersion,
+			},
+			AuthStatusCommand: []string{"login", "status"},
+			AuthMarkerPaths:   []string{"~/.tutti-agent/auth.json"},
+			Install:           tuttiAgentInstallerSpec(),
+			LoginArgs:         []string{"login"},
 		},
 		agentprovider.Cursor: {
 			Provider: agentprovider.Cursor,
@@ -225,9 +230,10 @@ func codexCLIInstallerSpec() InstallerSpec {
 func tuttiAgentInstallerSpec() InstallerSpec {
 	return InstallerSpec{
 		Kind:           InstallerKindManagedNPMPackage,
-		DisplayCommand: "npm install -g @tutti-os/tutti-agent --include=optional",
+		DisplayCommand: "npm install -g @tutti-os/tutti-agent@" + tuttiAgentRequiredVersion + " --include=optional",
 		ManagedNPM: &ManagedNPMPackageInstallerSpec{
 			PackageName:     "@tutti-os/tutti-agent",
+			PackageVersion:  tuttiAgentRequiredVersion,
 			BinaryName:      "tutti-agent",
 			IncludeOptional: true,
 		},
