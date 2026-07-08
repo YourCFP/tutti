@@ -394,6 +394,13 @@ hunks, convert them into file-level `changes[].diff` payloads, and only use
 input-derived file metadata for optimistic display before the tool response
 arrives.
 
+Provider adapters that receive successful write/edit/apply_patch tool calls
+without a native turn-level diff event must still normalize the executed tool
+output into `fileChanges.files` and emit a `turn.updated` patch carrying those
+`fileChanges`. The AgentGUI turn summary reads the turn state as the shared
+source for the response-tail changed-file list; tool-only payloads are not a
+substitute for that state.
+
 Approval tool calls may wrap the pending Edit/Write input so the transcript can
 preview what the user approved. Treat that nested input as preview-only data:
 Approval rows must not contribute edit diff counts, changed-file summaries, or
@@ -1438,6 +1445,14 @@ the first-party `tutti-agent` provider path for Tutti Agent entry points.
 OpenCode is not a future placeholder: it is a real local provider target backed
 by `local:opencode`, but desktop hides it behind the `enableOpenCodeAgent`
 developer preference until the preview is enabled.
+Provider slash commands must come from the runtime command snapshot or an
+explicit adapter-owned command seed. Do not add AgentGUI-only slash-command
+fallbacks to make providers look aligned. For OpenCode, `/compact` and
+`/review` are adapter-owned: the runtime seeds the command snapshot, and
+`/review` also injects an OpenCode `command.review` config entry. AgentGUI may
+surface these as OpenCode fallbacks. OpenCode may reuse the shared review
+picker, but picker selections must still submit provider-native `/review ...`
+text and must not call Codex's structured `review/start` protocol.
 Static catalog targets do not change the legacy activation contract: AgentGUI
 does not persist or send their `providerTargetRef`. Synthesized local targets
 may expose stable `local:<provider>` values as `agentTargetId` for supported

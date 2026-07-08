@@ -819,7 +819,7 @@ describe("AgentGUINodeView layout persistence", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("orders provider rail tiles as Codex, Claude Code, Cursor, Tutti, Hermes, OpenClaw without visible provider labels", () => {
+  it("orders provider rail tiles as Codex, Claude Code, Cursor, OpenCode, Tutti, Hermes, OpenClaw without visible provider labels", () => {
     renderAgentGUINodeView({
       viewModel: {
         ...createViewModel(),
@@ -829,6 +829,7 @@ describe("AgentGUINodeView layout persistence", () => {
             disabled: true
           },
           createLocalAgentGUIProviderTarget("claude-code"),
+          createLocalAgentGUIProviderTarget("opencode"),
           {
             ...createLocalAgentGUIProviderTarget("hermes"),
             disabled: true
@@ -851,6 +852,7 @@ describe("AgentGUINodeView layout persistence", () => {
       "Codex",
       "Claude Code",
       "Cursor",
+      "OpenCode",
       "Tutti",
       "Hermes",
       "OpenClaw"
@@ -860,6 +862,7 @@ describe("AgentGUINodeView layout persistence", () => {
     expect(screen.getByRole("tab", { name: "Claude Code" })).toHaveTextContent(
       ""
     );
+    expect(screen.getByRole("tab", { name: "OpenCode" })).toHaveTextContent("");
     expect(screen.getByRole("tab", { name: "Tutti" })).toHaveTextContent("");
     expect(screen.getByRole("tab", { name: "Hermes" })).toHaveTextContent("");
     expect(screen.getByRole("tab", { name: "OpenClaw" })).toHaveTextContent("");
@@ -1573,8 +1576,8 @@ describe("AgentGUINodeView layout persistence", () => {
       "Codex",
       "Claude Code",
       "Cursor",
-      "Tutti Agent",
       "OpenCode",
+      "Tutti Agent",
       "Hermes",
       "OpenClaw"
     ]);

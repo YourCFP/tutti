@@ -5179,8 +5179,8 @@ const agentGUIProviderRailOrder: readonly AgentGUIProvider[] = [
   "codex",
   "claude-code",
   "cursor",
-  "tutti-agent",
   "opencode",
+  "tutti-agent",
   "nexight",
   "hermes",
   "openclaw"
