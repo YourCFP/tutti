@@ -584,6 +584,12 @@ rather than cwd grouping, root filters, excluded project paths, or local
 Show more heuristics. Removing a project removes that rail section from the
 section list; re-adding the same path reveals historical sessions with the same
 section key.
+Section-level actions must use the same backend section contract when their
+scope is "everything in this section." For example, project batch delete cannot
+derive its target set solely from the currently rendered `section.items`, because
+those rows may only be the first page; it must use daemon section-scope
+operations such as `count` and `delete` by `sectionKey` before reporting the
+final target count or deleting the target set.
 Pinned conversations are returned beside those sections as a separate pinned
 page on the `listSessionSections` bootstrap response. AgentGUI may render that
 page as a local `pinned` group, but pinned is not a daemon section kind and

@@ -301,6 +301,10 @@ export function createDesktopAgentActivityRuntime(
       workspaceAgentActivityService.listSessionSections(input),
     listSessionSectionPage: (input) =>
       workspaceAgentActivityService.listSessionSectionPage(input),
+    countSessionSection: (input) =>
+      workspaceAgentActivityService.countSessionSection(input),
+    deleteSessionSection: (input) =>
+      workspaceAgentActivityService.deleteSessionSection(input),
     listPinnedSessionsPage: (input) =>
       workspaceAgentActivityService.listPinnedSessionsPage(input),
     async load(workspaceId, signal) {

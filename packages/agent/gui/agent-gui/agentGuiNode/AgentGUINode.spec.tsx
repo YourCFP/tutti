@@ -7635,6 +7635,7 @@ function createViewModel(
     isDeletingProjectConversations: false,
     pendingDeleteConversation: null,
     pendingDeleteProjectConversations: null,
+    pendingDeleteConversations: null,
     pendingApproval: null,
     pendingInteractivePrompt: null,
     activeLiveState: "active",

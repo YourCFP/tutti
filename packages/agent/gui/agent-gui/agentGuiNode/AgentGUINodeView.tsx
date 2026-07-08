@@ -753,8 +753,12 @@ interface AgentGUINodeViewProps {
       title: string
     ) => Promise<void>;
     removeProject: (path: string) => void;
-    confirmDeleteProjectConversations: (path?: string) => void;
-    confirmDeleteConversations: (agentSessionIds: string[]) => void;
+    requestDeleteProjectConversations: (path: string) => void;
+    cancelDeleteProjectConversations: () => void;
+    confirmDeleteProjectConversations: () => void;
+    requestDeleteConversations: () => void;
+    cancelDeleteConversations: () => void;
+    confirmDeleteConversations: () => void;
     requestDeleteConversation: (agentSessionId: string) => void;
     cancelDeleteConversation: () => void;
     confirmDeleteConversation: () => void;
@@ -1403,8 +1407,20 @@ export function AgentGUINodeView({
     actions.toggleConversationPinned
   );
   const removeProject = useStableEventCallback(actions.removeProject);
+  const requestDeleteProjectConversations = useStableEventCallback(
+    actions.requestDeleteProjectConversations
+  );
+  const cancelDeleteProjectConversations = useStableEventCallback(
+    actions.cancelDeleteProjectConversations
+  );
   const confirmDeleteProjectConversations = useStableEventCallback(
     actions.confirmDeleteProjectConversations
+  );
+  const requestDeleteConversations = useStableEventCallback(
+    actions.requestDeleteConversations
+  );
+  const cancelDeleteConversations = useStableEventCallback(
+    actions.cancelDeleteConversations
   );
   const confirmDeleteConversations = useStableEventCallback(
     actions.confirmDeleteConversations
@@ -1721,8 +1737,15 @@ export function AgentGUINodeView({
         onSelectConversation: selectConversation,
         onToggleConversationPinned: toggleConversationPinned,
         onMarkConversationUnread: actions.markConversationUnread,
+        pendingDeleteProjectConversations:
+          viewModel.pendingDeleteProjectConversations,
+        pendingDeleteConversations: viewModel.pendingDeleteConversations,
         onRemoveProject: removeProject,
+        onRequestDeleteProjectConversations: requestDeleteProjectConversations,
+        onCancelDeleteProjectConversations: cancelDeleteProjectConversations,
         onConfirmDeleteProjectConversations: confirmDeleteProjectConversations,
+        onRequestDeleteConversations: requestDeleteConversations,
+        onCancelDeleteConversations: cancelDeleteConversations,
         onConfirmDeleteConversations: confirmDeleteConversations,
         onRequestDeleteConversation: requestDeleteConversation,
         onRequestRenameConversation: requestRenameConversation,
@@ -1733,6 +1756,8 @@ export function AgentGUINodeView({
         selectProjectDirectory
       }),
       [
+        cancelDeleteProjectConversations,
+        cancelDeleteConversations,
         cancelDeleteConversation,
         confirmDeleteConversation,
         confirmDeleteConversations,
@@ -1747,6 +1772,8 @@ export function AgentGUINodeView({
         actions.updateConversationFilter,
         previewMode,
         removeProject,
+        requestDeleteProjectConversations,
+        requestDeleteConversations,
         requestCreateConversation,
         requestDeleteConversation,
         requestRenameConversation,
@@ -1764,6 +1791,8 @@ export function AgentGUINodeView({
         viewModel.isDeletingProjectConversations,
         viewModel.isLoadingConversations,
         viewModel.pendingDeleteConversation?.id,
+        viewModel.pendingDeleteProjectConversations,
+        viewModel.pendingDeleteConversations,
         workspaceUserProjectI18n
       ]
     );
@@ -4586,33 +4615,26 @@ interface AgentGUIConversationRailPaneProps {
   onOpenProjectFiles?: ((action: WorkspaceLinkAction) => void) | null;
   onOpenConversationWindow?: (agentSessionId: string) => void;
   selectProjectDirectory?: () => Promise<{ path: string } | null>;
+  pendingDeleteProjectConversations: AgentGUINodeViewModel["pendingDeleteProjectConversations"];
+  pendingDeleteConversations: AgentGUINodeViewModel["pendingDeleteConversations"];
   onRemoveProject: (path: string) => void;
-  onConfirmDeleteProjectConversations: (path?: string) => void;
-  onConfirmDeleteConversations: (agentSessionIds: string[]) => void;
+  onRequestDeleteProjectConversations: (path: string) => void;
+  onCancelDeleteProjectConversations: () => void;
+  onConfirmDeleteProjectConversations: () => void;
+  onRequestDeleteConversations: () => void;
+  onCancelDeleteConversations: () => void;
+  onConfirmDeleteConversations: () => void;
   onRequestDeleteConversation: (agentSessionId: string) => void;
   onRequestRenameConversation: (agentSessionId: string) => void;
   onCancelDeleteConversation: () => void;
   onConfirmDeleteConversation: () => void;
 }
 
-type AgentGUIProjectActionDialog =
-  | {
-      kind: "batch-delete";
-      conversationCount: number;
-      label: string;
-      path: string;
-    }
-  | {
-      kind: "batch-delete-conversations";
-      conversationCount: number;
-      label: string;
-      sessionIds: string[];
-    }
-  | {
-      kind: "remove";
-      label: string;
-      path: string;
-    };
+type AgentGUIProjectActionDialog = {
+  kind: "remove";
+  label: string;
+  path: string;
+};
 
 type OpenclawGatewayViewModel =
   | NonNullable<AgentGUINodeViewModel["openclawGateway"]>
@@ -4656,6 +4678,9 @@ function agentGUIConversationRailStoreSnapshotsEqual(
   return (
     current.activeConversationId === next.activeConversationId &&
     current.pendingDeleteConversationId === next.pendingDeleteConversationId &&
+    current.pendingDeleteProjectConversations ===
+      next.pendingDeleteProjectConversations &&
+    current.pendingDeleteConversations === next.pendingDeleteConversations &&
     current.isLoadingConversations === next.isLoadingConversations &&
     current.isDeletingConversation === next.isDeletingConversation &&
     current.isDeletingProjectConversations ===
@@ -4684,8 +4709,17 @@ function agentGUIConversationRailStoreSnapshotsEqual(
     current.onOpenConversationWindow === next.onOpenConversationWindow &&
     current.selectProjectDirectory === next.selectProjectDirectory &&
     current.onRemoveProject === next.onRemoveProject &&
+    current.onRequestDeleteProjectConversations ===
+      next.onRequestDeleteProjectConversations &&
+    current.onCancelDeleteProjectConversations ===
+      next.onCancelDeleteProjectConversations &&
     current.onConfirmDeleteProjectConversations ===
       next.onConfirmDeleteProjectConversations &&
+    current.onRequestDeleteConversations ===
+      next.onRequestDeleteConversations &&
+    current.onCancelDeleteConversations === next.onCancelDeleteConversations &&
+    current.onConfirmDeleteConversations ===
+      next.onConfirmDeleteConversations &&
     current.onRequestDeleteConversation === next.onRequestDeleteConversation &&
     current.onRequestRenameConversation === next.onRequestRenameConversation &&
     current.onCancelDeleteConversation === next.onCancelDeleteConversation &&
@@ -6831,8 +6865,14 @@ const AgentGUIConversationRailPane = memo(
     onOpenProjectFiles,
     onOpenConversationWindow,
     selectProjectDirectory,
+    pendingDeleteProjectConversations,
+    pendingDeleteConversations,
     onRemoveProject,
+    onRequestDeleteProjectConversations,
+    onCancelDeleteProjectConversations,
     onConfirmDeleteProjectConversations,
+    onRequestDeleteConversations,
+    onCancelDeleteConversations,
     onConfirmDeleteConversations,
     onRequestDeleteConversation,
     onRequestRenameConversation,
@@ -7132,6 +7172,10 @@ const AgentGUIConversationRailPane = memo(
                     onConfirmDeleteConversation={onConfirmDeleteConversation}
                     onCreateConversation={onCreateConversation}
                     onLoadMoreConversations={loadMoreSectionConversations}
+                    onRequestDeleteProjectConversations={
+                      onRequestDeleteProjectConversations
+                    }
+                    onRequestDeleteConversations={onRequestDeleteConversations}
                     onRequestDeleteConversation={onRequestDeleteConversation}
                     onRequestRenameConversation={onRequestRenameConversation}
                     onSelectConversation={onSelectConversation}
@@ -7154,46 +7198,60 @@ const AgentGUIConversationRailPane = memo(
           cancelLabel={labels.cancel}
           className={AGENT_GUI_CONFIRMATION_DIALOG_CLASS_NAME}
           confirmBusy={
-            (pendingProjectAction?.kind === "batch-delete" ||
-              pendingProjectAction?.kind === "batch-delete-conversations") &&
-            isDeletingProjectConversations
+            pendingDeleteProjectConversations?.conversationCount === null ||
+            pendingDeleteConversations?.conversationCount === null ||
+            ((pendingDeleteProjectConversations !== null ||
+              pendingDeleteConversations !== null) &&
+              isDeletingProjectConversations)
+          }
+          confirmDisabled={
+            pendingDeleteProjectConversations?.conversationCount === null ||
+            pendingDeleteConversations?.conversationCount === null
           }
           confirmLabel={
-            pendingProjectAction?.kind === "batch-delete"
+            pendingDeleteProjectConversations
               ? labels.batchDeleteProjectSessionsConfirm
-              : pendingProjectAction?.kind === "batch-delete-conversations"
+              : pendingDeleteConversations
                 ? labels.batchDeleteConversationsConfirm
                 : labels.removeProject
           }
           description={
-            pendingProjectAction?.kind === "batch-delete"
-              ? labels.batchDeleteProjectSessionsBody(
-                  pendingProjectAction.conversationCount,
-                  pendingProjectAction.label
-                )
-              : pendingProjectAction?.kind === "batch-delete-conversations"
-                ? labels.batchDeleteConversationsBody(
-                    pendingProjectAction.conversationCount
+            pendingDeleteProjectConversations
+              ? pendingDeleteProjectConversations.conversationCount === null
+                ? labels.loadingConversations
+                : labels.batchDeleteProjectSessionsBody(
+                    pendingDeleteProjectConversations.conversationCount,
+                    pendingDeleteProjectConversations.label
                   )
+              : pendingDeleteConversations
+                ? pendingDeleteConversations.conversationCount === null
+                  ? labels.loadingConversations
+                  : labels.batchDeleteConversationsBody(
+                      pendingDeleteConversations.conversationCount
+                    )
                 : pendingProjectAction
                   ? labels.removeProjectConfirmDescription(
                       pendingProjectAction.label
                     )
                   : undefined
           }
-          onCancel={() => setPendingProjectAction(null)}
+          onCancel={() => {
+            setPendingProjectAction(null);
+            onCancelDeleteProjectConversations();
+            onCancelDeleteConversations();
+          }}
           onConfirm={() => {
+            if (pendingDeleteProjectConversations) {
+              onConfirmDeleteProjectConversations();
+              return;
+            }
+            if (pendingDeleteConversations) {
+              onConfirmDeleteConversations();
+              return;
+            }
             const action = pendingProjectAction;
             setPendingProjectAction(null);
             if (!action) {
-              return;
-            }
-            if (action.kind === "batch-delete") {
-              onConfirmDeleteProjectConversations(action.path);
-              return;
-            }
-            if (action.kind === "batch-delete-conversations") {
-              onConfirmDeleteConversations(action.sessionIds);
               return;
             }
             onRemoveProject(action.path);
@@ -7201,14 +7259,20 @@ const AgentGUIConversationRailPane = memo(
           onOpenChange={(open) => {
             if (!open) {
               setPendingProjectAction(null);
+              onCancelDeleteProjectConversations();
+              onCancelDeleteConversations();
             }
           }}
-          open={pendingProjectAction !== null}
+          open={
+            pendingDeleteProjectConversations !== null ||
+            pendingDeleteConversations !== null ||
+            pendingProjectAction !== null
+          }
           overlayClassName={AGENT_GUI_CONFIRMATION_DIALOG_OVERLAY_CLASS_NAME}
           title={
-            pendingProjectAction?.kind === "batch-delete"
+            pendingDeleteProjectConversations
               ? labels.batchDeleteProjectSessionsTitle
-              : pendingProjectAction?.kind === "batch-delete-conversations"
+              : pendingDeleteConversations
                 ? labels.batchDeleteConversationsTitle
                 : labels.removeProjectConfirmTitle
           }
@@ -7249,6 +7313,8 @@ interface AgentGUIConversationRailSectionProps {
   onMarkConversationUnread: (agentSessionId: string) => void;
   onOpenProjectFiles?: ((action: WorkspaceLinkAction) => void) | null;
   onOpenConversationWindow?: (agentSessionId: string) => void;
+  onRequestDeleteProjectConversations: (path: string) => void;
+  onRequestDeleteConversations: () => void;
   onRequestDeleteConversation: (agentSessionId: string) => void;
   onRequestRenameConversation: (agentSessionId: string) => void;
   onCancelDeleteConversation: () => void;
@@ -7283,6 +7349,8 @@ const AgentGUIConversationRailSection = memo(
     onMarkConversationUnread,
     onOpenProjectFiles,
     onOpenConversationWindow,
+    onRequestDeleteProjectConversations,
+    onRequestDeleteConversations,
     onRequestDeleteConversation,
     onRequestRenameConversation,
     onCancelDeleteConversation,
@@ -7509,13 +7577,7 @@ const AgentGUIConversationRailSection = memo(
                       <DropdownMenuItem
                         className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
                         onSelect={() => {
-                          const label = projectLabel || projectPath;
-                          setPendingProjectAction({
-                            kind: "batch-delete",
-                            conversationCount: projectConversationCount,
-                            label,
-                            path: projectPath
-                          });
+                          onRequestDeleteProjectConversations(projectPath);
                         }}
                       >
                         <span>{labels.batchDeleteProjectSessions}</span>
@@ -7593,12 +7655,7 @@ const AgentGUIConversationRailSection = memo(
                     <DropdownMenuItem
                       className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
                       onSelect={() => {
-                        setPendingProjectAction({
-                          kind: "batch-delete-conversations",
-                          conversationCount: section.items.length,
-                          label: section.label,
-                          sessionIds: section.items.map((item) => item.id)
-                        });
+                        onRequestDeleteConversations();
                       }}
                     >
                       <span>{labels.batchDeleteConversations}</span>
