@@ -364,6 +364,14 @@ function normalizeCompletionKey(value: string | null | undefined): string {
   return value?.trim() ?? "";
 }
 
+function fallbackSessionCompletionKey(
+  conversation: Pick<AgentGUIConversationSummary, "id" | "status">
+): string {
+  return conversation.status === "completed" || conversation.status === "ready"
+    ? `session:${conversation.id}:completed`
+    : "";
+}
+
 function isCompletedRead(
   readState: WorkspaceAgentReadStateSnapshot,
   completionKey: string
@@ -1852,9 +1860,7 @@ export function markAgentGUIConversationUnreadCompletion(input: {
         }
         const completionKey =
           normalizeCompletionKey(conversation.unreadCompletionKey) ||
-          (conversation.status === "completed"
-            ? `session:${conversation.id}:completed`
-            : "");
+          fallbackSessionCompletionKey(conversation);
         const canShowCompletion =
           completionKey &&
           conversation.isImported !== true &&

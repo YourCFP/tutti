@@ -10512,7 +10512,7 @@ export function useAgentGUINodeController({
               hasUnreadCompletion: true,
               unreadCompletionKey:
                 current.unreadCompletionKey ??
-                (current.status === "completed"
+                (current.status === "completed" || current.status === "ready"
                   ? `session:${current.id}:completed`
                   : null)
             }

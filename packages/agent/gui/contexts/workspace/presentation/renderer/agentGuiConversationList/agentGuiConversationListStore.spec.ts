@@ -887,6 +887,38 @@ describe("agentGuiConversationListStore", () => {
     );
   });
 
+  it("allows manually marking a ready conversation unread without an existing key", () => {
+    const query: AgentGUIConversationListQuery = {
+      workspaceId: "workspace-1",
+      userId: "user-1",
+      provider: "codex",
+      sessionOrigin: "WORKSPACE_AGENT_SESSION_ORIGIN_RUNTIME"
+    };
+    ensureAgentGUIConversationListQuery(query);
+
+    setAgentGUIConversationListConversationsForTests(query, [
+      conversation("session-1", {
+        hasUnreadCompletion: false,
+        status: "ready",
+        unreadCompletionKey: null
+      })
+    ]);
+
+    markAgentGUIConversationUnreadCompletion({
+      query,
+      conversationId: "session-1"
+    });
+
+    expect(
+      getAgentGUIConversationListQuerySnapshot(query)?.conversations[0]
+    ).toEqual(
+      expect.objectContaining({
+        hasUnreadCompletion: true,
+        unreadCompletionKey: "session:session-1:completed"
+      })
+    );
+  });
+
   // NOTE: project metadata is no longer canonical store state — it is a
   // view-only JOIN of cwd × userProjects derived per-window in the view-model
   // layer (see useAgentGUINodeController visibleConversations). The store
