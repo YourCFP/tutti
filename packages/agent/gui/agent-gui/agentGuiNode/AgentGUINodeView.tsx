@@ -104,6 +104,7 @@ import type {
 } from "./model/agentGuiNodeTypes";
 import { AgentHomeSuggestions } from "./AgentHomeSuggestions";
 import { AGENT_GUI_WORKBENCH_OPEN_EXTERNAL_IMPORT_EVENT } from "../../workbench/contribution";
+import { resolveAgentGuiWorkbenchProviderLabel } from "../../workbench/providerCatalog";
 import { useProjectedAgentConversation } from "../../shared/agentConversation/projection/useProjectedAgentConversation";
 import { normalizeOptionalWorkspaceAgentStatus } from "../../shared/workspaceAgentStatusNormalizer";
 import {
@@ -157,9 +158,13 @@ import {
 } from "../../shared/AgentTargetPresentationContext";
 import { AgentInteractivePromptSurface } from "./AgentInteractivePromptSurface";
 import { AgentConversationListSkeleton } from "./AgentConversationListSkeleton";
-import { useAgentHostApi } from "../../agentActivityHost";
+import {
+  useAgentHostApi,
+  useOptionalAgentHostApi
+} from "../../agentActivityHost";
 import {
   useAgentActivityRuntime,
+  type AgentActivityRuntimeSessionPage,
   type AgentActivityRuntimeSessionSection
 } from "../../agentActivityRuntime";
 import {
@@ -183,7 +188,11 @@ import type {
   AgentContextMentionItem,
   AgentMentionWorkspaceReferenceItem
 } from "./agentRichText/agentFileMentionExtension";
-import { formatAgentMentionMarkdown } from "./agentRichText/agentFileMentionExtension";
+import {
+  createAgentSessionMarkdownLink,
+  createAgentSessionMentionHref,
+  formatAgentMentionMarkdown
+} from "./agentRichText/agentFileMentionExtension";
 import { createRichTextMentionHref } from "@tutti-os/ui-rich-text/core";
 import { resolveAgentGuiSessionProviderFlatIconUrl } from "../../agentGuiSessionProviderIconUrls";
 import { agentColorfulUrl } from "../../managedAgentIconAssets";
@@ -513,6 +522,7 @@ export interface AgentGUIViewLabels {
   showLessConversations: string;
   deleteSession: string;
   pinSession: string;
+  copySessionLink: string;
   renameSession: string;
   renameSessionTitle: string;
   renameSessionDescription: string;
@@ -635,6 +645,11 @@ interface AgentGUINodeViewProps {
   renderSidebarFooter?: AgentGUISidebarFooterRenderer;
   /** Renders the provider rail empty state in "exact" mode. See the type doc. */
   renderProviderRailEmpty?: AgentGUIProviderRailEmptyRenderer;
+  /**
+   * Renders the main-pane state for a selected host-disabled provider target.
+   * Other readiness gates keep the built-in AgentGUI flows.
+   */
+  renderProviderUnavailableState?: AgentGUIProviderUnavailableStateRenderer;
   providerRailAllPresentation?: AgentGUIProviderRailAllPresentation | null;
   onLinkAction?: (action: WorkspaceLinkAction) => void;
   onHandoffConversation?: (input: {
@@ -1067,17 +1082,18 @@ function buildAgentConversationHandoffPrompt(input: {
     input.uiLanguage
   );
   const mentionLabel = `${sourceAgentLabel}${title ? ` ${title}` : ""}`.trim();
-  const href = createRichTextMentionHref({
-    providerId: "agent-session",
-    entityId: conversation.id,
+  const href = createAgentSessionMentionHref({
+    agentTargetId: conversation.agentTargetId,
+    agentSessionId: conversation.id,
     label: mentionLabel,
-    scope: { workspaceId: input.workspaceId }
+    workspaceId: input.workspaceId
   });
   return `${formatAgentMentionMarkdown({
     kind: "session",
     href,
     workspaceId: input.workspaceId,
     targetId: conversation.id,
+    agentTargetId: conversation.agentTargetId ?? undefined,
     name: mentionLabel,
     title: title || sourceAgentLabel,
     scope: "my_sessions",
@@ -1113,10 +1129,28 @@ export type AgentGUISidebarFooterRenderer = (
  */
 export type AgentGUIProviderRailEmptyRenderer = () => ReactNode;
 
+export interface AgentGUIProviderUnavailableStateContext {
+  provider: AgentGUIProvider;
+  providerLabel: string;
+  target: AgentGUIProviderTarget;
+  iconUrl: string;
+  unavailableReason: string | null;
+}
+
+/**
+ * Renders the main-pane unavailable state for a selected provider target that
+ * the host explicitly marks as disabled. This does not replace install,
+ * login, checking, or retry readiness gates.
+ */
+export type AgentGUIProviderUnavailableStateRenderer = (
+  ctx: AgentGUIProviderUnavailableStateContext
+) => ReactNode;
+
 export function AgentGUINodeView({
   viewModel,
   renderSidebarFooter,
   renderProviderRailEmpty,
+  renderProviderUnavailableState,
   providerRailAllPresentation,
   onLinkAction,
   onHandoffConversation,
@@ -1908,6 +1942,7 @@ export function AgentGUINodeView({
             contextMentionProviders={contextMentionProviders}
             workspaceAppIcons={effectiveWorkspaceAppIcons}
             workspaceUserProjectI18n={workspaceUserProjectI18n}
+            renderProviderUnavailableState={renderProviderUnavailableState}
             previewMode={previewMode}
           />
         </section>
@@ -2113,6 +2148,7 @@ interface AgentGUIDetailPaneProps {
   onRequestComposerFocus: () => void;
   contextMentionProviders?: readonly AgentContextMentionProvider[];
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
+  renderProviderUnavailableState?: AgentGUIProviderUnavailableStateRenderer;
 }
 
 function mergeWorkspaceAppIconsFromCommands(input: {
@@ -2206,7 +2242,8 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   onRequestGitBranches,
   onRequestComposerFocus,
   contextMentionProviders,
-  workspaceAppIcons = EMPTY_WORKSPACE_APP_ICONS
+  workspaceAppIcons = EMPTY_WORKSPACE_APP_ICONS,
+  renderProviderUnavailableState
 }: AgentGUIDetailPaneProps): React.JSX.Element {
   "use memo";
   const timelineRef = useRef<HTMLDivElement | null>(null);
@@ -2366,7 +2403,9 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     conversation
   });
   const activeConversationTurnBusy =
-    viewModel.isSubmitting || derivedBusyStatus !== null;
+    viewModel.isSubmitting ||
+    viewModel.activeConversationBusy ||
+    derivedBusyStatus !== null;
   const isComposerSending =
     viewModel.isSubmitting ||
     activeConversationTurnBusy ||
@@ -3117,6 +3156,13 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
         : [agentGUIProviderIconPresentation(emptyHeroProvider)],
     [emptyHeroProvider, viewModel.conversationFilter]
   );
+  const disabledProviderTarget = selectedProviderTargetComingSoon
+    ? (viewModel.selectedProviderTarget ?? null)
+    : null;
+  const shouldRenderProviderUnavailableState =
+    !hasActiveConversation &&
+    disabledProviderTarget !== null &&
+    renderProviderUnavailableState !== undefined;
   const bottomDockStoreState = useMemo<AgentGUIBottomDockStoreSnapshot>(
     () => ({
       // The lifted prompt is rendered from props on the pane; the store still
@@ -3533,7 +3579,26 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
         viewportContentStyle={AGENT_GUI_TIMELINE_SCROLL_AREA_CONTENT_STYLE}
       >
         {!hasActiveConversation ? (
-          emptyProviderReadinessGate ? (
+          shouldRenderProviderUnavailableState && disabledProviderTarget ? (
+            <>
+              {renderProviderUnavailableState?.({
+                provider: disabledProviderTarget.provider,
+                providerLabel:
+                  labels.emptyProviderForProvider?.(
+                    disabledProviderTarget.provider
+                  ) ??
+                  resolveAgentGuiWorkbenchProviderLabel(
+                    disabledProviderTarget.provider
+                  ),
+                target: disabledProviderTarget,
+                iconUrl: resolveAgentGUIHeroIconUrl(
+                  disabledProviderTarget.provider
+                ),
+                unavailableReason:
+                  disabledProviderTarget.unavailableReason ?? null
+              })}
+            </>
+          ) : emptyProviderReadinessGate ? (
             <AgentGUIProviderReadinessGatePane
               provider={emptyHeroProvider}
               gate={emptyProviderReadinessGate}
@@ -4744,7 +4809,7 @@ function stabilizeConversationSectionItems(
 export function updateConversationSectionsFromSummaries(
   previous: ConversationSection[] | null,
   conversations: readonly AgentGUINodeViewModel["conversations"][number][],
-  options: { sectionConversationsLabel: string }
+  options: { sectionConversationsLabel: string; sectionPinnedLabel?: string }
 ): ConversationSection[] | null {
   if (!previous || conversations.length === 0) {
     return previous;
@@ -4771,6 +4836,55 @@ export function updateConversationSectionsFromSummaries(
   let changed = false;
   const nextSections = previous.map((section) => {
     let sectionChanged = false;
+    if (section.kind === "pinned") {
+      const pinnedSummaryItems = conversations.filter(
+        (conversation) => (conversation.pinnedAtUnixMs ?? 0) > 0
+      );
+      const items = section.items
+        .map((item) => {
+          seenIds.add(item.id);
+          const summary = summariesById.get(item.id);
+          if (!summary) {
+            return item;
+          }
+          if ((summary.pinnedAtUnixMs ?? 0) <= 0) {
+            sectionChanged = true;
+            return null;
+          }
+          if (conversationSummariesRenderEqual(item, summary)) {
+            return item;
+          }
+          sectionChanged = true;
+          return summary;
+        })
+        .filter(
+          (item): item is AgentGUINodeViewModel["conversations"][number] =>
+            item !== null
+        );
+      const existingIds = new Set(items.map((item) => item.id));
+      const mergedItems = [
+        ...items,
+        ...pinnedSummaryItems.filter((item) => !existingIds.has(item.id))
+      ];
+      if (mergedItems.length !== items.length) {
+        sectionChanged = true;
+      }
+      for (const item of pinnedSummaryItems) {
+        seenIds.add(item.id);
+      }
+      const stableItems = stabilizeConversationSectionItems(
+        section.items,
+        sortPinnedConversations(mergedItems)
+      );
+      if (!sectionChanged && stableItems === section.items) {
+        return section;
+      }
+      changed = true;
+      return {
+        ...section,
+        items: stableItems
+      };
+    }
     const summaryItems = summarySectionItemsById.get(section.id) ?? [];
     const summaryIdsForSection = new Set(summaryItems.map((item) => item.id));
     const items = section.items
@@ -4806,7 +4920,7 @@ export function updateConversationSectionsFromSummaries(
           items
         }
       : section;
-    if (section.kind === "pinned" || summaryItems.length === 0) {
+    if (summaryItems.length === 0) {
       if (sectionChanged) {
         changed = true;
       }
@@ -4845,17 +4959,34 @@ export function updateConversationSectionsFromSummaries(
   // refetch happens to include it, which -- because that refetch is keyed
   // off conversation membership -- may never happen again for the same id.
   const existingSectionIds = new Set(nextSections.map((section) => section.id));
+  const newPinnedConversations =
+    existingSectionIds.has("pinned") || !options.sectionPinnedLabel
+      ? []
+      : conversations.filter(
+          (conversation) =>
+            (conversation.pinnedAtUnixMs ?? 0) > 0 &&
+            !seenIds.has(conversation.id)
+        );
   const newConversations = [...summarySectionItemsById.entries()].flatMap(
     ([sectionId, items]) =>
       existingSectionIds.has(sectionId)
         ? []
         : items.filter((conversation) => !seenIds.has(conversation.id))
   );
-  if (newConversations.length === 0) {
+  if (newPinnedConversations.length === 0 && newConversations.length === 0) {
     return changed ? nextSections : previous;
   }
 
   const sectionsWithInsertions = [...nextSections];
+  if (newPinnedConversations.length > 0 && options.sectionPinnedLabel) {
+    sectionsWithInsertions.unshift({
+      id: "pinned",
+      kind: "pinned",
+      label: options.sectionPinnedLabel,
+      project: null,
+      items: sortPinnedConversations(newPinnedConversations)
+    });
+  }
   for (const conversation of newConversations) {
     const targetSectionId = conversation.project
       ? `project:${normalizeConversationProjectPath(conversation.project.path)}`
@@ -4883,15 +5014,41 @@ export function updateConversationSectionsFromSummaries(
   return sectionsWithInsertions;
 }
 
+function sortPinnedConversations(
+  conversations: AgentGUINodeViewModel["conversations"]
+): AgentGUINodeViewModel["conversations"] {
+  return [...conversations].sort(
+    (left, right) =>
+      (right.pinnedAtUnixMs ?? 0) - (left.pinnedAtUnixMs ?? 0) ||
+      (right.sortTimeUnixMs ?? right.updatedAtUnixMs) -
+        (left.sortTimeUnixMs ?? left.updatedAtUnixMs) ||
+      left.id.localeCompare(right.id)
+  );
+}
+
 function projectRuntimeSectionsToConversationSections(input: {
   conversationFilter: Parameters<
     typeof buildAgentGUIConversationSummaries
   >[0]["conversationFilter"];
   labels: Pick<AgentGUIViewLabels, "sectionPinned" | "sectionConversations">;
+  pinned?: AgentActivityRuntimeSessionPage;
   sections: readonly AgentActivityRuntimeSessionSection[];
   workspaceId: string;
 }): ConversationSection[] {
-  const pinned: AgentGUINodeViewModel["conversations"] = [];
+  const pinned: AgentGUINodeViewModel["conversations"] = input.pinned
+    ? buildAgentGUIConversationSummaries({
+        conversationFilter: input.conversationFilter,
+        provider: AGENT_GUI_CONVERSATION_RAIL_PROJECTION_PROVIDER,
+        snapshot: {
+          composerOptionsByProvider: {},
+          presences: [],
+          sessionMessagesById: {},
+          sessions: input.pinned.sessions,
+          workspaceId: input.workspaceId
+        },
+        userProjects: []
+      }).filter((conversation) => (conversation.pinnedAtUnixMs ?? 0) > 0)
+    : [];
   const result: ConversationSection[] = [];
   for (const section of input.sections) {
     const project = section.userProject
@@ -4938,18 +5095,19 @@ function projectRuntimeSectionsToConversationSections(input: {
     });
   }
   if (pinned.length > 0) {
+    const pinnedById = new Map<
+      string,
+      AgentGUINodeViewModel["conversations"][number]
+    >();
+    for (const conversation of pinned) {
+      pinnedById.set(conversation.id, conversation);
+    }
     result.unshift({
       id: "pinned",
       kind: "pinned",
       label: input.labels.sectionPinned,
       project: null,
-      items: pinned.sort(
-        (left, right) =>
-          (right.pinnedAtUnixMs ?? 0) - (left.pinnedAtUnixMs ?? 0) ||
-          (right.sortTimeUnixMs ?? right.updatedAtUnixMs) -
-            (left.sortTimeUnixMs ?? left.updatedAtUnixMs) ||
-          left.id.localeCompare(right.id)
-      )
+      items: sortPinnedConversations([...pinnedById.values()])
     });
   }
   return result;
@@ -4961,6 +5119,7 @@ function conversationSummariesRenderEqual(
 ): boolean {
   return (
     left.id === right.id &&
+    left.agentTargetId === right.agentTargetId &&
     left.provider === right.provider &&
     left.title === right.title &&
     left.titleFallback === right.titleFallback &&
@@ -5024,8 +5183,7 @@ const agentGUIProviderRailOrder: readonly AgentGUIProvider[] = [
   "opencode",
   "nexight",
   "hermes",
-  "openclaw",
-  "gemini"
+  "openclaw"
 ];
 
 const agentGUIProviderRailDefaultProviders = [
@@ -6194,6 +6352,8 @@ function useAgentGUIConversationRail({
   const runtimeListSessionSections = agentActivityRuntime.listSessionSections;
   const runtimeListSessionSectionPage =
     agentActivityRuntime.listSessionSectionPage;
+  const runtimeListPinnedSessionsPage =
+    agentActivityRuntime.listPinnedSessionsPage;
   const runtimeSectionsEnabled =
     !previewMode &&
     Boolean(runtimeListSessionSections) &&
@@ -6281,13 +6441,17 @@ function useAgentGUIConversationRail({
         const sections = projectRuntimeSectionsToConversationSections({
           conversationFilter,
           labels: sectionProjectionLabels,
+          pinned: page.pinned,
           sections: page.sections,
           workspaceId: page.workspaceId
         });
         const sectionsWithSummaries = updateConversationSectionsFromSummaries(
           sections,
           conversationsRef.current,
-          { sectionConversationsLabel: labels.sectionConversations }
+          {
+            sectionConversationsLabel: labels.sectionConversations,
+            sectionPinnedLabel: labels.sectionPinned
+          }
         );
         setRuntimeRailSections((current) =>
           stabilizeConversationSections(
@@ -6298,6 +6462,13 @@ function useAgentGUIConversationRail({
         setRuntimeRailSectionsPending(false);
         setSectionPageStates(() => {
           const next = new Map<string, ConversationRailSectionPageState>();
+          if (page.pinned) {
+            next.set("pinned", {
+              hasMore: page.pinned.hasMore,
+              isLoading: false,
+              nextCursor: page.pinned.nextCursor ?? null
+            });
+          }
           for (const section of page.sections) {
             next.set(section.sectionKey, {
               hasMore: section.hasMore,
@@ -6343,30 +6514,31 @@ function useAgentGUIConversationRail({
     );
     setRuntimeRailSections((current) =>
       updateConversationSectionsFromSummaries(current, filteredConversations, {
-        sectionConversationsLabel: labels.sectionConversations
+        sectionConversationsLabel: labels.sectionConversations,
+        sectionPinnedLabel: labels.sectionPinned
       })
     );
   }, [
     conversationFilter,
     conversations,
     labels.sectionConversations,
+    labels.sectionPinned,
     runtimeSectionsEnabled
   ]);
 
   const loadMoreSectionConversations = useCallback(
     (section: ConversationSection) => {
-      if (
-        !runtimeListSessionSectionPage ||
-        previewMode ||
-        conversationQuery.trim()
-      ) {
-        return;
-      }
-      if (section.kind === "pinned") {
+      if (previewMode || conversationQuery.trim()) {
         return;
       }
       const currentPageState = sectionPageStates.get(section.id);
       if (currentPageState?.isLoading || currentPageState?.hasMore === false) {
+        return;
+      }
+      if (section.kind === "pinned" && !runtimeListPinnedSessionsPage) {
+        return;
+      }
+      if (section.kind !== "pinned" && !runtimeListSessionSectionPage) {
         return;
       }
       const fallbackCursor = conversationRailPageCursor(section.items);
@@ -6383,7 +6555,96 @@ function useAgentGUIConversationRail({
         });
         return next;
       });
-      void runtimeListSessionSectionPage({
+      if (section.kind === "pinned") {
+        const listPinnedSessionsPage = runtimeListPinnedSessionsPage;
+        if (!listPinnedSessionsPage) {
+          return;
+        }
+        void listPinnedSessionsPage({
+          agentTargetId: sectionAgentTargetId || undefined,
+          cursor: cursor || undefined,
+          limit: AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE,
+          signal: abortController.signal,
+          workspaceId
+        })
+          .then((page) => {
+            if (
+              abortController.signal.aborted ||
+              requestSequence !== pagingRequestSequenceRef.current
+            ) {
+              return;
+            }
+            const pageConversations = buildAgentGUIConversationSummaries({
+              conversationFilter,
+              provider: AGENT_GUI_CONVERSATION_RAIL_PROJECTION_PROVIDER,
+              snapshot: {
+                composerOptionsByProvider: {},
+                presences: [],
+                sessionMessagesById: {},
+                sessions: page.sessions,
+                workspaceId
+              },
+              userProjects: []
+            }).filter((conversation) => (conversation.pinnedAtUnixMs ?? 0) > 0);
+            setRuntimeRailSections((current) => {
+              if (!current) {
+                return current;
+              }
+              return current.map((candidate) =>
+                candidate.id === section.id
+                  ? {
+                      ...candidate,
+                      items: mergeConversationRailPageItems(
+                        candidate.items,
+                        pageConversations
+                      )
+                    }
+                  : candidate
+              );
+            });
+            setSectionPageStates((current) => {
+              const next = new Map(current);
+              next.set(section.id, {
+                hasMore: page.hasMore,
+                isLoading: false,
+                nextCursor: page.nextCursor ?? null
+              });
+              return next;
+            });
+          })
+          .catch(() => {
+            if (
+              abortController.signal.aborted ||
+              requestSequence !== pagingRequestSequenceRef.current
+            ) {
+              return;
+            }
+            setSectionPageStates((current) => {
+              const next = new Map(current);
+              const existing = next.get(section.id);
+              next.set(section.id, {
+                hasMore: existing?.hasMore ?? true,
+                isLoading: false,
+                nextCursor: existing?.nextCursor ?? null
+              });
+              return next;
+            });
+          })
+          .finally(() => {
+            if (
+              pagingAbortControllersRef.current.get(section.id) ===
+              abortController
+            ) {
+              pagingAbortControllersRef.current.delete(section.id);
+            }
+          });
+        return;
+      }
+      const listSessionSectionPage = runtimeListSessionSectionPage;
+      if (!listSessionSectionPage) {
+        return;
+      }
+      void listSessionSectionPage({
         agentTargetId: sectionAgentTargetId || undefined,
         cursor: cursor || undefined,
         limit: AGENT_GUI_CONVERSATION_RAIL_SECTION_PAGE_SIZE,
@@ -6470,6 +6731,7 @@ function useAgentGUIConversationRail({
       conversationFilter,
       conversationQuery,
       previewMode,
+      runtimeListPinnedSessionsPage,
       runtimeListSessionSectionPage,
       sectionAgentTargetId,
       sectionPageStates,
@@ -6790,9 +7052,7 @@ const AgentGUIConversationRailPane = memo(
                 : 0;
               const sectionPageState = sectionPageStates.get(section.id);
               const sectionHasMore =
-                !conversationQuery.trim() &&
-                section.kind !== "pinned" &&
-                sectionPageState?.hasMore === true;
+                !conversationQuery.trim() && sectionPageState?.hasMore === true;
               return (
                 <Fragment key={section.id}>
                   {showProjectRailHeader ? (
@@ -6821,6 +7081,7 @@ const AgentGUIConversationRailPane = memo(
                     section={section}
                     sectionHasMore={sectionHasMore}
                     uiLanguage={uiLanguage}
+                    workspaceId={workspaceId}
                     onCancelDeleteConversation={onCancelDeleteConversation}
                     onConfirmDeleteConversation={onConfirmDeleteConversation}
                     onCreateConversation={onCreateConversation}
@@ -6928,6 +7189,7 @@ interface AgentGUIConversationRailSectionProps {
   currentTimeMs: number;
   labels: AgentGUIViewLabels;
   uiLanguage: UiLanguage;
+  workspaceId: string;
   registerItemElement: (itemId: string, element: HTMLDivElement | null) => void;
   onCreateConversation: (options?: {
     projectPath?: string | null;
@@ -6964,6 +7226,7 @@ const AgentGUIConversationRailSection = memo(
     currentTimeMs,
     labels,
     uiLanguage,
+    workspaceId,
     registerItemElement,
     onCreateConversation,
     onToggleProjectSectionCollapsed,
@@ -7324,6 +7587,7 @@ const AgentGUIConversationRailSection = memo(
                 previewMode={previewMode}
                 registerItemElement={registerItemElement}
                 uiLanguage={uiLanguage}
+                workspaceId={workspaceId}
                 onCancelDeleteConversation={onCancelDeleteConversation}
                 onConfirmDeleteConversation={onConfirmDeleteConversation}
                 onRequestDeleteConversation={onRequestDeleteConversation}
@@ -7373,6 +7637,7 @@ interface AgentGUIConversationRailItemProps {
   labels: AgentGUIViewLabels;
   previewMode: boolean;
   uiLanguage: UiLanguage;
+  workspaceId: string;
   registerItemElement: (itemId: string, element: HTMLDivElement | null) => void;
   onSelectConversation: (agentSessionId: string) => void;
   onToggleConversationPinned: (agentSessionId: string, pinned: boolean) => void;
@@ -7394,6 +7659,7 @@ const AgentGUIConversationRailItem = memo(
     labels,
     previewMode,
     uiLanguage,
+    workspaceId,
     registerItemElement,
     onSelectConversation,
     onToggleConversationPinned,
@@ -7416,6 +7682,8 @@ const AgentGUIConversationRailItem = memo(
     const [contextMenuResetKey, setContextMenuResetKey] = useState(0);
     const contextMenuRenameRequestedRef = useRef(false);
     const contextMenuOpenConversationWindowRequestedRef = useRef(false);
+    const contextMenuCopySessionLinkRequestedRef = useRef(false);
+    const agentHostApi = useOptionalAgentHostApi();
     const handleMouseLeave = useCallback(() => {
       if (isPendingDeleteConversation) {
         onCancelDeleteConversation();
@@ -7472,6 +7740,33 @@ const AgentGUIConversationRailItem = memo(
         contextMenuOpenConversationWindowRequestedRef.current = false;
       }, 0);
     }, [handleOpenConversationWindow]);
+    const handleContextMenuCopySessionLink = useCallback(() => {
+      if (contextMenuCopySessionLinkRequestedRef.current) {
+        return;
+      }
+      contextMenuCopySessionLinkRequestedRef.current = true;
+      setContextMenuResetKey((key) => key + 1);
+      window.setTimeout(() => {
+        if (!agentHostApi?.clipboard?.writeText) {
+          contextMenuCopySessionLinkRequestedRef.current = false;
+          return;
+        }
+        const title = conversationPlainTitle(item, labels, uiLanguage);
+        const markdown = createAgentSessionMarkdownLink({
+          agentSessionId: item.id,
+          agentTargetId: item.agentTargetId,
+          label: title,
+          workspaceId,
+          withAtPrefix: false
+        });
+        void agentHostApi.clipboard
+          .writeText(markdown)
+          .catch(() => undefined)
+          .finally(() => {
+            contextMenuCopySessionLinkRequestedRef.current = false;
+          });
+      }, 0);
+    }, [agentHostApi, item, labels, uiLanguage, workspaceId]);
     const row = (
       <div
         ref={setItemElement}
@@ -7630,6 +7925,18 @@ const AgentGUIConversationRailItem = memo(
               <span>{labels.openConversationWindow}</span>
             </ContextMenuItem>
           ) : null}
+          <ContextMenuItem
+            className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
+            onClick={handleContextMenuCopySessionLink}
+            onPointerUp={(event) => {
+              if (event.button === 0) {
+                handleContextMenuCopySessionLink();
+              }
+            }}
+            onSelect={handleContextMenuCopySessionLink}
+          >
+            <span>{labels.copySessionLink}</span>
+          </ContextMenuItem>
           <ContextMenuItem
             className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
             disabled={!canMarkUnread}

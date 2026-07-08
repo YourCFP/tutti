@@ -516,13 +516,6 @@ export const en = {
               "Minimizes permission checks. Best for trusted tasks that need uninterrupted execution."
           }
         },
-        gemini: {
-          yolo: {
-            label: "Fixed mode",
-            description:
-              "This provider doesn't support changing permission mode here."
-          }
-        },
         hermes: {
           yolo: {
             label: "Fixed mode",
@@ -909,6 +902,7 @@ export const en = {
       showLessConversations: "Show less",
       deleteSession: "Delete session",
       pinSession: "Pin session",
+      copySessionLink: "Copy session link",
       renameSession: "Rename session",
       renameSessionTitle: "Rename conversation",
       renameSessionDescription: "Keep it short and easy to recognize.",
@@ -1849,7 +1843,6 @@ export const en = {
       agentClaudeCode: "Claude Code",
       agentTutti: "Tutti",
       agentHermes: "Hermes",
-      agentGemini: "Gemini",
       agentOpenClaw: "OpenClaw",
       statusNotStarted: "To run",
       statusRunning: "Running",

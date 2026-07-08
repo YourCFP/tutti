@@ -989,8 +989,12 @@ function AgentComposerHandoffIcon({
   isPlaying: boolean;
 }): JSX.Element {
   const [isLottieReady, setIsLottieReady] = useState(false);
+  const shouldLoadAnimation = !disabled && isPlaying;
 
   useEffect(() => {
+    if (!shouldLoadAnimation) {
+      return;
+    }
     let isMounted = true;
     void loadHandoffLottiePlayer().then((isReady) => {
       if (isMounted) {
@@ -1000,9 +1004,9 @@ function AgentComposerHandoffIcon({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [shouldLoadAnimation]);
 
-  const shouldShowAnimation = !disabled && isPlaying && isLottieReady;
+  const shouldShowAnimation = shouldLoadAnimation && isLottieReady;
 
   return (
     <span
@@ -1024,13 +1028,15 @@ function AgentComposerHandoffIcon({
           maskSize: "contain"
         }}
       />
-      <dotlottie-wc
-        autoplay
-        className={styles.composerHandoffAnimatedIcon}
-        data-active={shouldShowAnimation ? "true" : undefined}
-        loop
-        src={HANDOFF_LOTTIE_ANIMATION_SRC}
-      />
+      {shouldShowAnimation ? (
+        <dotlottie-wc
+          autoplay
+          className={styles.composerHandoffAnimatedIcon}
+          data-active="true"
+          loop
+          src={HANDOFF_LOTTIE_ANIMATION_SRC}
+        />
+      ) : null}
     </span>
   );
 }

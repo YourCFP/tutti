@@ -50,6 +50,7 @@ import {
   type AgentGUIViewLabels,
   type AgentGUISidebarFooterContext,
   type AgentGUIProviderRailEmptyRenderer,
+  type AgentGUIProviderUnavailableStateRenderer,
   type AgentMentionReferenceTargetResolver,
   type AgentWorkspaceReferenceInitialTargetResolver
 } from "./AgentGUINodeView";
@@ -277,6 +278,11 @@ export interface AgentGUINodeProps {
   providerRailMode?: AgentGUIProviderRailMode;
   /** Host-owned empty state for the provider rail in "exact" mode. */
   renderProviderRailEmpty?: AgentGUIProviderRailEmptyRenderer;
+  /**
+   * Host-owned main-pane state for a selected provider target that is explicitly
+   * disabled. This does not replace install, login, checking, or retry gates.
+   */
+  renderProviderUnavailableState?: AgentGUIProviderUnavailableStateRenderer;
   renderSidebarFooter?: (ctx: AgentGUISidebarFooterContext) => ReactNode;
   comingSoonProviders?: readonly AgentGUIProvider[];
   providerReadinessGates?: Partial<
@@ -664,6 +670,8 @@ function areAgentGUINodePropsEqual(
     previous.renderSidebarFooter === next.renderSidebarFooter &&
     previous.providerRailMode === next.providerRailMode &&
     previous.renderProviderRailEmpty === next.renderProviderRailEmpty &&
+    previous.renderProviderUnavailableState ===
+      next.renderProviderUnavailableState &&
     previous.comingSoonProviders === next.comingSoonProviders &&
     previous.providerReadinessGates === next.providerReadinessGates &&
     previous.defaultProviderTargetId === next.defaultProviderTargetId &&
@@ -727,6 +735,7 @@ export const AgentGUINode = memo(function AgentGUINode({
   providerRailAllPresentation = null,
   providerRailMode = "catalog",
   renderProviderRailEmpty,
+  renderProviderUnavailableState,
   renderSidebarFooter,
   comingSoonProviders,
   providerReadinessGates = null,
@@ -772,13 +781,16 @@ export const AgentGUINode = memo(function AgentGUINode({
   );
   const handleLinkAction = useCallback(
     (action: WorkspaceLinkAction) => {
+      const agentTargetId = state.agentTargetId?.trim() || null;
       onLinkAction?.(
-        action.type === "open-agent-session" && !action.provider
-          ? { ...action, provider: state.provider }
+        action.type === "open-agent-session" &&
+          !action.agentTargetId &&
+          agentTargetId
+          ? { ...action, agentTargetId }
           : action
       );
     },
-    [onLinkAction, state.provider]
+    [onLinkAction, state.agentTargetId]
   );
   const handleAgentProviderLogin = useCallback(
     (provider?: string | null) => {
@@ -1387,6 +1399,7 @@ export const AgentGUINode = memo(function AgentGUINode({
       showLessConversations: t("agentHost.agentGui.showLessConversations"),
       deleteSession: t("agentHost.agentGui.deleteSession"),
       pinSession: t("agentHost.agentGui.pinSession"),
+      copySessionLink: t("agentHost.agentGui.copySessionLink"),
       renameSession: t("agentHost.agentGui.renameSession"),
       renameSessionTitle: t("agentHost.agentGui.renameSessionTitle"),
       renameSessionDescription: t(
@@ -1889,6 +1902,7 @@ export const AgentGUINode = memo(function AgentGUINode({
             viewModel={viewModel}
             renderSidebarFooter={renderSidebarFooter}
             renderProviderRailEmpty={renderProviderRailEmpty}
+            renderProviderUnavailableState={renderProviderUnavailableState}
             providerRailAllPresentation={providerRailAllPresentation}
             actions={viewActions}
             isActive={isActive}

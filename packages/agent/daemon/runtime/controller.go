@@ -157,7 +157,6 @@ func NewDefaultControllerWithOptions(
 		NewTuttiAgentAppServerAdapterWithHostMetadata(transport, host),
 		NewCursorAdapterWithHostMetadata(transport, host),
 		NewNexightAdapterWithHostMetadata(transport, host),
-		NewGeminiAdapterWithHostMetadata(transport, host),
 		NewHermesAdapterWithHostMetadata(transport, host),
 		NewOpenClawAdapterWithHostMetadata(transport, host),
 		NewOpenCodeAdapterWithHostMetadata(transport, host),
@@ -454,7 +453,7 @@ func defaultPermissionModeIDForProvider(provider string) string {
 		return "auto"
 	case ProviderCursor:
 		return "agent"
-	case ProviderGemini, ProviderHermes:
+	case ProviderHermes:
 		return "yolo"
 	default:
 		return ""
@@ -495,7 +494,7 @@ func permissionModeIDAllowedForProvider(provider string, mode string) bool {
 		}
 	case ProviderCursor:
 		return cursorACPModeID(mode) != ""
-	case ProviderGemini, ProviderHermes:
+	case ProviderHermes:
 		return strings.TrimSpace(mode) == "yolo"
 	case ProviderOpenCode, ProviderOpenClaw:
 		return strings.TrimSpace(mode) == ""
@@ -1259,7 +1258,9 @@ func (c *Controller) runAsyncExecTurn(ctx context.Context, session Session, adap
 			"session_status":       session.Status,
 			"turn_phase":           turnLifecyclePhaseFromEvents(events),
 		})
-		if turnHasTerminalEvent(events, turnID) || turnSteeredIntoActiveTurn(events, turnID) {
+		if turnHasTerminalEvent(events, turnID) ||
+			turnLifecycleSnapshotSettledTurn(events, turnID) ||
+			turnSteeredIntoActiveTurn(events, turnID) {
 			finish(session)
 		}
 	}
@@ -1294,6 +1295,24 @@ func turnHasTerminalEvent(events []activityshared.Event, turnID string) bool {
 			if string(event.Type) == EventTurnCanceled {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func turnLifecycleSnapshotSettledTurn(events []activityshared.Event, turnID string) bool {
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return false
+	}
+	for _, event := range events {
+		snapshot, ok := activityshared.TurnLifecycleSnapshotFromEvent(event)
+		if !ok || strings.TrimSpace(snapshot.Phase) != string(activityshared.TurnPhaseSettled) {
+			continue
+		}
+		if strings.TrimSpace(event.Payload.TurnID) == turnID ||
+			strings.TrimSpace(snapshot.ActiveTurnID) == turnID {
+			return true
 		}
 	}
 	return false

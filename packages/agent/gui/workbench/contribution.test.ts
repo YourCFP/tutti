@@ -218,7 +218,7 @@ describe("agent GUI workbench contribution copy", () => {
     expect(
       entry?.matchNode?.({
         data: {
-          instanceId: "agent-gui:gemini:panel:test-1",
+          instanceId: "agent-gui:removed-provider:panel:test-1",
           typeId: agentGuiWorkbenchTypeId
         }
       } as never)
@@ -323,6 +323,62 @@ describe("agent GUI workbench contribution copy", () => {
       conversationRailCollapsed: false,
       conversationRailWidthPx: null,
       lastActiveAgentSessionId: "session-codex-1"
+    });
+  });
+
+  it("clears the active session when prefill launches reuse an agent node", () => {
+    const contribution = createTestAgentGuiWorkbenchContribution({
+      renderBody: () => null,
+      workspaceId: "workspace-1"
+    });
+    const baseRequest = {
+      dockEntryId: "agent-gui",
+      layoutConstraints: testLaunchLayout.layoutConstraints,
+      reason: "host" as const,
+      surfaceSize: testLaunchLayout.surfaceSize,
+      typeId: agentGuiWorkbenchTypeId,
+      workspaceId: "workspace-1"
+    };
+
+    const sessionLaunch = contribution.onLaunchRequest?.({
+      ...baseRequest,
+      payload: {
+        agentSessionId: "session-codex-1",
+        agentTargetId: "local:codex",
+        provider: "codex"
+      }
+    }) as
+      | {
+          instanceId: string;
+        }
+      | null
+      | undefined;
+
+    const prefillLaunch = contribution.onLaunchRequest?.({
+      ...baseRequest,
+      payload: {
+        agentTargetId: "local:codex",
+        draftPrompt: "Handle this issue",
+        provider: "codex"
+      }
+    }) as
+      | {
+          instanceId: string;
+        }
+      | null
+      | undefined;
+
+    expect(prefillLaunch?.instanceId).toBe(sessionLaunch?.instanceId);
+    expect(
+      contribution.externalStateSource?.getSnapshotNodeState?.({
+        instanceId: prefillLaunch?.instanceId ?? "",
+        typeId: agentGuiWorkbenchTypeId
+      } as never)
+    ).toEqual({
+      agentTargetId: "local:codex",
+      conversationRailCollapsed: false,
+      conversationRailWidthPx: null,
+      lastActiveAgentSessionId: null
     });
   });
 

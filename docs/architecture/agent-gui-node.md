@@ -180,6 +180,11 @@ a Codex panel before the draft prefill effect runs. The prefilled handoff panel
 must also scope the conversation rail to the selected target instead of opening
 on `All`; the target-specific rail selection is part of the handoff activation
 state, not a later user filter choice.
+External draft-prefill launchers that start separate work, such as Issue
+Manager task execution and task breakdown, must request a new AgentGUI window
+and must not reuse an existing dock-entry node. Reusing the dock entry can focus
+or restore the previous active conversation before the new draft composer is
+visible.
 The handoff menu is a launch surface, so its options must come from the
 host-provided, enabled provider targets. It must not use the provider rail's
 static catalog fallback or coming-soon placeholders, which are display chrome
@@ -204,7 +209,10 @@ needs to show the provider in a disabled state. Filter the target out only for
 surfaces that should completely hide it. All empty-home new-conversation
 affordances, including rail toolbar and section actions, must read the selected
 provider target's disabled state so coming-soon targets remain inspectable but
-cannot start sessions.
+cannot start sessions. Hosts that need product-specific temporarily-unavailable
+presentation for the selected disabled target may use AgentGUI's
+`renderProviderUnavailableState`; that renderer is not a replacement for the
+install, login, checking, or retry readiness gates.
 When an empty composer has an `agentTargetId`, model, permission, reasoning,
 and speed options are target-scoped. Do not fall back to provider-level options
 for that target; a missing target-scoped option snapshot should remain a
@@ -556,6 +564,12 @@ rather than cwd grouping, root filters, excluded project paths, or local
 Show more heuristics. Removing a project removes that rail section from the
 section list; re-adding the same path reveals historical sessions with the same
 section key.
+Pinned conversations are returned beside those sections as a separate pinned
+page on the `listSessionSections` bootstrap response. AgentGUI may render that
+page as a local `pinned` group, but pinned is not a daemon section kind and
+must continue to be derived from session `pinnedAtUnixMs`. Pinned Show more
+uses the dedicated pinned page runtime method instead of the section page
+endpoint, because pinned has no daemon `sectionKey`.
 When the provider rail is scoped to a specific agent target, AgentGUI must pass
 that `agentTargetId` to both section endpoints. The daemon applies that filter
 before `LIMIT` and `hasMore` calculation; frontend filtering after an unscoped
@@ -703,6 +717,15 @@ dispatch to provider-specific active-turn guidance without opening a normal next
 turn. Codex app-server maps this to `turn/steer`; Claude SDK maps it through the
 sidecar live prompt queue. `Shift+Enter` remains the multiline composer shortcut
 and must not submit either a normal prompt or guidance.
+Active composer state must prefer a live `AgentActivityRuntime` turn lifecycle
+over the selected session view/control state. `getState` and legacy state patch
+paths can temporarily report a settled or available control state while the
+runtime snapshot still has `turnLifecycle.activeTurnId` with a live phase. In
+that split state, AgentGuiNode must keep the transcript/loading projection busy,
+set normal `canSubmit` false, and let ordinary composer sends enter the local
+queue. Only explicit guidance actions bypass that queue and steer the active
+turn. Legacy `idle` turn patches clear `activeTurnId`; they must not leave a
+stale active-turn block behind.
 
 The submit target is not just a render detail. A detail-page composer must not
 fall back to `startConversation` because a UI-local active conversation ref is
@@ -1751,6 +1774,26 @@ Validation:
 pnpm --filter @tutti-os/agent-gui test -- agent-gui/agentGuiNode/controller/useAgentGUINodeController.spec.tsx
 pnpm --filter @tutti-os/agent-gui test -- agent-gui/agentGuiNode/model/agentGuiConversationModel.spec.ts
 ```
+
+### Mixed AgentGUI Language Or Date Labels
+
+Quick checks:
+
+- Check whether the surface is wrapped in `AgentGuiI18nProvider` through
+  `AgentGUI`, `WorkspaceAgentMessageCenterPanel`, or a host-owned card wrapper.
+- If a desktop surface passes a host `i18n` runtime into
+  `AgentGuiI18nProvider`, pass the matching `locale` too. `t()` reads the
+  runtime, while formatting helpers such as `formatAgentMessageTimestamp` read
+  the AgentGUI locale bridge through `getActiveUiLanguage()`.
+- Inspect workbench contribution plumbing when a card is rendered outside the
+  main AgentGUI tree; `DesktopWorkbenchContributionContext` should carry both
+  `appI18n` and `appLocale`.
+
+Likely fix area:
+
+- desktop contribution context / shell runtime locale propagation
+- host-owned message center card wrappers
+- direct `AgentGuiI18nProvider` call sites
 
 ### Approval Or Question Remains After Answering
 
