@@ -1694,18 +1694,9 @@ export function AgentGUINodeView({
   const [renameConversationDialogOpen, setRenameConversationDialogOpen] =
     useState(false);
   const requestRenameConversation = useStableEventCallback(
-    (agentSessionId: string) => {
-      const target =
-        viewModel.conversations.find(
-          (conversation) => conversation.id === agentSessionId
-        ) ??
-        (viewModel.activeConversation?.id === agentSessionId
-          ? viewModel.activeConversation
-          : null);
-      if (target) {
-        setRenameConversationTarget(target);
-        setRenameConversationDialogOpen(true);
-      }
+    (conversation: AgentGUINodeViewModel["conversations"][number]) => {
+      setRenameConversationTarget(conversation);
+      setRenameConversationDialogOpen(true);
     }
   );
   const conversationRailStoreState =
@@ -4625,7 +4616,9 @@ interface AgentGUIConversationRailPaneProps {
   onCancelDeleteConversations: () => void;
   onConfirmDeleteConversations: () => void;
   onRequestDeleteConversation: (agentSessionId: string) => void;
-  onRequestRenameConversation: (agentSessionId: string) => void;
+  onRequestRenameConversation: (
+    conversation: AgentGUINodeViewModel["conversations"][number]
+  ) => void;
   onCancelDeleteConversation: () => void;
   onConfirmDeleteConversation: () => void;
 }
@@ -7316,7 +7309,9 @@ interface AgentGUIConversationRailSectionProps {
   onRequestDeleteProjectConversations: (path: string) => void;
   onRequestDeleteConversations: () => void;
   onRequestDeleteConversation: (agentSessionId: string) => void;
-  onRequestRenameConversation: (agentSessionId: string) => void;
+  onRequestRenameConversation: (
+    conversation: AgentGUINodeViewModel["conversations"][number]
+  ) => void;
   onCancelDeleteConversation: () => void;
   onConfirmDeleteConversation: () => void;
 }
@@ -7747,7 +7742,9 @@ interface AgentGUIConversationRailItemProps {
   onMarkConversationUnread: (agentSessionId: string) => void;
   onOpenConversationWindow?: (agentSessionId: string) => void;
   onRequestDeleteConversation: (agentSessionId: string) => void;
-  onRequestRenameConversation: (agentSessionId: string) => void;
+  onRequestRenameConversation: (
+    conversation: AgentGUINodeViewModel["conversations"][number]
+  ) => void;
   onCancelDeleteConversation: () => void;
   onConfirmDeleteConversation: () => void;
 }
@@ -7819,8 +7816,8 @@ const AgentGUIConversationRailItem = memo(
       onRequestDeleteConversation(item.id);
     }, [item.id, onRequestDeleteConversation]);
     const handleRequestRename = useCallback(() => {
-      onRequestRenameConversation(item.id);
-    }, [item.id, onRequestRenameConversation]);
+      onRequestRenameConversation(item);
+    }, [item, onRequestRenameConversation]);
     const handleContextMenuRename = useCallback(() => {
       if (contextMenuRenameRequestedRef.current) {
         return;
