@@ -599,6 +599,11 @@ page as a local `pinned` group, but pinned is not a daemon section kind and
 must continue to be derived from session `pinnedAtUnixMs`. Pinned Show more
 uses the dedicated pinned page runtime method instead of the section page
 endpoint, because pinned has no daemon `sectionKey`.
+Rail row actions that need row details must use the row from the displayed
+section model, not re-resolve it from the activity snapshot. Section pages can
+include historical sessions that are visible in the rail before they appear in
+the current snapshot, so actions such as rename must carry the displayed
+conversation through to their dialog or local interaction state.
 When the provider rail is scoped to a specific agent target, AgentGUI must pass
 that `agentTargetId` to both section endpoints. The daemon applies that filter
 before `LIMIT` and `hasMore` calculation; frontend filtering after an unscoped
@@ -1089,6 +1094,9 @@ User-visible rules:
 - Home composer submit with no active conversation starts activation. Detail
   composer submit with an active conversation sends input. First-message
   activation keeps the user on the home composer until activation succeeds.
+- New-conversation entry points that return the user to the home composer,
+  including workbench header or external workbench events, should also issue a
+  composer focus request so the empty input is ready for typing immediately.
 - Treat active-session refs as controller caches, not the source of truth for
   whether a submit is new or existing. React effect cleanup, projection reloads,
   and conversation-list refreshes may temporarily disturb UI-local refs; they

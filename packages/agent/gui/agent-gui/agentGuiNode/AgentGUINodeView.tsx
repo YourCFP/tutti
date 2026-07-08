@@ -82,7 +82,11 @@ import { WorkspaceUserProjectSelect } from "@tutti-os/workspace-user-project/ui"
 import type { WorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
 import type { WorkspaceFileManagerI18nRuntime } from "@tutti-os/workspace-file-manager";
 import type { WorkspaceFileEntry } from "@tutti-os/workspace-file-manager/services";
-import { BareIconButton, ScrollArea } from "@tutti-os/ui-system/components";
+import {
+  BareIconButton,
+  Input,
+  ScrollArea
+} from "@tutti-os/ui-system/components";
 import { Button } from "../../app/renderer/components/ui/button";
 import {
   CreateChatIcon,
@@ -255,6 +259,11 @@ export function resolveAgentGUIHeroIconUrl(
   );
 }
 
+// Providers whose colorful provider-rail art is also the intended hero glyph
+// (their square "manage" avatar differs from the branded icon we show on the
+// empty hero).
+const HERO_USES_PROVIDER_RAIL_ICON = new Set(["cursor", "opencode"]);
+
 function agentGUIProviderIconPresentation(
   provider: string | undefined,
   iconUrl?: string | null
@@ -265,7 +274,9 @@ function agentGUIProviderIconPresentation(
   return {
     provider: normalizedProvider,
     iconUrl:
-      (normalizedProvider === "cursor" ? providerRailIconUrl : null) ||
+      (HERO_USES_PROVIDER_RAIL_ICON.has(normalizedProvider)
+        ? providerRailIconUrl
+        : null) ||
       iconUrl?.trim() ||
       resolveAgentGUIHeroIconUrl(normalizedProvider)
   };
@@ -281,7 +292,9 @@ function agentGUIProviderRailIconPresentation(
   return {
     provider: normalizedProvider,
     iconUrl:
-      (normalizedProvider === "cursor" ? providerRailIconUrl : null) ||
+      (HERO_USES_PROVIDER_RAIL_ICON.has(normalizedProvider)
+        ? providerRailIconUrl
+        : null) ||
       iconUrl?.trim() ||
       providerRailIconUrl ||
       resolveAgentGUIHeroIconUrl(normalizedProvider)
@@ -1693,18 +1706,9 @@ export function AgentGUINodeView({
   const [renameConversationDialogOpen, setRenameConversationDialogOpen] =
     useState(false);
   const requestRenameConversation = useStableEventCallback(
-    (agentSessionId: string) => {
-      const target =
-        viewModel.conversations.find(
-          (conversation) => conversation.id === agentSessionId
-        ) ??
-        (viewModel.activeConversation?.id === agentSessionId
-          ? viewModel.activeConversation
-          : null);
-      if (target) {
-        setRenameConversationTarget(target);
-        setRenameConversationDialogOpen(true);
-      }
+    (conversation: AgentGUINodeViewModel["conversations"][number]) => {
+      setRenameConversationTarget(conversation);
+      setRenameConversationDialogOpen(true);
     }
   );
   const conversationRailStoreState =
@@ -2123,7 +2127,7 @@ const AgentGUIRenameConversationDialog = memo(
     return (
       <ConfirmationDialog
         cancelLabel={labels.cancel}
-        className="sm:max-w-[480px]"
+        className="bg-[var(--background-fronted)] sm:max-w-[480px]"
         confirmBusy={isSaving}
         confirmDisabled={!trimmedTitle}
         confirmLabel={labels.renameSessionSave}
@@ -2161,10 +2165,11 @@ const AgentGUIRenameConversationDialog = memo(
         onConfirm={confirmRename}
         onOpenChange={onOpenChange}
       >
-        <input
+        <Input
           ref={inputRef}
           aria-label={labels.renameSessionTitle}
-          className="h-10 w-full rounded-md border border-border bg-background px-3 text-[14px] font-medium leading-5 text-text-primary shadow-none outline-none transition-colors placeholder:text-text-tertiary focus:border-primary"
+          className="h-9"
+          variant="md"
           placeholder={labels.renameSessionPlaceholder}
           value={title}
           onChange={(event) => setTitle(event.currentTarget.value)}
@@ -3685,6 +3690,17 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
                 provider={emptyHeroProvider}
                 gate={emptyProviderReadinessGate}
                 showAllProviders={viewModel.conversationFilter.kind === "all"}
+                emptyLabel={emptyHeroLabel}
+                emptyProvider={emptyHeroProviderLabel}
+                providerTargets={composerProviderTargets}
+                selectedProviderTarget={viewModel.selectedProviderTarget}
+                onProviderSelect={
+                  canSwitchComposerProvider &&
+                  viewModel.activeConversationId === null
+                    ? selectHomeComposerAgentTargetAndFocus
+                    : undefined
+                }
+                providerSelectLabel={labels.providerSwitchLabel}
                 labels={labels}
               />
             )
@@ -4031,6 +4047,14 @@ interface AgentGUIProviderReadinessGatePaneProps {
   provider: AgentGUINodeViewModel["data"]["provider"];
   gate: AgentGUIProviderReadinessGate;
   showAllProviders?: boolean;
+  // Shared empty-hero title props so the not-installed / not-logged-in gate
+  // keeps the same main title and agent-switch dropdown as the ready state.
+  emptyLabel: string;
+  emptyProvider: string;
+  providerTargets: readonly AgentGUIProviderTarget[];
+  selectedProviderTarget: AgentGUIProviderTarget | null;
+  onProviderSelect?: AgentGUINodeViewProps["actions"]["selectHomeComposerAgentTarget"];
+  providerSelectLabel: string;
   labels: Pick<
     AgentGUIViewLabels,
     | "providerGateCheckingTitle"
@@ -4059,6 +4083,12 @@ const AgentGUIProviderReadinessGatePane = memo(
     provider,
     gate,
     showAllProviders = false,
+    emptyLabel,
+    emptyProvider,
+    providerTargets,
+    selectedProviderTarget,
+    onProviderSelect,
+    providerSelectLabel,
     labels
   }: AgentGUIProviderReadinessGatePaneProps): React.JSX.Element {
     "use memo";
@@ -4076,6 +4106,10 @@ const AgentGUIProviderReadinessGatePane = memo(
       showAllProviders: showAllProvidersChecking
     });
     const action = providerGateAction(gate.status);
+    // Not-installed / not-logged-in gates keep the ready state's main title and
+    // agent-switch dropdown; only the body (description + button) differs.
+    const useSharedHeroTitle =
+      gate.status === "not_installed" || gate.status === "auth_required";
     const pendingLabel =
       pendingAction === "install"
         ? labels.providerGatePendingInstall
@@ -4092,8 +4126,9 @@ const AgentGUIProviderReadinessGatePane = memo(
           data-testid="agent-gui-provider-readiness-gate"
           role="status"
         >
-          {showAllProvidersChecking ? (
+          {showAllProviders ? (
             <AgentGUIAllProviderGridIcon
+              activeProvider={provider}
               className={styles.emptyHeroLaunchpadIcon}
               icons={launchpadIconPresentations}
             />
@@ -4106,8 +4141,24 @@ const AgentGUIProviderReadinessGatePane = memo(
               alt=""
             />
           )}
-          <h2 className={styles.emptyHeroTitle}>{content.title}</h2>
-          <p className={styles.emptyProviderGateDescription}>
+          <h2 className={styles.emptyHeroTitle}>
+            {useSharedHeroTitle ? (
+              <EmptyHeroTitle
+                label={emptyLabel}
+                providerLabel={emptyProvider}
+                providerSelectLabel={providerSelectLabel}
+                providerTargets={providerTargets}
+                selectedProviderTarget={selectedProviderTarget}
+                onProviderSelect={onProviderSelect}
+              />
+            ) : (
+              content.title
+            )}
+          </h2>
+          <p
+            className={styles.emptyProviderGateDescription}
+            data-testid="agent-gui-provider-readiness-gate-description"
+          >
             {content.description}
           </p>
           {pendingLabel && !action ? (
@@ -4256,6 +4307,15 @@ function AgentGUIUnifiedProviderIcon({
   );
 }
 
+// Opacity applied to a hero launchpad icon based on how far it sits from the
+// centered (selected) agent — neighbours fade out toward both edges.
+function agentGUIHeroStripOpacity(distance: number): number {
+  if (distance <= 0) {
+    return 1;
+  }
+  return Math.max(0.15, 1 - distance * 0.4);
+}
+
 function AgentGUILaunchpadIconGrid({
   activeProvider,
   icons
@@ -4266,24 +4326,53 @@ function AgentGUILaunchpadIconGrid({
   const normalizedActiveProvider = activeProvider
     ? normalizeManagedAgentProvider(activeProvider)
     : null;
+  const activeIndex =
+    normalizedActiveProvider === null
+      ? -1
+      : icons.findIndex(
+          (icon) =>
+            normalizeManagedAgentProvider(icon.provider) ===
+            normalizedActiveProvider
+        );
+  const renderItem = (
+    icon: AgentGUIProviderIconPresentation,
+    distance: number,
+    isActive: boolean
+  ): React.JSX.Element => (
+    <span
+      key={`${icon.provider}:${icon.iconUrl}`}
+      className={styles.providerRailLaunchpadItem}
+      data-provider-active={
+        normalizedActiveProvider === null ? undefined : isActive
+      }
+      style={{ opacity: agentGUIHeroStripOpacity(distance) }}
+    >
+      <AgentGUIProviderIconVisual imageClassName="" icon={icon} />
+    </span>
+  );
+  if (activeIndex < 0) {
+    return (
+      <span aria-hidden="true" className={styles.providerRailLaunchpadIcon}>
+        {icons.map((icon) => renderItem(icon, 0, false))}
+      </span>
+    );
+  }
+  // Keep the icons left-to-right, but split them around the selected agent so
+  // the active icon always stays dead-center. The leading/trailing rails share
+  // equal flex width, so the center never drifts with uneven side counts.
   return (
     <span aria-hidden="true" className={styles.providerRailLaunchpadIcon}>
-      {icons.map((icon) => {
-        return (
-          <span
-            key={`${icon.provider}:${icon.iconUrl}`}
-            className={styles.providerRailLaunchpadItem}
-            data-provider-active={
-              normalizedActiveProvider === null
-                ? undefined
-                : normalizeManagedAgentProvider(icon.provider) ===
-                  normalizedActiveProvider
-            }
-          >
-            <AgentGUIProviderIconVisual imageClassName="" icon={icon} />
-          </span>
-        );
-      })}
+      <span className={styles.providerRailLaunchpadSide} data-side="leading">
+        {icons
+          .slice(0, activeIndex)
+          .map((icon, index) => renderItem(icon, activeIndex - index, false))}
+      </span>
+      {renderItem(icons[activeIndex]!, 0, true)}
+      <span className={styles.providerRailLaunchpadSide} data-side="trailing">
+        {icons
+          .slice(activeIndex + 1)
+          .map((icon, index) => renderItem(icon, index + 1, false))}
+      </span>
     </span>
   );
 }
@@ -4624,7 +4713,9 @@ interface AgentGUIConversationRailPaneProps {
   onCancelDeleteConversations: () => void;
   onConfirmDeleteConversations: () => void;
   onRequestDeleteConversation: (agentSessionId: string) => void;
-  onRequestRenameConversation: (agentSessionId: string) => void;
+  onRequestRenameConversation: (
+    conversation: AgentGUINodeViewModel["conversations"][number]
+  ) => void;
   onCancelDeleteConversation: () => void;
   onConfirmDeleteConversation: () => void;
 }
@@ -4772,6 +4863,22 @@ interface ConversationRailSectionPageState {
   hasMore: boolean;
   isLoading: boolean;
   nextCursor: string | null;
+}
+
+function preserveAdvancedConversationRailPageState(
+  existing: ConversationRailSectionPageState | undefined,
+  nextCursor: string | null
+): ConversationRailSectionPageState | null {
+  if (!existing) {
+    return null;
+  }
+  if (existing.hasMore === false) {
+    return existing;
+  }
+  if (existing.nextCursor && existing.nextCursor !== nextCursor) {
+    return existing;
+  }
+  return null;
 }
 
 function conversationRailPageCursor(
@@ -5270,9 +5377,9 @@ const agentGUIProviderRailOrder: readonly AgentGUIProvider[] = [
   "codex",
   "claude-code",
   "cursor",
-  "opencode",
   "tutti-agent",
   "nexight",
+  "opencode",
   "hermes",
   "openclaw"
 ];
@@ -5297,11 +5404,15 @@ function agentGUIProviderRailOrderIndex(provider: AgentGUIProvider): number {
 }
 
 function agentGUILaunchpadIconPresentations(): readonly AgentGUIProviderIconPresentation[] {
+  // Keep this order aligned with the left provider rail (`agentGUIProviderRailOrder`).
   return [
     agentGUIProviderRailIconPresentation("codex"),
     agentGUIProviderRailIconPresentation("claude-code"),
     agentGUIProviderRailIconPresentation("cursor"),
-    agentGUIProviderRailIconPresentation("tutti")
+    agentGUIProviderRailIconPresentation("tutti"),
+    agentGUIProviderRailIconPresentation("opencode"),
+    agentGUIProviderRailIconPresentation("hermes"),
+    agentGUIProviderRailIconPresentation("openclaw")
   ];
 }
 
@@ -6551,20 +6662,30 @@ function useAgentGUIConversationRail({
           )
         );
         setRuntimeRailSectionsPending(false);
-        setSectionPageStates(() => {
+        setSectionPageStates((current) => {
           const next = new Map<string, ConversationRailSectionPageState>();
           if (page.pinned) {
+            const nextCursor = page.pinned.nextCursor ?? null;
+            const preserved = preserveAdvancedConversationRailPageState(
+              current.get("pinned"),
+              nextCursor
+            );
             next.set("pinned", {
-              hasMore: page.pinned.hasMore,
+              hasMore: preserved?.hasMore ?? page.pinned.hasMore,
               isLoading: false,
-              nextCursor: page.pinned.nextCursor ?? null
+              nextCursor: preserved?.nextCursor ?? nextCursor
             });
           }
           for (const section of page.sections) {
+            const nextCursor = section.nextCursor ?? null;
+            const preserved = preserveAdvancedConversationRailPageState(
+              current.get(section.sectionKey),
+              nextCursor
+            );
             next.set(section.sectionKey, {
-              hasMore: section.hasMore,
+              hasMore: preserved?.hasMore ?? section.hasMore,
               isLoading: false,
-              nextCursor: section.nextCursor ?? null
+              nextCursor: preserved?.nextCursor ?? nextCursor
             });
           }
           return next;
@@ -7318,7 +7439,9 @@ interface AgentGUIConversationRailSectionProps {
   onRequestDeleteProjectConversations: (path: string) => void;
   onRequestDeleteConversations: () => void;
   onRequestDeleteConversation: (agentSessionId: string) => void;
-  onRequestRenameConversation: (agentSessionId: string) => void;
+  onRequestRenameConversation: (
+    conversation: AgentGUINodeViewModel["conversations"][number]
+  ) => void;
   onCancelDeleteConversation: () => void;
   onConfirmDeleteConversation: () => void;
 }
@@ -7749,7 +7872,9 @@ interface AgentGUIConversationRailItemProps {
   onMarkConversationUnread: (agentSessionId: string) => void;
   onOpenConversationWindow?: (agentSessionId: string) => void;
   onRequestDeleteConversation: (agentSessionId: string) => void;
-  onRequestRenameConversation: (agentSessionId: string) => void;
+  onRequestRenameConversation: (
+    conversation: AgentGUINodeViewModel["conversations"][number]
+  ) => void;
   onCancelDeleteConversation: () => void;
   onConfirmDeleteConversation: () => void;
 }
@@ -7821,8 +7946,8 @@ const AgentGUIConversationRailItem = memo(
       onRequestDeleteConversation(item.id);
     }, [item.id, onRequestDeleteConversation]);
     const handleRequestRename = useCallback(() => {
-      onRequestRenameConversation(item.id);
-    }, [item.id, onRequestRenameConversation]);
+      onRequestRenameConversation(item);
+    }, [item, onRequestRenameConversation]);
     const handleContextMenuRename = useCallback(() => {
       if (contextMenuRenameRequestedRef.current) {
         return;

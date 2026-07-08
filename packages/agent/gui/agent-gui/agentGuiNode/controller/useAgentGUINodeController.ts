@@ -8257,6 +8257,24 @@ export function useAgentGUINodeController({
       setIsLoadingMessages(false);
       setDetailError(null);
       persistActiveConversation(null);
+      // Leaving an existing conversation to start a fresh one must present an
+      // empty composer: a home draft the user just submitted stays visible
+      // during the async session-create round trip (the eager clear is skipped
+      // there so the box isn't left blank mid-flight), and without this reset
+      // that already-sent text would reappear in the fresh composer. Only clear
+      // when we are actually leaving a conversation (`previous` set) — starting
+      // at home and merely switching project/target while composing a new
+      // conversation must preserve the in-progress draft.
+      const homeDraftKeysToClear = new Set<string>();
+      if (previous) {
+        const selectedTargetData = selectedComposerTargetDataRef.current;
+        homeDraftKeysToClear.add(
+          nodeDefaultDraftContentKey(
+            selectedTargetData.provider,
+            selectedTargetData.agentTargetId
+          )
+        );
+      }
       // Starting a new conversation from a target tab should compose for that
       // tab's target, not for whatever target the node last remembered.
       const filter = conversationFilterRef.current;
@@ -8274,8 +8292,33 @@ export function useAgentGUINodeController({
           (filterTarget.agentTargetId?.trim() ?? "") === filter.agentTargetId
         ) {
           setHomeComposerTargetOverride(filterTarget);
+          if (previous) {
+            homeDraftKeysToClear.add(
+              nodeDefaultDraftContentKey(
+                filterTarget.provider,
+                filterTarget.agentTargetId
+              )
+            );
+          }
         }
       }
+      const clearHomeDrafts = (
+        current: Record<string, AgentComposerDraft>
+      ): Record<string, AgentComposerDraft> => {
+        let next: Record<string, AgentComposerDraft> | null = null;
+        for (const key of homeDraftKeysToClear) {
+          const existing = current[key];
+          if (existing && agentComposerDraftHasContent(existing)) {
+            next = next ?? { ...current };
+            next[key] = emptyAgentComposerDraft();
+          }
+        }
+        return next ?? current;
+      };
+      draftBySessionIdRef.current = clearHomeDrafts(
+        draftBySessionIdRef.current
+      );
+      setDraftBySessionId(clearHomeDrafts);
       loadDraftComposerOptions();
     },
     [
@@ -9640,6 +9683,20 @@ export function useAgentGUINodeController({
           target: targetData,
           options: snapshotComposerOptions
         });
+        agentActivityRuntime.reportDiagnostic?.({
+          details: {
+            agentTargetId: targetData.agentTargetId ?? null,
+            changedFields: Object.keys(supportedNextSettings).sort().join(","),
+            nextModel: supportedNextSettings.model ?? null,
+            previousModel: previousSettings.model ?? null,
+            provider: targetData.provider,
+            reason: "no_active_conversation",
+            resolvedModel: targetSafeMerged.model ?? null
+          },
+          event: "agent.gui.composer_settings.default_only",
+          level: "info",
+          workspaceId
+        });
         draftSettingsBySessionIdRef.current = {
           ...draftSettingsBySessionIdRef.current,
           [defaultDraftKey]: targetSafeMerged
@@ -9777,10 +9834,70 @@ export function useAgentGUINodeController({
           );
         }
       }
+      const sessionSettingsPatchKeys = Object.keys(sessionSettingsPatch).sort();
       if (
-        Object.keys(sessionSettingsPatch).length > 0 &&
+        sessionSettingsPatchKeys.length === 0 &&
+        (nextModel !== undefined ||
+          nextReasoningEffort !== undefined ||
+          nextSpeed !== undefined ||
+          nextPlanMode !== undefined ||
+          nextPermission !== undefined ||
+          nextBrowserUse !== undefined ||
+          nextComputerUse !== undefined)
+      ) {
+        agentActivityRuntime.reportDiagnostic?.({
+          details: {
+            agentSessionId,
+            agentTargetId: normalizeOptionalText(dataRef.current.agentTargetId),
+            attemptedModel: nextModel ?? null,
+            currentModel,
+            provider: dataRef.current.provider,
+            reason: "settings_already_current"
+          },
+          event: "agent.gui.composer_settings.update_noop",
+          level: "info",
+          workspaceId
+        });
+      }
+      if (
+        sessionSettingsPatchKeys.length > 0 &&
+        activeSessionState === null &&
+        !isPreActivationSession
+      ) {
+        agentActivityRuntime.reportDiagnostic?.({
+          details: {
+            agentSessionId,
+            agentTargetId: normalizeOptionalText(dataRef.current.agentTargetId),
+            changedFields: sessionSettingsPatchKeys.join(","),
+            currentModel,
+            nextModel: sessionSettingsPatch.model ?? null,
+            provider: dataRef.current.provider,
+            reason: "missing_active_session_state"
+          },
+          event: "agent.gui.composer_settings.update_skipped",
+          level: "warn",
+          workspaceId
+        });
+      }
+      if (
+        sessionSettingsPatchKeys.length > 0 &&
         (activeSessionState !== null || isPreActivationSession)
       ) {
+        agentActivityRuntime.reportDiagnostic?.({
+          details: {
+            agentSessionId,
+            agentTargetId: normalizeOptionalText(dataRef.current.agentTargetId),
+            changedFields: sessionSettingsPatchKeys.join(","),
+            currentModel,
+            isPreActivationSession,
+            nextModel: sessionSettingsPatch.model ?? null,
+            provider: dataRef.current.provider,
+            turnPhase: activeSessionState?.turnLifecycle?.phase ?? null
+          },
+          event: "agent.gui.composer_settings.update_requested",
+          level: "info",
+          workspaceId
+        });
         updateAgentSessionViewControlState(
           sessionViewRef(agentSessionId),
           (existing) => {
