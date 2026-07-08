@@ -2235,17 +2235,10 @@ export function WorkbenchHostDock({
               };
               const descriptor =
                 popupEntry.entry.resolvePopupItem?.(item) ?? {};
-              const descriptorPreviewImageUrl =
-                descriptor.previewImageUrl ?? null;
               const descriptorPreview =
                 descriptor.preview ??
-                (descriptorPreviewImageUrl
-                  ? ({
-                      kind: "image",
-                      revision: descriptor.revision ?? null,
-                      src: descriptorPreviewImageUrl
-                    } as const)
-                  : (popupEntry.entry.providePopupItemPreview?.(item) ?? null));
+                popupEntry.entry.providePopupItemPreview?.(item) ??
+                null;
               return {
                 ...item,
                 preview: descriptorPreview,
