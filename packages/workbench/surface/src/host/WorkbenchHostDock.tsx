@@ -2305,7 +2305,9 @@ export function WorkbenchHostDock({
               () =>
                 host.launchNode({
                   dockEntryId: popupEntry.entry.id,
-                  payload: popupEntry.entry.launchPayload,
+                  payload:
+                    popupEntry.entry.newWindowLaunchPayload ??
+                    popupEntry.entry.launchPayload,
                   reason: "dock",
                   typeId: popupEntry.entry.typeId
                 })

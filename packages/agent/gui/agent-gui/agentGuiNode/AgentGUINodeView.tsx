@@ -82,7 +82,11 @@ import { WorkspaceUserProjectSelect } from "@tutti-os/workspace-user-project/ui"
 import type { WorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
 import type { WorkspaceFileManagerI18nRuntime } from "@tutti-os/workspace-file-manager";
 import type { WorkspaceFileEntry } from "@tutti-os/workspace-file-manager/services";
-import { BareIconButton, ScrollArea } from "@tutti-os/ui-system/components";
+import {
+  BareIconButton,
+  Input,
+  ScrollArea
+} from "@tutti-os/ui-system/components";
 import { Button } from "../../app/renderer/components/ui/button";
 import {
   CreateChatIcon,
@@ -2061,7 +2065,7 @@ const AgentGUIRenameConversationDialog = memo(
     return (
       <ConfirmationDialog
         cancelLabel={labels.cancel}
-        className="sm:max-w-[480px]"
+        className="bg-[var(--background-fronted)] sm:max-w-[480px]"
         confirmBusy={isSaving}
         confirmDisabled={!trimmedTitle}
         confirmLabel={labels.renameSessionSave}
@@ -2099,10 +2103,11 @@ const AgentGUIRenameConversationDialog = memo(
         onConfirm={confirmRename}
         onOpenChange={onOpenChange}
       >
-        <input
+        <Input
           ref={inputRef}
           aria-label={labels.renameSessionTitle}
-          className="h-10 w-full rounded-md border border-border bg-background px-3 text-[14px] font-medium leading-5 text-text-primary shadow-none outline-none transition-colors placeholder:text-text-tertiary focus:border-primary"
+          className="h-9"
+          variant="md"
           placeholder={labels.renameSessionPlaceholder}
           value={title}
           onChange={(event) => setTitle(event.currentTarget.value)}
