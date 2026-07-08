@@ -650,6 +650,12 @@ interface AgentGUINodeViewProps {
    * Other readiness gates keep the built-in AgentGUI flows.
    */
   renderProviderUnavailableState?: AgentGUIProviderUnavailableStateRenderer;
+  /**
+   * Renders host-owned main-pane readiness gates such as checking, install,
+   * login, coming-soon, or unavailable. When omitted, AgentGUI uses its built-in
+   * readiness gate pane.
+   */
+  renderProviderReadinessGateState?: AgentGUIProviderReadinessGateStateRenderer;
   providerRailAllPresentation?: AgentGUIProviderRailAllPresentation | null;
   onLinkAction?: (action: WorkspaceLinkAction) => void;
   onHandoffConversation?: (input: {
@@ -1146,11 +1152,31 @@ export type AgentGUIProviderUnavailableStateRenderer = (
   ctx: AgentGUIProviderUnavailableStateContext
 ) => ReactNode;
 
+export interface AgentGUIProviderReadinessGateStateContext {
+  provider: AgentGUIProvider;
+  providerLabel: string;
+  target: AgentGUIProviderTarget | null;
+  iconUrl: string;
+  gate: AgentGUIProviderReadinessGate;
+  showAllProviders: boolean;
+}
+
+/**
+ * Renders the main-pane state for a host-projected provider readiness gate.
+ * Use this when a host has product-specific semantics for a readiness state,
+ * for example a shared agent that is temporarily unavailable because the owner
+ * is offline or sharing was revoked.
+ */
+export type AgentGUIProviderReadinessGateStateRenderer = (
+  ctx: AgentGUIProviderReadinessGateStateContext
+) => ReactNode;
+
 export function AgentGUINodeView({
   viewModel,
   renderSidebarFooter,
   renderProviderRailEmpty,
   renderProviderUnavailableState,
+  renderProviderReadinessGateState,
   providerRailAllPresentation,
   onLinkAction,
   onHandoffConversation,
@@ -1943,6 +1969,7 @@ export function AgentGUINodeView({
             workspaceAppIcons={effectiveWorkspaceAppIcons}
             workspaceUserProjectI18n={workspaceUserProjectI18n}
             renderProviderUnavailableState={renderProviderUnavailableState}
+            renderProviderReadinessGateState={renderProviderReadinessGateState}
             previewMode={previewMode}
           />
         </section>
@@ -2149,6 +2176,7 @@ interface AgentGUIDetailPaneProps {
   contextMentionProviders?: readonly AgentContextMentionProvider[];
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
   renderProviderUnavailableState?: AgentGUIProviderUnavailableStateRenderer;
+  renderProviderReadinessGateState?: AgentGUIProviderReadinessGateStateRenderer;
 }
 
 function mergeWorkspaceAppIconsFromCommands(input: {
@@ -2243,7 +2271,8 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   onRequestComposerFocus,
   contextMentionProviders,
   workspaceAppIcons = EMPTY_WORKSPACE_APP_ICONS,
-  renderProviderUnavailableState
+  renderProviderUnavailableState,
+  renderProviderReadinessGateState
 }: AgentGUIDetailPaneProps): React.JSX.Element {
   "use memo";
   const timelineRef = useRef<HTMLDivElement | null>(null);
@@ -3163,6 +3192,10 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     !hasActiveConversation &&
     disabledProviderTarget !== null &&
     renderProviderUnavailableState !== undefined;
+  const shouldRenderProviderReadinessGateState =
+    !hasActiveConversation &&
+    emptyProviderReadinessGate !== null &&
+    renderProviderReadinessGateState !== undefined;
   const bottomDockStoreState = useMemo<AgentGUIBottomDockStoreSnapshot>(
     () => ({
       // The lifted prompt is rendered from props on the pane; the store still
@@ -3599,12 +3632,27 @@ const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
               })}
             </>
           ) : emptyProviderReadinessGate ? (
-            <AgentGUIProviderReadinessGatePane
-              provider={emptyHeroProvider}
-              gate={emptyProviderReadinessGate}
-              showAllProviders={viewModel.conversationFilter.kind === "all"}
-              labels={labels}
-            />
+            shouldRenderProviderReadinessGateState ? (
+              <>
+                {renderProviderReadinessGateState?.({
+                  provider: emptyHeroProvider,
+                  providerLabel:
+                    emptyHeroProviderLabel ||
+                    resolveAgentGuiWorkbenchProviderLabel(emptyHeroProvider),
+                  target: viewModel.selectedProviderTarget ?? null,
+                  iconUrl: resolveAgentGUIHeroIconUrl(emptyHeroProvider),
+                  gate: emptyProviderReadinessGate,
+                  showAllProviders: viewModel.conversationFilter.kind === "all"
+                })}
+              </>
+            ) : (
+              <AgentGUIProviderReadinessGatePane
+                provider={emptyHeroProvider}
+                gate={emptyProviderReadinessGate}
+                showAllProviders={viewModel.conversationFilter.kind === "all"}
+                labels={labels}
+              />
+            )
           ) : (
             <AgentGUIEmptyHeroPane
               provider={emptyHeroProvider}

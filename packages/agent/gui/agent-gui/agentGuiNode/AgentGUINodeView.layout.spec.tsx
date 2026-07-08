@@ -4688,6 +4688,42 @@ describe("AgentGUINodeView provider readiness gate", () => {
     expect(renderProviderUnavailableState).not.toHaveBeenCalled();
   });
 
+  it("lets the host render provider readiness gate state", () => {
+    const renderProviderReadinessGateState = vi.fn((ctx) => (
+      <div data-testid="custom-provider-readiness">
+        {ctx.providerLabel} / {ctx.gate.status} /{" "}
+        {ctx.target?.label ?? "no target"}
+      </div>
+    ));
+    const target = createLocalAgentGUIProviderTarget("codex");
+
+    renderAgentGUINodeView({
+      renderProviderReadinessGateState,
+      viewModel: createViewModel({
+        providerReadinessGate: {
+          status: "coming_soon"
+        },
+        selectedProviderTarget: target,
+        providerTargets: [target]
+      })
+    });
+
+    expect(screen.getByTestId("custom-provider-readiness")).toHaveTextContent(
+      "Codex / coming_soon / Codex"
+    );
+    expect(
+      screen.queryByTestId("agent-gui-provider-readiness-gate")
+    ).not.toBeInTheDocument();
+    expect(renderProviderReadinessGateState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "codex",
+        providerLabel: "Codex",
+        gate: expect.objectContaining({ status: "coming_soon" }),
+        target
+      })
+    );
+  });
+
   it("renders the aggregate agents checking gate when the All tab is active", () => {
     renderAgentGUINodeView({
       viewModel: createViewModel({
@@ -4813,6 +4849,7 @@ interface RenderAgentGUINodeViewOptions {
   renderSidebarFooter?: AgentGUINodeViewProps["renderSidebarFooter"];
   renderProviderRailEmpty?: AgentGUINodeViewProps["renderProviderRailEmpty"];
   renderProviderUnavailableState?: AgentGUINodeViewProps["renderProviderUnavailableState"];
+  renderProviderReadinessGateState?: AgentGUINodeViewProps["renderProviderReadinessGateState"];
   providerRailAllPresentation?: AgentGUINodeViewProps["providerRailAllPresentation"];
   slashStatusLimits?: AgentGUINodeViewProps["slashStatusLimits"];
 }
@@ -4833,6 +4870,7 @@ function buildAgentGUINodeViewElement({
   renderSidebarFooter,
   renderProviderRailEmpty,
   renderProviderUnavailableState,
+  renderProviderReadinessGateState,
   providerRailAllPresentation,
   slashStatusLimits = []
 }: RenderAgentGUINodeViewOptions = {}) {
@@ -4843,6 +4881,7 @@ function buildAgentGUINodeViewElement({
         renderSidebarFooter={renderSidebarFooter}
         renderProviderRailEmpty={renderProviderRailEmpty}
         renderProviderUnavailableState={renderProviderUnavailableState}
+        renderProviderReadinessGateState={renderProviderReadinessGateState}
         providerRailAllPresentation={providerRailAllPresentation}
         onLinkAction={onLinkAction}
         isActive={isActive}

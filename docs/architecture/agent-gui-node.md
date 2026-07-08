@@ -211,8 +211,10 @@ affordances, including rail toolbar and section actions, must read the selected
 provider target's disabled state so coming-soon targets remain inspectable but
 cannot start sessions. Hosts that need product-specific temporarily-unavailable
 presentation for the selected disabled target may use AgentGUI's
-`renderProviderUnavailableState`; that renderer is not a replacement for the
-install, login, checking, or retry readiness gates.
+`renderProviderUnavailableState`. Hosts that need product-specific presentation
+for host-projected readiness gates such as coming-soon, install, login,
+checking, or unavailable should use `renderProviderReadinessGateState` instead
+of covering the built-in pane outside AgentGUI.
 When an empty composer has an `agentTargetId`, model, permission, reasoning,
 and speed options are target-scoped. Do not fall back to provider-level options
 for that target; a missing target-scoped option snapshot should remain a
