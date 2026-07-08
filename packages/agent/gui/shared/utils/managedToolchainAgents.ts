@@ -15,7 +15,6 @@ export type AgentHostManagedToolchainAgent = {
     | "codex"
     | "claude"
     | "cursor"
-    | "gemini"
     | "openclaw"
     | "opencode"
     | "nexight"
@@ -92,22 +91,12 @@ export const AGENT_HOST_MANAGED_TOOLCHAIN_AGENTS: readonly AgentHostManagedToolc
     {
       id: "opencode",
       // i18n-check-ignore: Provider brand name.
-      label: "OpenCode",
+      label: "Open Code",
       toolIds: ["opencode-cli"],
       agentIds: ["opencode"],
       runtimeManaged: true,
       helperProvider: "opencode",
       aliases: ["open code", "open-code", "opencode-ai"]
-    },
-    {
-      id: "gemini",
-      // i18n-check-ignore: Provider brand name.
-      label: "Gemini CLI",
-      toolIds: ["gemini-cli"],
-      agentIds: ["gemini"],
-      runtimeManaged: true,
-      helperProvider: "gemini",
-      aliases: ["gemini cli"]
     }
   ] as const;
 

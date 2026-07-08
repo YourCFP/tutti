@@ -7,7 +7,6 @@ export const agentGuiWorkbenchProviders = [
   "tutti-agent",
   "opencode",
   "hermes",
-  "gemini",
   "openclaw"
 ] as const satisfies readonly AgentGuiWorkbenchProvider[];
 
@@ -19,7 +18,6 @@ export const agentGuiWorkbenchDefaultDockProviders = [
 
 export const agentGuiWorkbenchDockSuppressedProviders = [
   "hermes",
-  "gemini",
   "opencode"
 ] as const satisfies readonly AgentGuiWorkbenchProvider[];
 
@@ -45,11 +43,10 @@ export const agentGuiWorkbenchProviderLabels: Record<
   "claude-code": "Claude Code",
   codex: "Codex",
   cursor: "Cursor",
-  gemini: "Gemini CLI",
   hermes: "Hermes Agent",
   nexight: "Nexight",
   openclaw: "OpenClaw",
-  opencode: "OpenCode",
+  opencode: "Open Code",
   "tutti-agent": "Tutti Agent"
 };
 

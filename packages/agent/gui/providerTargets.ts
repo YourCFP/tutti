@@ -9,11 +9,10 @@ const agentGUIProviderTargetStaticLabels: Record<AgentGUIProvider, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
   cursor: "Cursor",
-  gemini: "Gemini",
   hermes: "Hermes",
   nexight: "Tutti Agent",
   openclaw: "OpenClaw",
-  opencode: "OpenCode",
+  opencode: "Open Code",
   "tutti-agent": "Tutti Agent"
 };
 
