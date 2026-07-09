@@ -15,9 +15,11 @@
 
 ---
 
-## Download for macOS
+## Download
 
-[Download Tutti · Local for macOS (universal DMG)](https://tutti.sh/desktop/download?platform=macos&arch=universal&format=dmg)
+[Download Tutti · Local for macOS](https://tutti.sh/desktop/download?platform=macos&arch=universal&format=dmg)
+
+Windows support is coming soon.
 
 If you like Tutti, give our GitHub repo a star, fork it, open an issue, or send a PR.
 
@@ -249,7 +251,9 @@ No. Tutti is useful for coding, design, content, app workflows, and any work whe
 
 ### Download
 
-[Download Tutti · Local for macOS (universal DMG)](https://tutti.sh/desktop/download?platform=macos&arch=universal&format=dmg)
+[Download Tutti · Local for macOS](https://tutti.sh/desktop/download?platform=macos&arch=universal&format=dmg)
+
+Windows support is coming soon.
 
 <!-- TODO: waitlist link for Tutti · VM -->
 
