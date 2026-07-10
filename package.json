@@ -27,7 +27,7 @@
     "check:agent-activity-runtime-boundaries": "node ./tools/scripts/check-agent-activity-runtime-boundaries.mjs",
     "check:agent-gui-degradation": "node ./tools/scripts/check-agent-gui-degradation.mjs",
     "check:agent-gui-degradation:staged": "node ./tools/scripts/check-agent-gui-degradation.mjs --staged",
-    "check:agent-gui-provider-catalog-generated": "node ./tools/scripts/generate-agent-gui-provider-catalog.mjs --check",
+    "check:agent-gui-provider-catalog-generated": "node ./tools/scripts/check-agent-gui-provider-catalog.mjs",
     "check:codexproto-generated": "node ./tools/scripts/check-codexproto-generated.mjs",
     "check:defaults-generated": "node ./tools/scripts/generate-defaults.mjs --check",
     "check:changed": "node ./tools/scripts/run-check-changed.mjs",

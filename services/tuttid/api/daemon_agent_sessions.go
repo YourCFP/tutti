@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	tuttigenerated "github.com/tutti-os/tutti/services/tuttid/api/generated"
 	"github.com/tutti-os/tutti/services/tuttid/apierrors"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
@@ -502,15 +503,35 @@ func composerSettingsPatchFromGenerated(settings tuttigenerated.AgentSessionComp
 func generatedAgentProviderComposerOptions(options agentservice.ComposerOptions) tuttigenerated.AgentProviderComposerOptionsResponse {
 	effectiveSettings := generatedAgentSessionComposerSettings(options.EffectiveSettings)
 	return tuttigenerated.AgentProviderComposerOptionsResponse{
-		CapabilityCatalog: generatedAgentProviderCapabilityOptions(options.CapabilityCatalog),
-		EffectiveSettings: effectiveSettings,
-		ModelConfig:       generatedComposerConfigOption(options.ModelConfig),
-		PermissionConfig:  generatedPermissionConfig(options.PermissionConfig),
-		Provider:          tuttigenerated.WorkspaceAgentProvider(options.Provider),
-		ReasoningConfig:   generatedComposerConfigOption(options.ReasoningConfig),
-		SpeedConfig:       generatedComposerConfigOptionPointer(options.SpeedConfig),
-		RuntimeContext:    options.RuntimeContext,
-		Skills:            generatedAgentProviderSkillOptions(options.Skills),
+		CapabilityCatalog:  generatedAgentProviderCapabilityOptions(options.CapabilityCatalog),
+		EffectiveSettings:  effectiveSettings,
+		ModelConfig:        generatedComposerConfigOption(options.ModelConfig),
+		PermissionConfig:   generatedPermissionConfig(options.PermissionConfig),
+		Provider:           tuttigenerated.WorkspaceAgentProvider(options.Provider),
+		ReasoningConfig:    generatedComposerConfigOption(options.ReasoningConfig),
+		SpeedConfig:        generatedComposerConfigOptionPointer(options.SpeedConfig),
+		RuntimeContext:     options.RuntimeContext,
+		Skills:             generatedAgentProviderSkillOptions(options.Skills),
+		SlashCommandPolicy: generatedAgentSlashCommandPolicy(options.SlashCommandPolicy),
+	}
+}
+
+func generatedAgentSlashCommandPolicy(
+	policy *providerregistry.SlashCommandPolicyDescriptor,
+) *tuttigenerated.AgentSlashCommandPolicy {
+	if policy == nil {
+		return nil
+	}
+	effects := make([]tuttigenerated.AgentSlashCommandEffectDescriptor, 0, len(policy.CommandEffects))
+	for _, effect := range policy.CommandEffects {
+		effects = append(effects, tuttigenerated.AgentSlashCommandEffectDescriptor{
+			Command: strings.TrimSpace(effect.Command),
+			Effect:  tuttigenerated.AgentSlashCommandEffect(effect.Effect),
+		})
+	}
+	return &tuttigenerated.AgentSlashCommandPolicy{
+		FallbackCommands: append([]string(nil), policy.FallbackCommands...),
+		CommandEffects:   effects,
 	}
 }
 

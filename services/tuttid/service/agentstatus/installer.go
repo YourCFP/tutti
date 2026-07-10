@@ -429,7 +429,7 @@ func (s Service) executeInstaller(
 		if runtime != nil {
 			existingCLIPath = strings.TrimSpace(runtime.CLIPath)
 		}
-		result, err := s.runCodexCLILatestInstaller(installCtx, spec, existingCLIPath)
+		result, err := s.runCodexCLILatestInstaller(installCtx, provider, spec, existingCLIPath)
 		return runResult(result, err)
 	case InstallerKindManagedNPMPackage:
 		existingCLIPath := ""

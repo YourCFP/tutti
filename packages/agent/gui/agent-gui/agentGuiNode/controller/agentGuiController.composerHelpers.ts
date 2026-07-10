@@ -1,6 +1,9 @@
 // Agent GUI controller — composer settings, drafts, and permission labels.
 
-import type { AgentActivityComposerOptions } from "@tutti-os/agent-activity-core";
+import type {
+  AgentActivityComposerOptions,
+  AgentActivitySlashCommandPolicy
+} from "@tutti-os/agent-activity-core";
 import type {
   AgentSessionComposerSettings,
   AgentSessionPermissionConfig,
@@ -201,6 +204,30 @@ export function areProviderSkillOptionListsEqual(
     left.every((skill, index) =>
       areProviderSkillOptionsEqual(skill, right[index]!)
     )
+  );
+}
+
+export function slashCommandPoliciesEqual(
+  left: AgentActivitySlashCommandPolicy | null | undefined,
+  right: AgentActivitySlashCommandPolicy | null | undefined
+): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+  return (
+    left.fallbackCommands.length === right.fallbackCommands.length &&
+    left.fallbackCommands.every(
+      (command, index) => command === right.fallbackCommands[index]
+    ) &&
+    left.commandEffects.length === right.commandEffects.length &&
+    left.commandEffects.every((effect, index) => {
+      const other = right.commandEffects[index];
+      return (
+        other !== undefined &&
+        effect.command === other.command &&
+        effect.effect === other.effect
+      );
+    })
   );
 }
 

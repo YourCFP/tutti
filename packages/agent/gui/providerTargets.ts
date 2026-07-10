@@ -4,10 +4,13 @@ import type {
   AgentGUIProviderTargetBadge,
   AgentGUIProviderTargetRef
 } from "./types.ts";
-import { resolveAgentGUIProviderCatalogIdentity } from "./providerIdentityCatalog.ts";
+import {
+  migratedAgentGUIProviderIdentityCatalog,
+  resolveAgentGUIProviderCatalogIdentity,
+  resolveMigratedAgentGUIProviderIdentity
+} from "./providerIdentityCatalog.ts";
 
-export const agentGUIDefaultTargetProviders = [
-  "codex",
+const legacyAgentGUIDefaultTargetProviders = [
   "claude-code",
   "cursor",
   "tutti-agent",
@@ -16,7 +19,14 @@ export const agentGUIDefaultTargetProviders = [
   "openclaw"
 ] as const satisfies readonly AgentGUIProvider[];
 
-const agentGUIDisabledPlaceholderProviders = [
+export const agentGUIDefaultTargetProviders: readonly AgentGUIProvider[] = [
+  ...[...migratedAgentGUIProviderIdentityCatalog]
+    .sort((left, right) => left.target.sortOrder - right.target.sortOrder)
+    .map((identity) => identity.providerId as AgentGUIProvider),
+  ...legacyAgentGUIDefaultTargetProviders
+];
+
+const legacyAgentGUIDisabledPlaceholderProviders = [
   "hermes",
   "openclaw"
 ] as const satisfies readonly AgentGUIProvider[];
@@ -25,6 +35,7 @@ export function createLocalAgentGUIProviderTarget(
   provider: AgentGUIProvider
 ): AgentGUIProviderTarget {
   const identity = resolveAgentGUIProviderCatalogIdentity(provider);
+  const migratedIdentity = resolveMigratedAgentGUIProviderIdentity(provider);
   const targetId = localAgentGUIProviderTargetId(provider);
   const agentTargetId = localAgentGUIAgentTargetId(provider);
   return {
@@ -35,7 +46,8 @@ export function createLocalAgentGUIProviderTarget(
       kind: "local",
       provider
     },
-    label: identity?.targetDisplayName ?? identity?.displayName ?? provider
+    label: identity?.targetDisplayName ?? identity?.displayName ?? provider,
+    ...(migratedIdentity?.target.enabled === false ? { disabled: true } : {})
   };
 }
 
@@ -102,7 +114,7 @@ function createStaticAgentGUIProviderTargets(
 ): AgentGUIProviderTarget[] {
   const disabledProviders = new Set<AgentGUIProvider>(
     options?.includeDisabledPlaceholders === true
-      ? agentGUIDisabledPlaceholderProviders
+      ? legacyAgentGUIDisabledPlaceholderProviders
       : []
   );
   return providers.map((provider) =>
@@ -155,7 +167,7 @@ export function normalizeAgentGUIProviderTargets(
     normalizedTargets.push(normalized);
   }
   if (includeDisabledPlaceholders && normalizedTargets.length > 0) {
-    for (const provider of agentGUIDisabledPlaceholderProviders) {
+    for (const provider of legacyAgentGUIDisabledPlaceholderProviders) {
       if (seenProviders.has(provider)) {
         continue;
       }

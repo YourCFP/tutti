@@ -101,15 +101,16 @@ type ComposerCapabilityOption struct {
 }
 
 type ComposerOptions struct {
-	Provider          string
-	ModelConfig       ComposerConfigOption
-	PermissionConfig  PermissionConfig
-	ReasoningConfig   ComposerConfigOption
-	SpeedConfig       ComposerConfigOption
-	EffectiveSettings ComposerSettings
-	RuntimeContext    map[string]any
-	Skills            []ComposerSkillOption
-	CapabilityCatalog []ComposerCapabilityOption
+	Provider           string
+	ModelConfig        ComposerConfigOption
+	PermissionConfig   PermissionConfig
+	ReasoningConfig    ComposerConfigOption
+	SpeedConfig        ComposerConfigOption
+	EffectiveSettings  ComposerSettings
+	RuntimeContext     map[string]any
+	Skills             []ComposerSkillOption
+	CapabilityCatalog  []ComposerCapabilityOption
+	SlashCommandPolicy *providerregistry.SlashCommandPolicyDescriptor
 }
 
 func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsInput) (ComposerOptions, error) {
@@ -159,9 +160,7 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		"reasoningEffort":  nullableString(effectiveSettings.ReasoningEffort),
 		"speed":            nullableString(effectiveSettings.Speed),
 	}
-	if slashCommandPolicy := composerSlashCommandPolicyRuntimeContext(provider); slashCommandPolicy != nil {
-		runtimeContext["slashCommandPolicy"] = slashCommandPolicy
-	}
+	slashCommandPolicy := composerSlashCommandPolicy(provider)
 	if agentTargetID != "" {
 		runtimeContext["agentTargetId"] = agentTargetID
 	}
@@ -184,15 +183,16 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		}
 	}
 	options := ComposerOptions{
-		Provider:          provider,
-		ModelConfig:       composerModelConfig(provider, effectiveSettings.Model, modelOptions),
-		PermissionConfig:  permissionConfig,
-		ReasoningConfig:   composerReasoningConfig(provider, effectiveSettings.ReasoningEffort, locale),
-		SpeedConfig:       composerSpeedConfig(provider, effectiveSettings.Speed, locale),
-		EffectiveSettings: effectiveSettings,
-		RuntimeContext:    runtimeContext,
-		Skills:            skills,
-		CapabilityCatalog: capabilityCatalog,
+		Provider:           provider,
+		ModelConfig:        composerModelConfig(provider, effectiveSettings.Model, modelOptions),
+		PermissionConfig:   permissionConfig,
+		ReasoningConfig:    composerReasoningConfig(provider, effectiveSettings.ReasoningEffort, locale),
+		SpeedConfig:        composerSpeedConfig(provider, effectiveSettings.Speed, locale),
+		EffectiveSettings:  effectiveSettings,
+		RuntimeContext:     runtimeContext,
+		Skills:             skills,
+		CapabilityCatalog:  capabilityCatalog,
+		SlashCommandPolicy: slashCommandPolicy,
 	}
 	if composerProfileFor(provider).LiveModelDiscovery {
 		var err error
@@ -311,21 +311,17 @@ func composerDefaultModel(
 	}
 }
 
-func composerSlashCommandPolicyRuntimeContext(provider string) map[string]any {
+func composerSlashCommandPolicy(provider string) *providerregistry.SlashCommandPolicyDescriptor {
 	policy := composerProfileFor(provider).SlashCommandPolicy
 	if len(policy.FallbackCommands) == 0 && len(policy.CommandEffects) == 0 {
 		return nil
 	}
-	effects := make([]map[string]any, 0, len(policy.CommandEffects))
-	for _, descriptor := range policy.CommandEffects {
-		effects = append(effects, map[string]any{
-			"command": strings.TrimSpace(descriptor.Command),
-			"effect":  string(descriptor.Effect),
-		})
-	}
-	return map[string]any{
-		"fallbackCommands": append([]string(nil), policy.FallbackCommands...),
-		"commandEffects":   effects,
+	return &providerregistry.SlashCommandPolicyDescriptor{
+		FallbackCommands: append([]string(nil), policy.FallbackCommands...),
+		CommandEffects: append(
+			[]providerregistry.SlashCommandEffectDescriptor(nil),
+			policy.CommandEffects...,
+		),
 	}
 }
 

@@ -43,6 +43,25 @@ func TestCodexModelCatalogSpecComesFromProviderDescriptor(t *testing.T) {
 	}
 }
 
+func TestCodexModelCatalogListerUsesDescriptorRuntimeCommand(t *testing.T) {
+	descriptor, ok := providerregistry.Find(agentprovider.Codex)
+	if !ok {
+		t.Fatal("codex descriptor missing")
+	}
+	descriptor.Runtime.Command = []string{"poison-codex", "poison-app-server"}
+	spec, registered, err := agentModelCatalogSpecFromDescriptor(descriptor)
+	if err != nil || !registered {
+		t.Fatalf("agentModelCatalogSpecFromDescriptor() = (_, %v, %v)", registered, err)
+	}
+	lister, ok := spec.lister(&CachedAgentModelCatalog{}).(CodexCLIModelLister)
+	if !ok {
+		t.Fatalf("lister = %T, want CodexCLIModelLister", spec.lister(&CachedAgentModelCatalog{}))
+	}
+	if lister.Command != "poison-codex" || !reflect.DeepEqual(lister.Args, []string{"poison-app-server"}) {
+		t.Fatalf("lister command = %q %#v", lister.Command, lister.Args)
+	}
+}
+
 func TestAgentModelCatalogSpecRejectsUnknownDescriptorKind(t *testing.T) {
 	descriptor, ok := providerregistry.Find(agentprovider.Codex)
 	if !ok {
@@ -71,23 +90,23 @@ func TestCodexCapabilityCatalogCommandComesFromRuntimeDescriptor(t *testing.T) {
 }
 
 func TestCodexSlashCommandPolicyComesFromProviderDescriptor(t *testing.T) {
-	policy := composerSlashCommandPolicyRuntimeContext(agentprovider.Codex)
-	if !reflect.DeepEqual(policy["fallbackCommands"], []string{"compact", "status", "fast", "goal", "review"}) {
-		t.Fatalf("fallbackCommands = %#v", policy["fallbackCommands"])
+	policy := composerSlashCommandPolicy(agentprovider.Codex)
+	if policy == nil {
+		t.Fatal("slash command policy missing")
 	}
-	effects, ok := policy["commandEffects"].([]map[string]any)
-	if !ok || len(effects) != 6 {
-		t.Fatalf("commandEffects = %#v", policy["commandEffects"])
+	if !reflect.DeepEqual(policy.FallbackCommands, []string{"compact", "status", "fast", "goal", "review"}) {
+		t.Fatalf("fallbackCommands = %#v", policy.FallbackCommands)
 	}
-	want := []map[string]any{
-		{"command": "init", "effect": "submitImmediate"},
-		{"command": "compact", "effect": "submitImmediate"},
-		{"command": "review", "effect": "showReviewPicker"},
-		{"command": "plan", "effect": "togglePlanMode"},
-		{"command": "status", "effect": "showStatus"},
-		{"command": "fast", "effect": "toggleSpeed"},
+	want := []providerregistry.SlashCommandEffectDescriptor{
+		{Command: "init", Effect: providerregistry.SlashCommandEffectSubmitImmediate},
+		{Command: "compact", Effect: providerregistry.SlashCommandEffectSubmitImmediate},
+		{Command: "review", Effect: providerregistry.SlashCommandEffectShowReviewPicker},
+		{Command: "goal", Effect: providerregistry.SlashCommandEffectActivateGoalMode},
+		{Command: "plan", Effect: providerregistry.SlashCommandEffectTogglePlanMode},
+		{Command: "status", Effect: providerregistry.SlashCommandEffectShowStatus},
+		{Command: "fast", Effect: providerregistry.SlashCommandEffectToggleSpeed},
 	}
-	if !reflect.DeepEqual(effects, want) {
-		t.Fatalf("commandEffects = %#v, want %#v", effects, want)
+	if !reflect.DeepEqual(policy.CommandEffects, want) {
+		t.Fatalf("commandEffects = %#v, want %#v", policy.CommandEffects, want)
 	}
 }

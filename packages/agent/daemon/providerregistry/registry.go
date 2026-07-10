@@ -290,6 +290,7 @@ func validateSlashCommandPolicy(policy SlashCommandPolicyDescriptor) error {
 		switch descriptor.Effect {
 		case SlashCommandEffectSubmitImmediate,
 			SlashCommandEffectShowReviewPicker,
+			SlashCommandEffectActivateGoalMode,
 			SlashCommandEffectTogglePlanMode,
 			SlashCommandEffectShowStatus,
 			SlashCommandEffectToggleSpeed:

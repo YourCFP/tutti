@@ -62,6 +62,7 @@ That root command now uses a repository-owned Node orchestration script so the s
 That full validation currently includes:
 
 - `pnpm check:defaults-generated`
+- `pnpm check:agent-gui-provider-catalog-generated`
 - `pnpm check:api-generated`
 - `pnpm check:event-protocol-generated`
 - `pnpm check:i18n`

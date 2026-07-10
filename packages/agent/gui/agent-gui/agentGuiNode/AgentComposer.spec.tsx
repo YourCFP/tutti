@@ -5246,6 +5246,7 @@ function createComposerSettings(
         { command: "init", effect: "submitImmediate" },
         { command: "compact", effect: "submitImmediate" },
         { command: "review", effect: "showReviewPicker" },
+        { command: "goal", effect: "activateGoalMode" },
         { command: "plan", effect: "togglePlanMode" },
         { command: "status", effect: "showStatus" },
         { command: "fast", effect: "toggleSpeed" }

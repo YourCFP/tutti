@@ -136,6 +136,7 @@ type SlashCommandEffect string
 const (
 	SlashCommandEffectSubmitImmediate  SlashCommandEffect = "submitImmediate"
 	SlashCommandEffectShowReviewPicker SlashCommandEffect = "showReviewPicker"
+	SlashCommandEffectActivateGoalMode SlashCommandEffect = "activateGoalMode"
 	SlashCommandEffectTogglePlanMode   SlashCommandEffect = "togglePlanMode"
 	SlashCommandEffectShowStatus       SlashCommandEffect = "showStatus"
 	SlashCommandEffectToggleSpeed      SlashCommandEffect = "toggleSpeed"

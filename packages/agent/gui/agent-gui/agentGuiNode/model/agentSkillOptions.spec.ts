@@ -32,7 +32,6 @@ describe("agentSkillOptions", () => {
   it("normalizes known skill aliases before sending to the provider", () => {
     expect(
       promptForProviderSkills({
-        provider: "codex",
         prompt: "/caveman keep /init",
         skills: [
           {
@@ -47,7 +46,6 @@ describe("agentSkillOptions", () => {
 
     expect(
       promptForProviderSkills({
-        provider: "claude-code",
         prompt: "$product-design:frontend-design keep /init",
         skills: [
           {

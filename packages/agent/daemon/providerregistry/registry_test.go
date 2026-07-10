@@ -45,8 +45,19 @@ func TestMigratedCodexDescriptorIsComplete(t *testing.T) {
 	if descriptor.ComposerProfile.CapabilityCatalog.Kind != CapabilityCatalogKindCodexAppServer {
 		t.Fatalf("CapabilityCatalog = %#v", descriptor.ComposerProfile.CapabilityCatalog)
 	}
-	if len(descriptor.ComposerProfile.SlashCommandPolicy.CommandEffects) != 6 {
+	effects := descriptor.ComposerProfile.SlashCommandPolicy.CommandEffects
+	if len(effects) != 7 {
 		t.Fatalf("SlashCommandPolicy = %#v", descriptor.ComposerProfile.SlashCommandPolicy)
+	}
+	goalEffectFound := false
+	for _, effect := range effects {
+		if effect.Command == "goal" && effect.Effect == SlashCommandEffectActivateGoalMode {
+			goalEffectFound = true
+			break
+		}
+	}
+	if !goalEffectFound {
+		t.Fatalf("SlashCommandPolicy goal effect missing: %#v", effects)
 	}
 }
 

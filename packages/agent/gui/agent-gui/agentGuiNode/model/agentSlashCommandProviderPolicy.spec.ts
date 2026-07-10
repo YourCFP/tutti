@@ -12,6 +12,7 @@ const CODEX_POLICY = {
     { command: "init", effect: "submitImmediate" },
     { command: "compact", effect: "submitImmediate" },
     { command: "review", effect: "showReviewPicker" },
+    { command: "goal", effect: "activateGoalMode" },
     { command: "plan", effect: "togglePlanMode" },
     { command: "status", effect: "showStatus" },
     { command: "fast", effect: "toggleSpeed" }
@@ -198,6 +199,17 @@ describe("agentSlashCommandProviderPolicy", () => {
     ).toEqual({ kind: "submitPrompt", prompt: "/compact" });
   });
 
+  it("does not apply legacy immediate-command behavior over a typed policy", () => {
+    expect(
+      resolveSlashCommandSelectionEffect({
+        provider: "codex",
+        policy: { fallbackCommands: ["compact"], commandEffects: [] },
+        command: { name: "compact" },
+        currentDraft: "/"
+      })
+    ).toEqual({ kind: "fillDraft", draft: "/compact " });
+  });
+
   it("activates goal mode instead of filling a raw /goal draft", () => {
     expect(
       resolveSlashCommandSelectionEffect({
@@ -215,6 +227,17 @@ describe("agentSlashCommandProviderPolicy", () => {
         currentDraft: "/"
       })
     ).toEqual({ kind: "activateGoalMode" });
+  });
+
+  it("does not infer Codex goal behavior when the typed policy omits it", () => {
+    expect(
+      resolveSlashCommandSelectionEffect({
+        provider: "codex",
+        policy: { fallbackCommands: ["goal"], commandEffects: [] },
+        command: { name: "goal" },
+        currentDraft: "/"
+      })
+    ).toEqual({ kind: "fillDraft", draft: "/goal " });
   });
 
   it("handles Codex local status without provider prompts", () => {
@@ -297,6 +320,14 @@ describe("agentSlashCommandProviderPolicy", () => {
         draft: "/plan"
       })
     ).toEqual({ kind: "togglePlanMode" });
+    expect(
+      resolveSlashCommandSubmitEffect({
+        provider: "codex",
+        policy: CODEX_POLICY,
+        commands,
+        draft: "/goal"
+      })
+    ).toEqual({ kind: "activateGoalMode" });
   });
 
   it("parses manual Claude Code status and toggles plan mode on submit", () => {

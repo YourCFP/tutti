@@ -199,8 +199,11 @@ import {
   nodeDataFromComposerSettings,
   normalizeConfigOptionValue,
   normalizePermissionModeId,
+  providerSkillsFromComposerOptions,
   resolveEffectiveComposerSettings,
-  sameComposerSettings
+  sameComposerSettings,
+  areProviderSkillOptionListsEqual,
+  slashCommandPoliciesEqual as sameSlashPolicy
 } from "./agentGuiController.composerHelpers";
 import { mergeAgentSessionControlStateSnapshot } from "./agentGuiController.sessionHelpers";
 import {
@@ -2643,101 +2646,6 @@ function speedSelectionFromComposerOptions(
   };
 }
 
-function providerSkillsFromComposerOptions(
-  options: AgentActivityComposerOptions | null
-): AgentGUIProviderSkillOption[] {
-  if (!options) {
-    return [];
-  }
-  const invocationByTrigger = new Map(
-    (options.capabilityCatalog ?? []).flatMap((capability) =>
-      capability.trigger &&
-      (capability.invocation === "promptItem" ||
-        capability.invocation === "textTrigger")
-        ? [[capability.trigger, capability.invocation] as const]
-        : []
-    )
-  );
-  return dedupeProviderSkills([
-    ...options.skills.map((skill) => ({
-      ...skill,
-      ...(invocationByTrigger.get(skill.trigger)
-        ? { invocation: invocationByTrigger.get(skill.trigger) }
-        : {})
-    })),
-    ...(options.capabilityCatalog ?? [])
-      .filter(
-        (capability) =>
-          capability.invocation === "promptItem" &&
-          (capability.kind === "skill" || capability.kind === "connector") &&
-          capability.status === "available" &&
-          Boolean(capability.trigger) &&
-          Boolean(capability.path)
-      )
-      .map((capability): AgentGUIProviderSkillOption => {
-        const isConnector = capability.kind === "connector";
-        return {
-          name: isConnector ? capability.label : capability.name,
-          trigger: capability.trigger!,
-          invocation: "promptItem",
-          sourceKind: isConnector ? "connector" : "plugin",
-          kind: isConnector ? "connector" : "skill",
-          ...(capability.description
-            ? { description: capability.description }
-            : {}),
-          ...(capability.pluginName
-            ? { pluginName: capability.pluginName }
-            : {}),
-          ...(capability.path ? { path: capability.path } : {})
-        };
-      })
-  ]);
-}
-
-function areProviderSkillOptionsEqual(
-  left: AgentGUIProviderSkillOption,
-  right: AgentGUIProviderSkillOption
-): boolean {
-  return (
-    left.name === right.name &&
-    left.trigger === right.trigger &&
-    left.invocation === right.invocation &&
-    left.sourceKind === right.sourceKind &&
-    left.description === right.description &&
-    left.pluginName === right.pluginName &&
-    left.path === right.path &&
-    left.kind === right.kind
-  );
-}
-
-function areProviderSkillOptionListsEqual(
-  left: readonly AgentGUIProviderSkillOption[],
-  right: readonly AgentGUIProviderSkillOption[]
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every((skill, index) =>
-      areProviderSkillOptionsEqual(skill, right[index]!)
-    )
-  );
-}
-
-function dedupeProviderSkills(
-  skills: readonly AgentGUIProviderSkillOption[]
-): AgentGUIProviderSkillOption[] {
-  const seen = new Set<string>();
-  const result: AgentGUIProviderSkillOption[] = [];
-  for (const skill of skills) {
-    const key = skill.trigger || `${skill.kind ?? "skill"}:${skill.name}`;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    result.push(skill);
-  }
-  return result;
-}
-
 function areComposerSettingOptionsEqual(
   left: AgentGUIComposerSettingOption,
   right: AgentGUIComposerSettingOption
@@ -2896,10 +2804,9 @@ function areComposerSettingsVMsEqual(
       (right.supportsComputerUse ?? false) &&
     (left.permissionModeChangeDuringTurn ?? false) ===
       (right.permissionModeChangeDuringTurn ?? false) &&
-    left.slashCommandPolicy === right.slashCommandPolicy &&
+    sameSlashPolicy(left.slashCommandPolicy, right.slashCommandPolicy) &&
     left.isSettingsLoading === right.isSettingsLoading &&
-    Boolean(left.isModelOptionsLoading) ===
-      Boolean(right.isModelOptionsLoading) &&
+    !!left.isModelOptionsLoading === !!right.isModelOptionsLoading &&
     left.modelUnavailable === right.modelUnavailable &&
     left.reasoningUnavailable === right.reasoningUnavailable &&
     left.speedUnavailable === right.speedUnavailable &&

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	workspacefiles "github.com/tutti-os/tutti/packages/workspace/files"
 	workspaceissues "github.com/tutti-os/tutti/packages/workspace/issues"
 	tuttigenerated "github.com/tutti-os/tutti/services/tuttid/api/generated"
@@ -1429,6 +1430,13 @@ func TestDaemonAPIGeneratedRoutesGetAgentProviderComposerOptions(t *testing.T) {
 						SourceKind:  "project",
 						Description: "Review architecture changes",
 					}},
+					SlashCommandPolicy: &providerregistry.SlashCommandPolicyDescriptor{
+						FallbackCommands: []string{"compact", "goal"},
+						CommandEffects: []providerregistry.SlashCommandEffectDescriptor{
+							{Command: "compact", Effect: providerregistry.SlashCommandEffectSubmitImmediate},
+							{Command: "goal", Effect: providerregistry.SlashCommandEffectActivateGoalMode},
+						},
+					},
 				}, nil
 			},
 		},
@@ -1469,6 +1477,12 @@ func TestDaemonAPIGeneratedRoutesGetAgentProviderComposerOptions(t *testing.T) {
 	}
 	if len(response.Skills) != 1 || response.Skills[0].Trigger != "$architecture-review" || response.Skills[0].SourceKind != tuttigenerated.AgentProviderSkillOptionSourceKindProject {
 		t.Fatalf("skills = %#v", response.Skills)
+	}
+	if response.SlashCommandPolicy == nil ||
+		!slices.Equal(response.SlashCommandPolicy.FallbackCommands, []string{"compact", "goal"}) ||
+		len(response.SlashCommandPolicy.CommandEffects) != 2 ||
+		response.SlashCommandPolicy.CommandEffects[1].Effect != tuttigenerated.ActivateGoalMode {
+		t.Fatalf("slashCommandPolicy = %#v", response.SlashCommandPolicy)
 	}
 }
 

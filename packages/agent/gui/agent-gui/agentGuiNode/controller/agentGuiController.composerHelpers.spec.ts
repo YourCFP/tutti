@@ -4,6 +4,7 @@ import type { AgentSessionPermissionConfig } from "../../../shared/agentSessionT
 import type { AgentGUINodeData } from "../../../types";
 import {
   buildNodeDefaultComposerSettings,
+  slashCommandPoliciesEqual,
   composerOptionsMissingLiveModelValues,
   liveModelOptionValuesFromRuntimeContext,
   mergeRuntimeContextComposerSettings,
@@ -13,6 +14,31 @@ import {
   readNodeDefaultDraftSettings
 } from "./agentGuiController.composerHelpers";
 import type { AgentActivityComposerOptions } from "@tutti-os/agent-activity-core";
+
+describe("slash command policy equality", () => {
+  const policy = {
+    fallbackCommands: ["compact", "goal"],
+    commandEffects: [
+      { command: "compact", effect: "submitImmediate" as const },
+      { command: "goal", effect: "activateGoalMode" as const }
+    ]
+  };
+
+  it("compares cloned policy values structurally", () => {
+    expect(slashCommandPoliciesEqual(policy, structuredClone(policy))).toBe(
+      true
+    );
+    expect(
+      slashCommandPoliciesEqual(policy, {
+        ...structuredClone(policy),
+        commandEffects: [
+          { command: "compact", effect: "submitImmediate" },
+          { command: "goal", effect: "showStatus" }
+        ]
+      })
+    ).toBe(false);
+  });
+});
 
 describe("live model options from runtime context", () => {
   const cursorRuntimeContext = {

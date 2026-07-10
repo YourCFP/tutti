@@ -12,7 +12,7 @@ func codexDescriptor() ProviderDescriptor {
 			ID:          CodexProviderID,
 			DisplayName: "Codex",
 			IconKey:     "codex",
-			LocaleKey:   "agentGUI.labels.conversationFilterCodex",
+			LocaleKey:   "agentHost.agentGui.conversationFilterCodex",
 		},
 		Runtime: RuntimeDescriptor{
 			Kind:    RuntimeKindCodexAppServer,
@@ -104,6 +104,7 @@ func codexDescriptor() ProviderDescriptor {
 					{Command: "init", Effect: SlashCommandEffectSubmitImmediate},
 					{Command: "compact", Effect: SlashCommandEffectSubmitImmediate},
 					{Command: "review", Effect: SlashCommandEffectShowReviewPicker},
+					{Command: "goal", Effect: SlashCommandEffectActivateGoalMode},
 					{Command: "plan", Effect: SlashCommandEffectTogglePlanMode},
 					{Command: "status", Effect: SlashCommandEffectShowStatus},
 					{Command: "fast", Effect: SlashCommandEffectToggleSpeed},

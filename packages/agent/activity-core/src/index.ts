@@ -92,6 +92,8 @@ export type {
   AgentActivityComposerPermissionModeOption,
   AgentActivityComposerSettingOption,
   AgentActivityComposerSettings,
+  AgentActivitySlashCommandEffect,
+  AgentActivitySlashCommandPolicy,
   AgentActivityComposerSkillOption,
   AgentActivityCreateSessionInput,
   AgentActivityDeleteSessionInput,

@@ -175,6 +175,22 @@ export interface AgentActivityComposerSettings {
   permissionModeId?: string | null;
 }
 
+export type AgentActivitySlashCommandEffect =
+  | "submitImmediate"
+  | "showReviewPicker"
+  | "activateGoalMode"
+  | "togglePlanMode"
+  | "showStatus"
+  | "toggleSpeed";
+
+export interface AgentActivitySlashCommandPolicy {
+  fallbackCommands: readonly string[];
+  commandEffects: readonly {
+    command: string;
+    effect: AgentActivitySlashCommandEffect;
+  }[];
+}
+
 export interface AgentActivityComposerOptions {
   provider: string;
   models: AgentActivityComposerSettingOption[];
@@ -191,6 +207,7 @@ export interface AgentActivityComposerOptions {
   runtimeContext?: Record<string, unknown>;
   skills: AgentActivityComposerSkillOption[];
   capabilityCatalog?: AgentActivityComposerCapabilityOption[];
+  slashCommandPolicy?: AgentActivitySlashCommandPolicy | null;
   loadedAtUnixMs: number;
 }
 

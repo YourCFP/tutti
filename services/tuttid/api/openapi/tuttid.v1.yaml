@@ -6105,6 +6105,43 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AgentProviderCapabilityOption"
+        slashCommandPolicy:
+          $ref: "#/components/schemas/AgentSlashCommandPolicy"
+    AgentSlashCommandEffect:
+      type: string
+      enum:
+        - submitImmediate
+        - showReviewPicker
+        - activateGoalMode
+        - togglePlanMode
+        - showStatus
+        - toggleSpeed
+    AgentSlashCommandEffectDescriptor:
+      type: object
+      additionalProperties: false
+      required:
+        - command
+        - effect
+      properties:
+        command:
+          type: string
+        effect:
+          $ref: "#/components/schemas/AgentSlashCommandEffect"
+    AgentSlashCommandPolicy:
+      type: object
+      additionalProperties: false
+      required:
+        - fallbackCommands
+        - commandEffects
+      properties:
+        fallbackCommands:
+          type: array
+          items:
+            type: string
+        commandEffects:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentSlashCommandEffectDescriptor"
     AgentProviderSkillOption:
       type: object
       additionalProperties: false

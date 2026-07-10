@@ -31,3 +31,32 @@ test("agent composer options keep SDK fast speed configurable after reload", () 
     "fast"
   );
 });
+
+test("agent composer options project the typed slash command policy", () => {
+  const options = agentActivityComposerOptionsFromTuttidResult("codex", {
+    slashCommandPolicy: {
+      fallbackCommands: ["compact", "status"],
+      commandEffects: [
+        { command: "compact", effect: "submitImmediate" },
+        { command: "status", effect: "showStatus" },
+        { command: "goal", effect: "activateGoalMode" },
+        { command: "poison", effect: "unknown" }
+      ]
+    },
+    runtimeContext: {
+      slashCommandPolicy: {
+        fallbackCommands: ["legacy"],
+        commandEffects: []
+      }
+    }
+  });
+
+  assert.deepEqual(options.slashCommandPolicy, {
+    fallbackCommands: ["compact", "status"],
+    commandEffects: [
+      { command: "compact", effect: "submitImmediate" },
+      { command: "status", effect: "showStatus" },
+      { command: "goal", effect: "activateGoalMode" }
+    ]
+  });
+});

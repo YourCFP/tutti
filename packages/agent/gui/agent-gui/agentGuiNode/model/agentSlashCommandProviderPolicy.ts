@@ -1,5 +1,8 @@
 import type { AgentSessionCommand } from "../../../shared/agentSessionTypes";
-import type { AgentActivityComposerOptions } from "@tutti-os/agent-activity-core";
+import type {
+  AgentActivityComposerOptions,
+  AgentActivitySlashCommandPolicy
+} from "@tutti-os/agent-activity-core";
 import {
   buildTuttiBrowserUseSubmitPrompt,
   parseTuttiBrowserUseInvocation
@@ -24,18 +27,7 @@ export type AgentSlashCommand =
   | AgentSessionCommand
   | AgentSlashCommandCapability;
 
-export interface AgentSlashCommandPolicy {
-  fallbackCommands: readonly string[];
-  commandEffects: readonly {
-    command: string;
-    effect:
-      | "submitImmediate"
-      | "showReviewPicker"
-      | "togglePlanMode"
-      | "showStatus"
-      | "toggleSpeed";
-  }[];
-}
+export type AgentSlashCommandPolicy = AgentActivitySlashCommandPolicy;
 
 export type SlashCommandSelectionEffect =
   | {
@@ -93,6 +85,7 @@ interface ProviderSlashPolicy {
   reviewPickerCommands: ReadonlySet<string>;
   /** Commands surfaced when the agent advertises none of its own. */
   fallbackCommands: readonly AgentSessionCommand[];
+  localGoalCommands: ReadonlySet<string>;
   localPlanCommands: ReadonlySet<string>;
   localStatusCommands: ReadonlySet<string>;
   localSpeedCommands: ReadonlySet<string>;
@@ -147,6 +140,7 @@ const PROVIDER_SLASH_POLICY: Readonly<
     immediateCommands: new Set(["compact", "context", "usage"]),
     reviewPickerCommands: new Set([REVIEW_COMMAND]),
     fallbackCommands: CLAUDE_CODE_FALLBACK_COMMANDS,
+    localGoalCommands: new Set(["goal"]),
     localPlanCommands: new Set(["plan"]),
     localStatusCommands: new Set(["status"]),
     localSpeedCommands: new Set(["fast"])
@@ -155,6 +149,7 @@ const PROVIDER_SLASH_POLICY: Readonly<
     immediateCommands: new Set(),
     reviewPickerCommands: new Set(),
     fallbackCommands: CURSOR_FALLBACK_COMMANDS,
+    localGoalCommands: new Set(),
     localPlanCommands: new Set(["plan"]),
     localStatusCommands: new Set(),
     localSpeedCommands: new Set()
@@ -178,6 +173,7 @@ function providerSlashPolicy(
       fallbackCommands: policy.fallbackCommands.map((name) => ({ name })),
       immediateCommands: commandsForEffect("submitImmediate"),
       reviewPickerCommands: commandsForEffect("showReviewPicker"),
+      localGoalCommands: commandsForEffect("activateGoalMode"),
       localPlanCommands: commandsForEffect("togglePlanMode"),
       localStatusCommands: commandsForEffect("showStatus"),
       localSpeedCommands: commandsForEffect("toggleSpeed")
@@ -270,7 +266,7 @@ export function resolveSlashCommandSelectionEffect({
   if (isLocalTogglePlanCommand(provider, commandName, policy)) {
     return { kind: "togglePlanMode" };
   }
-  if (isGoalModeCommand(commandName)) {
+  if (isLocalGoalCommand(provider, commandName, policy)) {
     return { kind: "activateGoalMode" };
   }
   if (isLocalToggleSpeedCommand(provider, commandName, policy)) {
@@ -349,6 +345,9 @@ export function resolveSlashCommandSubmitEffect({
   if (isLocalTogglePlanCommand(provider, commandName, policy)) {
     return { kind: "togglePlanMode" };
   }
+  if (isLocalGoalCommand(provider, commandName, policy)) {
+    return invocation.args.trim() === "" ? { kind: "activateGoalMode" } : null;
+  }
   if (isLocalToggleSpeedCommand(provider, commandName, policy)) {
     return { kind: "toggleSpeed" };
   }
@@ -381,8 +380,16 @@ function isLocalTogglePlanCommand(
   );
 }
 
-function isGoalModeCommand(commandName: string): boolean {
-  return commandName.trim().toLowerCase() === "goal";
+function isLocalGoalCommand(
+  provider: AgentSlashCommandProvider,
+  commandName: string,
+  policy?: AgentSlashCommandPolicy | null
+): boolean {
+  return (
+    providerSlashPolicy(provider, policy)?.localGoalCommands.has(
+      commandName.trim().toLowerCase()
+    ) ?? false
+  );
 }
 
 function isReviewPickerCommand(
@@ -446,7 +453,7 @@ function isImmediateCommand(
   commandName: string,
   policy?: AgentSlashCommandPolicy | null
 ): boolean {
-  if (UNIVERSAL_IMMEDIATE_COMMANDS.has(commandName)) {
+  if (!policy && UNIVERSAL_IMMEDIATE_COMMANDS.has(commandName)) {
     return true;
   }
   return (
@@ -464,53 +471,7 @@ function normalizedCommandSet(values: readonly string[]): ReadonlySet<string> {
 export function slashCommandPolicyFromComposerOptions(
   options: AgentActivityComposerOptions | null
 ): AgentSlashCommandPolicy | null {
-  const raw = options?.runtimeContext?.slashCommandPolicy;
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return null;
-  }
-  const record = raw as Record<string, unknown>;
-  const fallbackCommands = stringArray(record.fallbackCommands);
-  if (!Array.isArray(record.commandEffects)) {
-    return null;
-  }
-  const commandEffects = record.commandEffects.flatMap((value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      return [];
-    }
-    const entry = value as Record<string, unknown>;
-    const command = normalizedText(entry.command);
-    const effect = normalizedCommandEffect(entry.effect);
-    return command && effect ? [{ command, effect }] : [];
-  });
-  return { fallbackCommands, commandEffects };
-}
-
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.flatMap((entry) => {
-        const normalized = normalizedText(entry);
-        return normalized ? [normalized] : [];
-      })
-    : [];
-}
-
-function normalizedText(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function normalizedCommandEffect(
-  value: unknown
-): AgentSlashCommandPolicy["commandEffects"][number]["effect"] | null {
-  switch (value) {
-    case "submitImmediate":
-    case "showReviewPicker":
-    case "togglePlanMode":
-    case "showStatus":
-    case "toggleSpeed":
-      return value;
-    default:
-      return null;
-  }
+  return options?.slashCommandPolicy ?? null;
 }
 
 function normalizedCommandName(command: { name: string }): string {

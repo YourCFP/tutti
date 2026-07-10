@@ -26,7 +26,6 @@ export function labelForProviderSkill(
 
 export function promptForProviderSkills(input: {
   prompt: string;
-  provider: string;
   skills: readonly AgentGUIProviderSkillOption[];
 }): string {
   let prompt = input.prompt;

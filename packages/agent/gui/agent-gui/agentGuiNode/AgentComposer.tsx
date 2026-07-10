@@ -1796,7 +1796,6 @@ export function AgentComposer({
       // workspace-reference 保持为单条 mention，由 skill+CLI 按需解析。
       const submitContent = agentComposerDraftToPromptContent({
         draft: nextDraftContent,
-        provider,
         skills: availableSkills
       });
       const submitDisplayPrompt =

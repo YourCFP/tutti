@@ -121,6 +121,13 @@ func agentModelCatalogSpecFromDescriptor(descriptor providerregistry.ProviderDes
 	case "":
 		return agentModelCatalogSpec{}, false, nil
 	case providerregistry.ModelCatalogKindCodexCLI:
+		command := append([]string(nil), descriptor.Runtime.Command...)
+		if len(command) == 0 || strings.TrimSpace(command[0]) == "" {
+			return agentModelCatalogSpec{}, false, fmt.Errorf(
+				"provider %q model catalog runtime command is required",
+				descriptor.Identity.ID,
+			)
+		}
 		return agentModelCatalogSpec{
 			source: string(descriptor.ComposerProfile.ModelCatalog),
 			ttl:    codexModelCacheTTL,
@@ -129,7 +136,10 @@ func agentModelCatalogSpecFromDescriptor(descriptor providerregistry.ProviderDes
 				if c.Codex != nil {
 					return c.Codex
 				}
-				return CodexCLIModelLister{}
+				return CodexCLIModelLister{
+					Command: command[0],
+					Args:    append([]string(nil), command[1:]...),
+				}
 			},
 			configuredDefaultModel:    readCodexConfiguredDefaultModel,
 			missingDefaultDescription: descriptor.Identity.DisplayName + " configured custom model",

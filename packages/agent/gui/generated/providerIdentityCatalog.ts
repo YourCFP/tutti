@@ -5,7 +5,7 @@ export const generatedProviderIdentityCatalog = [
     providerId: "codex",
     displayName: "Codex",
     iconKey: "codex",
-    localeKey: "agentGUI.labels.conversationFilterCodex",
+    localeKey: "agentHost.agentGui.conversationFilterCodex",
     aliases: [],
     target: {
       id: "local:codex",

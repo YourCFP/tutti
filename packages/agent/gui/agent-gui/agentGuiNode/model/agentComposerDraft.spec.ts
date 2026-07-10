@@ -19,7 +19,6 @@ describe("agentComposerDraft", () => {
     expect(
       agentComposerDraftToPromptContent({
         draft,
-        provider: "codex",
         skills: []
       })
     ).toEqual([]);
@@ -29,7 +28,6 @@ describe("agentComposerDraft", () => {
     expect(
       agentComposerDraftToPromptContent({
         draft: { prompt: "  run tests  ", images: [] },
-        provider: "codex",
         skills: []
       })
     ).toEqual([{ type: "text", text: "run tests" }]);
@@ -39,7 +37,6 @@ describe("agentComposerDraft", () => {
     expect(
       agentComposerDraftToPromptContent({
         draft: { prompt: "/review-code inspect this", images: [] },
-        provider: "future-provider",
         skills: [
           {
             name: "review-code",
@@ -85,7 +82,6 @@ describe("agentComposerDraft", () => {
     expect(
       agentComposerDraftToPromptContent({
         draft,
-        provider: "codex",
         skills: []
       })
     ).toEqual([
@@ -136,14 +132,12 @@ describe("agentComposerDraft", () => {
     expect(
       agentComposerDraftToPromptContent({
         draft: uploading,
-        provider: "codex",
         skills: []
       })
     ).toEqual([]);
     expect(
       agentComposerDraftToPromptContent({
         draft: errored,
-        provider: "codex",
         skills: []
       })
     ).toEqual([]);
@@ -217,7 +211,6 @@ describe("agentComposerDraft", () => {
     expect(
       agentComposerDraftToPromptContent({
         draft: { prompt: "$review $github check this", images: [] },
-        provider: "codex",
         skills: [
           {
             name: "review",
@@ -259,7 +252,6 @@ describe("agentComposerDraft", () => {
             }
           ]
         },
-        provider: "codex",
         skills: []
       })
     ).toEqual([
@@ -287,7 +279,6 @@ describe("agentComposerDraft", () => {
             }
           ]
         },
-        provider: "codex",
         skills: []
       })
     ).toEqual([
@@ -324,7 +315,6 @@ describe("agentComposerDraft", () => {
             }
           ]
         },
-        provider: "codex",
         skills: []
       })
     ).toEqual([]);
@@ -405,7 +395,6 @@ describe("agentComposerDraft", () => {
             }
           ]
         },
-        provider: "codex",
         skills: []
       })
     ).toEqual([

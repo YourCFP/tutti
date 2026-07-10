@@ -590,12 +590,8 @@ function cloneAgentActivityComposerOptions(
   return {
     provider: options.provider,
     models: options.models.map((option) => ({ ...option })),
-    reasoningEfforts: options.reasoningEfforts.map((option) => ({
-      ...option
-    })),
-    speeds: (options.speeds ?? []).map((option) => ({
-      ...option
-    })),
+    reasoningEfforts: options.reasoningEfforts.map((option) => ({ ...option })),
+    speeds: (options.speeds ?? []).map((option) => ({ ...option })),
     modelConfigurable: options.modelConfigurable ?? false,
     reasoningConfigurable: options.reasoningConfigurable ?? false,
     speedConfigurable: options.speedConfigurable ?? false,
@@ -611,6 +607,9 @@ function cloneAgentActivityComposerOptions(
     capabilityCatalog: (options.capabilityCatalog ?? []).map((capability) => ({
       ...capability
     })),
+    slashCommandPolicy: cloneJSONValue(
+      options.slashCommandPolicy ?? null
+    ) as AgentActivityComposerOptions["slashCommandPolicy"],
     loadedAtUnixMs: options.loadedAtUnixMs
   };
 }

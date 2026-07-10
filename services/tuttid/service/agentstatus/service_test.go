@@ -1406,7 +1406,7 @@ func TestServiceRunCodexCLILatestInstallerPrefersManagedNPM(t *testing.T) {
 		input.OnStdout("installed")
 		return InstallCommandResult{ExitCode: 0, Stdout: "installed"}, nil
 	}
-	result, err := service.runCodexCLILatestInstaller(context.Background(), InstallerSpec{
+	result, err := service.runCodexCLILatestInstaller(context.Background(), "codex", InstallerSpec{
 		Kind:     InstallerKindCodexCLILatest,
 		CodexCLI: codexCLIInstallerSpec().CodexCLI,
 	}, "")
@@ -1430,6 +1430,7 @@ func TestServiceRunCodexCLILatestInstallerPrefersManagedNPM(t *testing.T) {
 }
 
 func TestServiceRunCodexInstallerReportsManagedNPMActiveAction(t *testing.T) {
+	const provider = "codex"
 	home := t.TempDir()
 	binDir := filepath.Join(home, "bin")
 	writeExecutable(t, filepath.Join(binDir, npmBinaryNameForTest()), "#!/bin/sh\nexit 0\n")
@@ -1447,7 +1448,7 @@ func TestServiceRunCodexInstallerReportsManagedNPMActiveAction(t *testing.T) {
 		return AuthInfo{Status: AuthAuthenticated}, true
 	}
 	service.Registry = Registry{Specs: []ProviderSpec{{
-		Provider:           "codex",
+		Provider:           provider,
 		BinaryNames:        []string{"codex-test"},
 		AdapterBinaryNames: []string{"codex-test"},
 		AdapterCommand:     []string{"codex-test", "app-server"},
@@ -1502,7 +1503,7 @@ func TestServiceRunCodexInstallerReportsManagedNPMActiveAction(t *testing.T) {
 	_ = requireTestCodexPlatformBinaryPath(t, pkgDir)
 	go func() {
 		result, err := service.RunAction(context.Background(), RunActionInput{
-			Provider: "codex",
+			Provider: provider,
 			ActionID: ActionInstall,
 		})
 		if err != nil {
@@ -1517,7 +1518,7 @@ func TestServiceRunCodexInstallerReportsManagedNPMActiveAction(t *testing.T) {
 		t.Fatalf("RunAction completed before install started: %#v", result)
 	}
 	defer releaseInstallOnce.Do(func() { close(releaseInstall) })
-	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{"codex"}})
+	snapshot, err := service.List(context.Background(), ListInput{Providers: []string{provider}})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}

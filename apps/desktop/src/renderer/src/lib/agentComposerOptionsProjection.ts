@@ -3,7 +3,9 @@ import type {
   AgentActivityComposerOptions,
   AgentActivityComposerPermissionConfig,
   AgentActivityComposerSettingOption,
-  AgentActivityComposerSkillOption
+  AgentActivityComposerSkillOption,
+  AgentActivitySlashCommandEffect,
+  AgentActivitySlashCommandPolicy
 } from "@tutti-os/agent-activity-core";
 
 export function agentActivityComposerOptionsFromTuttidResult(
@@ -75,8 +77,48 @@ export function agentActivityComposerOptionsFromTuttidResult(
     skills:
       skillsFromResult.length > 0 ? skillsFromResult : skillsFromRuntimeContext,
     capabilityCatalog,
+    slashCommandPolicy: slashCommandPolicyFromValue(result.slashCommandPolicy),
     loadedAtUnixMs: Date.now()
   };
+}
+
+function slashCommandPolicyFromValue(
+  value: unknown
+): AgentActivitySlashCommandPolicy | null {
+  const policy = recordValue(value);
+  if (
+    !Array.isArray(policy.fallbackCommands) ||
+    !Array.isArray(policy.commandEffects)
+  ) {
+    return null;
+  }
+  const fallbackCommands = policy.fallbackCommands.flatMap((entry) => {
+    const command = normalizeText(entry);
+    return command ? [command] : [];
+  });
+  const commandEffects = policy.commandEffects.flatMap((entry) => {
+    const descriptor = recordValue(entry);
+    const command = normalizeText(descriptor.command);
+    const effect = slashCommandEffectFromValue(descriptor.effect);
+    return command && effect ? [{ command, effect }] : [];
+  });
+  return { fallbackCommands, commandEffects };
+}
+
+function slashCommandEffectFromValue(
+  value: unknown
+): AgentActivitySlashCommandEffect | null {
+  switch (value) {
+    case "submitImmediate":
+    case "showReviewPicker":
+    case "activateGoalMode":
+    case "togglePlanMode":
+    case "showStatus":
+    case "toggleSpeed":
+      return value;
+    default:
+      return null;
+  }
 }
 
 function settingOptionsFromComposerConfig(

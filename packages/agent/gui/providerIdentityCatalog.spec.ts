@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { agentGuiI18nResources } from "./i18n/index.ts";
 import {
   migratedAgentGUIProviderIdentityCatalog,
   agentGUIProviderIdentityDisplayName,
@@ -12,7 +13,7 @@ describe("provider identity catalog", () => {
       providerId: "codex",
       displayName: "Codex",
       iconKey: "codex",
-      localeKey: "agentGUI.labels.conversationFilterCodex",
+      localeKey: "agentHost.agentGui.conversationFilterCodex",
       target: {
         id: "local:codex",
         launchRefType: "local_cli",
@@ -42,7 +43,20 @@ describe("provider identity catalog", () => {
     expect(identity).not.toBeNull();
     const t = vi.fn(() => "科德克斯");
     expect(agentGUIProviderIdentityDisplayName(identity!, t)).toBe("科德克斯");
-    expect(t).toHaveBeenCalledWith("agentGUI.labels.conversationFilterCodex");
+    expect(t).toHaveBeenCalledWith(
+      "agentHost.agentGui.conversationFilterCodex"
+    );
+  });
+
+  it("resolves every generated locale key in every AgentGUI locale", () => {
+    for (const [locale, resource] of Object.entries(agentGuiI18nResources)) {
+      for (const identity of migratedAgentGUIProviderIdentityCatalog) {
+        expect(
+          valueAtPath(resource, identity.localeKey),
+          `${locale}:${identity.providerId}:${identity.localeKey}`
+        ).toBeTypeOf("string");
+      }
+    }
   });
 
   it("contains unique generated provider and target ids", () => {
@@ -58,3 +72,12 @@ describe("provider identity catalog", () => {
     ).toBe(migratedAgentGUIProviderIdentityCatalog.length);
   });
 });
+
+function valueAtPath(value: unknown, path: string): unknown {
+  return path.split(".").reduce<unknown>((current, key) => {
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      return undefined;
+    }
+    return (current as Record<string, unknown>)[key];
+  }, value);
+}

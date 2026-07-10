@@ -400,6 +400,36 @@ func (e AgentProviderSkillOptionSourceKind) Valid() bool {
 	}
 }
 
+// Defines values for AgentSlashCommandEffect.
+const (
+	ActivateGoalMode AgentSlashCommandEffect = "activateGoalMode"
+	ShowReviewPicker AgentSlashCommandEffect = "showReviewPicker"
+	ShowStatus       AgentSlashCommandEffect = "showStatus"
+	SubmitImmediate  AgentSlashCommandEffect = "submitImmediate"
+	TogglePlanMode   AgentSlashCommandEffect = "togglePlanMode"
+	ToggleSpeed      AgentSlashCommandEffect = "toggleSpeed"
+)
+
+// Valid indicates whether the value is a known member of the AgentSlashCommandEffect enum.
+func (e AgentSlashCommandEffect) Valid() bool {
+	switch e {
+	case ActivateGoalMode:
+		return true
+	case ShowReviewPicker:
+		return true
+	case ShowStatus:
+		return true
+	case SubmitImmediate:
+		return true
+	case TogglePlanMode:
+		return true
+	case ToggleSpeed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentTargetLaunchRefType.
 const (
 	LocalCli AgentTargetLaunchRefType = "local_cli"
@@ -2258,15 +2288,16 @@ type AgentProviderComposerConfigOptionValue struct {
 
 // AgentProviderComposerOptionsResponse defines model for AgentProviderComposerOptionsResponse.
 type AgentProviderComposerOptionsResponse struct {
-	CapabilityCatalog []AgentProviderCapabilityOption `json:"capabilityCatalog"`
-	EffectiveSettings AgentSessionComposerSettings    `json:"effectiveSettings"`
-	ModelConfig       AgentProviderComposerConfig     `json:"modelConfig"`
-	PermissionConfig  PermissionConfig                `json:"permissionConfig"`
-	Provider          WorkspaceAgentProvider          `json:"provider"`
-	ReasoningConfig   AgentProviderComposerConfig     `json:"reasoningConfig"`
-	RuntimeContext    map[string]interface{}          `json:"runtimeContext"`
-	Skills            []AgentProviderSkillOption      `json:"skills"`
-	SpeedConfig       *AgentProviderComposerConfig    `json:"speedConfig,omitempty"`
+	CapabilityCatalog  []AgentProviderCapabilityOption `json:"capabilityCatalog"`
+	EffectiveSettings  AgentSessionComposerSettings    `json:"effectiveSettings"`
+	ModelConfig        AgentProviderComposerConfig     `json:"modelConfig"`
+	PermissionConfig   PermissionConfig                `json:"permissionConfig"`
+	Provider           WorkspaceAgentProvider          `json:"provider"`
+	ReasoningConfig    AgentProviderComposerConfig     `json:"reasoningConfig"`
+	RuntimeContext     map[string]interface{}          `json:"runtimeContext"`
+	Skills             []AgentProviderSkillOption      `json:"skills"`
+	SlashCommandPolicy *AgentSlashCommandPolicy        `json:"slashCommandPolicy,omitempty"`
+	SpeedConfig        *AgentProviderComposerConfig    `json:"speedConfig,omitempty"`
 }
 
 // AgentProviderNetworkEndpoint defines model for AgentProviderNetworkEndpoint.
@@ -2351,6 +2382,21 @@ type AgentSessionComposerSettings struct {
 	PlanMode         *bool   `json:"planMode,omitempty"`
 	ReasoningEffort  *string `json:"reasoningEffort,omitempty"`
 	Speed            *string `json:"speed,omitempty"`
+}
+
+// AgentSlashCommandEffect defines model for AgentSlashCommandEffect.
+type AgentSlashCommandEffect string
+
+// AgentSlashCommandEffectDescriptor defines model for AgentSlashCommandEffectDescriptor.
+type AgentSlashCommandEffectDescriptor struct {
+	Command string                  `json:"command"`
+	Effect  AgentSlashCommandEffect `json:"effect"`
+}
+
+// AgentSlashCommandPolicy defines model for AgentSlashCommandPolicy.
+type AgentSlashCommandPolicy struct {
+	CommandEffects   []AgentSlashCommandEffectDescriptor `json:"commandEffects"`
+	FallbackCommands []string                            `json:"fallbackCommands"`
 }
 
 // AgentTarget defines model for AgentTarget.
