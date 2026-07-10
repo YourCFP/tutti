@@ -7436,7 +7436,7 @@ function createEmptyAgentActivitySnapshot(
     presences: [],
     sessions: [],
     sessionMessagesById: {},
-    composerOptionsByProvider: {}
+    composerOptionsByTargetKey: {}
   };
 }
 

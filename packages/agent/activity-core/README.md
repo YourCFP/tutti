@@ -100,6 +100,21 @@ cannot mutate controller state by accident.
 When loaded or upserted session data is unchanged, the controller preserves the
 current snapshot reference and does not notify subscribers.
 
+## Composer Options Cache
+
+`loadComposerOptions({ targetKey, provider, ... })` caches results in a single
+key space, `composerOptionsByTargetKey`. `targetKey` is an **opaque** cache key:
+the controller round-trips it verbatim to the adapter (as `agentTargetId`) and
+uses it as the snapshot key — it never parses, derives meaning from, or rewrites
+it. Callers pass the already-resolved directory target id; two distinct targets
+that share a `provider` therefore keep isolated caches (no provider-dimension
+fallback).
+
+`invalidateComposerOptions({ providers })` drops freshness markers so the next
+non-forced load refetches, while the last known options stay renderable. It
+filters by the `provider` stored inside each cached value, never by inspecting
+the opaque `targetKey`.
+
 ## Submit Availability
 
 Hosts should return `submitAvailability` as the authoritative wire state when a

@@ -23,7 +23,7 @@ describe("projectCoreSessionStatus", () => {
 describe("agentHostSnapshotFromAgentActivitySnapshot", () => {
   it("projects active runtime phases into host session status", () => {
     const hostSnapshot = agentHostSnapshotFromAgentActivitySnapshot({
-      composerOptionsByProvider: {},
+      composerOptionsByTargetKey: {},
       presences: [],
       sessionMessagesById: {},
       sessions: [

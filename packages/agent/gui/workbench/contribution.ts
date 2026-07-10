@@ -452,8 +452,9 @@ export function createAgentGuiWorkbenchContribution(
         launchPayload,
         provider
       );
-      const launchAgentTargetId =
-        providerTarget.agentTargetId ?? providerTarget.providerTargetId;
+      // Identity is the agentTargetId only — a providerTargetId is a deprecated
+      // ref and must never be laundered into the agentTargetId slot.
+      const launchAgentTargetId = providerTarget.agentTargetId;
       if (targetAgentSessionId) {
         const previousState = nodeStateSource.readNodeState({
           instanceId,
@@ -486,9 +487,6 @@ export function createAgentGuiWorkbenchContribution(
             lastActiveAgentSessionId: null,
             ...(providerTarget.agentTargetId
               ? { agentTargetId: providerTarget.agentTargetId }
-              : {}),
-            ...(providerTarget.providerTargetId
-              ? { agentTargetId: providerTarget.providerTargetId }
               : {})
           },
           typeId: agentGuiWorkbenchTypeId

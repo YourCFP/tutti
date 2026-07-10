@@ -11,6 +11,7 @@ export {
   createEmptyAgentActivitySnapshot,
   setAgentActivityStoreDiagnosticSink,
   type AgentActivityController,
+  type AgentActivityLoadComposerOptionsControllerInput,
   type AgentActivitySnapshotListener,
   type CreateAgentActivityControllerInput
 } from "./controller.ts";

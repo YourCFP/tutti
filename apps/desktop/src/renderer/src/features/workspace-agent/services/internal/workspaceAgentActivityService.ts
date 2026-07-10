@@ -888,10 +888,14 @@ export class WorkspaceAgentActivityService implements IWorkspaceAgentActivitySer
     workspaceId: string;
   }): Promise<unknown> {
     const provider = resolveDesktopAgentGUIProvider(input.provider);
+    // The resolved agent target id is the opaque composer-options cache key
+    // inside activity-core (single key space); it is passed through verbatim
+    // as targetKey. Callers must resolve identity first — activity-core
+    // rejects an empty key (no provider-keyed fallback bucket).
     return this.controllerEntry(
       input.workspaceId
     ).controller.loadComposerOptions({
-      agentTargetId: input.agentTargetId,
+      targetKey: (input.agentTargetId ?? "").trim(),
       provider,
       cwd: input.cwd,
       force: input.force,
