@@ -1387,12 +1387,15 @@ test("controller maps session update events into complete session snapshots", ()
   assert.equal(session?.lastEventUnixMs, 2000);
 });
 
-test("controller caches composer options by provider and clones snapshots", async () => {
+test("controller round-trips the opaque targetKey verbatim and clones snapshots", async () => {
   let loadCount = 0;
+  const seenTargetKeys: Array<string | null | undefined> = [];
+  const targetKey = "shared-agent:abc/def?weird=1";
   const controller = createAgentActivityController({
     adapter: fakeAdapter({
       loadComposerOptions: async (input) => {
         loadCount += 1;
+        seenTargetKeys.push(input.agentTargetId);
         return createComposerOptions({
           provider: input.provider,
           models: [{ value: "gpt-5.4", label: "GPT-5.4" }],
@@ -1408,27 +1411,48 @@ test("controller caches composer options by provider and clones snapshots", asyn
     workspaceId: "workspace-1"
   });
 
-  const first = await controller.loadComposerOptions({ provider: "codex" });
+  const first = await controller.loadComposerOptions({
+    provider: "codex",
+    targetKey
+  });
   first.models[0]!.label = "mutated";
   first.permissionConfig!.defaultValue = "mutated";
   first.permissionConfig!.modes[0]!.label = "mutated";
   (first.runtimeContext!.promptCapabilities as Record<string, unknown>).image =
     false;
-  const second = await controller.loadComposerOptions({ provider: "codex" });
+  const second = await controller.loadComposerOptions({
+    provider: "codex",
+    targetKey
+  });
 
   assert.equal(loadCount, 1);
+  // The key is round-tripped verbatim to the adapter and used as the snapshot
+  // key without any parsing or prefixing.
+  assert.deepEqual(seenTargetKeys, [targetKey]);
   assert.equal(second.models[0]?.label, "GPT-5.4");
   assert.equal(second.permissionConfig?.defaultValue, "auto");
   assert.equal(second.permissionConfig?.modes[0]?.label, "Auto");
   assert.deepEqual(second.runtimeContext?.promptCapabilities, { image: true });
   assert.equal(
-    controller.getSnapshot().composerOptionsByProvider?.codex?.models[0]?.label,
+    controller.getSnapshot().composerOptionsByTargetKey?.[targetKey]?.models[0]
+      ?.label,
     "GPT-5.4"
   );
   assert.equal(
-    controller.getSnapshot().composerOptionsByProvider?.codex?.permissionConfig
-      ?.defaultValue,
+    controller.getSnapshot().composerOptionsByTargetKey?.[targetKey]
+      ?.permissionConfig?.defaultValue,
     "auto"
+  );
+});
+
+test("controller loadComposerOptions requires a non-empty targetKey", async () => {
+  const controller = createAgentActivityController({
+    adapter: fakeAdapter(),
+    workspaceId: "workspace-1"
+  });
+  await assert.rejects(
+    controller.loadComposerOptions({ provider: "codex", targetKey: "  " }),
+    /targetKey is required/
   );
 });
 
@@ -1447,22 +1471,32 @@ test("controller invalidateComposerOptions makes the next non-forced load refetc
     workspaceId: "workspace-1"
   });
 
-  await controller.loadComposerOptions({ provider: "codex" });
-  await controller.loadComposerOptions({ provider: "codex" });
+  await controller.loadComposerOptions({
+    provider: "codex",
+    targetKey: "local:codex"
+  });
+  await controller.loadComposerOptions({
+    provider: "codex",
+    targetKey: "local:codex"
+  });
   assert.equal(loadCount, 1);
 
   controller.invalidateComposerOptions({ providers: ["codex"] });
   // The stale snapshot stays available for rendering until the refetch lands.
   assert.equal(
-    controller.getSnapshot().composerOptionsByProvider?.codex?.models[0]?.value,
+    controller.getSnapshot().composerOptionsByTargetKey?.["local:codex"]
+      ?.models[0]?.value,
     "model-1"
   );
-  const reloaded = await controller.loadComposerOptions({ provider: "codex" });
+  const reloaded = await controller.loadComposerOptions({
+    provider: "codex",
+    targetKey: "local:codex"
+  });
   assert.equal(loadCount, 2);
   assert.equal(reloaded.models[0]?.value, "model-2");
 });
 
-test("controller invalidateComposerOptions only touches matching providers and their targets", async () => {
+test("controller invalidateComposerOptions filters by cached provider, not by key", async () => {
   let loadCount = 0;
   const controller = createAgentActivityController({
     adapter: fakeAdapter({
@@ -1477,26 +1511,41 @@ test("controller invalidateComposerOptions only touches matching providers and t
     workspaceId: "workspace-1"
   });
 
-  await controller.loadComposerOptions({ provider: "codex" });
-  await controller.loadComposerOptions({ provider: "claude-code" });
+  // Two codex targets and one claude-code target — all in the single key space.
   await controller.loadComposerOptions({
     provider: "codex",
-    agentTargetId: "codex-target"
+    targetKey: "local:codex"
+  });
+  await controller.loadComposerOptions({
+    provider: "claude-code",
+    targetKey: "local:claude-code"
+  });
+  await controller.loadComposerOptions({
+    provider: "codex",
+    targetKey: "shared-agent:codex-1"
   });
   assert.equal(loadCount, 3);
 
   controller.invalidateComposerOptions({ providers: ["codex"] });
-  await controller.loadComposerOptions({ provider: "claude-code" });
+  // claude-code target is untouched → cache hit.
+  await controller.loadComposerOptions({
+    provider: "claude-code",
+    targetKey: "local:claude-code"
+  });
   assert.equal(loadCount, 3);
-  await controller.loadComposerOptions({ provider: "codex" });
+  // Both codex targets refetch.
   await controller.loadComposerOptions({
     provider: "codex",
-    agentTargetId: "codex-target"
+    targetKey: "local:codex"
+  });
+  await controller.loadComposerOptions({
+    provider: "codex",
+    targetKey: "shared-agent:codex-1"
   });
   assert.equal(loadCount, 5);
 });
 
-test("controller caches composer options by agent target without mutating provider cache", async () => {
+test("controller isolates caches for two targetKeys sharing a provider", async () => {
   const adapterCalls: Array<{
     agentTargetId: string | null | undefined;
     provider: string;
@@ -1510,37 +1559,30 @@ test("controller caches composer options by agent target without mutating provid
         });
         return createComposerOptions({
           provider: input.provider,
-          models: [
-            {
-              value: input.agentTargetId
-                ? `${input.agentTargetId}-model`
-                : `${input.provider}-model`,
-              label: "Model"
-            }
-          ]
+          models: [{ value: `${input.agentTargetId}-model`, label: "Model" }]
         });
       }
     }),
     workspaceId: "workspace-1"
   });
 
-  await controller.loadComposerOptions({ provider: "codex" });
+  // Same provider, two distinct targets (impersonation preview): the caches
+  // must not merge into a single provider bucket.
   const targetA = await controller.loadComposerOptions({
     provider: "codex",
-    agentTargetId: "target-a"
+    targetKey: "target-a"
   });
   const targetB = await controller.loadComposerOptions({
     provider: "codex",
-    agentTargetId: "target-b"
+    targetKey: "target-b"
   });
   const targetAAgain = await controller.loadComposerOptions({
     provider: "codex",
-    agentTargetId: "target-a"
+    targetKey: "target-a"
   });
 
-  assert.equal(adapterCalls.length, 3);
+  assert.equal(adapterCalls.length, 2);
   assert.deepEqual(adapterCalls, [
-    { agentTargetId: null, provider: "codex" },
     { agentTargetId: "target-a", provider: "codex" },
     { agentTargetId: "target-b", provider: "codex" }
   ]);
@@ -1548,17 +1590,13 @@ test("controller caches composer options by agent target without mutating provid
   assert.equal(targetB.models[0]?.value, "target-b-model");
   assert.equal(targetAAgain.models[0]?.value, "target-a-model");
   assert.equal(
-    controller.getSnapshot().composerOptionsByProvider?.codex?.models[0]?.value,
-    "codex-model"
-  );
-  assert.equal(
-    controller.getSnapshot().composerOptionsByAgentTargetId?.["target-a"]
-      ?.models[0]?.value,
+    controller.getSnapshot().composerOptionsByTargetKey?.["target-a"]?.models[0]
+      ?.value,
     "target-a-model"
   );
   assert.equal(
-    controller.getSnapshot().composerOptionsByAgentTargetId?.["target-b"]
-      ?.models[0]?.value,
+    controller.getSnapshot().composerOptionsByTargetKey?.["target-b"]?.models[0]
+      ?.value,
     "target-b-model"
   );
 });
@@ -1582,8 +1620,14 @@ test("controller dedupes in-flight composer option loads and supports force relo
     workspaceId: "workspace-1"
   });
 
-  const firstLoad = controller.loadComposerOptions({ provider: "codex" });
-  const secondLoad = controller.loadComposerOptions({ provider: "codex" });
+  const firstLoad = controller.loadComposerOptions({
+    provider: "codex",
+    targetKey: "local:codex"
+  });
+  const secondLoad = controller.loadComposerOptions({
+    provider: "codex",
+    targetKey: "local:codex"
+  });
   (releaseLoad as (() => void) | null)?.();
   const [first, second] = await Promise.all([firstLoad, secondLoad]);
 
@@ -1593,6 +1637,7 @@ test("controller dedupes in-flight composer option loads and supports force relo
 
   const reload = controller.loadComposerOptions({
     provider: "codex",
+    targetKey: "local:codex",
     force: true
   });
   (releaseLoad as (() => void) | null)?.();
@@ -1600,6 +1645,45 @@ test("controller dedupes in-flight composer option loads and supports force relo
 
   assert.equal(loadCount, 2);
   assert.equal(reloaded.models[0]?.value, "gpt-2");
+});
+
+test("controller in-flight dedup is scoped per targetKey", async () => {
+  let loadCount = 0;
+  const releases: Array<() => void> = [];
+  const controller = createAgentActivityController({
+    adapter: fakeAdapter({
+      loadComposerOptions: async (input) => {
+        loadCount += 1;
+        await new Promise<void>((resolve) => {
+          releases.push(resolve);
+        });
+        return createComposerOptions({
+          provider: input.provider,
+          models: [{ value: `${input.agentTargetId}-model`, label: "Model" }]
+        });
+      }
+    }),
+    workspaceId: "workspace-1"
+  });
+
+  // Concurrent loads on distinct targetKeys must not dedup into one another.
+  const loadA = controller.loadComposerOptions({
+    provider: "codex",
+    targetKey: "target-a"
+  });
+  const loadB = controller.loadComposerOptions({
+    provider: "codex",
+    targetKey: "target-b"
+  });
+  await waitFor(() => {
+    assert.equal(loadCount, 2);
+  });
+  for (const release of releases) {
+    release();
+  }
+  const [a, b] = await Promise.all([loadA, loadB]);
+  assert.equal(a.models[0]?.value, "target-a-model");
+  assert.equal(b.models[0]?.value, "target-b-model");
 });
 
 test("controller force reload bypasses stale in-flight composer option loads", async () => {
@@ -1621,13 +1705,17 @@ test("controller force reload bypasses stale in-flight composer option loads", a
     workspaceId: "workspace-1"
   });
 
-  const staleLoad = controller.loadComposerOptions({ provider: "codex" });
+  const staleLoad = controller.loadComposerOptions({
+    provider: "codex",
+    targetKey: "local:codex"
+  });
   await waitFor(() => {
     assert.equal(resolvers.length, 1);
   });
 
   const forceLoad = controller.loadComposerOptions({
     provider: "codex",
+    targetKey: "local:codex",
     force: true
   });
   await waitFor(() => {
@@ -1653,7 +1741,8 @@ test("controller force reload bypasses stale in-flight composer option loads", a
 
   assert.equal(stale.models[0]?.value, "stale");
   assert.equal(
-    controller.getSnapshot().composerOptionsByProvider?.codex?.models[0]?.value,
+    controller.getSnapshot().composerOptionsByTargetKey?.["local:codex"]
+      ?.models[0]?.value,
     "fresh"
   );
 });
@@ -1675,15 +1764,18 @@ test("loadComposerOptions refetches when cwd changes and caches per cwd", async 
 
   const first = await controller.loadComposerOptions({
     provider: "codex",
+    targetKey: "local:codex",
     cwd: "/repo/a"
   });
   const cachedSame = await controller.loadComposerOptions({
     provider: "codex",
+    targetKey: "local:codex",
     cwd: "/repo/a"
   });
   assert.equal(adapterCalls.length, 1); // same cwd → cache hit
   const afterSwitch = await controller.loadComposerOptions({
     provider: "codex",
+    targetKey: "local:codex",
     cwd: "/repo/b"
   });
   assert.equal(adapterCalls.length, 2); // cwd changed → refetch

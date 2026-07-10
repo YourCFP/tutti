@@ -155,11 +155,13 @@ export function createDesktopAgentActivityAdapter({
     },
     async loadComposerOptions(input) {
       const cwd = input.cwd?.trim();
+      const agentTargetId = input.agentTargetId?.trim();
       const result = await withAbortableRequestTimeout(
         (signal) =>
           tuttidClient.getAgentProviderComposerOptions(
             workspaceAgentProvider(input.provider),
             {
+              ...(agentTargetId ? { agentTargetId } : {}),
               ...(cwd ? { cwd } : {}),
               workspaceId: input.workspaceId,
               settings: input.settings ?? {}

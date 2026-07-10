@@ -63,6 +63,7 @@ import type {
 } from "../../../types";
 import {
   agentGUIProviderTargetRefsEqual,
+  localAgentGUIAgentTargetId,
   normalizeAgentGUIProviderTargets,
   resolveAgentGUIProviderTarget
 } from "../../../providerTargets";
@@ -334,29 +335,26 @@ function composerDefaultsPatchFromSettings(
   return Object.keys(patch).length > 0 ? patch : null;
 }
 
+// A provider target from the rail/catalog is the directory record itself, so
+// identity (agentTargetId/provider/targetId/label) is taken verbatim from it.
+// The deprecated providerTargetId/providerTargetRef fields are never written as
+// identity anymore — a target that lacks an agentTargetId simply has no
+// composer identity (submission is gated elsewhere) rather than falling back to
+// a provider-target ref guess. `isExplicit` is retained for call-site
+// compatibility but no longer affects identity.
 function composerTargetDataFromProviderTarget(input: {
   current: AgentGUINodeData;
   isExplicit: boolean;
   target: AgentGUIProviderTarget;
 }): AgentGUIComposerTargetData {
   const agentTargetId = normalizeOptionalText(input.target.agentTargetId);
-  const useLegacyProviderTargetRef = !agentTargetId && input.isExplicit;
-  const providerTargetId = useLegacyProviderTargetRef
-    ? input.target.targetId
-    : null;
-  const providerTargetRef = useLegacyProviderTargetRef
-    ? input.target.ref
-    : null;
   const currentAgentTargetId = normalizeOptionalText(
     input.current.agentTargetId
-  );
-  const currentProviderTargetId = normalizeOptionalText(
-    input.current.providerTargetId
   );
   const canPromoteLegacyComposerOverrides =
     agentTargetId !== null &&
     currentAgentTargetId === null &&
-    currentProviderTargetId === null &&
+    normalizeOptionalText(input.current.providerTargetId) === null &&
     input.current.providerTargetRef == null &&
     input.current.provider === input.target.provider &&
     input.current.composerOverrides != null &&
@@ -369,26 +367,19 @@ function composerTargetDataFromProviderTarget(input: {
     : input.current.composerOverridesByAgentTargetId;
   const currentTargetIdentityChanged =
     input.current.provider !== input.target.provider ||
-    (currentAgentTargetId !== null && currentAgentTargetId !== agentTargetId) ||
-    (currentProviderTargetId !== null &&
-      currentProviderTargetId !== providerTargetId) ||
-    (input.current.providerTargetRef != null &&
-      !agentGUIProviderTargetRefsEqual(
-        input.current.providerTargetRef,
-        providerTargetRef
-      ));
+    (currentAgentTargetId !== null && currentAgentTargetId !== agentTargetId);
   return {
     agentTargetId,
     provider: input.target.provider,
-    providerTargetId,
-    providerTargetRef,
+    providerTargetId: null,
+    providerTargetRef: null,
     targetId: input.target.targetId,
     data: {
       ...input.current,
       provider: input.target.provider,
       agentTargetId,
-      providerTargetId,
-      providerTargetRef,
+      providerTargetId: null,
+      providerTargetRef: null,
       composerOverrides: canPromoteLegacyComposerOverrides
         ? null
         : currentTargetIdentityChanged
@@ -397,6 +388,18 @@ function composerTargetDataFromProviderTarget(input: {
       composerOverridesByAgentTargetId
     }
   };
+}
+
+type AgentGUIComposerTargetResolutionStatus =
+  | "resolved"
+  | "loading"
+  | "missing";
+
+interface AgentGUIComposerTargetResolution {
+  status: AgentGUIComposerTargetResolutionStatus;
+  target: AgentGUIComposerTargetData;
+  /** The unresolved foreign key when status is "missing". */
+  missingAgentTargetId: string | null;
 }
 
 function isExplicitAgentGUIProviderTarget(
@@ -411,19 +414,88 @@ function isExplicitAgentGUIProviderTarget(
   );
 }
 
+function findAgentGUIDirectoryTarget(
+  directory: readonly AgentGUIProviderTarget[] | undefined,
+  agentTargetId: string | null
+): AgentGUIProviderTarget | undefined {
+  if (!agentTargetId || !directory) {
+    return undefined;
+  }
+  return directory.find(
+    (target) => normalizeOptionalText(target.agentTargetId) === agentTargetId
+  );
+}
+
+// The node/session carries `agentTargetId` only as a foreign key. When a
+// directory (rail catalog projection) is supplied, the key is resolved against
+// it and — on a hit — identity (id/provider/label) is taken from the directory
+// record, never from the raw node fields. Legacy provider-only node data (no
+// foreign key) is resolved through the same registry: the provider's canonical
+// local target id (`local:${provider}`) is derived and looked up in the
+// directory, so a hit yields a canonical identity rather than a provider-keyed
+// shell. There is no provider-target-ref fallback: an unresolved key produces
+// an identity-less shell whose caller is responsible for the fail-fast error
+// state.
 function composerTargetDataFromNodeData(
-  data: AgentGUINodeData
+  data: AgentGUINodeData,
+  directory?: readonly AgentGUIProviderTarget[]
 ): AgentGUIComposerTargetData {
-  const agentTargetId = normalizeOptionalText(data.agentTargetId);
-  const providerTargetId = data.providerTargetId ?? null;
+  const foreignKeyAgentTargetId = normalizeOptionalText(data.agentTargetId);
+  const lookupAgentTargetId =
+    foreignKeyAgentTargetId ?? localAgentGUIAgentTargetId(data.provider);
+  const directoryTarget = findAgentGUIDirectoryTarget(
+    directory,
+    lookupAgentTargetId
+  );
+  // Identity comes from the directory record; the raw foreign key is kept only
+  // when it is the node's own (it still names the session's target while the
+  // directory loads). A derived local id is never used without a registry hit.
+  const agentTargetId =
+    normalizeOptionalText(directoryTarget?.agentTargetId) ??
+    foreignKeyAgentTargetId;
+  const provider = directoryTarget?.provider ?? data.provider;
   return {
     agentTargetId,
-    provider: data.provider,
-    providerTargetId,
-    providerTargetRef: data.providerTargetRef ?? null,
-    targetId: agentTargetId ?? providerTargetId ?? `local:${data.provider}`,
-    data
+    provider,
+    providerTargetId: null,
+    providerTargetRef: null,
+    targetId: directoryTarget?.targetId ?? agentTargetId ?? `local:${provider}`,
+    data:
+      directoryTarget && directoryTarget.provider !== data.provider
+        ? { ...data, provider }
+        : data
   };
+}
+
+// Fail-fast resolution for the active session's composer target: the session's
+// foreign-key agentTargetId must resolve inside the loaded directory. Legacy
+// provider-only sessions (no foreign key) resolve through the same registry via
+// the provider's canonical local target id — this is a directory lookup, not a
+// provider fallback. While the directory is still loading we stay neutral
+// ("loading"); once loaded, an unresolved key is an honest error ("missing") —
+// no provider-keyed cache bucket, since sibling targets of the same provider
+// would silently splice in another (possibly cloned) agent's identity.
+function resolveActiveSessionComposerTarget(input: {
+  data: AgentGUINodeData;
+  foreignKeyAgentTargetId: string | null;
+  directory: readonly AgentGUIProviderTarget[];
+  directoryLoading: boolean;
+}): AgentGUIComposerTargetResolution {
+  const foreignKey = normalizeOptionalText(input.foreignKeyAgentTargetId);
+  const target = composerTargetDataFromNodeData(input.data, input.directory);
+  if (input.directoryLoading) {
+    return { status: "loading", target, missingAgentTargetId: null };
+  }
+  const resolveKey =
+    foreignKey ?? localAgentGUIAgentTargetId(input.data.provider);
+  const directoryTarget = findAgentGUIDirectoryTarget(
+    input.directory,
+    resolveKey
+  );
+  if (directoryTarget) {
+    return { status: "resolved", target, missingAgentTargetId: null };
+  }
+  return { status: "missing", target, missingAgentTargetId: resolveKey };
 }
 
 function agentGUINodeDataHasComposerTarget(data: AgentGUINodeData): boolean {
@@ -438,18 +510,15 @@ function composerOptionsForTarget(input: {
   snapshot: AgentActivitySnapshot;
   target: AgentGUIComposerTargetData;
 }): AgentActivityComposerOptions | null {
-  if (input.target.agentTargetId) {
-    const targetOptions =
-      input.snapshot.composerOptionsByAgentTargetId?.[
-        input.target.agentTargetId
-      ] ?? null;
-    if (targetOptions) {
-      return targetOptions;
-    }
+  // Single opaque key space: composer options are cached under the resolved
+  // directory target id (the targetKey), verbatim. A target without a resolved
+  // identity has no cache entry — no provider-keyed fallback bucket.
+  if (!input.target.agentTargetId) {
     return null;
   }
   return (
-    input.snapshot.composerOptionsByProvider?.[input.target.provider] ?? null
+    input.snapshot.composerOptionsByTargetKey?.[input.target.agentTargetId] ??
+    null
   );
 }
 
@@ -4106,7 +4175,7 @@ export function useAgentGUINodeController({
               target: selectedProviderTarget
             })
           : agentGUINodeDataHasComposerTarget(data)
-            ? composerTargetDataFromNodeData(data)
+            ? composerTargetDataFromNodeData(data, normalizedProviderTargets)
             : composerTargetDataFromProviderTarget({
                 current: data,
                 isExplicit: selectedProviderTargetIsExplicit,
@@ -4117,6 +4186,7 @@ export function useAgentGUINodeController({
       homeComposerTargetOverride,
       homeComposerTargetOverrideIsExplicit,
       nodeComposerTargetResolvedByProviderTarget,
+      normalizedProviderTargets,
       selectedProviderTarget,
       selectedProviderTargetIsExplicit
     ]
@@ -4347,7 +4417,7 @@ export function useAgentGUINodeController({
   const composerTargetData =
     activeConversationId === null
       ? selectedComposerTargetData
-      : composerTargetDataFromNodeData(data);
+      : composerTargetDataFromNodeData(data, normalizedProviderTargets);
   const providerComposerOptions = composerOptionsForTarget({
     snapshot: agentActivitySnapshot,
     target: composerTargetData
@@ -4680,6 +4750,8 @@ export function useAgentGUINodeController({
   providerTargetsProvidedRef.current = providerTargets !== undefined;
   const selectedComposerTargetDataRef = useRef(selectedComposerTargetData);
   selectedComposerTargetDataRef.current = selectedComposerTargetData;
+  const normalizedProviderTargetsRef = useRef(normalizedProviderTargets);
+  normalizedProviderTargetsRef.current = normalizedProviderTargets;
   const draftSettingsBySessionIdRef = useRef(draftSettingsBySessionId);
   const onDataChangeRef = useRef(onDataChange);
   const onRememberComposerDefaultsRef = useRef(onRememberComposerDefaults);
@@ -6711,6 +6783,13 @@ export function useAgentGUINodeController({
       // carry the capabilities fallback and the skills list.
       const provider = targetData.provider;
       const agentTargetId = targetData.agentTargetId;
+      // The resolved directory target id is the opaque composer-options cache
+      // key (targetKey). A target without one is unresolved — either the
+      // directory is still loading or the session is in the fail-fast error
+      // state (agent missing) — so there is nothing to load.
+      if (!agentTargetId) {
+        return;
+      }
       if (isCreatingConversationRef.current) {
         return;
       }
@@ -6739,7 +6818,10 @@ export function useAgentGUINodeController({
       const targetData =
         activeConversationIdRef.current === null
           ? selectedComposerTargetDataRef.current
-          : composerTargetDataFromNodeData(dataRef.current);
+          : composerTargetDataFromNodeData(
+              dataRef.current,
+              normalizedProviderTargetsRef.current
+            );
       loadComposerOptionsForTarget(targetData, options);
     },
     [loadComposerOptionsForTarget]
@@ -11101,6 +11183,41 @@ export function useAgentGUINodeController({
     providerTargetsLoading,
     shouldUseStaticProviderTargets
   ]);
+  // Fail-fast resolution of the active session's foreign-key agentTargetId
+  // against the loaded directory. Scoped to the active conversation so a removed
+  // agent only errors its own session, never sibling sessions in the node.
+  const activeSessionTargetResolution =
+    useMemo<AgentGUIComposerTargetResolution>(() => {
+      if (previewMode || activeConversationId === null) {
+        return {
+          status: "resolved",
+          target: composerTargetDataFromNodeData(
+            data,
+            normalizedProviderTargets
+          ),
+          missingAgentTargetId: null
+        };
+      }
+      return resolveActiveSessionComposerTarget({
+        data,
+        // The session record's own agentTargetId is the authoritative foreign
+        // key; the node's persisted agentTargetId can lag when the reconcile
+        // effect declines to overwrite an explicit target with a fallback.
+        foreignKeyAgentTargetId:
+          activeConversation?.agentTargetId ?? data.agentTargetId ?? null,
+        directory: normalizedProviderTargets,
+        directoryLoading: providerTargetsLoading
+      });
+    }, [
+      activeConversation?.agentTargetId,
+      activeConversationId,
+      data,
+      normalizedProviderTargets,
+      previewMode,
+      providerTargetsLoading
+    ]);
+  const activeSessionTargetMissing =
+    activeSessionTargetResolution.status === "missing";
   const visibleConversationsRef = useRef<AgentGUIConversationSummary[] | null>(
     null
   );
@@ -11694,13 +11811,18 @@ export function useAgentGUINodeController({
             ? { message: normalizedError }
             : null,
       approval: pendingApproval,
-      recovery:
-        activeLiveState === "activating" &&
-        // Suppress the "reconnecting" banner during a first-message create:
-        // the user just submitted and is already seeing their optimistic
-        // message, so an activation-in-flight state on the conversation they
-        // just entered is not a recovery event.
-        startingConversationIdRef.current !== activeConversationId
+      recovery: activeSessionTargetMissing
+        ? {
+            kind: "failed",
+            message: translate("messages.agentTargetRemoved"),
+            canRetry: false
+          }
+        : activeLiveState === "activating" &&
+            // Suppress the "reconnecting" banner during a first-message create:
+            // the user just submitted and is already seeing their optimistic
+            // message, so an activation-in-flight state on the conversation they
+            // just entered is not a recovery event.
+            startingConversationIdRef.current !== activeConversationId
           ? {
               kind: "activating",
               // i18n-check-ignore: Legacy recovery fallback copy; localized presentation should move to view labels.
@@ -11726,6 +11848,7 @@ export function useAgentGUINodeController({
     activeConversationId,
     activeConversationResumeUnavailable,
     activeSessionState,
+    activeSessionTargetMissing,
     hasProviderSessionNotFoundError,
     pendingApproval
   ]);
@@ -12175,8 +12298,7 @@ export function useAgentGUINodeController({
           target: nextTarget
         });
         const nextAgentTargetId = currentNextTargetData.agentTargetId;
-        const currentTargetId =
-          current.agentTargetId ?? current.providerTargetId ?? null;
+        const currentTargetId = normalizeOptionalText(current.agentTargetId);
         const nextTargetId = nextAgentTargetId ?? nextTarget.targetId;
         const providerTargetChanged =
           current.provider !== nextProvider ||

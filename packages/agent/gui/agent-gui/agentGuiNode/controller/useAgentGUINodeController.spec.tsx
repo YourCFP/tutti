@@ -1516,6 +1516,7 @@ describe("useAgentGUINodeController", () => {
         providerTargets: [
           {
             targetId: "shared-agent:codex-1",
+            agentTargetId: "shared-agent:codex-1",
             provider: "codex",
             ref: {
               kind: "shared-agent",
@@ -1536,16 +1537,21 @@ describe("useAgentGUINodeController", () => {
       });
     });
 
+    // A directory target now carries an agentTargetId, so filtering by it scopes
+    // the rail to that agent rather than falling back to the unscoped "all".
     await waitFor(() => {
       expect(result.current.viewModel.conversationFilter).toEqual({
-        kind: "all"
+        kind: "agentTarget",
+        agentTargetId: "shared-agent:codex-1"
       });
     });
     expect(result.current.viewModel.selectedProviderTarget.targetId).toBe(
       "shared-agent:codex-1"
     );
     expect(result.current.viewModel.data.provider).toBe("codex");
-    expect(result.current.viewModel.data.providerTargetId).toBe(
+    // Identity comes from the directory record's agentTargetId; the deprecated
+    // providerTargetId/providerTargetRef fields are never written anymore.
+    expect(result.current.viewModel.data.agentTargetId).toBe(
       "shared-agent:codex-1"
     );
     const nextData = onDataChange.mock.calls
@@ -1553,13 +1559,9 @@ describe("useAgentGUINodeController", () => {
       .find((candidate) => candidate.provider === "codex");
     expect(nextData).toMatchObject({
       provider: "codex",
-      agentTargetId: null,
-      providerTargetId: "shared-agent:codex-1",
-      providerTargetRef: {
-        kind: "shared-agent",
-        provider: "codex",
-        sharedAgentId: "codex-1"
-      },
+      agentTargetId: "shared-agent:codex-1",
+      providerTargetId: null,
+      providerTargetRef: null,
       composerOverrides: null
     });
   });
@@ -1699,6 +1701,325 @@ describe("useAgentGUINodeController", () => {
         agentTargetId: "local:codex"
       });
     });
+  });
+
+  describe("active session agent-target fail-fast", () => {
+    const localCodexDirectory = [
+      {
+        targetId: "local:codex",
+        agentTargetId: "local:codex",
+        provider: "codex" as const,
+        ref: { kind: "local-provider", provider: "codex" as const },
+        label: "Codex"
+      }
+    ];
+
+    type FailFastProps = Parameters<typeof useAgentGUINodeController>[0];
+
+    // The node's own `agentTargetId` is the active session's foreign key (it is
+    // written from the launched session and re-targeted on switch). The list
+    // projection doesn't surface a per-summary agentTargetId here, so we drive
+    // the FK through node data — the same value production carries.
+    function failFastProps(input: {
+      agentTargetId: string | null;
+      activeSessionId: string;
+      providerTargets?: FailFastProps["providerTargets"];
+      providerTargetsLoading?: boolean;
+    }): FailFastProps {
+      return {
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        data: agentGuiData(input.activeSessionId, "codex", {
+          agentTargetId: input.agentTargetId
+        }),
+        providerTargets: input.providerTargets ?? localCodexDirectory,
+        providerTargetsLoading: input.providerTargetsLoading ?? false,
+        onDataChange: vi.fn()
+      };
+    }
+
+    function renderFailFast(input: {
+      sessions: AgentHostWorkspaceAgentSession[];
+      props: FailFastProps;
+    }) {
+      installAgentHostApi({
+        list: vi.fn(async () => ({ presences: [], sessions: input.sessions })),
+        listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+        subscribeEvents: vi.fn(() => vi.fn())
+      });
+      return renderHook(
+        (props: FailFastProps) => useAgentGUINodeController(props),
+        { initialProps: input.props }
+      );
+    }
+
+    it("errors the session read-only when its agent target is missing from the loaded directory", async () => {
+      const { result } = renderFailFast({
+        sessions: [
+          workspaceAgentSession("ghost-session", {
+            provider: "codex",
+            title: "Ghost session"
+          })
+        ],
+        props: failFastProps({
+          agentTargetId: "deleted-agent",
+          activeSessionId: "ghost-session"
+        })
+      });
+
+      await waitFor(() => {
+        expect(result.current.viewModel.sessionChrome.recovery).toMatchObject({
+          kind: "failed",
+          canRetry: false
+        });
+      });
+      expect(
+        result.current.viewModel.sessionChrome.recovery?.message
+      ).toContain("no longer exists");
+      // History stays visible/read-only even while the composer is fenced off.
+      await waitFor(() => {
+        expect(
+          result.current.viewModel.conversations.map((item) => item.id)
+        ).toContain("ghost-session");
+      });
+      expect(result.current.viewModel.listError).toBeNull();
+    });
+
+    it("stays neutral while the directory is still loading", async () => {
+      const { result } = renderFailFast({
+        sessions: [
+          workspaceAgentSession("ghost-session", {
+            provider: "codex",
+            title: "Ghost session"
+          })
+        ],
+        props: failFastProps({
+          agentTargetId: "deleted-agent",
+          activeSessionId: "ghost-session",
+          providerTargets: [],
+          providerTargetsLoading: true
+        })
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(
+        result.current.viewModel.sessionChrome.recovery?.message ?? ""
+      ).not.toContain("no longer exists");
+    });
+
+    it("treats a resolvable local agent target as a normal session", async () => {
+      const { result } = renderFailFast({
+        sessions: [
+          workspaceAgentSession("codex-session", {
+            provider: "codex",
+            title: "Codex session"
+          })
+        ],
+        props: failFastProps({
+          agentTargetId: "local:codex",
+          activeSessionId: "codex-session"
+        })
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(
+        result.current.viewModel.sessionChrome.recovery?.message ?? ""
+      ).not.toContain("no longer exists");
+    });
+
+    it("resolves a legacy provider-only session through the directory's local target", async () => {
+      // No foreign key on the node: the provider's canonical local target id is
+      // derived and looked up in the directory (registry lookup, not fallback).
+      const { result } = renderFailFast({
+        sessions: [
+          workspaceAgentSession("legacy-session", {
+            provider: "codex",
+            title: "Legacy session"
+          })
+        ],
+        props: failFastProps({
+          agentTargetId: null,
+          activeSessionId: "legacy-session"
+        })
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(
+        result.current.viewModel.sessionChrome.recovery?.message ?? ""
+      ).not.toContain("no longer exists");
+    });
+
+    it("errors a legacy provider-only session when the directory has no local target for its provider", async () => {
+      const sharedOnlyDirectory = [
+        {
+          targetId: "shared-agent:codex-1",
+          agentTargetId: "shared-agent:codex-1",
+          provider: "codex" as const,
+          ref: {
+            kind: "shared-agent",
+            provider: "codex" as const,
+            sharedAgentId: "codex-1"
+          },
+          label: "Alice's Codex"
+        }
+      ];
+      const { result } = renderFailFast({
+        sessions: [
+          workspaceAgentSession("legacy-session", {
+            provider: "codex",
+            title: "Legacy session"
+          })
+        ],
+        props: failFastProps({
+          agentTargetId: null,
+          activeSessionId: "legacy-session",
+          providerTargets: sharedOnlyDirectory
+        })
+      });
+
+      await waitFor(() => {
+        expect(result.current.viewModel.sessionChrome.recovery).toMatchObject({
+          kind: "failed",
+          canRetry: false
+        });
+      });
+      expect(
+        result.current.viewModel.sessionChrome.recovery?.message
+      ).toContain("no longer exists");
+    });
+
+    it("treats a resolvable shared agent target the same as a local one", async () => {
+      const sharedDirectory = [
+        {
+          targetId: "shared-agent:codex-1",
+          agentTargetId: "shared-agent:codex-1",
+          provider: "codex" as const,
+          ref: {
+            kind: "shared-agent",
+            provider: "codex" as const,
+            sharedAgentId: "codex-1"
+          },
+          label: "Alice's Codex"
+        }
+      ];
+      const { result } = renderFailFast({
+        sessions: [
+          workspaceAgentSession("shared-session", {
+            provider: "codex",
+            title: "Shared session"
+          })
+        ],
+        props: failFastProps({
+          agentTargetId: "shared-agent:codex-1",
+          activeSessionId: "shared-session",
+          providerTargets: sharedDirectory
+        })
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(
+        result.current.viewModel.sessionChrome.recovery?.message ?? ""
+      ).not.toContain("no longer exists");
+    });
+
+    it("scopes the removed-agent error to the active session's target only", async () => {
+      // Session A (removed agent) is active: it errors.
+      const { result, rerender } = renderFailFast({
+        sessions: [
+          workspaceAgentSession("ghost-session", {
+            provider: "codex",
+            title: "Ghost session"
+          }),
+          workspaceAgentSession("ok-session", {
+            provider: "codex",
+            title: "Live session"
+          })
+        ],
+        props: failFastProps({
+          agentTargetId: "deleted-agent",
+          activeSessionId: "ghost-session"
+        })
+      });
+
+      await waitFor(() => {
+        expect(result.current.viewModel.sessionChrome.recovery).toMatchObject({
+          kind: "failed",
+          canRetry: false
+        });
+      });
+
+      // Switching to sibling session B (re-targets node data to a resolvable
+      // agent, as the reconcile effect does in production) clears the error —
+      // the error was scoped to session A's target, not the whole node.
+      rerender(
+        failFastProps({
+          agentTargetId: "local:codex",
+          activeSessionId: "ok-session"
+        })
+      );
+      await waitFor(() => {
+        expect(
+          result.current.viewModel.sessionChrome.recovery?.message ?? ""
+        ).not.toContain("no longer exists");
+      });
+      // The node never collapsed — both conversations stay listed.
+      expect(
+        result.current.viewModel.conversations.map((item) => item.id).sort()
+      ).toEqual(["ghost-session", "ok-session"]);
+    });
+  });
+
+  it("loads composer options for a legacy provider-only session under the canonical local target id", async () => {
+    const getComposerOptions = vi.fn(
+      async (_input: { agentTargetId?: string | null }) => ({
+        provider: "codex",
+        modelConfig: {
+          configurable: true,
+          options: [{ value: "gpt-5", name: "GPT-5" }]
+        }
+      })
+    );
+    installAgentHostApi({
+      list: vi.fn(async () => snapshotWithSession("session-1")),
+      listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
+      subscribeEvents: vi.fn(() => vi.fn()),
+      getComposerOptions
+    });
+
+    renderHook(() =>
+      useAgentGUINodeController({
+        workspaceId: "room-1",
+        currentUserId: "user-1",
+        workspacePath: "/workspace",
+        avoidGroupingEdits: false,
+        // Legacy node data: provider only, no agentTargetId foreign key. The
+        // controller resolves the canonical local target from the registry and
+        // loads composer options under that id — never a provider-keyed bucket.
+        data: agentGuiData("session-1"),
+        onDataChange: vi.fn()
+      })
+    );
+
+    await waitFor(() => {
+      expect(getComposerOptions).toHaveBeenCalled();
+    });
+    for (const [input] of getComposerOptions.mock.calls) {
+      expect(input.agentTargetId).toBe("local:codex");
+    }
   });
 
   it("keeps the scoped rail filter aligned when switching the empty composer target before starting a new conversation", async () => {
@@ -1928,17 +2249,20 @@ describe("useAgentGUINodeController", () => {
     });
   });
 
-  it("preserves generic composer overrides when normalizing the same provider target", async () => {
+  it("preserves target-keyed composer overrides when re-selecting the same agent target", async () => {
     installAgentHostApi({
       list: vi.fn(async () => ({ presences: [], sessions: [] })),
       listSessionTimeline: vi.fn(async () => ({ timelineItems: [] })),
       subscribeEvents: vi.fn(() => vi.fn())
     });
     const onDataChange = vi.fn();
+    // Identity is the agentTargetId; overrides are keyed by it. Re-selecting the
+    // same directory target must not disturb that target's stored overrides.
     const initialData = agentGuiData(null, "codex", {
-      providerTargetId: "local:codex",
-      providerTargetRef: { kind: "local-provider", provider: "codex" },
-      composerOverrides: { model: "gpt-5.3-codex" }
+      agentTargetId: "local:codex",
+      composerOverridesByAgentTargetId: {
+        "local:codex": { model: "gpt-5.3-codex" }
+      }
     });
 
     const { result } = renderHook(() =>
@@ -1977,7 +2301,9 @@ describe("useAgentGUINodeController", () => {
       agentTargetId: "local:codex",
       providerTargetId: null,
       providerTargetRef: null,
-      composerOverrides: { model: "gpt-5.3-codex" }
+      composerOverridesByAgentTargetId: {
+        "local:codex": { model: "gpt-5.3-codex" }
+      }
     });
   });
 
@@ -20019,26 +20345,21 @@ function installAgentActivityRuntimeForHostMocks({
           input.provider ?? "codex",
           result
         );
-        const agentTargetId =
+        // Strict single key space: the runtime only caches under the resolved
+        // agent target id (the opaque targetKey); no provider-keyed bucket.
+        const targetKey =
           typeof input.agentTargetId === "string" && input.agentTargetId.trim()
             ? input.agentTargetId.trim()
             : null;
-        setSnapshot(input.workspaceId, (current) => ({
-          ...current,
-          ...(agentTargetId
-            ? {
-                composerOptionsByAgentTargetId: {
-                  ...(current.composerOptionsByAgentTargetId ?? {}),
-                  [agentTargetId]: options
-                }
-              }
-            : {
-                composerOptionsByProvider: {
-                  ...(current.composerOptionsByProvider ?? {}),
-                  [options.provider]: options
-                }
-              })
-        }));
+        if (targetKey) {
+          setSnapshot(input.workspaceId, (current) => ({
+            ...current,
+            composerOptionsByTargetKey: {
+              ...(current.composerOptionsByTargetKey ?? {}),
+              [targetKey]: options
+            }
+          }));
+        }
         return options;
       }
       return {};
@@ -20087,13 +20408,9 @@ function installAgentActivityRuntimeForHostMocks({
       const next = agentActivitySnapshotFromHostSnapshot(snapshot, workspaceId);
       const merged = setSnapshot(workspaceId, (current) => ({
         ...next,
-        composerOptionsByProvider:
-          current.composerOptionsByProvider ??
-          next.composerOptionsByProvider ??
-          {},
-        composerOptionsByAgentTargetId:
-          current.composerOptionsByAgentTargetId ??
-          next.composerOptionsByAgentTargetId ??
+        composerOptionsByTargetKey:
+          current.composerOptionsByTargetKey ??
+          next.composerOptionsByTargetKey ??
           {},
         sessionMessagesById: {
           ...next.sessionMessagesById,
@@ -20382,8 +20699,7 @@ function emptyAgentActivitySnapshot(
     presences: [],
     sessions: [],
     sessionMessagesById: {},
-    composerOptionsByAgentTargetId: {},
-    composerOptionsByProvider: {}
+    composerOptionsByTargetKey: {}
   };
 }
 
@@ -20541,18 +20857,10 @@ function cloneAgentActivitySnapshot(
     workspaceId: snapshot.workspaceId,
     presences: snapshot.presences.map((presence) => ({ ...presence })),
     sessions: snapshot.sessions.map((session) => ({ ...session })),
-    composerOptionsByAgentTargetId: Object.fromEntries(
-      Object.entries(snapshot.composerOptionsByAgentTargetId ?? {}).map(
-        ([agentTargetId, options]) => [
-          agentTargetId,
-          cloneComposerOptionsForTest(options)
-        ]
-      )
-    ),
-    composerOptionsByProvider: Object.fromEntries(
-      Object.entries(snapshot.composerOptionsByProvider ?? {}).map(
-        ([provider, options]) => [
-          provider,
+    composerOptionsByTargetKey: Object.fromEntries(
+      Object.entries(snapshot.composerOptionsByTargetKey ?? {}).map(
+        ([targetKey, options]) => [
+          targetKey,
           cloneComposerOptionsForTest(options)
         ]
       )
@@ -20628,18 +20936,12 @@ function agentActivitySnapshotFromHostSnapshot(
       agentActivitySessionFromWorkspaceAgentSession(session, workspaceId)
     ),
     sessionMessagesById,
-    composerOptionsByAgentTargetId:
+    composerOptionsByTargetKey:
       (
         snapshot as {
-          composerOptionsByAgentTargetId?: AgentActivitySnapshot["composerOptionsByAgentTargetId"];
+          composerOptionsByTargetKey?: AgentActivitySnapshot["composerOptionsByTargetKey"];
         }
-      ).composerOptionsByAgentTargetId ?? {},
-    composerOptionsByProvider:
-      (
-        snapshot as {
-          composerOptionsByProvider?: AgentActivitySnapshot["composerOptionsByProvider"];
-        }
-      ).composerOptionsByProvider ?? {}
+      ).composerOptionsByTargetKey ?? {}
   };
 }
 

@@ -6223,6 +6223,12 @@ components:
       type: object
       additionalProperties: false
       properties:
+        agentTargetId:
+          type: string
+          description:
+            Agent target whose provider and runtime context the composer options
+            resolve against. Optional; when omitted the provider path parameter
+            is used directly.
         cwd:
           type: string
         workspaceId:

@@ -1003,6 +1003,10 @@ export type AgentProviderComposerConfig = {
 };
 
 export type GetAgentProviderComposerOptionsRequest = {
+  /**
+   * Agent target whose provider and runtime context the composer options resolve against. Optional; when omitted the provider path parameter is used directly.
+   */
+  agentTargetId?: string;
   cwd?: string;
   /**
    * Workspace used for Claude Code live model discovery.

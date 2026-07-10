@@ -1566,6 +1566,30 @@ func TestDaemonAPIGeneratedRoutesGetAgentProviderComposerOptions(t *testing.T) {
 	}
 }
 
+func TestDaemonAPIGeneratedRoutesGetAgentProviderComposerOptionsPassesAgentTargetID(t *testing.T) {
+	var gotAgentTargetID string
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, NewRoutes(DaemonAPI{
+		AgentSessionService: stubAgentSessionService{
+			composerOptionsFn: func(_ context.Context, input agentservice.ComposerOptionsInput) (agentservice.ComposerOptions, error) {
+				gotAgentTargetID = input.AgentTargetID
+				return agentservice.ComposerOptions{Provider: input.Provider}, nil
+			},
+		},
+	}))
+
+	recorder := performGeneratedRouteRequest(t, mux, http.MethodPost, "/v1/agent-providers/codex/composer-options", map[string]any{
+		"agentTargetId": "shared-agent:abc",
+		"workspaceId":   "ws-1",
+	})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if gotAgentTargetID != "shared-agent:abc" {
+		t.Fatalf("agentTargetID = %q, want shared-agent:abc", gotAgentTargetID)
+	}
+}
+
 func TestDaemonAPIGeneratedRoutesGetAgentProviderComposerOptionsUsesPreferencesDefaults(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, NewRoutes(DaemonAPI{
