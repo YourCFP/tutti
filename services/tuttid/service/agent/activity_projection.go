@@ -18,6 +18,7 @@ type ActivityProjection struct {
 	publisher              ActivityUpdatePublisher
 	sessionMessageObserver SessionMessageObserver
 	sessionStateObserver   SessionStateObserver
+	agentTargetResolver    AgentTargetResolver
 }
 
 func NewActivityProjection(repo agentactivitybiz.Repository) *ActivityProjection {
@@ -117,6 +118,15 @@ func (p *ActivityProjection) ReportSessionState(
 	}
 	input.SessionOrigin = sessionOrigin
 	input.Source = source
+	// Reference-integrity boundary: an owner-domain agentTargetId carried by a
+	// shared session must never be persisted verbatim. Canonicalize it against
+	// the local target directory here, before it lands in the store, so the
+	// invariant "persisted agentTargetId ∈ local directory or empty" holds.
+	canonicalTargetID, runtimeContext := p.canonicalizeAgentTargetID(
+		ctx,
+		firstNonEmptyString(input.State.AgentTargetID, input.Source.AgentTargetID),
+		input.State.RuntimeContext,
+	)
 	result, err := p.repo.ReportSessionState(ctx, agentactivitybiz.SessionStateReport{
 		WorkspaceID:    strings.TrimSpace(input.WorkspaceID),
 		AgentSessionID: strings.TrimSpace(input.AgentSessionID),
@@ -124,12 +134,12 @@ func (p *ActivityProjection) ReportSessionState(
 		// Tutti local workspaces intentionally leave Source.UserID empty. Cloud
 		// collaboration hosts may provide real account user ids on this wire.
 		UserID:            strings.TrimSpace(input.Source.UserID),
-		AgentTargetID:     strings.TrimSpace(firstNonEmptyString(input.State.AgentTargetID, input.Source.AgentTargetID)),
+		AgentTargetID:     canonicalTargetID,
 		Provider:          strings.TrimSpace(firstNonEmptyString(input.State.Provider, input.Source.Provider)),
 		ProviderSessionID: strings.TrimSpace(firstNonEmptyString(input.State.ProviderSessionID, input.Source.ProviderSessionID)),
 		Model:             strings.TrimSpace(input.State.Model),
 		Settings:          clonePayload(input.State.Settings),
-		RuntimeContext:    clonePayload(input.State.RuntimeContext),
+		RuntimeContext:    clonePayload(runtimeContext),
 		Cwd:               strings.TrimSpace(input.State.CWD),
 		Title:             strings.TrimSpace(sessionStateTitle(input.State)),
 		Status:            strings.TrimSpace(input.State.LifecycleStatus),
@@ -167,7 +177,7 @@ func (p *ActivityProjection) ReportSessionState(
 					input.WorkspaceID,
 					input.AgentSessionID,
 					result.LastEventUnixMS,
-					firstNonEmptyString(input.State.AgentTargetID, input.Source.AgentTargetID),
+					canonicalTargetID,
 				),
 			)
 		}
@@ -330,7 +340,7 @@ func (p *ActivityProjection) GetSession(workspaceID string, agentSessionID strin
 	if !ok {
 		return PersistedSession{}, false
 	}
-	return persistedSessionFromActivity(session), true
+	return p.projectPersistedSession(context.Background(), persistedSessionFromActivity(session)), true
 }
 
 func (p *ActivityProjection) ListSessions(workspaceID string) ([]PersistedSession, bool) {
@@ -349,9 +359,10 @@ func (p *ActivityProjection) ListSessions(workspaceID string) ([]PersistedSessio
 	if !ok {
 		return nil, false
 	}
+	ctx := context.Background()
 	out := make([]PersistedSession, 0, len(sessions))
 	for _, session := range sessions {
-		out = append(out, persistedSessionFromActivity(session))
+		out = append(out, p.projectPersistedSession(ctx, persistedSessionFromActivity(session)))
 	}
 	return out, true
 }
