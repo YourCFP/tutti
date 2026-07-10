@@ -40,18 +40,18 @@ func codexACPReasoningEffortValue(value string) string {
 	}
 }
 
-// codexAppServerReasoningEffortValue preserves the distinct max and ultra
-// values advertised by current Codex app-server model catalogs. The legacy
-// ACP mapper above remains unchanged for providers that still treat max as an
-// alias for xhigh.
+// codexAppServerReasoningEffortValue preserves the catalog value expected by
+// the Codex app-server. Current catalogs deliberately model reasoning effort
+// as an open string, so unknown future values must pass through instead of
+// being dropped by the legacy ACP allowlist above. Known values are still
+// canonicalized for compatibility with older persisted settings.
 func codexAppServerReasoningEffortValue(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "max":
-		return "max"
-	case "ultra":
-		return "ultra"
+	trimmed := strings.TrimSpace(value)
+	switch strings.ToLower(trimmed) {
+	case "minimal", "low", "medium", "high", "xhigh", "max", "ultra":
+		return strings.ToLower(trimmed)
 	default:
-		return codexACPReasoningEffortValue(value)
+		return trimmed
 	}
 }
 

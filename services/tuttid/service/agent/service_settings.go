@@ -11,13 +11,16 @@ func (s *Service) clampReasoningEffortForModel(
 	model string,
 	selected string,
 ) string {
-	selected = normalizeReasoningEffortForProvider(provider, selected)
+	selected = strings.TrimSpace(selected)
+	// Catalog-backed values are open-ended provider capabilities. Apply the
+	// legacy provider normalization only when no authoritative model effort list
+	// is available.
 	if !composerOptionsProviderUsesModelCatalog(provider) {
-		return selected
+		return normalizeReasoningEffortForProvider(provider, selected)
 	}
 	catalogOptions, ok := composerModelOptionsFromCatalog(ctx, s.ModelCatalog, provider, model)
 	if !ok || !catalogOptions.ReasoningEffortsAdvertised {
-		return selected
+		return normalizeReasoningEffortForProvider(provider, selected)
 	}
 	return resolveAdvertisedReasoningEffort(
 		provider,

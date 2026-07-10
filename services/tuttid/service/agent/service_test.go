@@ -1725,6 +1725,46 @@ func TestServiceCreateClampsLegacyMaxToSelectedModelCapability(t *testing.T) {
 	}
 }
 
+func TestServiceCreatePreservesAdvertisedReasoningEffort(t *testing.T) {
+	for _, effort := range []string{"minimal", "none"} {
+		t.Run(effort, func(t *testing.T) {
+			runtime := newFakeRuntime()
+			service := newTestService(runtime)
+			service.ModelCatalog = fakeModelCatalog{
+				result: AgentModelCatalogResult{
+					Provider: "codex",
+					Source:   "codex-cli",
+					Models: []AgentModelOption{{
+						ID:                         "gpt-catalog",
+						DefaultReasoningEffort:     "high",
+						ReasoningEffortsAdvertised: true,
+						SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+							{Value: "minimal"}, {Value: "none"}, {Value: "high"},
+						},
+					}},
+				},
+			}
+
+			session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
+				AgentSessionID:  "55555555-5555-4555-8555-555555555555",
+				AgentTargetID:   agenttargetbiz.IDLocalCodex,
+				Provider:        "codex",
+				Model:           stringRef("gpt-catalog"),
+				ReasoningEffort: stringRef(effort),
+			})
+			if err != nil {
+				t.Fatalf("Create returned error: %v", err)
+			}
+			if len(runtime.startCalls) != 1 || runtime.startCalls[0].ReasoningEffort != effort {
+				t.Fatalf("runtime start calls = %#v, want reasoning %q", runtime.startCalls, effort)
+			}
+			if session.Settings == nil || session.Settings.ReasoningEffort != effort {
+				t.Fatalf("session settings = %#v, want reasoning %q", session.Settings, effort)
+			}
+		})
+	}
+}
+
 func TestServiceCreatePassesPlanModeToRuntime(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	runtime := newFakeRuntime()
@@ -2927,7 +2967,189 @@ func TestServiceGetsComposerOptionsWithResolvedCodexDefaultModel(t *testing.T) {
 func TestServiceGetsComposerOptionsPreservesCodexModelCatalogReasoningEffort(t *testing.T) {
 	runtime := newFakeRuntime()
 	service := newIsolatedAgentService(runtime)
-	service.CapabilityLister = &recordingComposerCapabilityLister{}
+	service.ModelCatalog = fakeModelCatalog{
+		result: AgentModelCatalogResult{
+			Provider: "codex",
+			Source:   "codex-cli",
+			Models: []AgentModelOption{
+				{
+					ID:                         "gpt-5.6-sol",
+					DisplayName:                "GPT-5.6-Sol",
+					DefaultReasoningEffort:     "low",
+					IsDefault:                  true,
+					ReasoningEffortsAdvertised: true,
+					SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+						{Value: "low"},
+						{Value: "ultra"},
+					},
+				},
+				{
+					ID:                         "gpt-5.6-luna",
+					DisplayName:                "GPT-5.6-Luna",
+					DefaultReasoningEffort:     "medium",
+					ReasoningEffortsAdvertised: true,
+					SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+						{Value: "low"},
+						{Value: "medium"},
+						{Value: "high"},
+						{Value: "xhigh"},
+						{Value: "max"},
+					},
+				},
+			},
+		},
+	}
+
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		Provider: "codex",
+		Settings: ComposerSettings{
+			Model:           "gpt-5.6-luna",
+			ReasoningEffort: "ultra",
+		},
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if options.EffectiveSettings.ReasoningEffort != "medium" {
+		t.Fatalf("effectiveSettings.reasoningEffort = %q, want medium", options.EffectiveSettings.ReasoningEffort)
+	}
+	values := make([]string, 0, len(options.ReasoningConfig.Options))
+	for _, option := range options.ReasoningConfig.Options {
+		values = append(values, option.Value)
+	}
+	if !slices.Equal(values, []string{"low", "medium", "high", "xhigh", "max"}) {
+		t.Fatalf("reasoningConfig values = %#v, want selected Luna model capabilities", values)
+	}
+	profiles, ok := options.RuntimeContext["modelReasoningOptionsByModel"].(map[string]any)
+	if !ok {
+		t.Fatalf("modelReasoningOptionsByModel = %#v", options.RuntimeContext["modelReasoningOptionsByModel"])
+	}
+	solProfile := profiles["gpt-5.6-sol"].(map[string]any)
+	lunaProfile := profiles["gpt-5.6-luna"].(map[string]any)
+	if len(solProfile["options"].([]map[string]string)) != 2 ||
+		len(lunaProfile["options"].([]map[string]string)) != 5 {
+		t.Fatalf("reasoning profiles = %#v, want model-specific option counts", profiles)
+	}
+}
+
+func TestServiceGetsComposerOptionsPreservesAdvertisedEmptyReasoningEfforts(t *testing.T) {
+	runtime := newFakeRuntime()
+	service := newIsolatedAgentService(runtime)
+	service.ModelCatalog = fakeModelCatalog{
+		result: AgentModelCatalogResult{
+			Provider: "codex",
+			Source:   "codex-cli",
+			Models: []AgentModelOption{
+				{
+					ID:                         "no-reasoning",
+					DisplayName:                "No Reasoning",
+					IsDefault:                  true,
+					ReasoningEffortsAdvertised: true,
+					SupportedReasoningEfforts:  []AgentModelReasoningEffortOption{},
+				},
+			},
+		},
+	}
+
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		Provider: "codex",
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if options.EffectiveSettings.ReasoningEffort != "" || len(options.ReasoningConfig.Options) != 0 {
+		t.Fatalf("reasoningConfig = %#v, want authoritative empty options", options.ReasoningConfig)
+	}
+	profiles, ok := options.RuntimeContext["modelReasoningOptionsByModel"].(map[string]any)
+	if !ok {
+		t.Fatalf("modelReasoningOptionsByModel = %#v", options.RuntimeContext["modelReasoningOptionsByModel"])
+	}
+	profile, ok := profiles["no-reasoning"].(map[string]any)
+	if !ok {
+		t.Fatalf("no-reasoning profile = %#v", profiles["no-reasoning"])
+	}
+	profileOptions, ok := profile["options"].([]map[string]string)
+	if !ok || len(profileOptions) != 0 {
+		t.Fatalf("no-reasoning profile options = %#v, want empty", profile["options"])
+	}
+}
+
+func TestServiceGetsComposerOptionsPreservesAdvertisedMinimalReasoningEffort(t *testing.T) {
+	runtime := newFakeRuntime()
+	service := newIsolatedAgentService(runtime)
+	service.ModelCatalog = fakeModelCatalog{
+		result: AgentModelCatalogResult{
+			Provider: "codex",
+			Source:   "codex-cli",
+			Models: []AgentModelOption{
+				{
+					ID:                         "minimal-only",
+					DisplayName:                "Minimal Only",
+					DefaultReasoningEffort:     "minimal",
+					IsDefault:                  true,
+					ReasoningEffortsAdvertised: true,
+					SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+						{Value: "minimal"},
+					},
+				},
+			},
+		},
+	}
+
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		Provider: "codex",
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if options.EffectiveSettings.ReasoningEffort != "minimal" {
+		t.Fatalf("effectiveSettings.reasoningEffort = %q, want minimal", options.EffectiveSettings.ReasoningEffort)
+	}
+	if options.ReasoningConfig.CurrentValue != "minimal" {
+		t.Fatalf("reasoningConfig.currentValue = %q, want minimal", options.ReasoningConfig.CurrentValue)
+	}
+	if len(options.ReasoningConfig.Options) != 1 || options.ReasoningConfig.Options[0].Value != "minimal" {
+		t.Fatalf("reasoningConfig.options = %#v, want only minimal", options.ReasoningConfig.Options)
+	}
+}
+
+func TestServiceGetsComposerOptionsPreservesSelectedAdvertisedReasoningEffort(t *testing.T) {
+	for _, effort := range []string{"minimal", "none"} {
+		t.Run(effort, func(t *testing.T) {
+			service := NewService(newFakeRuntime())
+			service.ModelCatalog = fakeModelCatalog{
+				result: AgentModelCatalogResult{
+					Provider: "codex",
+					Source:   "codex-cli",
+					Models: []AgentModelOption{{
+						ID:                         "gpt-catalog",
+						DefaultReasoningEffort:     "high",
+						IsDefault:                  true,
+						ReasoningEffortsAdvertised: true,
+						SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+							{Value: "minimal"}, {Value: "none"}, {Value: "high"},
+						},
+					}},
+				},
+			}
+
+			options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+				Provider: "codex",
+				Settings: ComposerSettings{Model: "gpt-catalog", ReasoningEffort: effort},
+			})
+			if err != nil {
+				t.Fatalf("GetComposerOptions returned error: %v", err)
+			}
+			if options.EffectiveSettings.ReasoningEffort != effort || options.ReasoningConfig.CurrentValue != effort {
+				t.Fatalf("composer reasoning = %#v, want %q", options.ReasoningConfig, effort)
+			}
+		})
+	}
+}
+
+func TestServiceGetsComposerOptionsNormalizesCodexMinimalReasoningEffort(t *testing.T) {
+	runtime := newFakeRuntime()
+	service := newIsolatedAgentService(runtime)
 
 	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
 		Provider: "codex",
@@ -3523,6 +3745,49 @@ func TestServiceUpdateSettingsPreservesCodexModelCatalogReasoningEffort(t *testi
 	}
 	if session.Settings == nil || session.Settings.ReasoningEffort != "minimal" {
 		t.Fatalf("session settings = %#v, want reasoningEffort minimal", session.Settings)
+	}
+}
+
+func TestServiceUpdateSettingsPreservesAdvertisedReasoningEffort(t *testing.T) {
+	for _, effort := range []string{"minimal", "none"} {
+		t.Run(effort, func(t *testing.T) {
+			runtime := newFakeRuntime()
+			runtime.sessions["ws-1:session-1"] = RuntimeSession{
+				ID:          "session-1",
+				Provider:    "codex",
+				WorkspaceID: "ws-1",
+				Status:      "working",
+				Settings: &ComposerSettings{
+					Model:           "gpt-catalog",
+					ReasoningEffort: "high",
+				},
+			}
+			service := NewService(runtime)
+			service.ModelCatalog = fakeModelCatalog{
+				result: AgentModelCatalogResult{
+					Provider: "codex",
+					Source:   "codex-cli",
+					Models: []AgentModelOption{{
+						ID:                         "gpt-catalog",
+						DefaultReasoningEffort:     "high",
+						ReasoningEffortsAdvertised: true,
+						SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+							{Value: "minimal"}, {Value: "none"}, {Value: "high"},
+						},
+					}},
+				},
+			}
+
+			session, err := service.UpdateSettings(context.Background(), "ws-1", "session-1", ComposerSettingsPatch{
+				ReasoningEffort: stringRef(effort),
+			})
+			if err != nil {
+				t.Fatalf("UpdateSettings returned error: %v", err)
+			}
+			if session.Settings == nil || session.Settings.ReasoningEffort != effort {
+				t.Fatalf("session settings = %#v, want reasoning %q", session.Settings, effort)
+			}
+		})
 	}
 }
 
