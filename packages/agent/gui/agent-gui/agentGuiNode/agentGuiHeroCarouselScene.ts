@@ -93,6 +93,7 @@ interface AgentGuiHeroCarouselTile {
 export interface AgentGuiHeroCarouselSceneOptions {
   canvas: HTMLCanvasElement;
   iconUrls: readonly string[];
+  loadedImages?: readonly (HTMLImageElement | null)[];
   // Fired once the wheel settles on an integer slot after an animated move.
   onSettle: (index: number) => void;
 }
@@ -122,6 +123,7 @@ export class AgentGuiHeroCarouselScene {
   private readonly wheelRadius: number;
   private readonly onSettle: (index: number) => void;
   private readonly images: HTMLImageElement[] = [];
+  private readonly ownedImages = new Set<HTMLImageElement>();
   private scroll = 0;
   private target = 0;
   private velocity = 0;
@@ -164,22 +166,26 @@ export class AgentGuiHeroCarouselScene {
       this.tiles.push({ mesh });
     }
     options.iconUrls.forEach((iconUrl, agentIndex) => {
-      const image = new Image();
+      const loadedImage = options.loadedImages?.[agentIndex] ?? null;
+      const image = loadedImage ?? new Image();
+      if (!loadedImage) {
+        image.decoding = "async";
+        image.loading = "eager";
+        image.setAttribute("fetchpriority", "high");
+        this.ownedImages.add(image);
+      }
       this.images.push(image);
       image.onload = () => {
         if (this.disposed) {
           return;
         }
-        const texture = roundedIconTexture(image, () => this.requestRender());
-        for (const tile of this.tiles) {
-          if (tile.mesh.userData.agentIndex === agentIndex) {
-            tile.mesh.material.map = texture;
-            tile.mesh.material.visible = true;
-            tile.mesh.material.needsUpdate = true;
-          }
-        }
+        this.applyImageTexture(image, agentIndex);
       };
-      image.src = iconUrl;
+      if (image.complete && image.naturalWidth > 0) {
+        this.applyImageTexture(image, agentIndex);
+      } else if (!loadedImage) {
+        image.src = iconUrl;
+      }
     });
 
     this.applyPoses();
@@ -279,8 +285,11 @@ export class AgentGuiHeroCarouselScene {
     }
     for (const image of this.images) {
       image.onload = null;
-      image.src = "";
+      if (this.ownedImages.has(image)) {
+        image.src = "";
+      }
     }
+    this.ownedImages.clear();
     for (const tile of this.tiles) {
       tile.mesh.geometry.dispose();
       tile.mesh.material.map?.dispose();
@@ -360,6 +369,20 @@ export class AgentGuiHeroCarouselScene {
         this.renderer.render(this.scene, this.camera);
       }
     });
+  }
+
+  private applyImageTexture(image: HTMLImageElement, agentIndex: number): void {
+    if (this.disposed) {
+      return;
+    }
+    const texture = roundedIconTexture(image, () => this.requestRender());
+    for (const tile of this.tiles) {
+      if (tile.mesh.userData.agentIndex === agentIndex) {
+        tile.mesh.material.map = texture;
+        tile.mesh.material.visible = true;
+        tile.mesh.material.needsUpdate = true;
+      }
+    }
   }
 
   private applyPoses(): void {

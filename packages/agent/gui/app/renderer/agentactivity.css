@@ -9073,6 +9073,8 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   display: block;
   width: 100%;
   height: 100%;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
 
   /* Fade-out mask: a horizontal band dissolves tiles toward the stage sides
      (the fully-transparent stops sit where the outermost tiles ride, not at
@@ -9088,6 +9090,11 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
     ),
     linear-gradient(180deg, #000 0%, #000 70%, transparent 96%);
   mask-composite: intersect;
+}
+
+.agent-gui-node__empty-hero-carousel[data-icons-ready="true"]
+  > .agent-gui-node__empty-hero-carousel-canvas {
+  opacity: 1;
 }
 
 .agent-gui-node__empty-hero-carousel-item {

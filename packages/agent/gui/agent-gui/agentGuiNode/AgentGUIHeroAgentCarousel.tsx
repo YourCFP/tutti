@@ -52,6 +52,92 @@ const CAROUSEL_WHEEL_STEP_THRESHOLD = 42;
 const CAROUSEL_WHEEL_STEP_COOLDOWN_MS = 110;
 const CAROUSEL_DRAG_STEP_PX = 52;
 
+interface AgentGUIHeroCarouselImagePreloadState {
+  images: readonly (HTMLImageElement | null)[];
+  ready: boolean;
+}
+
+function emptyPreloadedCarouselImages(
+  length: number
+): (HTMLImageElement | null)[] {
+  return Array.from({ length }).map((): HTMLImageElement | null => null);
+}
+
+function useAgentGUIHeroCarouselImages(
+  icons: readonly AgentGUIHeroCarouselIcon[],
+  iconKey: string
+): AgentGUIHeroCarouselImagePreloadState {
+  const [preloadState, setPreloadState] =
+    useState<AgentGUIHeroCarouselImagePreloadState>({
+      images: [],
+      ready: icons.length === 0
+    });
+
+  useEffect(() => {
+    if (icons.length === 0) {
+      setPreloadState({ images: [], ready: true });
+      return;
+    }
+    if (typeof Image !== "function") {
+      setPreloadState({
+        images: emptyPreloadedCarouselImages(icons.length),
+        ready: true
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setPreloadState({
+      images: emptyPreloadedCarouselImages(icons.length),
+      ready: false
+    });
+
+    void Promise.all(
+      icons.map(
+        (icon) =>
+          new Promise<HTMLImageElement | null>((resolve) => {
+            const image = new Image();
+            const resolveDecoded = (): void => {
+              const decode = image.decode?.();
+              if (decode) {
+                void decode
+                  .then(() => resolve(image))
+                  .catch(() => resolve(image));
+                return;
+              }
+              resolve(image);
+            };
+            image.decoding = "async";
+            image.loading = "eager";
+            image.setAttribute("fetchpriority", "high");
+            image.onload = () => {
+              resolveDecoded();
+            };
+            image.onerror = () => resolve(null);
+            image.src = icon.iconUrl;
+            if (image.complete) {
+              if (image.naturalWidth > 0) {
+                resolveDecoded();
+              } else {
+                resolve(null);
+              }
+            }
+          })
+      )
+    ).then((images) => {
+      if (!cancelled) {
+        setPreloadState({ images, ready: true });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [iconKey]);
+
+  return preloadState;
+}
+
 // Empty-hero agent switcher for the "All" tab: a ring of same-sized agent
 // tiles rendered with three.js (see agentGuiHeroCarouselScene) so tiles
 // farther around the ring genuinely shrink and fade with perspective.
@@ -126,16 +212,18 @@ export const AgentGUIHeroAgentCarousel = memo(
     const iconKey = icons
       .map((icon) => `${icon.provider}:${icon.iconUrl}`)
       .join("|");
+    const carouselImages = useAgentGUIHeroCarouselImages(icons, iconKey);
 
     useEffect(() => {
       const canvas = canvasRef.current;
       const stage = stageRef.current;
-      if (!canvas || !stage) {
+      if (!canvas || !stage || !carouselImages.ready) {
         return;
       }
       const scene = AgentGuiHeroCarouselScene.create({
         canvas,
         iconUrls: icons.map((icon) => icon.iconUrl),
+        loadedImages: carouselImages.images,
         onSettle: (index) => {
           centerIndexRef.current = index;
           setCenterIndex(index);
@@ -168,7 +256,7 @@ export const AgentGUIHeroAgentCarousel = memo(
       };
       // The scene is rebuilt only when the icon set itself changes.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [iconKey]);
+    }, [carouselImages.images, carouselImages.ready, iconKey]);
 
     // Follow external agent switches (left rail, hero title dropdown).
     useEffect(() => {
@@ -339,6 +427,7 @@ export const AgentGUIHeroAgentCarousel = memo(
         aria-label={interactive ? providerSelectLabel : undefined}
         role={interactive ? "group" : undefined}
         className={styles.emptyHeroCarousel}
+        data-icons-ready={carouselImages.ready}
         onKeyDown={interactive ? handleKeyDown : undefined}
         onPointerDown={interactive ? handlePointerDown : undefined}
         onPointerMove={interactive ? handlePointerMove : undefined}
