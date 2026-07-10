@@ -187,12 +187,16 @@ type codexAppServerSessionLock struct {
 }
 
 type codexAppServerSession struct {
-	client                 *codexAppServerClient
-	threadID               string
-	serverInfo             map[string]any
-	account                map[string]any
-	rateLimits             map[string]any
-	goal                   map[string]any
+	client     *codexAppServerClient
+	threadID   string
+	serverInfo map[string]any
+	account    map[string]any
+	rateLimits map[string]any
+	goal       map[string]any
+	// goalRevision prevents a slow startup thread/goal/get response from
+	// overwriting a newer user control or provider notification. Guarded by
+	// the adapter mutex and incremented on every local goal mutation.
+	goalRevision           uint64
 	startupModelsReady     bool
 	startupRateLimitsReady bool
 	// lifecycleSeq numbers the adapter's TurnLifecycle snapshots (ADR 0008):
@@ -1230,10 +1234,11 @@ func (a *CodexAppServerAdapter) refreshStartupMetadataAsync(
 		// The goal lives in codex's thread state; restore it after start or
 		// resume so the banner survives daemon restarts and adopted
 		// continuation turns find the goal status they gate on.
-		if appSession := a.getSession(agentSessionID); appSession != nil && appSession.client != nil {
+		if appSession, goalRevision := a.goalRefreshGuard(agentSessionID); appSession != nil && appSession.client != nil {
 			if goal := a.fetchGoal(ctx, appSession.client, appSession.threadID, trace); len(goal) > 0 {
-				a.applyGoalUpdate(agentSessionID, goal)
-				a.emitStartupMetadataRefreshEvent(session, agentSessionID)
+				if a.applyStartupGoalRefresh(agentSessionID, appSession, goalRevision, goal) {
+					a.emitStartupMetadataRefreshEvent(session, agentSessionID)
+				}
 			}
 		}
 	}()

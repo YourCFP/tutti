@@ -159,6 +159,31 @@ Turn state, loading, cancel, restore, rail projection, event updates, imports, a
   [codex_appserver_adapter.go](../../../packages/agent/daemon/runtime/codex_appserver_adapter.go)
   [codex_appserver_adapter_test.go](../../../packages/agent/daemon/runtime/codex_appserver_adapter_test.go)
 
+### Codex goal reappears after pause, edit, or clear
+
+- Symptom:
+  A goal control succeeds, but the banner shortly returns to an older objective
+  or status; a cleared goal can reappear as paused.
+- Quick checks:
+  Compare the startup background `thread/goal/get` with later goal-control RPCs.
+  If the get began before the control and completed afterwards, inspect whether
+  its older snapshot was applied unconditionally.
+- Root cause:
+  Startup restores the persisted thread goal asynchronously. Its response can
+  race with newer user controls or provider goal notifications, so arrival
+  order is not a safe freshness signal.
+- Fix:
+  Version the session goal state. Capture the session identity and revision
+  before the startup fetch, and apply its result only when both are unchanged;
+  increment the revision on every update and clear.
+- Validation:
+  Capture a startup refresh guard, clear the goal, then attempt to apply the
+  older paused snapshot and verify it is rejected.
+- References:
+  [codex_appserver_adapter.go](../../../packages/agent/daemon/runtime/codex_appserver_adapter.go)
+  [codex_appserver_events.go](../../../packages/agent/daemon/runtime/codex_appserver_events.go)
+  [codex_appserver_adapter_test.go](../../../packages/agent/daemon/runtime/codex_appserver_adapter_test.go)
+
 ### Agent session stays loading after a completed turn
 
 - Symptom:

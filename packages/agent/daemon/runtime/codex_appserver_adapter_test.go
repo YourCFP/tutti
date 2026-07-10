@@ -3605,6 +3605,28 @@ func TestControllerGoalControl(t *testing.T) {
 	transport.conn.completePendingTurn()
 }
 
+func TestCodexAppServerAdapterStaleStartupGoalRefreshDoesNotRestoreClearedGoal(t *testing.T) {
+	t.Parallel()
+
+	adapter, _, session := startedAppServerAdapter(t)
+	adapter.applyGoalUpdate(session.AgentSessionID, map[string]any{
+		"objective": "ship it",
+		"status":    "paused",
+	})
+	expectedSession, revision := adapter.goalRefreshGuard(session.AgentSessionID)
+	adapter.applyGoalClear(session.AgentSessionID)
+
+	if applied := adapter.applyStartupGoalRefresh(session.AgentSessionID, expectedSession, revision, map[string]any{
+		"objective": "ship it",
+		"status":    "paused",
+	}); applied {
+		t.Fatal("stale startup goal refresh applied after clear")
+	}
+	if goal := adapter.sessionGoal(session.AgentSessionID); len(goal) != 0 {
+		t.Fatalf("stale startup refresh restored goal: %#v", goal)
+	}
+}
+
 // thread/goal/updated notifications must reach the GUI as session events even
 // while no turn is running (the banner refreshes off this signal).
 func TestCodexAppServerAdapterGoalUpdateNotificationEmitsSessionEvent(t *testing.T) {

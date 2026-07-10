@@ -985,6 +985,7 @@ func (a *CodexAppServerAdapter) applyGoalUpdate(agentSessionID string, goal map[
 	}
 	oldStatus = strings.TrimSpace(asString(appSession.goal["status"]))
 	appSession.goal = clonePayload(goal)
+	appSession.goalRevision++
 	newStatus = strings.TrimSpace(asString(appSession.goal["status"]))
 	if oldStatus != newStatus {
 		slog.Info("agent session app-server goal status changed",
@@ -1012,6 +1013,50 @@ func (a *CodexAppServerAdapter) applyGoalClear(agentSessionID string) {
 		)
 	}
 	appSession.goal = nil
+	appSession.goalRevision++
+}
+
+func (a *CodexAppServerAdapter) goalRefreshGuard(agentSessionID string) (*codexAppServerSession, uint64) {
+	if a == nil {
+		return nil, 0
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
+	if appSession == nil {
+		return nil, 0
+	}
+	return appSession, appSession.goalRevision
+}
+
+func (a *CodexAppServerAdapter) applyStartupGoalRefresh(
+	agentSessionID string,
+	expectedSession *codexAppServerSession,
+	expectedRevision uint64,
+	goal map[string]any,
+) bool {
+	if a == nil || expectedSession == nil || len(goal) == 0 {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
+	if appSession != expectedSession || appSession.goalRevision != expectedRevision {
+		return false
+	}
+	oldStatus := strings.TrimSpace(asString(appSession.goal["status"]))
+	appSession.goal = clonePayload(goal)
+	appSession.goalRevision++
+	newStatus := strings.TrimSpace(asString(appSession.goal["status"]))
+	if oldStatus != newStatus {
+		slog.Info("agent session app-server goal status changed",
+			"event", "agent_session.app_server.goal.status_changed",
+			"agent_session_id", agentSessionID,
+			"old_status", oldStatus,
+			"new_status", newStatus,
+		)
+	}
+	return true
 }
 
 func appServerRateLimitQuotas(snapshot map[string]any) []map[string]any {
