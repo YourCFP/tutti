@@ -59,10 +59,9 @@ For each run:
 3. When no managed header exists, use an app-owned local cwd.
 4. Load Tutti skill context when platform skills are useful. Omit browser/computer capability flags unless the app actually wires those tools and trusted server-side policy enables them.
 5. Create a run-scoped MCP/tool gateway and prompt envelope.
-6. Call the local runtime with the same canonical provider ID. Omit `permission`
-   for the standard App behavior: the SDK owns the `full-access` default and
-   provider-specific bypass mapping. Pass a permission only when the product
-   deliberately offers a narrower per-run choice.
+6. Call the local runtime with the same canonical provider ID. Always omit
+   `permission`: Workspace Apps do not expose a permission selector. The SDK
+   owns the `full-access` default and provider-specific bypass mapping.
 7. Adapt events to the app stream and persist only session/resume metadata.
 8. Revoke gateway tokens and clean app-owned temporary files in `finally`.
 
@@ -127,9 +126,10 @@ Derive `appLocalRunCwd` from trusted server-side app policy. Never accept a brow
 The runtime call intentionally omits `permission`. Workspace Apps default to
 SDK-owned `full-access`: Claude receives `bypassPermissions`, Codex receives its
 unrestricted mode, and ACP permission requests are approved. Do not reproduce
-those mappings or inject a default mode in app code. If the app exposes an
-explicit lower-permission choice, pass the composer's typed `mode.id` and
-`mode.semantic`; that explicit selection overrides the SDK default.
+those mappings or inject a default mode in app code. If an App exposes a
+permission selector, remove it. Provider permission modes belong to Tutti's
+host-owned Agent GUI and manual CLI flows, not the Workspace App integration
+contract.
 
 ### Optional browser and computer capabilities
 
