@@ -4402,10 +4402,12 @@ describe("AgentComposer", () => {
     );
     const createSession = vi.fn();
     const sendInput = vi.fn();
+    const reportDiagnostic = vi.fn();
     setAgentActivityRuntimeForTests({
       uploadPromptContent,
       createSession,
-      sendInput
+      sendInput,
+      reportDiagnostic
     } as unknown as AgentActivityRuntime);
 
     let draftContent = createDraft("");
@@ -4450,7 +4452,12 @@ describe("AgentComposer", () => {
     rerender(renderComposer());
     fireEvent.click(screen.getByRole("button", { name: "发送" }));
 
-    expect(screen.getByRole("button", { name: "发送" })).toBeDisabled();
+    const uploadingSendButton = screen.getByRole("button", { name: "发送" });
+    expect(uploadingSendButton).toBeDisabled();
+    expect(uploadingSendButton).toHaveAttribute(
+      "data-disabled-reason",
+      "image_uploading"
+    );
     expect(onSubmit).not.toHaveBeenCalled();
     expect(createSession).not.toHaveBeenCalled();
     expect(sendInput).not.toHaveBeenCalled();
@@ -4474,10 +4481,26 @@ describe("AgentComposer", () => {
     );
     expect(draftContent.images[0]?.data).toBeUndefined();
     expect(draftContent.images[0]?.uploadError).toBeUndefined();
+    expect(reportDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "agent.gui.composer.image_upload.requested",
+        details: expect.objectContaining({ uploadFunctionAvailable: true })
+      })
+    );
+    expect(reportDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "agent.gui.composer.image_upload.resolved",
+        details: expect.objectContaining({
+          hasData: false,
+          hasUrl: true
+        })
+      })
+    );
     rerender(renderComposer());
 
     const sendButton = screen.getByRole("button", { name: "发送" });
     expect(sendButton).not.toBeDisabled();
+    expect(sendButton).not.toHaveAttribute("data-disabled-reason");
     fireEvent.click(sendButton);
     expect(onSubmit).toHaveBeenCalledWith([
       {

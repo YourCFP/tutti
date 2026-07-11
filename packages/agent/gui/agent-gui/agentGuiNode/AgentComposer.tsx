@@ -156,7 +156,11 @@ import {
 import addLinedIconUrl from "../../app/renderer/assets/icons/add-lined-bold.svg";
 import atLinedIconUrl from "../../app/renderer/assets/icons/@-bold-lined.svg";
 import handoffLinedIconUrl from "../../app/renderer/assets/icons/handoff-lined.svg";
-import { useOptionalAgentActivityRuntime } from "../../agentActivityRuntime";
+import {
+  useOptionalAgentActivityRuntime,
+  type AgentActivityRuntime,
+  type AgentActivityRuntimeDiagnosticInput
+} from "../../agentActivityRuntime";
 import { useOptionalAgentHostApi } from "../../agentActivityHost";
 import type { AgentDroppedFileReferenceResolver } from "./model/agentDroppedFileReferences";
 import { resolvePermissionModeControlsDisabled } from "./model/composerModeSelection";
@@ -203,6 +207,21 @@ const DOCK_COMPOSER_INPUT_PADDING_BLOCK_HEIGHT = 24;
 const AGENT_COMPOSER_PASTED_TEXT_FILE_PREFIX = "pasted-text";
 
 const AGENT_COMPOSER_PASTED_TEXT_MIME = "text/plain";
+
+function reportAgentComposerDiagnostic(
+  runtime: AgentActivityRuntime | null,
+  input: AgentActivityRuntimeDiagnosticInput
+): void {
+  const reportDiagnostic = runtime?.reportDiagnostic;
+  if (!reportDiagnostic) {
+    return;
+  }
+  try {
+    void Promise.resolve(reportDiagnostic.call(runtime, input)).catch(() => {});
+  } catch {
+    // Diagnostics must never affect composer behavior.
+  }
+}
 
 function agentComposerTextByteLength(text: string): number {
   if (typeof TextEncoder !== "undefined") {
@@ -2311,6 +2330,21 @@ export function AgentComposer({
         (agentActivityRuntime.promptContentUploadSupport?.image ?? true)
           ? agentActivityRuntime.uploadPromptContent
           : undefined;
+      reportAgentComposerDiagnostic(agentActivityRuntime, {
+        details: {
+          imageCount: Math.min(images.length, remainingSlots),
+          promptImagesSupported,
+          runtimeAvailable: Boolean(agentActivityRuntime),
+          uploadCapabilityEnabled: canUploadAttachment,
+          uploadFunctionAvailable: Boolean(uploadPromptContent),
+          uploadSupportDeclared:
+            agentActivityRuntime?.promptContentUploadSupport?.image ?? null
+        },
+        event: "agent.gui.composer.image_upload.requested",
+        level: "info",
+        source: "agent-gui",
+        workspaceId
+      });
       const nextImages = images.slice(0, remainingSlots).map((image) => ({
         id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
         name: image.name,
@@ -2347,6 +2381,20 @@ export function AgentComposer({
               (block) => block.type === "image"
             );
             const uploadedUrl = uploadedImage?.url?.trim();
+            reportAgentComposerDiagnostic(agentActivityRuntime, {
+              details: {
+                foundImageBlock: Boolean(uploadedImage),
+                hasAttachmentId: Boolean(uploadedImage?.attachmentId?.trim()),
+                hasData: Boolean(uploadedImage?.data?.trim()),
+                hasPath: Boolean(uploadedImage?.path?.trim()),
+                hasUrl: Boolean(uploadedUrl),
+                imageId: draftImage.id
+              },
+              event: "agent.gui.composer.image_upload.resolved",
+              level: "info",
+              source: "agent-gui",
+              workspaceId
+            });
             if (
               !uploadedImage ||
               (!uploadedUrl &&
@@ -2389,6 +2437,16 @@ export function AgentComposer({
           .catch((error: unknown) => {
             const message =
               error instanceof Error ? error.message : String(error);
+            reportAgentComposerDiagnostic(agentActivityRuntime, {
+              details: {
+                error: message.slice(0, 500),
+                imageId: draftImage.id
+              },
+              event: "agent.gui.composer.image_upload.failed",
+              level: "warn",
+              source: "agent-gui",
+              workspaceId
+            });
             const failedDraftImages = draftImagesRef.current.map((image) =>
               image.id === draftImage.id
                 ? {
@@ -3390,6 +3448,67 @@ export function AgentComposer({
         ? "loading"
         : "send";
   const sendButtonBusy = isSendingTurn && !isQueueMode;
+  const sendDisabledReasons = [
+    isSelectedProjectMissing ? "project_missing" : null,
+    submitDisabled ? "submit_disabled" : null,
+    !hasDraftContent ? "draft_empty" : null,
+    hasUploadingDraftImages ? "image_uploading" : null,
+    hasFailedDraftImages ? "image_upload_failed" : null,
+    hasUploadingDraftFiles ? "file_uploading" : null,
+    hasFailedDraftFiles ? "file_upload_failed" : null,
+    hasUploadingDraftLargeTexts ? "large_text_uploading" : null,
+    hasFailedDraftLargeTexts ? "large_text_upload_failed" : null,
+    sendButtonBusy ? "send_busy" : null
+  ].filter((reason): reason is string => reason !== null);
+  const sendDisabledReasonKey = sendDisabledReasons.join(",");
+  useEffect(() => {
+    reportAgentComposerDiagnostic(agentActivityRuntime, {
+      details: {
+        canUploadAttachment,
+        draftFileCount: draftFiles.length,
+        draftImageCount: draftImages.length,
+        draftLargeTextCount: draftLargeTexts.length,
+        hasDraftContent,
+        hasFailedDraftFiles,
+        hasFailedDraftImages,
+        hasFailedDraftLargeTexts,
+        hasUploadingDraftFiles,
+        hasUploadingDraftImages,
+        hasUploadingDraftLargeTexts,
+        isSelectedProjectMissing,
+        promptImagesSupported,
+        sendButtonBusy,
+        sendDisabledReason: sendDisabledReasonKey || null,
+        submitDisabled,
+        uploadFunctionAvailable: Boolean(
+          agentActivityRuntime?.uploadPromptContent
+        )
+      },
+      event: "agent.gui.composer.submit_state_changed",
+      level: "info",
+      source: "agent-gui",
+      workspaceId
+    });
+  }, [
+    agentActivityRuntime,
+    canUploadAttachment,
+    draftFiles.length,
+    draftImages.length,
+    draftLargeTexts.length,
+    hasDraftContent,
+    hasFailedDraftFiles,
+    hasFailedDraftImages,
+    hasFailedDraftLargeTexts,
+    hasUploadingDraftFiles,
+    hasUploadingDraftImages,
+    hasUploadingDraftLargeTexts,
+    isSelectedProjectMissing,
+    promptImagesSupported,
+    sendButtonBusy,
+    sendDisabledReasonKey,
+    submitDisabled,
+    workspaceId
+  ]);
   const activePromptRequestId = activePrompt?.requestId ?? null;
   const [dismissedPromptRequestId, setDismissedPromptRequestId] = useState<
     string | null
@@ -3463,6 +3582,7 @@ export function AgentComposer({
       type="submit"
       className={styles.composerSendButton}
       data-state={sendButtonState}
+      data-disabled-reason={sendDisabledReasonKey || undefined}
       disabled={
         isSelectedProjectMissing ||
         submitDisabled ||

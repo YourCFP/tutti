@@ -864,6 +864,11 @@ UI rendering. Submitted-draft reconciliation must compare normalized URLs so
 an in-flight edit to a URL-backed image cannot be mistaken for the submitted
 draft and cleared. Validate this handoff with the focused `AgentComposer` and
 `useAgentGUINodeController` test suites listed under Boundary Checks.
+Composer diagnostics expose this chain without recording prompt bytes or signed
+URLs: `agent.gui.composer.image_upload.requested`, `.resolved`, and `.failed`
+report upload availability and safe reference-shape flags, while
+`agent.gui.composer.submit_state_changed` reports the exact send-button blocker
+such as `submit_disabled`, `image_uploading`, or `image_upload_failed`.
 Claude Code runtime options follow the same parity rule. The legacy ACP adapter
 and the Claude SDK adapter must derive system prompt append text, Tutti detail
 mode instructions, plan-mode instructions, plugin directory, custom model args,
