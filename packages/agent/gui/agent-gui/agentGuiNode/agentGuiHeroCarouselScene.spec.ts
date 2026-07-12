@@ -14,8 +14,10 @@ interface FakeMaterial extends FakeDisposable {
 
 interface FakeMesh {
   children: FakeMesh[];
-  geometry: FakeDisposable & { kind: "badge" | "icon" };
+  geometry: FakeDisposable & { kind: "badge" | "edge" | "icon" };
   material: FakeMaterial;
+  position: { set: ReturnType<typeof vi.fn>; z: number };
+  rotation: { set: ReturnType<typeof vi.fn>; x: number; z: number };
   userData: { agentIndex?: number };
 }
 
@@ -30,9 +32,9 @@ const threeState = vi.hoisted(() => ({
 vi.mock("three", () => {
   class FakeGeometry implements FakeDisposable {
     disposed = false;
-    readonly kind: "badge" | "icon";
+    readonly kind: "badge" | "edge" | "icon";
 
-    constructor(kind: "badge" | "icon") {
+    constructor(kind: "badge" | "edge" | "icon") {
       this.kind = kind;
     }
 
@@ -53,6 +55,12 @@ vi.mock("three", () => {
     }
   }
 
+  class CylinderGeometry extends FakeGeometry {
+    constructor() {
+      super("edge");
+    }
+  }
+
   class MeshBasicMaterial implements FakeMaterial {
     disposed = false;
     map?: FakeDisposable;
@@ -70,21 +78,30 @@ vi.mock("three", () => {
     }
   }
 
-  class Mesh implements FakeMesh {
-    readonly children: FakeMesh[] = [];
-    readonly position = { set: vi.fn() };
-    readonly rotation = { z: 0 };
-    readonly userData: { agentIndex?: number } = {};
+  class MeshStandardMaterial extends MeshBasicMaterial {}
 
+  class Group {
+    readonly children: FakeMesh[] = [];
+    readonly position = { set: vi.fn(), z: 0 };
+    readonly rotation = { set: vi.fn(), x: 0, z: 0 };
+    readonly scale = { setScalar: vi.fn() };
+    readonly userData: { agentIndex?: number } = {};
+    visible = true;
+
+    add(...children: FakeMesh[]): void {
+      this.children.push(...children);
+    }
+  }
+
+  class Mesh extends Group implements FakeMesh {
     constructor(
-      readonly geometry: FakeDisposable & { kind: "badge" | "icon" },
+      readonly geometry: FakeDisposable & {
+        kind: "badge" | "edge" | "icon";
+      },
       readonly material: FakeMaterial
     ) {
+      super();
       threeState.meshes.push(this);
-    }
-
-    add(child: FakeMesh): void {
-      this.children.push(child);
     }
   }
 
@@ -135,15 +152,28 @@ vi.mock("three", () => {
 
   class Vector2 {}
 
+  class AmbientLight {}
+
+  class DirectionalLight {
+    readonly position = { set: vi.fn() };
+  }
+
   return {
+    AmbientLight,
     CanvasTexture,
     CircleGeometry,
+    CylinderGeometry,
+    DirectionalLight,
+    Group,
     MathUtils: {
       clamp: (value: number, min: number, max: number) =>
-        Math.min(Math.max(value, min), max)
+        Math.min(Math.max(value, min), max),
+      smoothstep: (value: number, min: number, max: number) =>
+        Math.min(Math.max((value - min) / (max - min), 0), 1)
     },
     Mesh,
     MeshBasicMaterial,
+    MeshStandardMaterial,
     PerspectiveCamera,
     PlaneGeometry,
     Raycaster,
@@ -198,10 +228,21 @@ describe("AgentGuiHeroCarouselScene", () => {
     getContextSpy = vi
       .spyOn(HTMLCanvasElement.prototype, "getContext")
       .mockReturnValue({
+        arc: vi.fn(),
         beginPath: vi.fn(),
+        clearRect: vi.fn(),
         clip: vi.fn(),
+        createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+        createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
         drawImage: vi.fn(),
-        roundRect: vi.fn()
+        fill: vi.fn(),
+        fillRect: vi.fn(),
+        restore: vi.fn(),
+        rotate: vi.fn(),
+        roundRect: vi.fn(),
+        save: vi.fn(),
+        stroke: vi.fn(),
+        translate: vi.fn()
       } as unknown as CanvasRenderingContext2D);
   });
 
@@ -257,10 +298,16 @@ describe("AgentGuiHeroCarouselScene", () => {
     const iconMeshes = threeState.meshes.filter(
       (mesh) => mesh.geometry.kind === "icon"
     );
-    expect(iconMeshes[0]?.material.opacity).toBe(1);
-    expect(iconMeshes[0]?.children[0]?.material.opacity).toBe(1);
-    expect(iconMeshes[1]?.material.opacity).toBe(0.55);
-    expect(iconMeshes[1]?.children[0]?.material.opacity).toBe(0.55);
+    const centeredIcon = iconMeshes.find(
+      (mesh) => mesh.userData.agentIndex === 0 && mesh.material.opacity === 1
+    );
+    const centeredBadge = badgeMeshes.find(
+      (mesh) => mesh.userData.agentIndex === 0 && mesh.material.visible
+    );
+    expect(centeredIcon).toBeDefined();
+    expect(centeredBadge?.material.opacity).toBe(
+      centeredIcon?.material.opacity
+    );
 
     expect(scene?.pick(50, 50, 100, 100)).toBe(0);
     expect(

@@ -1565,6 +1565,31 @@ The public directory entry owns its presentation and availability:
 - show no aggregate `All` entry when exactly one agent exists
 - show `All` plus the host-ordered rail and home carousel when multiple agents
   exist
+- keep the multi-agent home carousel mounted when the selected agent changes;
+  move the selected directory-owned node into the center without reordering the
+  host array, including when the selected target enters or leaves a readiness
+  gate; keep the carousel canvas outside the ready/gated body branch so its
+  scroll position and animation are not reset; rotate the centered record by
+  default, temporarily give playback to the record under the pointer, return
+  playback to the current center when hover leaves, preserve each record's
+  stopped angle when playback moves elsewhere, and fade records progressively
+  by distance from the center while keeping the next outer record partially
+  visible on each side; target
+  changes should prime the wheel spring with an immediate directional impulse
+  and avoid duplicate WebGL submissions from playback and wheel animation; use
+  a shallow lit cylinder beneath the icon texture when rendering the record so
+  thickness, rim reflection, and side perspective remain part of the same
+  mounted Three.js scene instead of pre-rendered replacement assets; keep
+  one-shot redraw and spring animation RAF handles separate so a pending resize
+  or texture render cannot suppress a new interaction, let the spring frame own
+  the single pose/render pass during movement, share record geometry, and cull
+  repeated records outside the visible center range; start pointer-driven
+  carousel movement on primary `pointerdown`, then suppress the matching click
+  activation so the spring begins on press without double-selecting the target;
+  selection updates the title, composer, and controls below the carousel;
+  respect reduced motion by suppressing record playback animation; keep the
+  empty-home content on a fixed top anchor so readiness and composer height
+  changes grow downward instead of vertically re-centering the whole hero
 - persist and pass only `agentTargetId` for target selection and launch
 - use `agentTargetId` as the opaque activity-core composer `targetKey`; never
   derive a cache key from provider
