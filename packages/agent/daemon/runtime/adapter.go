@@ -111,6 +111,16 @@ type InteractiveAdapter interface {
 	SubmitInteractive(context.Context, Session, SubmitInteractiveInput) (SubmitInteractiveResult, error)
 }
 
+type InteractiveDispositionAdapter interface {
+	InteractiveDisposition(Session, string, string) InteractiveDisposition
+}
+
+type InteractiveDispositionSink func(string, string, string, InteractiveDisposition)
+
+type InteractiveDispositionSinkAdapter interface {
+	SetInteractiveDispositionSink(InteractiveDispositionSink)
+}
+
 // InteractiveSelectionState is the provider adapter's narrow projection of a
 // successful interactive choice onto generic session settings. The controller
 // owns persistence/publication; adapters own protocol vocabulary.

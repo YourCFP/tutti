@@ -213,6 +213,11 @@ test("canceling a queued submit atomically removes queue and pending intent", ()
   state = rootEngineReducer(state, {
     sessions: [
       {
+        ...{
+          activeTurnId: null,
+          latestTurnInteractions: [],
+          pendingInteractions: []
+        },
         activeTurn: {
           agentSessionId: "session-1",
           phase: "running",
@@ -290,6 +295,11 @@ test("submit acceptance rejects unknown and cross-workspace canonical sessions a
   let state = rootEngineReducer(createInitialAgentSessionEngineState(), {
     sessions: [
       {
+        ...{
+          activeTurnId: null,
+          latestTurnInteractions: [],
+          pendingInteractions: []
+        },
         agentSessionId: "session-1",
         cwd: "/workspace",
         provider: "codex",
@@ -326,6 +336,8 @@ test("an uncertain queued submit cannot be half-canceled", () => {
     agentSessionId: "session-1",
     cwd: "/workspace",
     provider: "codex",
+    latestTurnInteractions: [],
+    pendingInteractions: [],
     status: "working",
     title: "Session",
     updatedAtUnixMs: 1,
@@ -347,6 +359,11 @@ test("an uncertain queued submit cannot be half-canceled", () => {
   state = rootEngineReducer(state, {
     sessions: [
       {
+        ...{
+          activeTurnId: null,
+          latestTurnInteractions: [],
+          pendingInteractions: []
+        },
         ...runningSession,
         activeTurn: {
           ...runningSession.activeTurn,
@@ -391,6 +408,11 @@ test("session tombstone blocks late queue and snapshot resurrection across domai
     type: "session/snapshotReceived",
     sessions: [
       {
+        ...{
+          activeTurnId: null,
+          latestTurnInteractions: [],
+          pendingInteractions: []
+        },
         agentSessionId: "session-1",
         cwd: "/workspace",
         provider: "codex",
@@ -422,6 +444,11 @@ test("session tombstone blocks late queue and snapshot resurrection across domai
     type: "session/snapshotReceived",
     sessions: [
       {
+        ...{
+          activeTurnId: null,
+          latestTurnInteractions: [],
+          pendingInteractions: []
+        },
         agentSessionId: "session-1",
         cwd: "/workspace",
         provider: "codex",
@@ -462,6 +489,11 @@ test("an invalid send-now request cannot cancel an unrelated active turn", () =>
     type: "session/snapshotReceived",
     sessions: [
       {
+        ...{
+          activeTurnId: null,
+          latestTurnInteractions: [],
+          pendingInteractions: []
+        },
         activeTurn: {
           agentSessionId: "session-1",
           phase: "running",
@@ -501,6 +533,11 @@ test("ACP send-now fallback waits for the exact turn before canceling", () => {
     type: "session/snapshotReceived",
     sessions: [
       {
+        ...{
+          activeTurnId: null,
+          latestTurnInteractions: [],
+          pendingInteractions: []
+        },
         activeTurn: null,
         activeTurnId: "turn-1",
         agentSessionId: "session-1",
@@ -598,6 +635,8 @@ function runningSession(capabilityList: AgentActivitySessionCapabilities) {
     agentSessionId: "session-1",
     capabilities: capabilityList,
     cwd: "/workspace",
+    latestTurnInteractions: [],
+    pendingInteractions: [],
     provider: "opencode",
     title: "Session",
     updatedAtUnixMs: 1,

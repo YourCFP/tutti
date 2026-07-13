@@ -1044,6 +1044,7 @@ func TestControllerExecRunsOutsideRequestContext(t *testing.T) {
 	if _, err := controller.SubmitInteractive(context.Background(), SubmitInteractiveInput{
 		RoomID:         "room-1",
 		AgentSessionID: started.Session.AgentSessionID,
+		TurnID:         execResult.TurnID,
 		RequestID:      "permission-1",
 		OptionID:       "allow_once",
 	}); err != nil {
@@ -1069,11 +1070,12 @@ func TestControllerExecTurnContextHasNoDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if _, err := controller.Exec(context.Background(), ExecInput{
+	_, err = controller.Exec(context.Background(), ExecInput{
 		RoomID:         started.Session.RoomID,
 		AgentSessionID: started.Session.AgentSessionID,
 		Content:        textPrompt("wait for approval"),
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("Exec: %v", err)
 	}
 	adapter.waitForPrompt(t, "wait for approval")
@@ -1937,11 +1939,12 @@ func TestControllerCancelStopsBackgroundTurn(t *testing.T) {
 		t.Fatal("Subscribe returned ok=false")
 	}
 	defer unsubscribe()
-	if _, err := controller.Exec(context.Background(), ExecInput{
+	execResult, err := controller.Exec(context.Background(), ExecInput{
 		RoomID:         "room-1",
 		AgentSessionID: started.Session.AgentSessionID,
 		Content:        textPrompt("run tests"),
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("Exec: %v", err)
 	}
 	waitForPublishedSessionEvent(t, events, EventCallStarted, "approval", "waiting_approval")
@@ -1957,6 +1960,7 @@ func TestControllerCancelStopsBackgroundTurn(t *testing.T) {
 	if _, err := controller.SubmitInteractive(context.Background(), SubmitInteractiveInput{
 		RoomID:         "room-1",
 		AgentSessionID: started.Session.AgentSessionID,
+		TurnID:         execResult.TurnID,
 		RequestID:      "permission-1",
 		OptionID:       "allow_once",
 	}); !errors.Is(err, ErrInteractiveRequestNotLive) {
@@ -4470,6 +4474,18 @@ func TestControllerSubmitInteractiveDoesNotSyncUnsupportedPermissionSelections(t
 	}
 }
 
+func TestControllerKeepsTerminalInteractiveDispositionAfterSessionRemoval(t *testing.T) {
+	controller := NewController(nil, nil)
+	controller.recordTerminalInteractiveDisposition("session-1", "turn-1", "request-1", InteractiveDispositionAnswered)
+
+	if got := controller.InteractiveDisposition("room-1", "session-1", "turn-1", "request-1"); got != InteractiveDispositionAnswered {
+		t.Fatalf("disposition without live session = %q, want answered", got)
+	}
+	if got := controller.InteractiveDisposition("room-1", "session-1", "turn-2", "request-1"); got != InteractiveDispositionUnknown {
+		t.Fatalf("different-turn disposition = %q, want unknown", got)
+	}
+}
+
 func TestControllerSubmitInteractivePermissionSyncPreservesCurrentSessionState(t *testing.T) {
 	t.Parallel()
 
@@ -5203,11 +5219,8 @@ func TestEnrichStreamStateEventsWithSessionSnapshotFillsRuntimeContext(t *testin
 		patch.SubmitAvailability.Reason != "active_turn" {
 		t.Fatalf("submit availability = %#v, want active_turn blocked", patch.SubmitAvailability)
 	}
-	if !patch.PendingInteractivePresent {
-		t.Fatal("pending interactive present = false, want true")
-	}
-	if patch.PendingInteractive == nil || patch.PendingInteractive.RequestID != "request-1" {
-		t.Fatalf("pending interactive = %#v, want request-1", patch.PendingInteractive)
+	if patch.InteractionTransition != nil {
+		t.Fatalf("snapshot enrichment interaction transition = %#v, want nil", patch.InteractionTransition)
 	}
 }
 

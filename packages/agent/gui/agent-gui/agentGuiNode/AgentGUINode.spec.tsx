@@ -1314,6 +1314,11 @@ describe("AgentGUINode", () => {
         approval: null,
         recovery: null,
         rawState: normalizeAgentActivitySession({
+          ...{
+            activeTurnId: null,
+            latestTurnInteractions: [],
+            pendingInteractions: []
+          },
           workspaceId: "room-1",
           agentSessionId: "session-1",
           provider: "codex",
@@ -1375,6 +1380,11 @@ describe("AgentGUINode", () => {
         approval: null,
         recovery: null,
         rawState: normalizeAgentActivitySession({
+          ...{
+            activeTurnId: null,
+            latestTurnInteractions: [],
+            pendingInteractions: []
+          },
           workspaceId: "room-1",
           agentSessionId: "session-1",
           provider: "claude-code",
@@ -1441,6 +1451,11 @@ describe("AgentGUINode", () => {
         approval: null,
         recovery: null,
         rawState: normalizeAgentActivitySession({
+          ...{
+            activeTurnId: null,
+            latestTurnInteractions: [],
+            pendingInteractions: []
+          },
           workspaceId: "room-1",
           agentSessionId: "session-1",
           provider: "claude-code",
@@ -3883,9 +3898,7 @@ describe("AgentGUINode", () => {
             entries: [],
             occurredAtUnixMs: 1
           }
-        ],
-        pendingApproval: null,
-        pendingInteractivePrompt: null
+        ]
       },
       canSubmit: false,
       draftPrompt: "hello"
@@ -5532,6 +5545,11 @@ describe("AgentGUINode", () => {
       presences: [],
       sessions: [
         {
+          ...{
+            activeTurnId: null,
+            latestTurnInteractions: [],
+            pendingInteractions: []
+          },
           agentSessionId: "019e4dd9-20f7-7b92-9b18-a4eb49b57127",
           workspaceId: "room-1",
           userId: "user-1",
@@ -7056,6 +7074,11 @@ function createAgentActivitySnapshotFromViewModel(
     ...empty,
     sessions: mockViewModel.rail.conversations.map((conversation) =>
       normalizeAgentActivitySession({
+        ...{
+          activeTurnId: null,
+          latestTurnInteractions: [],
+          pendingInteractions: []
+        },
         workspaceId,
         agentSessionId: conversation.id,
         agentTargetId: conversation.agentTargetId,
@@ -7076,6 +7099,11 @@ function createAgentActivitySnapshotFromViewModel(
 function createNoopAgentActivityRuntime(): AgentActivityRuntime {
   const createSession = (workspaceId: string, agentSessionId: string) =>
     normalizeAgentActivitySession({
+      ...{
+        activeTurnId: null,
+        latestTurnInteractions: [],
+        pendingInteractions: []
+      },
       workspaceId,
       agentSessionId,
       provider: "codex",
@@ -7424,6 +7452,11 @@ function detailViewModel(
       sortTimeUnixMs: 1
     },
     session: normalizeAgentActivitySession({
+      ...{
+        activeTurnId: null,
+        latestTurnInteractions: [],
+        pendingInteractions: []
+      },
       workspaceId: "workspace-1",
       agentSessionId: "session-1",
       userId: "user-1",

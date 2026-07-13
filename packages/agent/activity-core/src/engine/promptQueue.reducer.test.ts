@@ -330,6 +330,11 @@ test("same-millisecond stale settled turn cannot replace a different running tur
     type: "session/snapshotReceived",
     sessions: [
       {
+        ...{
+          activeTurnId: null,
+          latestTurnInteractions: [],
+          pendingInteractions: []
+        },
         ...session("running", 3),
         activeTurn: { ...session("running", 3).activeTurn!, turnId: "turn-b" },
         activeTurnId: "turn-b"
@@ -341,6 +346,11 @@ test("same-millisecond stale settled turn cannot replace a different running tur
     type: "session/snapshotReceived",
     sessions: [
       {
+        ...{
+          activeTurnId: null,
+          latestTurnInteractions: [],
+          pendingInteractions: []
+        },
         ...session("settled", 3),
         activeTurn: {
           ...session("running", 3).activeTurn!,
@@ -538,6 +548,11 @@ function session(
   updatedAtUnixMs: number
 ): AgentActivitySession {
   return normalizeAgentActivitySession({
+    ...{
+      activeTurnId: null,
+      latestTurnInteractions: [],
+      pendingInteractions: []
+    },
     agentSessionId: "session-1",
     cwd: "/workspace",
     provider: "codex",
@@ -552,6 +567,7 @@ function session(
             updatedAtUnixMs
           }
         : null,
+    latestTurnInteractions: [],
     pendingInteractions: [],
     title: "Session",
     updatedAtUnixMs,

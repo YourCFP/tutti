@@ -698,23 +698,8 @@ describe("projectAgentConversationVM", () => {
 
     const conversation = projectAgentConversationVM(detail);
 
-    expect(conversation.pendingApproval?.requestId).toBe("approval-request-1");
-    expect(conversation.pendingApproval?.options[0]?.label).toBe("Allow once");
-    expect(conversation.pendingInteractivePrompt).toEqual({
-      kind: "ask-user",
-      requestId: "ask-request-1",
-      title: "Ask user",
-      questions: [
-        {
-          id: "approach",
-          header: "Approach",
-          question: "Which path should we take?",
-          options: [{ label: "Typed renderer", description: "Keep going" }],
-          multiSelect: false,
-          answer: null
-        }
-      ]
-    });
+    expect("pendingApproval" in conversation).toBe(false);
+    expect("pendingInteractivePrompt" in conversation).toBe(false);
   });
 
   it("surfaces a pending approval nested inside a delegated subagent's steps", () => {
@@ -775,14 +760,7 @@ describe("projectAgentConversationVM", () => {
 
     const conversation = projectAgentConversationVM(detail);
 
-    // Regression: a Task/subagent call renders its own tool activity as
-    // nested `task.steps`, not as sibling rows. Without descending into
-    // those steps, an approval a delegated subagent is blocked on never
-    // reached `conversation.pendingApproval`, so the session-detail bottom
-    // dock never mounted a prompt even though the run was genuinely stuck
-    // waiting on the user.
-    expect(conversation.pendingApproval?.requestId).toBe("nested-approval-1");
-    expect(conversation.pendingApproval?.options[0]?.label).toBe("Allow once");
+    expect("pendingApproval" in conversation).toBe(false);
   });
 
   it("surfaces a pending ask-user prompt nested inside a delegated subagent's steps", () => {
@@ -850,21 +828,7 @@ describe("projectAgentConversationVM", () => {
 
     const conversation = projectAgentConversationVM(detail);
 
-    expect(conversation.pendingInteractivePrompt).toEqual({
-      kind: "ask-user",
-      requestId: "nested-ask-1",
-      title: "Ask user",
-      questions: [
-        {
-          id: "approach",
-          header: "Approach",
-          question: "Which path should we take?",
-          options: [{ label: "Typed renderer", description: "Keep going" }],
-          multiSelect: false,
-          answer: null
-        }
-      ]
-    });
+    expect("pendingInteractivePrompt" in conversation).toBe(false);
   });
 
   it("carries runtime exit-plan options through the pending interactive prompt", () => {
@@ -929,20 +893,7 @@ describe("projectAgentConversationVM", () => {
 
     const conversation = projectAgentConversationVM(detail);
 
-    expect(conversation.pendingInteractivePrompt).toEqual({
-      kind: "exit-plan",
-      requestId: "plan-request-1",
-      title: "Exit plan mode",
-      options: [
-        {
-          id: "acceptEdits",
-          label: "Yes, and auto-accept edits",
-          kind: "acceptEdits"
-        },
-        { id: "auto", label: "Yes, and use auto mode", kind: "auto" }
-      ],
-      keepPlanningOptionId: "plan"
-    });
+    expect("pendingInteractivePrompt" in conversation).toBe(false);
   });
 
   it("does not append the processing row when canonical detail suppresses it", () => {
@@ -1562,6 +1513,11 @@ function detailViewModel(
       userAvatarUrl: ""
     },
     session: normalizeAgentActivitySession({
+      ...{
+        activeTurnId: null,
+        latestTurnInteractions: [],
+        pendingInteractions: []
+      },
       workspaceId: "workspace-1",
       agentSessionId: "session-1",
       userId: "user-1",

@@ -16,6 +16,25 @@ import {
 
 const workspaceId = "workspace-1";
 
+test("desktop agent activity adapter rejects missing protocol v2 session fields", () => {
+  for (const field of [
+    "activeTurnId",
+    "latestTurnInteractions",
+    "pendingInteractions"
+  ] as const) {
+    const malformed = { ...createSession() } as Record<string, unknown>;
+    delete malformed[field];
+    assert.throws(
+      () =>
+        agentActivitySessionFromTuttidSession(
+          workspaceId,
+          malformed as WorkspaceAgentSession
+        ),
+      new RegExp(`Protocol v2 contract error:.*${field}`)
+    );
+  }
+});
+
 test("desktop agent activity adapter preserves a settled latest turn on reload", () => {
   const latestTurn = {
     agentSessionId: "agent-session-1",

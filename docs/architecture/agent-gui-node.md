@@ -85,6 +85,34 @@ All reads go through exported selectors; all writes go through engine commands.
 The engine reconciles optimistic intent with authoritative events by correlation
 ID.
 
+Actionable interaction UI has one read path:
+
+```text
+durable Interaction(pending)
+  -> interaction_update
+  -> AgentSessionEngine pendingInteractions selector
+  -> approval / question / exit-plan presentation
+```
+
+Transcript messages are historical presentation only. A tool-call row with a
+`waiting_input` status must not create an approval dialog, question composer,
+exit-plan prompt, attention item, or pending-interaction view model. Session
+snapshots also must not create or recover an Interaction. If canonical
+`pendingInteractions` is empty, stale transcript rows have no actionability;
+other independent presentation, including plan implementation confirmation,
+continues under its existing priority rules.
+
+Historical timeline projection must not expose selectors or row fields that
+materialize transcript payloads as actionable approval or prompt objects.
+Timeline-specific parsing may produce display-only card content, while request
+identity, options, and response commands come only from canonical pending
+Interaction projections.
+
+Protocol-v2 host adapters must require `activeTurnId`,
+`latestTurnInteractions`, and `pendingInteractions`. Missing fields are a
+contract error at the desktop boundary, not an empty-list/default-value case.
+The engine and GUI consume these fields without `?? []` compatibility reads.
+
 The engine identity is explicit. A consumer resolves the injected engine for
 its workspace and runtime origin; module-global runtime slots and hidden origin
 registries are forbidden.
