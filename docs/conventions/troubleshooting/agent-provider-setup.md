@@ -799,3 +799,30 @@ invalid_grant`. Daemon logs may also show an extra `claude-code` process start
   `credentials.effectiveSource` only tracks OAuth material (keychain or
   `.credentials.json`). For API-key/proxy users it stays `"none"` even
   after the fix; a connected session is the success signal, not that field.
+
+### Tutti Agent retries a 402 and shows generic provider setup
+
+- Symptom:
+  A request with insufficient Tutti credits displays `Reconnecting... 5/5`,
+  then falls back to a generic provider error card whose action opens local
+  setup instead of account plans.
+- Root cause:
+  The billing boundary collapsed every commerce pre-deduct error into HTTP 402,
+  the agent protocol treated every unexpected HTTP status as retryable, and the
+  daemon classifier did not distinguish the resulting payment failure from a
+  generic provider failure.
+- Invariants:
+  Preserve machine-readable billing codes across commerce, token usage, the LLM
+  gateway, and the agent runtime. Commerce exposes depleted credits as
+  `ResourceExhausted/CREDITS_INSUFFICIENT`; token usage translates only that
+  decision to the OpenAI-compatible `429 usage_limit_reached` envelope with code
+  `insufficient_credits`, which legacy Tutti Agent releases already treat as
+  terminal. The gateway adds the Tutti plans promo header so the parsed terminal
+  error retains actionable account context. Dependency failures remain 5xx.
+  Classify actionable account failures before generic quota/provider buckets,
+  and route account actions through the host link-action boundary rather than
+  opening URLs directly from transcript UI.
+- Validation:
+  Cover the commerce RPC error mapping, token-usage envelope, gateway promo
+  header, daemon visible-error classification, and rendered plans-page action as
+  separate boundary tests.
