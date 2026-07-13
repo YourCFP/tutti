@@ -82,6 +82,43 @@ test("standalone Agent routes files and apps into the right sidebar", () => {
   );
 });
 
+test("standalone Agent restores the active session title in the window header", () => {
+  assert.match(
+    standaloneWindowSource,
+    /activitySnapshot\.sessions\s*\.find\([\s\S]*?session\.agentSessionId[\s\S]*?nodeState\.lastActiveAgentSessionId[\s\S]*?\)\s*\?\.title\?\.trim\(\) \|\| null/
+  );
+  assert.match(
+    standaloneWindowSource,
+    /conversationTitle=\{headerConversationTitle\}/
+  );
+});
+
+test("standalone Agent keeps its window title visible", () => {
+  assert.match(
+    standaloneWindowSource,
+    /showAppTitle\s*\n?\s+title=\{i18n\.t\("workspace\.agentGui\.fallbackAgentLabel"\)\}/
+  );
+});
+
+test("standalone Agent hides panel toggles until its content mounts", () => {
+  assert.match(
+    standaloneWindowSource,
+    /const \[isContentLoading, setIsContentLoading\] = useState\(true\)/
+  );
+  assert.match(
+    standaloneWindowSource,
+    /secondaryAccessory=\{isContentLoading \? null : toolActions\}/
+  );
+  assert.match(
+    standaloneWindowSource,
+    /showConversationRailToggle=\{!isContentLoading\}/
+  );
+  assert.match(
+    standaloneWindowSource,
+    /<StandaloneAgentWindowContentReady onReady=\{handleContentReady\}>[\s\S]*?<LazyDesktopAgentGUIWorkbenchBody/
+  );
+});
+
 test("standalone Agent duplicates the active window without minimizing its source", () => {
   assert.match(
     standaloneWindowSource,

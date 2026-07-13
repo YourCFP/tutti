@@ -1,11 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import type { TerminalTheme } from "@tutti-os/workspace-terminal/contracts";
 import type { TerminalNodeI18nKey } from "@tutti-os/workspace-terminal/i18n";
 import type {
   WorkbenchContribution,
   WorkbenchHostHandle
 } from "@tutti-os/workbench-surface";
-import { Button, CloseIcon, cn } from "@tutti-os/ui-system";
+import { cn } from "@tutti-os/ui-system";
 import { getWorkspaceTerminalSurfaceRuntime } from "../services/workspaceTerminalSurfaceRuntime.ts";
 import type { StandaloneAgentSharedToolPanelId } from "./standaloneAgentToolSidebarModel.ts";
 import { createStandaloneAgentDirectToolHost } from "./standaloneAgentToolWorkbench.ts";
@@ -22,18 +23,14 @@ const terminalCloseGuardDescriptionI18nKey: TerminalNodeI18nKey =
   "closeGuard.description";
 
 export function StandaloneAgentTerminalPanel({
-  closeLabel,
   contributions,
   loadingLabel,
-  onClose,
   open,
   setToolHost,
   unavailableLabel
 }: {
-  closeLabel: string;
   contributions: readonly WorkbenchContribution[] | undefined;
   loadingLabel: string;
-  onClose: () => void;
   open: boolean;
   setToolHost: (
     panel: StandaloneAgentSharedToolPanelId,
@@ -49,6 +46,23 @@ export function StandaloneAgentTerminalPanel({
       ? getWorkspaceTerminalSurfaceRuntime(contribution)
       : null;
   }, [contributions]);
+  const terminalFeature = useMemo(() => {
+    if (!runtime) {
+      return null;
+    }
+    return {
+      ...runtime.feature,
+      resolveTheme(input: Parameters<typeof runtime.feature.resolveTheme>[0]) {
+        const panelTheme = resolveStandaloneAgentTerminalTheme();
+        const terminalTheme = runtime.feature.resolveTheme(input);
+        return {
+          ...panelTheme,
+          ...terminalTheme,
+          background: panelTheme.background ?? terminalTheme.background
+        };
+      }
+    };
+  }, [runtime]);
   const [nodeId] = useState(createStandaloneAgentTerminalNodeId);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [launchError, setLaunchError] = useState(false);
@@ -135,38 +149,27 @@ export function StandaloneAgentTerminalPanel({
     <section
       aria-hidden={!open}
       className={cn(
-        "relative shrink-0 overflow-hidden border-t border-[var(--border-1)] bg-[var(--background-fronted)] transition-[height] duration-200 ease-out",
-        !open && "pointer-events-none border-t-0"
+        "relative h-full min-h-0 overflow-hidden bg-[var(--background-session-sidepanel)]",
+        !open && "pointer-events-none"
       )}
       data-standalone-agent-terminal-panel="true"
-      style={{ height: open ? "clamp(220px, 42vh, 440px)" : "0px" }}
+      style={
+        {
+          "--tutti-surface": "var(--background-session-sidepanel)"
+        } as CSSProperties
+      }
     >
-      {open ? (
-        <Button
-          aria-label={closeLabel}
-          className="absolute top-2 right-2 z-20 bg-[var(--background-panel)] shadow-sm"
-          data-standalone-agent-terminal-close="true"
-          size="icon-sm"
-          title={closeLabel}
-          type="button"
-          variant="chrome"
-          onClick={onClose}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <CloseIcon aria-hidden className="size-3.5" />
-        </Button>
-      ) : null}
       <div
         className="h-full min-h-0 overflow-hidden"
         data-standalone-agent-terminal-surface="true"
       >
-        {runtime && sessionId ? (
+        {terminalFeature && sessionId ? (
           <Suspense
             fallback={<StandaloneAgentToolLoadingState label={loadingLabel} />}
           >
             <LazyTerminalNode
               externalState={externalState}
-              feature={runtime.feature}
+              feature={terminalFeature}
               nodeId={nodeId}
               sessionId={sessionId}
               showHeader={false}
@@ -193,6 +196,21 @@ function createStandaloneAgentTerminalNodeId(): string {
       ? globalThis.crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `workspace-terminal:standalone-agent-tool:${instanceId}`;
+}
+
+function resolveStandaloneAgentTerminalTheme(): TerminalTheme {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return {};
+  }
+  const styles = window.getComputedStyle(document.documentElement);
+  const background = styles
+    .getPropertyValue("--background-session-sidepanel")
+    .trim();
+  const foreground = styles.getPropertyValue("--text-primary").trim();
+  return {
+    ...(background ? { background } : {}),
+    ...(foreground ? { cursor: foreground, foreground } : {})
+  };
 }
 
 function emptySubscribe(): () => void {

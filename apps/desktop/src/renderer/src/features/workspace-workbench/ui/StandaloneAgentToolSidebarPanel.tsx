@@ -1,10 +1,16 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import type { I18nRuntime } from "@tutti-os/ui-i18n-runtime";
-import type { WorkbenchContribution } from "@tutti-os/workbench-surface";
+import type {
+  WorkbenchContribution,
+  WorkbenchHostHandle
+} from "@tutti-os/workbench-surface";
 import type { WorkspaceAgentActivityService } from "@renderer/features/workspace-agent";
 import type { DesktopBrowserApi } from "@preload/types";
 import type { useTranslation } from "@renderer/i18n";
-import type { StandaloneAgentToolPanelId } from "./standaloneAgentToolSidebarModel.ts";
+import type {
+  StandaloneAgentSharedToolPanelId,
+  StandaloneAgentToolPanelId
+} from "./standaloneAgentToolSidebarModel.ts";
 import { StandaloneAgentBrowserToolPanel } from "./StandaloneAgentBrowserToolPanel.tsx";
 import { StandaloneAgentToolLoadingState } from "./StandaloneAgentToolLoadingState.tsx";
 
@@ -29,6 +35,13 @@ const LazyStandaloneAgentMessageCenterToolPanel = lazy(() =>
     })
   )
 );
+const LazyStandaloneAgentTerminalPanel = lazy(() =>
+  import("./StandaloneAgentTerminalPanel.tsx").then(
+    ({ StandaloneAgentTerminalPanel }) => ({
+      default: StandaloneAgentTerminalPanel
+    })
+  )
+);
 
 export interface StandaloneAgentFileOpenRequest {
   path: string;
@@ -48,6 +61,7 @@ export function StandaloneAgentToolSidebarPanel({
   onCloseMessageCenter,
   onOpenMessageCenterChat,
   panel,
+  setToolHost,
   workspaceId
 }: {
   active: boolean;
@@ -65,6 +79,10 @@ export function StandaloneAgentToolSidebarPanel({
     provider: string;
   }) => void;
   panel: StandaloneAgentToolPanelId;
+  setToolHost: (
+    panel: StandaloneAgentSharedToolPanelId,
+    host: WorkbenchHostHandle | null
+  ) => void;
   workspaceId: string;
 }): ReactNode {
   if (panel === "files") {
@@ -129,6 +147,25 @@ export function StandaloneAgentToolSidebarPanel({
         loadingLabel={i18n.t("common.loading")}
       />
     ) : null;
+  }
+  if (panel === "terminal") {
+    return (
+      <Suspense
+        fallback={
+          <StandaloneAgentToolLoadingState label={i18n.t("common.loading")} />
+        }
+      >
+        <LazyStandaloneAgentTerminalPanel
+          contributions={contributions}
+          loadingLabel={i18n.t("common.loading")}
+          open={active}
+          setToolHost={setToolHost}
+          unavailableLabel={i18n.t(
+            "workspace.agentGui.toolSidebar.unavailable"
+          )}
+        />
+      </Suspense>
+    );
   }
   return null;
 }
