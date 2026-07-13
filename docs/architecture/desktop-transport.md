@@ -65,6 +65,10 @@ that object stable. Its custom restart-aware fetch resolves backend config
 immediately before every HTTP request, replaces only the request origin, and
 overrides `Authorization` with the current per-run bearer token. Request path,
 query, method, body, other headers, and cancellation signal remain intact.
+Body-bearing requests materialize the canonical client's already-serialized
+body before rebuilding the request. Passing the original `Request` as
+`RequestInit` would preserve a streaming upload that Chromium only sends over
+HTTP/2 or QUIC, while the managed loopback daemon serves HTTP/1.1.
 
 Do not copy the `TuttidClient` method table into desktop wrappers, use `Proxy`,
 or maintain a second compatibility client. Daemon restart handling belongs in

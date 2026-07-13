@@ -15,12 +15,31 @@ export function createRestartAwareFetch(
       `${requestUrl.pathname}${requestUrl.search}${requestUrl.hash}`,
       backendUrl.origin
     );
-    const rewrittenRequest = new Request(rewrittenUrl, request);
+    const headers = new Headers(request.headers);
+    const body =
+      request.body === null ? undefined : await request.clone().arrayBuffer();
 
-    rewrittenRequest.headers.set(
-      "Authorization",
-      `Bearer ${config.accessToken}`
-    );
+    headers.set("Authorization", `Bearer ${config.accessToken}`);
+
+    // Passing a Request as RequestInit preserves its body as a ReadableStream.
+    // Chromium only sends streaming uploads over HTTP/2 or QUIC, while the
+    // managed loopback daemon intentionally serves HTTP/1.1. Materialize the
+    // already-serialized client body before rebuilding the request so POST and
+    // PUT calls remain ordinary HTTP/1.1 uploads after the origin changes.
+    const rewrittenRequest = new Request(rewrittenUrl, {
+      body,
+      cache: request.cache,
+      credentials: request.credentials,
+      headers,
+      integrity: request.integrity,
+      keepalive: request.keepalive,
+      method: request.method,
+      mode: request.mode,
+      redirect: request.redirect,
+      referrer: request.referrer,
+      referrerPolicy: request.referrerPolicy,
+      signal: request.signal
+    });
 
     return nativeFetch(rewrittenRequest);
   };

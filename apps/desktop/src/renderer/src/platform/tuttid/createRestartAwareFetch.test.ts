@@ -5,6 +5,25 @@ import { createRestartAwareFetch } from "./createRestartAwareFetch.ts";
 test("restart-aware fetch preserves JSON and binary request details while replacing auth", async () => {
   const requests: Request[] = [];
   const abortController = new AbortController();
+  const jsonRequest = new Request("http://tuttid.local/v1/json?include=all", {
+    body: JSON.stringify({ hello: "world" }),
+    headers: {
+      Authorization: "Bearer stale-token",
+      "Content-Type": "application/json",
+      "X-Request-ID": "json-request"
+    },
+    method: "POST",
+    signal: abortController.signal
+  });
+  const binaryRequest = new Request("http://tuttid.local/v1/binary", {
+    body: new Uint8Array([0, 1, 2, 255]),
+    headers: {
+      Authorization: "Bearer stale-token",
+      "Content-Type": "application/octet-stream",
+      "X-Request-ID": "binary-request"
+    },
+    method: "PUT"
+  });
   const restartAwareFetch = createRestartAwareFetch(
     {
       getBackendConfig: async () => ({
@@ -20,29 +39,8 @@ test("restart-aware fetch preserves JSON and binary request details while replac
     }
   );
 
-  await restartAwareFetch(
-    new Request("http://tuttid.local/v1/json?include=all", {
-      body: JSON.stringify({ hello: "world" }),
-      headers: {
-        Authorization: "Bearer stale-token",
-        "Content-Type": "application/json",
-        "X-Request-ID": "json-request"
-      },
-      method: "POST",
-      signal: abortController.signal
-    })
-  );
-  await restartAwareFetch(
-    new Request("http://tuttid.local/v1/binary", {
-      body: new Uint8Array([0, 1, 2, 255]),
-      headers: {
-        Authorization: "Bearer stale-token",
-        "Content-Type": "application/octet-stream",
-        "X-Request-ID": "binary-request"
-      },
-      method: "PUT"
-    })
-  );
+  await restartAwareFetch(jsonRequest);
+  await restartAwareFetch(binaryRequest);
 
   assert.equal(requests[0]?.url, "http://127.0.0.1:18080/v1/json?include=all");
   assert.equal(requests[0]?.method, "POST");
@@ -52,6 +50,7 @@ test("restart-aware fetch preserves JSON and binary request details while replac
   );
   assert.equal(requests[0]?.headers.get("content-type"), "application/json");
   assert.equal(requests[0]?.headers.get("x-request-id"), "json-request");
+  assert.notEqual(requests[0]?.body, jsonRequest.body);
   assert.deepEqual(await requests[0]?.json(), { hello: "world" });
   abortController.abort();
   assert.equal(requests[0]?.signal.aborted, true);
@@ -67,6 +66,7 @@ test("restart-aware fetch preserves JSON and binary request details while replac
     "application/octet-stream"
   );
   assert.equal(requests[1]?.headers.get("x-request-id"), "binary-request");
+  assert.notEqual(requests[1]?.body, binaryRequest.body);
   assert.deepEqual(
     [
       ...new Uint8Array(
