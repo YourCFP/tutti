@@ -227,6 +227,14 @@ prop and give it only existing neutral context such as `currentUserId` and
 `activeConversation`. Product concepts such as sharing, ownership,
 availability, quota, or authorization live entirely inside the React node
 supplied by the host.
+Standalone Agent windows keep right-side tools as UI-local panel tabs. The
+window chrome exposes one right-panel toggle plus quick actions for apps and
+messages while the panel is closed; those quick actions open the right panel
+and mount/select the corresponding tab. Once open, the panel header owns the
+active tab strip and its add menu for files, terminal, browser, apps, and
+messages.
+Opening a tool mounts it as a tab and selecting another tab only changes the
+visible projection; this state is not durable AgentGUI session data.
 Unified empty-home readiness is a host-projected, agent-scoped gate,
 not a durable session rule. Desktop may subscribe to its
 `agentProviderStatusService`, merge runtime status into `/agents` availability,
@@ -386,6 +394,9 @@ search controller, and AgentGUI presentation graph load when an Agent surface
 is required. Entering standalone Agent mode starts a dynamic preload of that
 body while allowing the lightweight standalone shell to render independently;
 the body fetch must not block the shell, and OS mode must not trigger it.
+While that body is still suspended, keep the standalone header's
+conversation-rail and right-panel toggles hidden; reveal them only after the
+body commits so loading chrome cannot target unavailable content.
 Startup optimizations such as mention browse warming must begin from the
 mounted AgentGUI lifecycle, never from workspace contribution registration.
 File activation in the standalone Agent window must use the host-owned right
@@ -445,8 +456,8 @@ creation decision only: the preference must not enter AgentGUI state, and an
 existing native window must not be made to impersonate the other window kind
 by swapping renderer content. Desktop persists the selection through the
 generic preference flag `workspace.standaloneAgentMode`; absence of that flag
-means OS mode, while an explicit `true` value selects the standalone Agent
-window.
+means OS mode, while explicit `true` and `false` values retain the user's Agent
+or OS selection respectively.
 Settings destinations remain host-local presentation behavior. The standalone
 Agent settings control opens the global panel on General, the Agent settings
 control embedded in OS mode opens the Agent section, and the OS workspace's

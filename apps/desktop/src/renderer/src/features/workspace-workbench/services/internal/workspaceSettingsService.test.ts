@@ -951,23 +951,23 @@ test("WorkspaceSettingsService changes workspace UI mode without replacing other
         return flags;
       },
       state: createPreferencesState({
-        featureFlags: {
-          "lab.enabled": true,
-          "workspace.standaloneAgentMode": true
-        }
+        featureFlags: { "lab.enabled": true }
       })
     })
   );
 
   service.openPanel({ id: "workspace-1" });
-  await service.changeWorkspaceUiMode("os");
+  await service.changeWorkspaceUiMode("agent");
 
   assert.deepEqual(writes, [
     {
-      "lab.enabled": true
+      "lab.enabled": true,
+      "workspace.standaloneAgentMode": true
     }
   ]);
-  assert.deepEqual(replacements, [{ mode: "os", workspaceId: "workspace-1" }]);
+  assert.deepEqual(replacements, [
+    { mode: "agent", workspaceId: "workspace-1" }
+  ]);
 });
 
 test("WorkspaceSettingsService refreshes App Center after changing catalog channel", async () => {

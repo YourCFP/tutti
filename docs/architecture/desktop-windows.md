@@ -8,7 +8,7 @@ The desktop app currently has three user-facing shells:
 
 - a launcher-style dashboard window for no-context startup
 - a workspace window for an opened workspace
-- an Agent-only window used as the default focused Agent experience
+- an Agent-only window used as an optional focused Agent experience
 
 The window model is intentionally simple:
 
@@ -51,8 +51,8 @@ The current renderer content is intentionally minimal. The shell exists so the s
 
 ### Agent-Only Window
 
-The Agent-only window is the default product shell for users who want AgentGUI
-without the full workspace desktop around it.
+The Agent-only window is the focused product shell for users who select Agent
+mode and want AgentGUI without the full workspace desktop around it.
 
 It is responsible for:
 
@@ -81,8 +81,8 @@ Desktop startup currently follows this sequence:
 1. start or reconnect to `tuttid`
 2. ask `tuttid` for the daemon-selected startup workspace
 3. if a startup workspace exists, read the desktop startup-interface preference
-4. create the Agent-only window by default, or the workspace window when the
-   user explicitly selected OS mode
+4. create the OS workspace window by default, or the Agent-only window when the
+   user explicitly selected Agent mode
 5. otherwise open the dashboard window
 
 On macOS activation with no open windows, the app follows the same startup resolution instead of always forcing the dashboard.
@@ -125,7 +125,8 @@ preference and immediately replaces the current native window with the selected
 Agent-only or OS workspace window. The replacement request carries the selected
 window kind explicitly, so it does not depend on asynchronous preference-event
 delivery in the main process. Desktop waits until the replacement is ready
-before closing the source window.
+before closing the source window. An absent preference resolves to OS mode;
+manual selections persist `true` for Agent mode and `false` for OS mode.
 
 ## Current Renderer Shell Mapping
 
@@ -156,10 +157,19 @@ remain mounted for later opens. macOS requests Electron's native content-bounds
 animation in parallel, while reduced-motion preferences disable the renderer
 transition and mount delay.
 Its Apps panel renders the App Center contribution body instead of mounting a
-catalog-only copy. The shared `openAppId` view state therefore replaces the
-catalog with the selected app's Browser Node in both OS and Agent-only shells,
-and the panel exposes a back action that clears that selection. An app open
-request activates the Apps sidebar automatically. Both shells
+catalog-only copy. The shared `openAppId` view state selects which surface is
+visible in both OS and Agent-only shells, but it does not own Browser Node
+lifetime. The contribution keeps the catalog and one app-specific Browser Node
+for every opened app mounted for the renderer lifetime. The back action clears
+only the selection, marks every retained Browser Node hidden, and reveals the
+already-mounted catalog; reopening an app reveals the same Browser Node so its
+page, in-memory editor state, and in-page Agent continue from the previous
+state. Every retained app uses a stable app-specific Browser Node id and
+receives `hidden={true}` whenever it is inactive or its containing tool surface
+is minimized. Retained instances are released only when a ready App Center
+snapshot confirms that the app is no longer available or when the containing
+host is torn down. An app open request activates the Apps sidebar
+automatically. Both shells
 must start the shared App Center polling lifecycle, so app runtime events update
 the selected Browser Node from `starting` to `running` with its launch URL.
 Both shells also mount the Workspace App external bridge and local
