@@ -1,5 +1,6 @@
 import {
   act,
+  createEvent,
   fireEvent,
   render,
   screen,
@@ -30,7 +31,10 @@ import {
   createLocalAgentGUIAgentTarget,
   createLocalAgentGUIAgentTargets
 } from "../../agentTargets";
-import { agentGUIProviderRailOrderStorageKey } from "./model/agentGuiProviderRailOrder";
+import {
+  agentGUIProviderRailOrderStorageKey,
+  parseAgentGUIProviderRailPreferences
+} from "./model/agentGuiProviderRailOrder";
 import {
   AgentActivityRuntimeProvider,
   type AgentActivityRuntime,
@@ -1126,12 +1130,19 @@ describe("AgentGUINodeView layout persistence", () => {
       "OpenClaw"
     ]);
     expect(
-      globalThis.localStorage.getItem(
-        agentGUIProviderRailOrderStorageKey("room-1")
-      )
-    ).toBe(
-      '["local:cursor","local:codex","local:claude-code","local:tutti-agent","local:opencode","local:nexight","local:hermes","local:openclaw"]'
-    );
+      parseAgentGUIProviderRailPreferences(
+        globalThis.localStorage.getItem(agentGUIProviderRailOrderStorageKey())
+      ).order
+    ).toEqual([
+      "local:cursor",
+      "local:codex",
+      "local:claude-code",
+      "local:tutti-agent",
+      "local:opencode",
+      "local:nexight",
+      "local:hermes",
+      "local:openclaw"
+    ]);
 
     rerender(
       buildAgentGUINodeViewElement({
@@ -1155,6 +1166,376 @@ describe("AgentGUINodeView layout persistence", () => {
         "OpenClaw"
       ]);
     });
+  });
+
+  it("moves agents between the available and disabled grids", async () => {
+    const actions = createActions();
+    const codexTarget = createLocalAgentGUIAgentTarget("codex");
+    const claudeTarget = createLocalAgentGUIAgentTarget("claude-code");
+    renderAgentGUINodeView({
+      actions,
+      viewModel: {
+        ...createViewModel(),
+        conversationFilter: {
+          kind: "agentTarget",
+          agentTargetId: codexTarget.agentTargetId ?? ""
+        },
+        selectedAgentTarget: codexTarget,
+        agentTargets: [codexTarget, claudeTarget]
+      }
+    });
+
+    fireEvent.click(screen.getByTitle("agentConfig"));
+    fireEvent.click(screen.getByRole("button", { name: "manageAgents" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "manageAgentsTitle" })
+    ).toBeInTheDocument();
+    const availableGrid = screen.getByRole("list", {
+      name: "manageAgentsAvailable"
+    });
+    expect(availableGrid).toHaveClass("grid-cols-5");
+    expect(within(availableGrid).getByText("Codex")).toBeInTheDocument();
+    expect(within(availableGrid).getByText("Claude Code")).toBeInTheDocument();
+    expect(
+      within(availableGrid)
+        .getAllByTestId("agent-gui-provider-manager-tile")[0]
+        ?.querySelector("img")
+    ).toHaveClass("size-9");
+    expect(
+      screen.queryByRole("button", { name: "removeAgentFromSidebar:Codex" })
+    ).toBeNull();
+    expect(screen.getByText("manageAgentsNoDisabled")).toBeInTheDocument();
+
+    const codexManagerTile = within(availableGrid).getAllByTestId(
+      "agent-gui-provider-manager-tile"
+    )[0]!;
+    fireEvent.pointerDown(codexManagerTile, {
+      button: 0,
+      clientX: 20,
+      clientY: 20,
+      pointerId: 1
+    });
+    fireEvent.animationEnd(codexManagerTile, {
+      animationName: "agent-gui-provider-manager-long-press"
+    });
+    expect(availableGrid).toHaveAttribute("data-editing", "true");
+    fireEvent.click(availableGrid);
+    expect(availableGrid).toHaveAttribute("data-editing", "false");
+    fireEvent.keyDown(codexManagerTile, { key: "Enter" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "removeAgentFromSidebar:Codex" })
+    );
+
+    expect(
+      document.querySelector("[role='tab'][aria-label='Codex']")
+    ).toBeNull();
+    const disabledGrid = screen.getByRole("list", {
+      name: "manageAgentsDisabled"
+    });
+    expect(disabledGrid).toHaveClass("grid-cols-5");
+    expect(within(disabledGrid).getByText("Codex")).toBeInTheDocument();
+    expect(
+      within(disabledGrid)
+        .getByTestId("agent-gui-provider-manager-disabled-tile")
+        .querySelector("img")
+    ).toHaveClass("size-9");
+    expect(actions.updateConversationFilter).toHaveBeenCalledWith({
+      kind: "all"
+    });
+    expect(
+      parseAgentGUIProviderRailPreferences(
+        globalThis.localStorage.getItem(agentGUIProviderRailOrderStorageKey())
+      )
+    ).toMatchObject({
+      hiddenTargetIds: ["local:codex"]
+    });
+
+    expect(
+      screen.getByRole("button", { name: "addAgentToSidebar:Codex" })
+    ).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(
+      screen.queryByRole("button", { name: "addAgentToSidebar:Codex" })
+    ).toBeNull();
+    fireEvent.keyDown(
+      within(availableGrid).getAllByTestId(
+        "agent-gui-provider-manager-tile"
+      )[0]!,
+      { key: "Enter" }
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "addAgentToSidebar:Codex" })
+    );
+    expect(within(availableGrid).getByText("Codex")).toBeInTheDocument();
+    expect(
+      document.querySelector("[role='tab'][aria-label='Codex']")
+    ).not.toBeNull();
+    expect(screen.getByText("manageAgentsNoDisabled")).toBeInTheDocument();
+    expect(
+      parseAgentGUIProviderRailPreferences(
+        globalThis.localStorage.getItem(agentGUIProviderRailOrderStorageKey())
+      ).order.at(-1)
+    ).toBe("local:codex");
+  });
+
+  it("keeps the manager close button outside the window drag region", async () => {
+    renderAgentGUINodeView();
+
+    fireEvent.click(screen.getByTitle("agentConfig"));
+    fireEvent.click(screen.getByRole("button", { name: "manageAgents" }));
+
+    const dialog = screen.getByRole("dialog", { name: "manageAgentsTitle" });
+    expect(dialog).toHaveClass(
+      "nodrag",
+      "tsh-desktop-no-drag",
+      "[-webkit-app-region:no-drag]"
+    );
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "manageAgentsTitle" })
+      ).toBeNull();
+    });
+  });
+
+  it("uses the first Escape to leave edit mode and the second to close", async () => {
+    renderAgentGUINodeView();
+
+    fireEvent.click(screen.getByTitle("agentConfig"));
+    fireEvent.click(screen.getByRole("button", { name: "manageAgents" }));
+
+    const availableGrid = screen.getByRole("list", {
+      name: "manageAgentsAvailable"
+    });
+    fireEvent.keyDown(
+      within(availableGrid).getAllByTestId(
+        "agent-gui-provider-manager-tile"
+      )[0]!,
+      { key: "Enter" }
+    );
+    expect(availableGrid).toHaveAttribute("data-editing", "true");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(availableGrid).toHaveAttribute("data-editing", "false");
+    expect(
+      screen.getByRole("dialog", { name: "manageAgentsTitle" })
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "manageAgentsTitle" })
+      ).toBeNull();
+    });
+  });
+
+  it("reorders only available agents in the management grid", () => {
+    const codexTarget = createLocalAgentGUIAgentTarget("codex");
+    const claudeTarget = createLocalAgentGUIAgentTarget("claude-code");
+    renderAgentGUINodeView({
+      viewModel: {
+        ...createViewModel(),
+        agentTargets: [codexTarget, claudeTarget]
+      }
+    });
+
+    fireEvent.click(screen.getByTitle("agentConfig"));
+    fireEvent.click(screen.getByRole("button", { name: "manageAgents" }));
+    const availableGrid = screen.getByRole("list", {
+      name: "manageAgentsAvailable"
+    });
+    const tiles = within(availableGrid).getAllByTestId(
+      "agent-gui-provider-manager-tile"
+    );
+    fireEvent.keyDown(tiles[0]!, { key: "Enter" });
+    expect(availableGrid).toHaveAttribute("data-editing", "true");
+    const dataTransfer = createDataTransferStub();
+    vi.spyOn(tiles[1]!, "getBoundingClientRect").mockReturnValue({
+      bottom: 100,
+      height: 80,
+      left: 100,
+      right: 180,
+      top: 20,
+      width: 80,
+      x: 100,
+      y: 20,
+      toJSON: () => ({})
+    });
+
+    fireEvent.dragStart(tiles[0]!, { dataTransfer });
+    fireEvent.dragOver(tiles[1]!, { clientX: 170, dataTransfer });
+    expect(tiles[0]).toHaveAttribute("data-dragging", "true");
+    expect(tiles[0]).toHaveAttribute("data-drag-active", "true");
+    expect(tiles[1]).toHaveAttribute("data-drag-active", "true");
+    expect(tiles[1]).toHaveAttribute("data-drag-over", "after");
+    expect(
+      within(tiles[1]!).getByTestId("agent-gui-provider-manager-drop-indicator")
+    ).toHaveAttribute("data-position", "after");
+    fireEvent.drop(tiles[1]!, { clientX: 170, dataTransfer });
+
+    const reorderedTiles = within(availableGrid).getAllByTestId(
+      "agent-gui-provider-manager-tile"
+    );
+    expect(
+      reorderedTiles
+        .map((tile) => tile.getAttribute("data-agent-target-id"))
+        .slice(0, 2)
+    ).toEqual(["local:claude-code", "local:codex"]);
+    expect(reorderedTiles[0]).not.toHaveAttribute("data-drag-over");
+    expect(reorderedTiles[1]).not.toHaveAttribute("data-dragging");
+    expect(reorderedTiles[0]).not.toHaveAttribute("data-drag-active");
+    expect(reorderedTiles[1]).not.toHaveAttribute("data-drag-active");
+    expect(
+      screen.queryByTestId("agent-gui-provider-manager-drop-indicator")
+    ).toBeNull();
+    expect(availableGrid).toHaveAttribute("data-editing", "true");
+  });
+
+  it("moves agents across the available and disabled drop zones", () => {
+    const codexTarget = createLocalAgentGUIAgentTarget("codex");
+    const claudeTarget = createLocalAgentGUIAgentTarget("claude-code");
+    renderAgentGUINodeView({
+      viewModel: {
+        ...createViewModel(),
+        agentTargets: [codexTarget, claudeTarget],
+        providerRailMode: "exact"
+      }
+    });
+
+    fireEvent.click(screen.getByTitle("agentConfig"));
+    fireEvent.click(screen.getByRole("button", { name: "manageAgents" }));
+    fireEvent.keyDown(
+      screen.getAllByTestId("agent-gui-provider-manager-tile")[0]!,
+      { key: "Enter" }
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "removeAgentFromSidebar:Codex" })
+    );
+    expect(
+      screen.getByRole("list", { name: "manageAgentsAvailable" })
+    ).toHaveAttribute("data-editing", "true");
+
+    const disabledCodex = screen.getByTestId(
+      "agent-gui-provider-manager-disabled-tile"
+    );
+    const availableClaude = screen.getByTestId(
+      "agent-gui-provider-manager-tile"
+    );
+    vi.spyOn(availableClaude, "getBoundingClientRect").mockReturnValue({
+      bottom: 100,
+      height: 80,
+      left: 100,
+      right: 180,
+      top: 20,
+      width: 80,
+      x: 100,
+      y: 20,
+      toJSON: () => ({})
+    });
+    const restoreTransfer = createDataTransferStub();
+    const dragOverAvailableClaude = (clientX: number) => {
+      const event = createEvent.dragOver(availableClaude, {
+        dataTransfer: restoreTransfer
+      });
+      Object.defineProperty(event, "clientX", { value: clientX });
+      fireEvent(availableClaude, event);
+    };
+    fireEvent.dragStart(disabledCodex, { dataTransfer: restoreTransfer });
+    dragOverAvailableClaude(130);
+    expect(availableClaude).toHaveAttribute("data-drag-over", "before");
+    dragOverAvailableClaude(143);
+    expect(availableClaude).toHaveAttribute("data-drag-over", "before");
+    dragOverAvailableClaude(150);
+    expect(availableClaude).toHaveAttribute("data-drag-over", "after");
+    dragOverAvailableClaude(130);
+    fireEvent.drop(availableClaude, {
+      clientX: 130,
+      dataTransfer: restoreTransfer
+    });
+
+    expect(
+      screen
+        .getAllByTestId("agent-gui-provider-manager-tile")
+        .map((tile) => tile.getAttribute("data-agent-target-id"))
+    ).toEqual(["local:codex", "local:claude-code"]);
+    expect(screen.getByText("manageAgentsNoDisabled")).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: "manageAgentsAvailable" })
+    ).toHaveAttribute("data-editing", "true");
+
+    const disableTransfer = createDataTransferStub();
+    const availableTiles = screen.getAllByTestId(
+      "agent-gui-provider-manager-tile"
+    );
+    const disabledDropZone = screen.getByTestId(
+      "agent-gui-provider-manager-disabled-drop-zone"
+    );
+    fireEvent.dragStart(availableTiles[1]!, { dataTransfer: disableTransfer });
+    fireEvent.dragOver(disabledDropZone, { dataTransfer: disableTransfer });
+    fireEvent.drop(disabledDropZone, { dataTransfer: disableTransfer });
+
+    expect(
+      screen
+        .getAllByTestId("agent-gui-provider-manager-tile")
+        .map((tile) => tile.getAttribute("data-agent-target-id"))
+    ).toEqual(["local:codex"]);
+    expect(
+      screen
+        .getByTestId("agent-gui-provider-manager-disabled-tile")
+        .getAttribute("data-agent-target-id")
+    ).toBe("local:claude-code");
+  });
+
+  it("keeps the final exact-mode agent available", () => {
+    const codexTarget = createLocalAgentGUIAgentTarget("codex");
+    renderAgentGUINodeView({
+      renderProviderRailEmpty: () => <span>providerRailEmpty</span>,
+      viewModel: {
+        ...createViewModel(),
+        conversationFilter: {
+          kind: "agentTarget",
+          agentTargetId: codexTarget.agentTargetId ?? ""
+        },
+        selectedAgentTarget: codexTarget,
+        agentTargets: [codexTarget],
+        providerRailMode: "exact"
+      }
+    });
+
+    fireEvent.click(screen.getByTitle("agentConfig"));
+    fireEvent.click(screen.getByRole("button", { name: "manageAgents" }));
+    fireEvent.keyDown(screen.getByTestId("agent-gui-provider-manager-tile"), {
+      key: "Enter"
+    });
+    const removeButton = screen.getByRole("button", {
+      name: "removeAgentFromSidebar:Codex"
+    });
+    expect(removeButton).toBeDisabled();
+    expect(removeButton).toHaveAttribute(
+      "title",
+      "manageAgentsKeepOneAvailable"
+    );
+    fireEvent.click(removeButton);
+
+    const dataTransfer = createDataTransferStub();
+    const availableTile = screen.getByTestId("agent-gui-provider-manager-tile");
+    const disabledDropZone = screen.getByTestId(
+      "agent-gui-provider-manager-disabled-drop-zone"
+    );
+    fireEvent.dragStart(availableTile, { dataTransfer });
+    fireEvent.dragOver(disabledDropZone, { dataTransfer });
+    fireEvent.drop(disabledDropZone, { dataTransfer });
+
+    expect(
+      screen.getByTestId("agent-gui-provider-manager-tile")
+    ).toBeInTheDocument();
+    expect(screen.queryByText("providerRailEmpty")).toBeNull();
+    expect(screen.getByText("manageAgentsNoDisabled")).toBeInTheDocument();
   });
 
   it("uses Cursor colorful artwork for the provider rail even when the target has a session icon", () => {
@@ -5740,6 +6121,18 @@ function createLabels(): AgentGUIViewLabels {
     agentConfig: "agentConfig",
     agentSettingsMenu: "agentSettingsMenu",
     agentEnvSetup: "agentEnvSetup",
+    manageAgents: "manageAgents",
+    manageAgentsTitle: "manageAgentsTitle",
+    manageAgentsDescription: "manageAgentsDescription",
+    manageAgentsAvailable: "manageAgentsAvailable",
+    manageAgentsDisabled: "manageAgentsDisabled",
+    manageAgentsNoAvailable: "manageAgentsNoAvailable",
+    manageAgentsNoDisabled: "manageAgentsNoDisabled",
+    manageAgentsKeepOneAvailable: "manageAgentsKeepOneAvailable",
+    removeAgentFromSidebar: (agent: string) =>
+      `removeAgentFromSidebar:${agent}`,
+    addAgentToSidebar: (agent: string) => `addAgentToSidebar:${agent}`,
+    dragAgentToReorder: (agent: string) => `dragAgentToReorder:${agent}`,
     noConversations: "noConversations",
     emptyProjectConversations: "emptyProjectConversations",
     conversationFilterAll: "All",

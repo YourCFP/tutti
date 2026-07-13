@@ -1679,6 +1679,23 @@ describe("agent GUI workbench contribution copy", () => {
     );
   });
 
+  it("keeps provider manager drag hit boxes stable while previewing insertion", () => {
+    const css = readFileSync(resolve("app/renderer/agentactivity.css"), "utf8");
+
+    expect(css).not.toMatch(
+      /\.agent-gui-provider-manager-tile\[data-drag-over="(?:before|after)"\]\s*\{[^}]*margin-/s
+    );
+    expect(css).toMatch(
+      /\.agent-gui-provider-manager-tile\[data-drag-over="before"\]\s*>\s*:not\(\.agent-gui-provider-manager-drop-indicator\)\s*\{[^}]*translate:\s*8px 0;/s
+    );
+    expect(css).toMatch(
+      /\.agent-gui-provider-manager-tile\[data-drag-over="after"\]\s*>\s*:not\(\.agent-gui-provider-manager-drop-indicator\)\s*\{[^}]*translate:\s*-8px 0;/s
+    );
+    expect(css).toMatch(
+      /\.agent-gui-provider-manager-tile\[data-editing="true"\]\[data-drag-active="true"\]\s*\{[^}]*animation:\s*none;/s
+    );
+  });
+
   it("anchors ready and gated empty homes to the same fixed frame", () => {
     const css = readFileSync(resolve("app/renderer/agentactivity.css"), "utf8");
     const providerGateRule =

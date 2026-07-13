@@ -6,5 +6,17 @@ export const zhCNAgentGuiProviderIdentity = {
   conversationFilterCursor: "Cursor",
   conversationFilterNexight: "Nexight",
   conversationFilterHermes: "Hermes Agent",
-  conversationFilterOpenClaw: "OpenClaw"
+  conversationFilterOpenClaw: "OpenClaw",
+  manageAgents: "管理 Agent",
+  manageAgentsTitle: "管理 Agent",
+  manageAgentsDescription:
+    "拖拽调整顺序或在可用与停用分组间移动，长按 Agent 可进入编辑。",
+  manageAgentsAvailable: "可用 Agent",
+  manageAgentsDisabled: "停用 Agent",
+  manageAgentsNoAvailable: "可从下方停用列表添加 Agent。",
+  manageAgentsNoDisabled: "暂无停用 Agent。",
+  manageAgentsKeepOneAvailable: "至少保留一个可用 Agent。",
+  removeAgentFromSidebar: "从左侧栏移除 {{agent}}",
+  addAgentToSidebar: "将 {{agent}} 添加到左侧栏",
+  dragAgentToReorder: "拖拽 {{agent}} 调整顺序"
 } as const;

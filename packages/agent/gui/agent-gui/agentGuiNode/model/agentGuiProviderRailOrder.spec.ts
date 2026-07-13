@@ -1,20 +1,45 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_GUI_PROVIDER_RAIL_PREFERENCES_STORAGE_KEY,
   agentGUIProviderRailOrderStorageKey,
   applyAgentGUIProviderRailOrder,
+  applyAgentGUIProviderRailVisibility,
+  changeAgentGUIProviderManagerVisibility,
+  normalizeAgentGUIProviderRailHiddenTargetIds,
   parseAgentGUIProviderRailOrder,
+  parseAgentGUIProviderRailPreferences,
   reorderAgentGUIProviderRailOrder,
-  serializeAgentGUIProviderRailOrder
+  serializeAgentGUIProviderRailOrder,
+  serializeAgentGUIProviderRailPreferences
 } from "./agentGuiProviderRailOrder";
 
 describe("agent gui provider rail order", () => {
-  it("scopes the storage key to the workspace", () => {
-    expect(agentGUIProviderRailOrderStorageKey("workspace-1")).toBe(
-      "agent-gui:provider-rail-order:workspace-1"
+  it("uses one device-local storage key without a workspace or user id", () => {
+    expect(AGENT_GUI_PROVIDER_RAIL_PREFERENCES_STORAGE_KEY).toBe(
+      "agent-gui:provider-rail-preferences"
     );
-    expect(agentGUIProviderRailOrderStorageKey("")).toBe(
-      "agent-gui:provider-rail-order:default"
+    expect(agentGUIProviderRailOrderStorageKey()).toBe(
+      AGENT_GUI_PROVIDER_RAIL_PREFERENCES_STORAGE_KEY
     );
+  });
+
+  it("parses and serializes versioned order and visibility preferences", () => {
+    const serialized = serializeAgentGUIProviderRailPreferences({
+      hiddenTargetIds: [" local:cursor ", "local:cursor", ""],
+      order: [" local:claude-code ", "local:codex", "local:codex"]
+    });
+
+    expect(serialized).toBe(
+      '{"version":1,"order":["local:claude-code","local:codex"],"hiddenTargetIds":["local:cursor"]}'
+    );
+    expect(parseAgentGUIProviderRailPreferences(serialized)).toEqual({
+      hiddenTargetIds: ["local:cursor"],
+      order: ["local:claude-code", "local:codex"]
+    });
+    expect(parseAgentGUIProviderRailPreferences("not json")).toEqual({
+      hiddenTargetIds: [],
+      order: []
+    });
   });
 
   it("parses and serializes sanitized target ids", () => {
@@ -47,6 +72,34 @@ describe("agent gui provider rail order", () => {
     ).toEqual([cursor, codex, claude]);
   });
 
+  it("filters hidden targets without changing the full ordered collection", () => {
+    const codex = { targetId: "local:codex" };
+    const claude = { targetId: "local:claude-code" };
+    const cursor = { targetId: "local:cursor" };
+
+    expect(
+      applyAgentGUIProviderRailVisibility(
+        [cursor, codex, claude],
+        ["local:codex", "unknown"]
+      )
+    ).toEqual([cursor, claude]);
+  });
+
+  it("recovers the first target when stored preferences hide every target", () => {
+    expect(
+      normalizeAgentGUIProviderRailHiddenTargetIds(
+        ["codex", "claude"],
+        ["codex", "claude"]
+      )
+    ).toEqual(["claude"]);
+    expect(
+      applyAgentGUIProviderRailVisibility(
+        [{ targetId: "codex" }, { targetId: "claude" }],
+        ["codex", "claude"]
+      )
+    ).toEqual([{ targetId: "codex" }]);
+  });
+
   it("reorders one target around another target", () => {
     const currentTargetIds = [
       "local:codex",
@@ -70,5 +123,36 @@ describe("agent gui provider rail order", () => {
         overTargetId: "local:cursor"
       })
     ).toEqual(["local:claude-code", "local:cursor", "local:codex"]);
+  });
+
+  it("changes visibility and placement atomically", () => {
+    expect(
+      changeAgentGUIProviderManagerVisibility({
+        currentTargetIds: ["codex", "claude", "cursor"],
+        placement: { overTargetId: "claude", position: "before" },
+        preferences: { hiddenTargetIds: ["cursor"], order: [] },
+        targetId: "cursor",
+        visible: true
+      })
+    ).toEqual({
+      hiddenTargetIds: [],
+      order: ["codex", "cursor", "claude"]
+    });
+  });
+
+  it("refuses to hide the final available target", () => {
+    const preferences = {
+      hiddenTargetIds: ["claude"],
+      order: ["codex", "claude"]
+    };
+
+    expect(
+      changeAgentGUIProviderManagerVisibility({
+        currentTargetIds: ["codex", "claude"],
+        preferences,
+        targetId: "codex",
+        visible: false
+      })
+    ).toBe(preferences);
   });
 });

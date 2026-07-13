@@ -149,6 +149,17 @@ export interface AgentGUIViewLabels {
   agentConfig: string;
   agentSettingsMenu: string;
   agentEnvSetup: string;
+  manageAgents: string;
+  manageAgentsTitle: string;
+  manageAgentsDescription: string;
+  manageAgentsAvailable: string;
+  manageAgentsDisabled: string;
+  manageAgentsNoAvailable: string;
+  manageAgentsNoDisabled: string;
+  manageAgentsKeepOneAvailable: string;
+  removeAgentFromSidebar: (agent: string) => string;
+  addAgentToSidebar: (agent: string) => string;
+  dragAgentToReorder: (agent: string) => string;
   noConversations: string;
   emptyProjectConversations: string;
   conversationFilterAll: string;

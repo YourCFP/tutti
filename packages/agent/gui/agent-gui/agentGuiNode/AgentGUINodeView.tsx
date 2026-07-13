@@ -130,6 +130,7 @@ export function AgentGUINodeView({
 }: AgentGUINodeViewProps): React.JSX.Element {
   "use memo";
   const layoutElementRef = useRef<HTMLDivElement | null>(null);
+  const [providerManagerOpen, setProviderManagerOpen] = useState(false);
   const railResizeInteractionRef = useRef<{
     lastWidthPx: number;
     pointerId: number;
@@ -414,9 +415,7 @@ export function AgentGUINodeView({
   const shouldShowProviderRailConfigButton =
     viewModel.rail.conversationFilter.kind === "all" ||
     viewModel.rail.selectedAgentTarget?.disabled !== true;
-  const shouldShowProviderRailConfigMenu =
-    shouldShowProviderRailConfigButton &&
-    viewModel.rail.conversationFilter.kind !== "all";
+  const shouldShowProviderRailConfigMenu = shouldShowProviderRailConfigButton;
   const effectiveProviderAuthAccountLabel = useMemo(() => {
     const provider =
       (effectiveRailConfigProvider ?? viewModel.shell.data.provider)?.trim() ??
@@ -581,7 +580,6 @@ export function AgentGUINodeView({
               conversationFilter={viewModel.rail.conversationFilter}
               labels={labels}
               previewMode={previewMode}
-              workspaceId={viewModel.shell.workspaceId}
               selectedAgentTarget={viewModel.rail.selectedAgentTarget}
               agentTargets={viewModel.rail.agentTargets}
               agentTargetsLoading={viewModel.rail.agentTargetsLoading}
@@ -589,6 +587,8 @@ export function AgentGUINodeView({
               renderProviderRailEmpty={renderProviderRailEmpty}
               providerRailAllPresentation={providerRailAllPresentation}
               comingSoonProviders={viewModel.rail.comingSoonProviders}
+              managerOpen={providerManagerOpen}
+              onManagerOpenChange={setProviderManagerOpen}
               onSelectConversationFilterTarget={
                 actions.selectConversationFilterTarget
               }
@@ -604,6 +604,9 @@ export function AgentGUINodeView({
                   <AgentGUIConfigMenu
                     labels={labels}
                     previewMode={previewMode}
+                    providerScopedActionsVisible={
+                      viewModel.rail.conversationFilter.kind !== "all"
+                    }
                     slashStatusLimits={effectiveRailSlashStatusLimits}
                     slashStatusLimitsLoading={slashStatusLimitsLoading}
                     slashStatusUsageCapturedAtUnixMs={
@@ -614,6 +617,7 @@ export function AgentGUINodeView({
                     providerAuthAccountLabel={effectiveProviderAuthAccountLabel}
                     onAgentConfigMenuOpen={onAgentConfigMenuOpen}
                     onAgentUsageRefresh={onAgentUsageRefresh}
+                    onOpenAgentManager={() => setProviderManagerOpen(true)}
                     onOpenAgentEnvSetup={openAgentEnvSetup}
                     onOpenAgentSettings={openAgentSettings}
                   />

@@ -9124,6 +9124,114 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   animation: agent-gui-provider-target-loading 1.2s ease-in-out infinite;
 }
 
+.agent-gui-provider-manager-tile[data-dragging="true"] {
+  opacity: 0.45;
+}
+
+.agent-gui-provider-manager-drop-zone {
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.agent-gui-provider-manager-drop-zone[data-drop-active="true"] {
+  background: color-mix(
+    in srgb,
+    var(--brand-primary, var(--tutti-purple)) 7%,
+    transparent
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(
+      in srgb,
+      var(--brand-primary, var(--tutti-purple)) 42%,
+      transparent
+    );
+}
+
+.agent-gui-provider-manager-drop-zone[data-drop-blocked="true"] {
+  background: color-mix(in srgb, var(--state-danger) 6%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--state-danger) 28%, transparent);
+}
+
+.agent-gui-provider-manager-tile
+  > :not(.agent-gui-provider-manager-drop-indicator) {
+  transition: translate 140ms ease;
+}
+
+.agent-gui-provider-manager-tile[data-drag-over="before"]
+  > :not(.agent-gui-provider-manager-drop-indicator) {
+  translate: 8px 0;
+}
+
+.agent-gui-provider-manager-tile[data-drag-over="after"]
+  > :not(.agent-gui-provider-manager-drop-indicator) {
+  translate: -8px 0;
+}
+
+.agent-gui-provider-manager-drop-indicator {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--brand-primary, var(--tutti-purple));
+  pointer-events: none;
+}
+
+.agent-gui-provider-manager-drop-indicator[data-position="before"] {
+  left: -9px;
+}
+
+.agent-gui-provider-manager-drop-indicator[data-position="after"] {
+  right: -9px;
+}
+
+.agent-gui-provider-manager-tile[data-long-press="true"] {
+  animation: agent-gui-provider-manager-long-press 550ms linear;
+}
+
+.agent-gui-provider-manager-tile[data-editing="true"] {
+  transform-origin: 50% 42%;
+  animation: agent-gui-provider-manager-wiggle 180ms ease-in-out infinite
+    alternate;
+}
+
+.agent-gui-provider-manager-tile[data-editing="true"]:nth-child(2n) {
+  animation-delay: -90ms;
+  animation-direction: alternate-reverse;
+}
+
+.agent-gui-provider-manager-tile[data-editing="true"][data-drag-active="true"] {
+  animation: none;
+}
+
+@keyframes agent-gui-provider-manager-wiggle {
+  0% {
+    transform: rotate(-1.2deg) translateY(0);
+  }
+
+  100% {
+    transform: rotate(1.2deg) translateY(-0.5px);
+  }
+}
+
+@keyframes agent-gui-provider-manager-long-press {
+  from {
+    scale: 1;
+  }
+
+  to {
+    scale: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-gui-provider-manager-tile[data-editing="true"] {
+    animation: none;
+  }
+}
+
 @keyframes agent-gui-provider-target-loading {
   0% {
     background-position: 100% 0;

@@ -1,13 +1,74 @@
 import type { AgentGUIAgentTarget } from "../../../types";
 
-const AGENT_GUI_PROVIDER_RAIL_ORDER_STORAGE_PREFIX =
-  "agent-gui:provider-rail-order:";
+export const AGENT_GUI_PROVIDER_RAIL_PREFERENCES_STORAGE_KEY =
+  "agent-gui:provider-rail-preferences";
+
+export const AGENT_GUI_PROVIDER_RAIL_PREFERENCES_EVENT =
+  "agent-gui:provider-rail-preferences-changed";
+
+export interface AgentGUIProviderRailPreferences {
+  hiddenTargetIds: readonly string[];
+  order: readonly string[];
+}
+
+export interface AgentGUIProviderManagerDropPlacement {
+  overTargetId: string;
+  position: "before" | "after";
+}
+
+const emptyAgentGUIProviderRailPreferences: AgentGUIProviderRailPreferences = {
+  hiddenTargetIds: [],
+  order: []
+};
 
 export function agentGUIProviderRailOrderStorageKey(
-  workspaceId: string | null | undefined
+  ..._legacyWorkspaceId: readonly unknown[]
 ): string {
-  const normalizedWorkspaceId = workspaceId?.trim() || "default";
-  return `${AGENT_GUI_PROVIDER_RAIL_ORDER_STORAGE_PREFIX}${normalizedWorkspaceId}`;
+  return AGENT_GUI_PROVIDER_RAIL_PREFERENCES_STORAGE_KEY;
+}
+
+export function parseAgentGUIProviderRailPreferences(
+  rawValue: string | null | undefined
+): AgentGUIProviderRailPreferences {
+  if (!rawValue) {
+    return emptyAgentGUIProviderRailPreferences;
+  }
+  try {
+    const parsed = JSON.parse(rawValue) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return emptyAgentGUIProviderRailPreferences;
+    }
+    const candidate = parsed as {
+      hiddenTargetIds?: unknown;
+      order?: unknown;
+      version?: unknown;
+    };
+    if (candidate.version !== 1) {
+      return emptyAgentGUIProviderRailPreferences;
+    }
+    return {
+      hiddenTargetIds: Array.isArray(candidate.hiddenTargetIds)
+        ? sanitizeAgentGUIProviderRailOrder(candidate.hiddenTargetIds)
+        : [],
+      order: Array.isArray(candidate.order)
+        ? sanitizeAgentGUIProviderRailOrder(candidate.order)
+        : []
+    };
+  } catch {
+    return emptyAgentGUIProviderRailPreferences;
+  }
+}
+
+export function serializeAgentGUIProviderRailPreferences(
+  preferences: AgentGUIProviderRailPreferences
+): string {
+  return JSON.stringify({
+    version: 1,
+    order: sanitizeAgentGUIProviderRailOrder(preferences.order),
+    hiddenTargetIds: sanitizeAgentGUIProviderRailOrder(
+      preferences.hiddenTargetIds
+    )
+  });
 }
 
 export function parseAgentGUIProviderRailOrder(
@@ -79,6 +140,36 @@ export function applyAgentGUIProviderRailOrder<
   });
 }
 
+export function applyAgentGUIProviderRailVisibility<
+  T extends Pick<AgentGUIAgentTarget, "targetId">
+>(targets: readonly T[], hiddenTargetIds: readonly string[]): readonly T[] {
+  const hidden = new Set(
+    normalizeAgentGUIProviderRailHiddenTargetIds(
+      targets.map((target) => target.targetId),
+      hiddenTargetIds
+    )
+  );
+  if (hidden.size === 0) {
+    return targets;
+  }
+  return targets.filter((target) => !hidden.has(target.targetId));
+}
+
+export function normalizeAgentGUIProviderRailHiddenTargetIds(
+  currentTargetIds: readonly string[],
+  hiddenTargetIds: readonly string[]
+): readonly string[] {
+  const current = sanitizeAgentGUIProviderRailOrder(currentTargetIds);
+  const hidden = sanitizeAgentGUIProviderRailOrder(hiddenTargetIds);
+  if (
+    current.length === 0 ||
+    current.some((targetId) => !hidden.includes(targetId))
+  ) {
+    return hiddenTargetIds;
+  }
+  return hidden.filter((targetId) => targetId !== current[0]);
+}
+
 export function reorderAgentGUIProviderRailOrder(input: {
   currentTargetIds: readonly string[];
   draggedTargetId: string;
@@ -114,4 +205,71 @@ export function reorderAgentGUIProviderRailOrder(input: {
     draggedTargetId,
     ...withoutDragged.slice(insertIndex)
   ];
+}
+
+export function changeAgentGUIProviderManagerVisibility(input: {
+  currentTargetIds: readonly string[];
+  placement?: AgentGUIProviderManagerDropPlacement;
+  preferences: AgentGUIProviderRailPreferences;
+  targetId: string;
+  visible: boolean;
+}): AgentGUIProviderRailPreferences {
+  const currentTargetIds = sanitizeAgentGUIProviderRailOrder(
+    input.currentTargetIds
+  );
+  const targetId = input.targetId.trim();
+  if (!targetId || !currentTargetIds.includes(targetId)) {
+    return input.preferences;
+  }
+  const hiddenTargetIds = new Set(
+    normalizeAgentGUIProviderRailHiddenTargetIds(
+      currentTargetIds,
+      input.preferences.hiddenTargetIds
+    )
+  );
+  const availableTargetCount = currentTargetIds.filter(
+    (candidateId) => !hiddenTargetIds.has(candidateId)
+  ).length;
+  if (
+    !input.visible &&
+    !hiddenTargetIds.has(targetId) &&
+    availableTargetCount <= 1
+  ) {
+    return input.preferences;
+  }
+
+  let order = input.preferences.order;
+  const fallbackTargetId = currentTargetIds
+    .filter(
+      (candidateId) =>
+        candidateId !== targetId &&
+        (input.visible
+          ? !hiddenTargetIds.has(candidateId)
+          : hiddenTargetIds.has(candidateId))
+    )
+    .at(-1);
+  const placement =
+    input.placement ??
+    (fallbackTargetId
+      ? { overTargetId: fallbackTargetId, position: "after" as const }
+      : null);
+  if (placement) {
+    order = reorderAgentGUIProviderRailOrder({
+      currentTargetIds,
+      draggedTargetId: targetId,
+      dropPosition: placement.position,
+      overTargetId: placement.overTargetId
+    });
+  }
+
+  if (input.visible) {
+    hiddenTargetIds.delete(targetId);
+  } else {
+    hiddenTargetIds.add(targetId);
+  }
+  return {
+    ...input.preferences,
+    hiddenTargetIds: [...hiddenTargetIds],
+    order
+  };
 }

@@ -203,15 +203,39 @@ launch preparation.
 UI affordances that aggregate across providers, such as rail provider filters
 and composer provider switching, are always part of the unified AgentGUI
 surface and do not belong to durable AgentGUI node data.
-Provider rail containers and tiles are interactive workbench chrome: they must
-explicitly release host/window drag regions with `nodrag` and
+Provider rail containers, tiles, and management dialogs are interactive
+workbench chrome: they must explicitly release host/window drag regions with `nodrag` and
 `-webkit-app-region: no-drag`, otherwise clicks near the window edge can be
 captured as drag gestures before AgentGUI sees the provider filter action.
-Agent rail ordering is also UI-local chrome state. Drag sorting may
-persist a workspace-scoped order in browser-local storage, but must not write
-that preference into controller state, session state, or durable AgentGUI node
-data. The aggregate `All` entry exists only for multiple agents and stays fixed
-above them.
+Agent rail ordering and visibility are also UI-local chrome state. Drag sorting
+and the rail management dialog persist one device-local order and hidden-target
+set in browser-local storage; they must not write those preferences into
+controller state, session state, or durable AgentGUI node data. The management
+dialog changes only rail presentation and never installs, removes, enables, or
+disables a real agent target. Hiding the selected target returns the rail filter
+to `All`. The manager presents available and hidden targets as separate icon
+grids. A long press enters a local edit mode for removal. Both grids are drop
+zones: same-grid drops reorder, and cross-grid drops atomically change local
+visibility and order. The pending drop position mirrors the provider rail by
+shifting the target tile aside and showing the same brand-color insertion line;
+the previewed before/after position is also the position committed on drop. At
+least one target must remain available, so both the remove action and an
+available-to-hidden drop enforce that invariant. These gestures still update
+only the same local chrome preference. The manager keeps each target tile's
+outer hit box layout-stable, shifts only its inner visual content, and renders a
+separate insertion-line element. Cross-grid midpoint decisions use hysteresis
+so a stationary pointer cannot make the target and insertion line oscillate.
+Starting a drag must not exit edit mode: the manager pauses the edit wiggle only
+while a drag is active, then resumes it after same-grid reorder or cross-grid
+visibility changes. Blank-space clicks, Escape, and closing the dialog remain
+the explicit edit-mode exit paths.
+While edit mode is active, the first Escape leaves edit mode without dismissing
+the manager; a second Escape closes the dialog. Both grids use the same compact
+five-column icon layout.
+Visibility controls stay hidden in the default state; entering edit mode shows
+red remove controls for available targets and green restore controls for hidden
+targets together. The aggregate `All` entry stays fixed above agents and cannot
+be hidden or reordered.
 Provider-scoped rail footer affordances, such as usage limits and environment
 setup, follow the rail's active provider filter target in multi-provider scope;
 when the rail filter is `All`, they should stay hidden because there is no

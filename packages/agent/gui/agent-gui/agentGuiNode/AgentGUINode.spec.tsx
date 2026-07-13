@@ -976,7 +976,7 @@ describe("AgentGUINode", () => {
     expect(screen.getByText("暂未接入用量")).toBeInTheDocument();
   });
 
-  it("opens Agent settings directly for the unified All provider filter", () => {
+  it("opens the generic config menu for the unified All provider filter", () => {
     mockViewModel = createViewModel({
       conversationFilter: { kind: "all" },
       agentTargets: [
@@ -987,13 +987,41 @@ describe("AgentGUINode", () => {
 
     renderAgentGUINode();
 
-    fireEvent.click(screen.getByTitle("agentHost.agentGui.agentSettingsMenu"));
+    fireEvent.click(screen.getByTitle("agentHost.agentGui.agentConfig"));
 
-    expect(screen.queryByTestId("agent-gui-config-menu")).toBeNull();
+    expect(screen.getByTestId("agent-gui-config-menu")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("agent-gui-config-manage-agents")
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-gui-config-env-setup")).toBeNull();
+    fireEvent.click(screen.getByTestId("agent-gui-config-settings"));
     expect(getWorkspaceSettingsPanelStore()).toMatchObject({
       section: "agent",
       requestSequence: 1
     });
+  });
+
+  it("renders environment setup before settings for a provider filter", () => {
+    const codexTarget = createLocalAgentGUIAgentTarget("codex");
+    mockViewModel = createViewModel({
+      conversationFilter: {
+        kind: "agentTarget",
+        agentTargetId: codexTarget.agentTargetId ?? ""
+      },
+      selectedAgentTarget: codexTarget,
+      agentTargets: [codexTarget]
+    });
+
+    renderAgentGUINode();
+
+    fireEvent.click(screen.getByTitle("agentHost.agentGui.agentConfig"));
+
+    const environmentSetup = screen.getByTestId("agent-gui-config-env-setup");
+    const settings = screen.getByTestId("agent-gui-config-settings");
+    expect(
+      environmentSetup.compareDocumentPosition(settings) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).not.toBe(0);
   });
 
   it("renders rail config usage from the unified provider filter target", async () => {
@@ -1095,6 +1123,13 @@ describe("AgentGUINode", () => {
         screen.getByTestId("agent-gui-config-usage-unavailable")
       ).toBeInTheDocument();
     });
+    const unavailable = screen.getByTestId(
+      "agent-gui-config-usage-unavailable"
+    );
+    expect(unavailable.parentElement).toContainElement(
+      screen.getByText("Limits")
+    );
+    expect(unavailable.parentElement?.querySelector("svg")).not.toBeNull();
     const refresh = screen.getByTestId("agent-gui-config-usage-refresh");
     expect(refresh).toBeInTheDocument();
 
