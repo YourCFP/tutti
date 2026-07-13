@@ -515,6 +515,25 @@ export function StandaloneAgentWindow({
     },
     [workspaceId, workspaceSettingsService]
   );
+  const handleDuplicateStandaloneWindow = useCallback(() => {
+    void hostWindowApi.openAgentWindow({
+      agentSessionId: nodeState.lastActiveAgentSessionId,
+      agentTargetId: activeAgentTargetId,
+      providerStatusSnapshot: agentProviderStatusService.getSnapshot(),
+      agents: agents ?? undefined,
+      minimizeSourceWindow: false,
+      provider: headerProvider,
+      workspaceId
+    });
+  }, [
+    activeAgentTargetId,
+    agentProviderStatusService,
+    agents,
+    headerProvider,
+    hostWindowApi,
+    nodeState.lastActiveAgentSessionId,
+    workspaceId
+  ]);
 
   return (
     <main
@@ -555,7 +574,10 @@ export function StandaloneAgentWindow({
               fallbackAgentLabel: i18n.t(
                 "workspace.agentGui.fallbackAgentLabel"
               ),
-              newConversation: i18n.t("workspace.agentGui.newConversation")
+              newConversation: i18n.t("workspace.agentGui.newConversation"),
+              openDetachedWindow: i18n.t(
+                "workspace.agentGui.openDetachedWindow"
+              )
             }}
             conversationRailWidthPx={headerConversationRailWidthPx}
             conversationIconUrl={headerConversationIconUrl}
@@ -586,6 +608,7 @@ export function StandaloneAgentWindow({
               }
             }}
             onCreateConversation={handleCreateConversation}
+            onOpenDetachedWindow={handleDuplicateStandaloneWindow}
             onToggleConversationRail={handleConversationRailToggle}
           />
         )}
