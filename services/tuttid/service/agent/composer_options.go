@@ -103,6 +103,7 @@ type ComposerCapabilityOption struct {
 
 type ComposerOptions struct {
 	Provider           string
+	Capabilities       []string
 	ModelConfig        ComposerConfigOption
 	PermissionConfig   PermissionConfig
 	ReasoningConfig    ComposerConfigOption
@@ -155,8 +156,9 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 	if composerProfileFor(provider).Behavior.ModelOptionsAuthoritative {
 		modelOptions = []ComposerConfigOptionValue{}
 	}
+	capabilities := composerProviderCapabilities(provider, s.computerUseAvailable())
 	runtimeContext := map[string]any{
-		"capabilities":     composerProviderCapabilities(provider, s.computerUseAvailable()),
+		"capabilities":     capabilities,
 		"configOptions":    composerConfigOptions(provider, effectiveSettings, modelOptions),
 		"model":            nullableString(effectiveSettings.Model),
 		"permissionModeId": nullableString(effectiveSettings.PermissionModeID),
@@ -187,6 +189,7 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 	}
 	options := ComposerOptions{
 		Provider:           provider,
+		Capabilities:       capabilities,
 		ModelConfig:        composerModelConfig(provider, effectiveSettings.Model, modelOptions),
 		PermissionConfig:   permissionConfig,
 		ReasoningConfig:    composerReasoningConfig(provider, effectiveSettings.ReasoningEffort, locale),
@@ -214,8 +217,8 @@ func composerOptionsIncludeCapabilityCatalog(input ComposerOptionsInput) bool {
 
 // composerProviderCapabilities is the conservative static default used to
 // render the composer before a session exists. Once a session is live the
-// adapter-reported runtimeContext.capabilities takes precedence (GUI-side
-// resolution). Keys mirror packages/agent/daemon/runtime/capabilities.go.
+// adapter-reported typed session capabilities take precedence in the GUI.
+// Keys mirror packages/agent/daemon/runtime/capabilities.go.
 func composerProviderCapabilities(provider string, computerUseAvailable bool) []string {
 	if !composerProfileKnown(provider) {
 		return nil

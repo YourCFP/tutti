@@ -121,6 +121,13 @@ Canonical sessions also carry typed `settings`, `permissionConfig`,
 `capabilities`, `usage`, `backgroundAgents`, `goal`, and `imported` fields from
 the daemon. Desktop adapters preserve those fields and must not recreate them
 from `runtimeContext`, `lastError`, or module-global per-session defaults.
+Before a session exists, composer options carry the same typed capability
+descriptor. The active session descriptor takes precedence once available.
+An omitted pre-session descriptor means the connected daemon predates the
+typed composer capability contract and must remain an unknown/loading state.
+Core capability booleans must not be reconstructed from private
+`runtimeContext` fields or represented as plugin/tool entries in the composer
+capability catalog.
 Provider context-window and quota updates enter the daemon at the runtime
 adapter boundary, are split into typed durable session metadata, and reach
 Agent GUI through the protocol-v2 `usage` field. GUI projections must not read

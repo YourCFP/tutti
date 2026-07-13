@@ -65,6 +65,7 @@ export function cloneAgentActivityComposerOptions(
 ): AgentActivityComposerOptions {
   return {
     provider: options.provider,
+    capabilities: options.capabilities ? { ...options.capabilities } : null,
     models: options.models.map((option) => ({ ...option })),
     reasoningEfforts: options.reasoningEfforts.map((option) => ({ ...option })),
     reasoningOptionsByModel: options.reasoningOptionsByModel

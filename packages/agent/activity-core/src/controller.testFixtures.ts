@@ -77,6 +77,7 @@ export function testComposerOptions(
       prewarmDraftSession: false,
       refreshModelOptionsAfterSettings: false
     },
+    capabilities: null,
     capabilityCatalog: [],
     loadedAtUnixMs,
     modelConfigurable: true,

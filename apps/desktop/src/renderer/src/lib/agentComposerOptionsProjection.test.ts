@@ -71,6 +71,46 @@ test("agent composer options project the typed slash command policy", () => {
   });
 });
 
+test("agent composer options project typed pre-session capabilities separately from the tool catalog", () => {
+  const options = agentActivityComposerOptionsFromTuttidResult("cursor", {
+    capabilities: {
+      browserUse: true,
+      compact: false,
+      computerUse: false,
+      goalPause: false,
+      imageInput: true,
+      interrupt: true,
+      modelImageInputRequired: true,
+      permissionModeChangeDeferred: false,
+      permissionModeChangeDuringTurn: false,
+      planImplementation: false,
+      planMode: true,
+      rateLimits: false,
+      resumeRunningTurn: false,
+      review: false,
+      skills: false,
+      tokenUsage: false
+    },
+    capabilityCatalog: [
+      {
+        id: "cursor-plugin",
+        invocation: "textTrigger",
+        kind: "plugin",
+        label: "Cursor plugin",
+        name: "cursor-plugin",
+        status: "available"
+      }
+    ]
+  });
+
+  assert.equal(options.capabilities?.planMode, true);
+  assert.equal(options.capabilities?.browserUse, true);
+  assert.deepEqual(
+    options.capabilityCatalog?.map((entry) => entry.id),
+    ["cursor-plugin"]
+  );
+});
+
 test("agent composer options preserve effective pre-session settings", () => {
   const options = agentActivityComposerOptionsFromTuttidResult("codex", {
     effectiveSettings: {

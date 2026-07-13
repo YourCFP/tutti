@@ -9,6 +9,11 @@ import (
 )
 
 func generatedAgentSessionCapabilities(raw []string) *tuttigenerated.WorkspaceAgentCapabilities {
+	capabilities := generatedAgentCapabilities(raw)
+	return &capabilities
+}
+
+func generatedAgentCapabilities(raw []string) tuttigenerated.WorkspaceAgentCapabilities {
 	capabilities := tuttigenerated.WorkspaceAgentCapabilities{}
 	for _, capability := range raw {
 		switch strings.TrimSpace(capability) {
@@ -46,7 +51,7 @@ func generatedAgentSessionCapabilities(raw []string) *tuttigenerated.WorkspaceAg
 			capabilities.TokenUsage = true
 		}
 	}
-	return &capabilities
+	return capabilities
 }
 
 func generatedAgentSessionUsage(raw *agentactivitybiz.SessionUsage) *tuttigenerated.WorkspaceAgentUsage {

@@ -52,8 +52,8 @@ type composerProfile struct {
 	Speed bool
 	// Capabilities is the conservative static capability list used to render
 	// the composer before a session exists. Once a session is live the
-	// adapter-reported runtimeContext.capabilities takes precedence. Keys
-	// mirror packages/agent/daemon/runtime/capabilities.go.
+	// adapter-reported typed session capabilities take precedence. Keys mirror
+	// packages/agent/daemon/runtime/capabilities.go.
 	Capabilities []string
 	// PermissionConfigurable: the permission-mode selector is interactive.
 	PermissionConfigurable bool

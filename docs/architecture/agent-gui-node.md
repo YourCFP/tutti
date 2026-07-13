@@ -1247,9 +1247,9 @@ User-visible rules:
   values and ordering; the relevant locale catalog owns user-visible labels and
   descriptions, including when live runtime options are the fresher source.
 - Shift+Tab plan mode is a provider capability, not a frontend allowlist. The
-  daemon's pre-session composer options and the live runtime
-  `runtimeContext.capabilities` must both advertise `planMode` before AgentGUI
-  enables the toggle for a provider.
+  daemon's typed pre-session composer capabilities and typed live session
+  capabilities must both advertise `planMode` before AgentGUI enables the
+  toggle for a provider.
 - Browser/computer capability controls come from daemon composer options and
   live runtime capabilities. `computerUse` must not be advertised or injected
   unless the daemon can reach the local `cua-driver` and its read-only

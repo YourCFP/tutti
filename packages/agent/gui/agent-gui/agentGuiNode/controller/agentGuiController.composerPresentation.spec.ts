@@ -104,6 +104,7 @@ describe("composer target presentation", () => {
   it("fills missing optimistic values from effective pre-session settings", () => {
     const preloaded = effectiveComposerSettingsFromOptions({
       provider: "codex",
+      capabilities: null,
       models: [],
       reasoningEfforts: [],
       speeds: [],
@@ -142,6 +143,7 @@ describe("composer target presentation", () => {
   it("does not turn an absent pre-session boolean into an explicit override", () => {
     const preloaded = effectiveComposerSettingsFromOptions({
       provider: "codex",
+      capabilities: null,
       models: [],
       reasoningEfforts: [],
       speeds: [],
@@ -172,6 +174,7 @@ describe("composer target presentation", () => {
     const settings = { model: "stale-model", reasoningEffort: "high" };
     const options = {
       provider: "any-provider",
+      capabilities: null,
       models: [{ value: "current-model", label: "Current" }],
       reasoningEfforts: [{ value: "high", label: "High" }],
       speeds: [],

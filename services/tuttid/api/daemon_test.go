@@ -1502,6 +1502,7 @@ func TestDaemonAPIGeneratedRoutesGetAgentProviderComposerOptions(t *testing.T) {
 					t.Fatalf("settings = %#v", input.Settings)
 				}
 				return agentservice.ComposerOptions{
+					Capabilities:      []string{"imageInput", "planMode", "browserUse"},
 					EffectiveSettings: input.Settings,
 					ModelConfig: agentservice.ComposerConfigOption{
 						Configurable: true,
@@ -1587,6 +1588,9 @@ func TestDaemonAPIGeneratedRoutesGetAgentProviderComposerOptions(t *testing.T) {
 	decodeGeneratedRouteResponse(t, recorder, &response)
 	if response.Provider != tuttigenerated.Codex {
 		t.Fatalf("provider = %q, want codex", response.Provider)
+	}
+	if response.Capabilities == nil || !response.Capabilities.ImageInput || !response.Capabilities.PlanMode || !response.Capabilities.BrowserUse || response.Capabilities.ComputerUse {
+		t.Fatalf("capabilities = %#v", response.Capabilities)
 	}
 	if response.EffectiveSettings.Model == nil || *response.EffectiveSettings.Model != "gpt-5" {
 		t.Fatalf("model = %#v, want gpt-5", response.EffectiveSettings.Model)

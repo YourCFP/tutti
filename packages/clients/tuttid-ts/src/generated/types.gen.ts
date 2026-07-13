@@ -1030,6 +1030,7 @@ export type AgentProviderComposerOptionsResponse = {
   runtimeContext: {
     [key: string]: unknown;
   };
+  capabilities?: WorkspaceAgentCapabilities;
   skills: Array<AgentProviderSkillOption>;
   capabilityCatalog: Array<AgentProviderCapabilityOption>;
   behavior: AgentProviderComposerBehavior;

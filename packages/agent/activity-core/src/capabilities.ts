@@ -16,10 +16,8 @@ export function resolveAgentActivityCapability(
 ): boolean | null {
   const sessionValue = input.sessionCapabilities?.[key];
   if (typeof sessionValue === "boolean") return sessionValue;
-  const catalogEntry = input.composerOptions?.capabilityCatalog?.find(
-    (entry) => entry.id === key
-  );
-  return catalogEntry ? catalogEntry.status === "available" : null;
+  const composerValue = input.composerOptions?.capabilities?.[key];
+  return typeof composerValue === "boolean" ? composerValue : null;
 }
 
 export function hasAgentCapability(

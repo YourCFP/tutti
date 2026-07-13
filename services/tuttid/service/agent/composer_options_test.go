@@ -26,7 +26,7 @@ func TestComposerProviderCapabilitiesDefaults(t *testing.T) {
 	}
 	// Browser use is delivered as a default MCP server to every provider, so it
 	// is advertised by default alongside the per-provider capabilities.
-	for _, provider := range []string{"claude-code", "codex", "tutti-agent", "openclaw"} {
+	for _, provider := range []string{"claude-code", "codex", "cursor", "opencode", "tutti-agent", "openclaw"} {
 		if got := composerProviderCapabilities(provider, true); !slices.Contains(got, "browserUse") {
 			t.Fatalf("%s defaults = %v, missing browserUse", provider, got)
 		}
@@ -40,8 +40,8 @@ func TestComposerProviderCapabilitiesDefaults(t *testing.T) {
 	if got := composerProviderCapabilities("opencode", true); !slices.Contains(got, "planMode") {
 		t.Fatalf("opencode defaults = %v, missing planMode", got)
 	}
-	if got := composerProviderCapabilities("cursor", true); !slices.Contains(got, "imageInput") || !slices.Contains(got, "interrupt") {
-		t.Fatalf("cursor defaults = %v, missing imageInput or interrupt", got)
+	if got := composerProviderCapabilities("cursor", true); !slices.Contains(got, "imageInput") || !slices.Contains(got, "interrupt") || !slices.Contains(got, "planMode") {
+		t.Fatalf("cursor defaults = %v, missing imageInput, interrupt, or planMode", got)
 	}
 	if got := composerProviderCapabilities("unknown", true); got != nil {
 		t.Fatalf("unknown provider defaults = %v, want nil", got)

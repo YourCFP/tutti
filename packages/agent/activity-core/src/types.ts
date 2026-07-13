@@ -206,6 +206,8 @@ export interface AgentActivityComposerBehavior {
 
 export interface AgentActivityComposerOptions {
   provider: string;
+  /** Typed capabilities available before a session exists. */
+  capabilities: AgentActivitySessionCapabilities | null;
   models: AgentActivityComposerSettingOption[];
   reasoningEfforts: AgentActivityComposerSettingOption[];
   reasoningOptionsByModel?: Record<

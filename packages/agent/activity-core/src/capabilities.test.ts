@@ -5,7 +5,10 @@ import {
   hasAgentCapability,
   resolveAgentActivityCapability
 } from "./capabilities.ts";
-import type { AgentActivityComposerOptions } from "./types.ts";
+import type {
+  AgentActivityComposerOptions,
+  AgentActivitySessionCapabilities
+} from "./types.ts";
 
 test("runtime capabilities take precedence over composer options", () => {
   assert.equal(
@@ -72,28 +75,20 @@ test("vocabulary matches the Go side", () => {
   ]);
 });
 
-function composerOptions(
-  runtimeContext: Record<string, unknown>
-): AgentActivityComposerOptions {
-  const capabilities = Array.isArray(runtimeContext.capabilities)
-    ? runtimeContext.capabilities.filter(
-        (value): value is string => typeof value === "string"
-      )
-    : [];
+function composerOptions(input: {
+  capabilities?: readonly string[];
+}): AgentActivityComposerOptions {
+  const capabilities = input.capabilities ?? [];
   return {
     provider: "codex",
+    capabilities: Object.fromEntries(
+      AGENT_CAPABILITY_KEYS.map((key) => [key, capabilities.includes(key)])
+    ) as unknown as AgentActivitySessionCapabilities,
     models: [],
     reasoningEfforts: [],
     speeds: [],
     permissionConfig: null,
-    capabilityCatalog: capabilities.map((id) => ({
-      id,
-      invocation: "none",
-      kind: "plugin",
-      label: id,
-      name: id,
-      status: "available"
-    })),
+    capabilityCatalog: [],
     skills: [],
     behavior: {
       collapseModelOptionsToLatest: false,

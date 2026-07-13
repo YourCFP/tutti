@@ -2329,7 +2329,10 @@ type AgentProviderComposerConfigOptionValue struct {
 
 // AgentProviderComposerOptionsResponse defines model for AgentProviderComposerOptionsResponse.
 type AgentProviderComposerOptionsResponse struct {
-	Behavior           AgentProviderComposerBehavior   `json:"behavior"`
+	Behavior AgentProviderComposerBehavior `json:"behavior"`
+
+	// Capabilities Protocol v2 daemon-issued capability descriptor. Clients branch on these booleans instead of provider identity. Field names mirror the canonical capability keys in packages/agent/daemon/runtime/capabilities.go.
+	Capabilities       *WorkspaceAgentCapabilities     `json:"capabilities,omitempty"`
 	CapabilityCatalog  []AgentProviderCapabilityOption `json:"capabilityCatalog"`
 	EffectiveSettings  AgentSessionComposerSettings    `json:"effectiveSettings"`
 	ModelConfig        AgentProviderComposerConfig     `json:"modelConfig"`

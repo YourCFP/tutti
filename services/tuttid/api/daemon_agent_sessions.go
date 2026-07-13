@@ -497,6 +497,7 @@ func generatedAgentProviderComposerOptions(options agentservice.ComposerOptions)
 			PrewarmDraftSession:                 options.Behavior.PrewarmDraftSession,
 			PlanModeExclusiveWithPermissionMode: options.Behavior.PlanModeExclusiveWithPermissionMode,
 		},
+		Capabilities:       generatedAgentSessionCapabilities(options.Capabilities),
 		CapabilityCatalog:  generatedAgentProviderCapabilityOptions(options.CapabilityCatalog),
 		EffectiveSettings:  effectiveSettings,
 		ModelConfig:        generatedComposerConfigOption(options.ModelConfig),

@@ -4,6 +4,7 @@ import type {
   AgentActivityComposerPermissionConfig,
   AgentActivityComposerSettingOption,
   AgentActivityComposerSkillOption,
+  AgentActivitySessionCapabilities,
   AgentActivitySlashCommandEffect,
   AgentActivitySlashCommandPolicy
 } from "@tutti-os/agent-activity-core";
@@ -53,6 +54,7 @@ export function agentActivityComposerOptionsFromTuttidResult(
       : capabilitiesFromRuntimeContext;
   return {
     provider: normalizeText(result.provider) ?? provider,
+    capabilities: sessionCapabilitiesFromValue(result.capabilities),
     models:
       modelsFromLiveConfig.length > 0 ? modelsFromLiveConfig : modelsFromConfig,
     reasoningEfforts:
@@ -87,6 +89,35 @@ export function agentActivityComposerOptionsFromTuttidResult(
     behavior: composerBehaviorFromValue(result.behavior),
     slashCommandPolicy: slashCommandPolicyFromValue(result.slashCommandPolicy),
     loadedAtUnixMs: Date.now()
+  };
+}
+
+function sessionCapabilitiesFromValue(
+  value: unknown
+): AgentActivitySessionCapabilities | null {
+  const capabilities = recordValue(value);
+  if (Object.keys(capabilities).length === 0) {
+    return null;
+  }
+  return {
+    browserUse: capabilities.browserUse === true,
+    compact: capabilities.compact === true,
+    computerUse: capabilities.computerUse === true,
+    goalPause: capabilities.goalPause === true,
+    imageInput: capabilities.imageInput === true,
+    interrupt: capabilities.interrupt === true,
+    modelImageInputRequired: capabilities.modelImageInputRequired === true,
+    permissionModeChangeDeferred:
+      capabilities.permissionModeChangeDeferred === true,
+    permissionModeChangeDuringTurn:
+      capabilities.permissionModeChangeDuringTurn === true,
+    planImplementation: capabilities.planImplementation === true,
+    planMode: capabilities.planMode === true,
+    rateLimits: capabilities.rateLimits === true,
+    resumeRunningTurn: capabilities.resumeRunningTurn === true,
+    review: capabilities.review === true,
+    skills: capabilities.skills === true,
+    tokenUsage: capabilities.tokenUsage === true
   };
 }
 

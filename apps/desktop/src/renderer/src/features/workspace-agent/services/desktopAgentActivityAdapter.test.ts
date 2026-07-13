@@ -610,6 +610,24 @@ test("desktop agent activity adapter normalizes provider composer options", asyn
             prewarmDraftSession: false,
             planModeExclusiveWithPermissionMode: false
           },
+          capabilities: {
+            browserUse: true,
+            compact: false,
+            computerUse: false,
+            goalPause: false,
+            imageInput: true,
+            interrupt: true,
+            modelImageInputRequired: true,
+            permissionModeChangeDeferred: false,
+            permissionModeChangeDuringTurn: false,
+            planImplementation: false,
+            planMode: true,
+            rateLimits: false,
+            resumeRunningTurn: false,
+            review: false,
+            skills: false,
+            tokenUsage: false
+          },
           capabilityCatalog: [],
           runtimeContext: {}
         };
@@ -667,6 +685,8 @@ test("desktop agent activity adapter normalizes provider composer options", asyn
       sourceKind: "bundled"
     }
   ]);
+  assert.equal(options.capabilities?.planMode, true);
+  assert.equal(options.capabilities?.browserUse, true);
 });
 
 test("desktop agent activity adapter cancels composer options when caller aborts", async () => {
