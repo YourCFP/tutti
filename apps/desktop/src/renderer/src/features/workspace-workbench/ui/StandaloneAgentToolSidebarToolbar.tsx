@@ -71,10 +71,6 @@ export function StandaloneAgentToolSidebarToolbar({
   onToggleExpansion: () => void;
   onToggleSidebar: () => void;
 }): ReactNode {
-  const reminderCount = Object.values(reminders).reduce(
-    (total, value) => total + (value ?? 0),
-    0
-  );
   const label = activePanel ? copy.closeRightPanel : copy.openRightPanel;
 
   return (
@@ -238,7 +234,6 @@ export function StandaloneAgentToolSidebarToolbar({
               onClick={onToggleSidebar}
             >
               <PanelIcon aria-hidden className="size-[18px] -scale-x-100" />
-              <ReminderBadge count={reminderCount} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">{label}</TooltipContent>

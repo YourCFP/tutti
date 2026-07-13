@@ -318,6 +318,14 @@ test("standalone Agent right sidebar transitions without a rebound curve before 
 });
 
 test("standalone Agent exposes one unified right-panel trigger", () => {
+  const toggleStart = standaloneAgentToolSidebarToolbarSource.indexOf(
+    'data-standalone-agent-tool-sidebar-toggle="true"'
+  );
+  const toggleEnd = standaloneAgentToolSidebarToolbarSource.indexOf(
+    "</Button>",
+    toggleStart
+  );
+
   assert.match(
     standaloneAgentToolSidebarToolbarSource,
     /data-standalone-agent-tool-sidebar-toggle="true"[\s\S]*?<PanelIcon[\s\S]*?aria-hidden[\s\S]*?className="size-\[18px\] -scale-x-100"/
@@ -325,6 +333,12 @@ test("standalone Agent exposes one unified right-panel trigger", () => {
   assert.doesNotMatch(
     standaloneAgentToolSidebarToolbarSource,
     /data-standalone-agent-tool-menu-trigger|ToolsIcon/
+  );
+  assert.ok(toggleStart >= 0);
+  assert.ok(toggleEnd > toggleStart);
+  assert.doesNotMatch(
+    standaloneAgentToolSidebarToolbarSource.slice(toggleStart, toggleEnd),
+    /ReminderBadge/
   );
 });
 
@@ -382,6 +396,10 @@ test("standalone Agent message reminders remain activity-driven", () => {
     /messages:\s*messageCenterModel\.waitingCount/
   );
   assert.match(
+    standaloneAgentToolSidebarToolbarSource,
+    /ReminderBadge count=\{reminders\.messages\}/
+  );
+  assert.doesNotMatch(
     standaloneAgentToolSidebarToolbarSource,
     /Object\.values\(reminders\)/
   );
