@@ -847,6 +847,15 @@ persists the normalized `attachmentId`. The managed source path must live under
 the daemon state root's `agent-prompt-assets` directory, and the daemon must
 re-check the resolved source path, symlink target, file type, and size before
 copying it into the session attachment store.
+Image validation is intentionally two-phase. The preflight that runs before
+attachment persistence may accept a managed `path` as an ingress source so it
+can check provider image capability without writing files. That does not make
+the path valid provider content. After the daemon copies and hydrates the
+source, `Controller.Exec` applies the strict runtime validator to the resulting
+`data`, `url`, or `attachmentId` representation. Keep runtime execution strict,
+and do not move attachment persistence ahead of capability preflight merely to
+make path-backed drafts pass validation; unsupported providers must still fail
+without creating session attachment files.
 Shared callers may instead supply a URL-backed image block when they already
 uploaded the image. That source must be an absolute HTTPS URL without embedded
 userinfo and must retain a supported PNG, JPEG, or WebP MIME type. `data` and
