@@ -188,3 +188,18 @@ export function classifyFailedAgentMessage(
   }
   return null;
 }
+
+/** True when detail text is a provider plan/payment gate (not a generic quota). */
+export function isProviderPlanLimitMessage(
+  detail: string | null | undefined
+): boolean {
+  const normalized = detail?.trim().toLowerCase() ?? "";
+  if (!normalized) {
+    return false;
+  }
+  const markers =
+    FAILED_MESSAGE_CODE_MARKERS.find(
+      ([code]) => code === "quota_or_rate_limit"
+    )?.[1] ?? [];
+  return markers.some((marker) => normalized.includes(marker));
+}
