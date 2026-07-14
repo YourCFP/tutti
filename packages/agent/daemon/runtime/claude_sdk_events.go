@@ -102,11 +102,26 @@ func (a *ClaudeCodeSDKAdapter) sidecarTurnEvents(adapterSession *claudeSDKAdapte
 			"contentMode": messageContentModeSnapshot,
 		})}, false, nil
 	case "tool_started", "tool_updated":
-		return adapterSession.claudeSDKToolEvents(session, turnID, event.Payload, EventCallStarted, messageStreamStateStreaming, event.Type), false, nil
+		if a.turnAlreadySettled(adapterSession, turnID) {
+			return nil, false, nil
+		}
+		events := adapterSession.claudeSDKToolEvents(session, turnID, event.Payload, EventCallStarted, messageStreamStateStreaming, event.Type)
+		a.trackClaudeSDKTurnCallEvents(adapterSession, events)
+		return events, false, nil
 	case "tool_completed":
-		return adapterSession.claudeSDKToolEvents(session, turnID, event.Payload, EventCallCompleted, messageStreamStateCompleted, event.Type), false, nil
+		if a.turnAlreadySettled(adapterSession, turnID) {
+			return nil, false, nil
+		}
+		events := adapterSession.claudeSDKToolEvents(session, turnID, event.Payload, EventCallCompleted, messageStreamStateCompleted, event.Type)
+		a.trackClaudeSDKTurnCallEvents(adapterSession, events)
+		return events, false, nil
 	case "tool_failed":
-		return adapterSession.claudeSDKToolEvents(session, turnID, event.Payload, EventCallFailed, messageStreamStateFailed, event.Type), false, nil
+		if a.turnAlreadySettled(adapterSession, turnID) {
+			return nil, false, nil
+		}
+		events := adapterSession.claudeSDKToolEvents(session, turnID, event.Payload, EventCallFailed, messageStreamStateFailed, event.Type)
+		a.trackClaudeSDKTurnCallEvents(adapterSession, events)
+		return events, false, nil
 	case "task_started", "task_progress", "task_completed":
 		return adapterSession.claudeSDKTaskLifecycleEvents(session, turnID, event.Type, event.Payload), false, nil
 	case "plan_updated":
@@ -137,23 +152,26 @@ func (a *ClaudeCodeSDKAdapter) sidecarTurnEvents(adapterSession *claudeSDKAdapte
 		events = append(events, newSessionActivityEvent(session, EventSessionUpdated, firstNonEmpty(session.Status, SessionStatusReady), claudeSDKRuntimeContext(session, adapterSession)))
 		return events, false, nil
 	case "turn_completed":
-		events := []activityshared.Event{newTurnActivityEvent(session, EventTurnCompleted, turnID, SessionStatusReady, "", "", map[string]any{
+		events := a.finishClaudeSDKTurnLifecycle(adapterSession, session, turnID, claudeSDKTurnFinishCompleted, "")
+		events = append(events, newTurnActivityEvent(session, EventTurnCompleted, turnID, SessionStatusReady, "", "", map[string]any{
 			"adapter":    claudeSDKSidecarAdapterName,
 			"stopReason": firstNonEmpty(payloadString(event.Payload, "stopReason"), "end_turn"),
-		})}
+		}))
 		events = append(events, a.goalEventsOnTurnSettled(adapterSession, session, turnID, true)...)
 		return events, true, nil
 	case "turn_canceled":
-		events := []activityshared.Event{newTurnActivityEvent(session, EventTurnCanceled, turnID, SessionStatusCanceled, "", "", map[string]any{
+		events := a.finishClaudeSDKTurnLifecycle(adapterSession, session, turnID, claudeSDKTurnFinishInterrupted, "interrupted")
+		events = append(events, newTurnActivityEvent(session, EventTurnCanceled, turnID, SessionStatusCanceled, "", "", map[string]any{
 			"adapter": claudeSDKSidecarAdapterName,
-		})}
+		}))
 		events = append(events, a.goalEventsOnTurnSettled(adapterSession, session, turnID, false)...)
 		return events, true, nil
 	case "turn_failed":
-		events := []activityshared.Event{newTurnActivityEvent(session, EventTurnFailed, turnID, SessionStatusFailed, "", "", map[string]any{
+		events := a.finishClaudeSDKTurnLifecycle(adapterSession, session, turnID, claudeSDKTurnFinishFailed, "turn_failed")
+		events = append(events, newTurnActivityEvent(session, EventTurnFailed, turnID, SessionStatusFailed, "", "", map[string]any{
 			"adapter": claudeSDKSidecarAdapterName,
 			"error":   payloadString(event.Payload, "error"),
-		})}
+		}))
 		events = append(events, a.goalEventsOnTurnSettled(adapterSession, session, turnID, false)...)
 		return events, true, nil
 	default:
@@ -451,6 +469,12 @@ func (a *ClaudeCodeSDKAdapter) failClaudeSDKReader(agentSessionID string, adapte
 		session.AgentSessionID = agentSessionID
 	}
 	pendingFailureEvents := a.claudeSDKPendingRequestFailureEvents(adapterSession, session, "", err)
+	pendingFailureEvents = append(pendingFailureEvents, a.finishAllClaudeSDKTurnLifecycles(
+		adapterSession,
+		session,
+		claudeSDKTurnFinishFailed,
+		err.Error(),
+	)...)
 	a.removeSession(agentSessionID, adapterSession)
 	a.emitClaudeSDKSessionEvents(agentSessionID, pendingFailureEvents)
 }
