@@ -90,11 +90,16 @@ export class AgentGUIHomeDraftSettlementController {
       ) {
         continue;
       }
-      if (submit.status !== "failed") {
-        this.applyDraftUpdate((drafts) =>
-          clearSubmittedDraftIfUnchanged({ drafts, snapshot })
-        );
-      }
+      this.applyDraftUpdate((drafts) =>
+        submit.status === "failed"
+          ? restoreFailedAgentGUIHomeDraft({
+              agentSessionId: submit.agentSessionId,
+              content: submit.content,
+              draftKey: snapshot.sourceScopeKey,
+              drafts
+            })
+          : clearSubmittedDraftIfUnchanged({ drafts, snapshot })
+      );
       delete this.snapshots[clientSubmitId];
     }
   }

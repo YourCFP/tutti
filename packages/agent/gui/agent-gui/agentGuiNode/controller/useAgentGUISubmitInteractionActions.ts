@@ -263,24 +263,24 @@ export function useAgentGUISubmitInteractionActions(
         agentSessionId
       ).some((record) => record.clientSubmitId === submitTrace.clientSubmitId);
       submitTrace.queued = queued;
-      if (queued) {
-        const snapshot =
-          submittedDraftSnapshotsRef.current[submitTrace.clientSubmitId];
-        if (snapshot) {
-          setDraftByScopeKey((current) => {
-            const next = clearSubmittedDraftIfUnchanged({
-              drafts: current,
-              snapshot
-            });
-            draftByScopeKeyRef.current = next;
-            return next;
+      setDetailError(null);
+      // Clear the composer optimistically the instant the engine takes the
+      // prompt — whether it was queued behind a busy turn or accepted straight
+      // into an idle session. The snapshot is retained so
+      // AgentGUIHomeDraftSettlementController can restore it if the send is
+      // later rejected. A submit the engine never accepted is left untouched so
+      // its text is not lost (deleteUnacceptedSubmittedDraftSnapshot cleans up).
+      const submittedSnapshot =
+        submittedDraftSnapshotsRef.current[submitTrace.clientSubmitId];
+      if ((accepted || queued) && submittedSnapshot) {
+        setDraftByScopeKey((current) => {
+          const next = clearSubmittedDraftIfUnchanged({
+            drafts: current,
+            snapshot: submittedSnapshot
           });
-        }
-        delete submittedDraftSnapshotsRef.current[submitTrace.clientSubmitId];
-        setDetailError(null);
-      }
-      if (!queued) {
-        setDetailError(null);
+          draftByScopeKeyRef.current = next;
+          return next;
+        });
       }
       deleteUnacceptedSubmittedDraftSnapshot({
         snapshots: submittedDraftSnapshotsRef.current,
@@ -300,7 +300,7 @@ export function useAgentGUISubmitInteractionActions(
         workspaceId
       });
     },
-    [agentActivityRuntime, sessionEngine, workspaceId]
+    [agentActivityRuntime, sessionEngine, setDraftByScopeKey, workspaceId]
   );
 
   useEffect(() => {

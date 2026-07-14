@@ -95,6 +95,67 @@ describe("AgentGUIHomeDraftSettlementController", () => {
     detach();
     engine.dispose();
   });
+
+  it("restores a failed existing-session submit while its draft is empty", async () => {
+    const engine = createTestAgentSessionEngine("test-workspace", {
+      execute(command) {
+        return command.type === "queue/sendPrompt"
+          ? Promise.reject(new Error("send failed"))
+          : Promise.resolve({ ok: true });
+      }
+    });
+    engine.dispatch({
+      type: "session/upserted",
+      session: normalizeAgentActivitySession({
+        activeTurnId: null,
+        agentSessionId: "session-1",
+        createdAtUnixMs: Date.now(),
+        cwd: "/workspace/app",
+        latestTurnInteractions: [],
+        pendingInteractions: [],
+        provider: "codex",
+        title: "session",
+        workspaceId: "test-workspace"
+      })
+    });
+    const sourceScopeKey = "session:session-1";
+    const snapshots: Record<string, SubmittedDraftSnapshot> = {
+      "submit-1": {
+        content: [{ type: "text", text: "follow up" }],
+        sourceScopeKey
+      }
+    };
+    let drafts: Record<string, AgentComposerDraft> = {
+      [sourceScopeKey]: emptyAgentComposerDraft()
+    };
+    const controller = new AgentGUIHomeDraftSettlementController({
+      applyDraftUpdate: (update) => {
+        drafts = update(drafts);
+      },
+      engine,
+      snapshots
+    });
+    const detach = controller.attach();
+
+    engine.dispatch({
+      type: "submit/requested",
+      agentSessionId: "session-1",
+      clientSubmitId: "submit-1",
+      content: [{ type: "text", text: "follow up" }],
+      expiresAtUnixMs: Date.now() + 60_000,
+      requestedAtUnixMs: Date.now(),
+      workspaceId: "test-workspace"
+    });
+
+    await vi.waitFor(() => {
+      expect(agentComposerDraftPrompt(drafts[sourceScopeKey]!)).toBe(
+        "follow up"
+      );
+    });
+    expect(snapshots).toEqual({});
+    detach();
+    engine.dispose();
+  });
 });
 
 function requestActivation(
