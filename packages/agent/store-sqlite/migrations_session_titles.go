@@ -17,7 +17,18 @@ func (s *Store) applyWorkspaceAgentSessionTitlesV1(ctx context.Context) error {
 		return nil
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin workspace agent session title canonicalization: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	rows, err := tx.QueryContext(ctx, `
 SELECT workspace_id, agent_session_id, title
 FROM workspace_agent_sessions
 WHERE title != ''
@@ -51,16 +62,6 @@ WHERE title != ''
 		return fmt.Errorf("close workspace agent session titles for canonicalization: %w", err)
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin workspace agent session title canonicalization: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
 	for _, update := range updates {
 		if _, err := tx.ExecContext(ctx, `
 UPDATE workspace_agent_sessions

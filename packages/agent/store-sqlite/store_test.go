@@ -221,7 +221,7 @@ func TestStoreReportAndListSessionLifecycle(t *testing.T) {
 		Provider:          "codex",
 		ProviderSessionID: "provider-1",
 		Cwd:               "/workspace",
-		Title:             "[@renderer.js](/Users/Sun/first cc/renderer.js)",
+		Title:             "@renderer.js",
 		Status:            "running",
 		OccurredAtUnixMS:  100,
 	})
@@ -303,7 +303,7 @@ func TestStoreReportAndListSessionLifecycle(t *testing.T) {
 		t.Fatalf("UpdateSessionPinned() = %#v ok=%v error=%v", pinned, ok, err)
 	}
 
-	renamed, ok, err := store.UpdateSessionTitle(ctx, "ws-1", "session-1", " [final](file:///tmp/a_(final).md) ")
+	renamed, ok, err := store.UpdateSessionTitle(ctx, "ws-1", "session-1", " final ")
 	if err != nil || !ok || renamed.Title != "final" || renamed.UpdatedAtUnixMS < pinned.UpdatedAtUnixMS {
 		t.Fatalf("UpdateSessionTitle() = %#v ok=%v error=%v", renamed, ok, err)
 	}

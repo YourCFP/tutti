@@ -1559,10 +1559,11 @@ runtime snapshot session + cached messages
 User-visible rules:
 
 - `session.title` is a shared, user-visible canonical plain-text field. The
-  daemon canonicalizes Markdown link labels and whitespace before session
-  state is persisted, and the SQLite store backfills existing rows during
-  migration. CLI, Agent, and desktop surfaces consume this same field; they
-  must not independently parse title Markdown or add mention prefixes.
+  daemon converts rich title input once before session state is persisted, and
+  the SQLite store backfills existing rows during migration without changing
+  session creation/update timestamps. CLI, Agent, and desktop surfaces consume
+  this same field and must not independently parse title Markdown or add
+  mention prefixes.
 - AgentGUI projection may still handle UI-local concerns such as provider-only
   placeholders and localized fallback labels, but it must not be the source of
   title syntax normalization.

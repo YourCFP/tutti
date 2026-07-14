@@ -8,6 +8,9 @@ import "strings"
 // and collapses whitespace. It intentionally does not apply UI-local labels or
 // localization; session titles are shared by the daemon, CLI, Agent, and
 // desktop surfaces.
+// Normalize converts provider/Tutti rich-text serialization to a plain title.
+// Call it only at a rich-text-to-title boundary; persisted canonical titles
+// must flow through the rest of the system without being parsed again.
 func Normalize(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {

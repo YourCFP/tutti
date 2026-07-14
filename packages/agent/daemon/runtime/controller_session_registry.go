@@ -9,7 +9,6 @@ import (
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
-	"github.com/tutti-os/tutti/packages/agent/daemon/titletext"
 )
 
 func (c *Controller) PublishStreamEvent(roomID, agentSessionID string, event StreamEvent) {
@@ -64,7 +63,7 @@ func (c *Controller) CanResume(input ResumeInput) bool {
 		CWD:               strings.TrimSpace(input.CWD),
 		Env:               append([]string(nil), input.Env...),
 		Status:            normalizeSessionStatus(input.Status),
-		Title:             titletext.Normalize(input.Title),
+		Title:             strings.TrimSpace(input.Title),
 		Visible:           sessionVisible(input.Visible),
 		PermissionModeID:  normalizePermissionModeIDWithFallback(provider, input.PermissionModeID, defaultPermissionModeIDForProvider(provider)),
 		Settings:          normalizeOptionalSessionSettings(input.Settings, provider, firstNonEmpty(input.PermissionModeID, defaultPermissionModeIDForProvider(provider))),

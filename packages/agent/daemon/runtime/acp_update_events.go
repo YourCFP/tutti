@@ -557,7 +557,7 @@ func newSessionTitleActivityEvent(session Session, title string) activityshared.
 	if !ok {
 		return activityshared.Event{}
 	}
-	ctx.Title = titletext.Normalize(title)
+	ctx.Title = strings.TrimSpace(title)
 	return activityshared.NewSessionTitleUpdated(ctx)
 }
 

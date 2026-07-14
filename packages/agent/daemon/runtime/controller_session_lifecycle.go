@@ -32,9 +32,10 @@ func (c *Controller) Start(ctx context.Context, input StartInput) (StartResult, 
 		provider,
 		firstNonEmpty(input.PermissionModeID, defaultPermissionModeIDForProvider(provider)),
 	)
+	title := titletext.Normalize(input.Title)
 	permissionModeID := settings.PermissionModeID
 	if agentSessionID == "" {
-		if existing, ok := c.findStartSession(roomID, strings.TrimSpace(input.AgentTargetID), provider, input.CWD, input.Title, settings, input.ProviderTargetRef); ok {
+		if existing, ok := c.findStartSession(roomID, strings.TrimSpace(input.AgentTargetID), provider, input.CWD, title, settings, input.ProviderTargetRef); ok {
 			return StartResult{Session: existing}, nil
 		}
 		agentSessionID = newID()
@@ -51,7 +52,7 @@ func (c *Controller) Start(ctx context.Context, input StartInput) (StartResult, 
 		CWD:               strings.TrimSpace(input.CWD),
 		Env:               append([]string(nil), input.Env...),
 		Status:            SessionStatusReady,
-		Title:             firstNonEmpty(titletext.Normalize(input.Title), provider),
+		Title:             firstNonEmpty(title, provider),
 		Visible:           sessionVisible(input.Visible),
 		RuntimeContext:    clonePayload(input.RuntimeContext),
 		ProviderTargetRef: clonePayload(input.ProviderTargetRef),
@@ -267,7 +268,7 @@ func (c *Controller) SetTitle(ctx context.Context, roomID, agentSessionID string
 	if !ok {
 		return Session{}, ErrSessionNotFound
 	}
-	title = titletext.Normalize(title)
+	title = strings.TrimSpace(title)
 	if session.Title == title {
 		return session, nil
 	}

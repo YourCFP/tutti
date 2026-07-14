@@ -1,10 +1,6 @@
 package projection
 
-import (
-	"strings"
-
-	"github.com/tutti-os/tutti/packages/agent/daemon/titletext"
-)
+import "strings"
 
 type SessionSnapshot struct {
 	WorkspaceID       string
@@ -87,7 +83,7 @@ func ProjectSessionState(
 		Settings:          cloneJSONMap(report.Settings),
 		RuntimeContext:    cloneJSONMap(report.RuntimeContext),
 		CWD:               strings.TrimSpace(report.CWD),
-		Title:             titletext.Normalize(report.Title),
+		Title:             strings.TrimSpace(report.Title),
 		Status:            strings.TrimSpace(report.Status),
 		CurrentPhase:      strings.TrimSpace(report.CurrentPhase),
 		LastError:         strings.TrimSpace(report.LastError),
@@ -131,7 +127,7 @@ func ProjectSessionState(
 			session.CWD = existing.CWD
 		}
 		if session.Title == "" {
-			session.Title = titletext.Normalize(existing.Title)
+			session.Title = existing.Title
 		}
 		if session.Status == "" {
 			session.Status = existing.Status

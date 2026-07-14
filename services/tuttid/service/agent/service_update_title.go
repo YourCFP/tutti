@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
-
-	"github.com/tutti-os/tutti/packages/agent/daemon/titletext"
 )
 
 const maxSessionTitleRunes = 120
@@ -14,7 +12,7 @@ const maxSessionTitleRunes = 120
 func (s *Service) UpdateTitle(ctx context.Context, workspaceID string, agentSessionID string, title string) (Session, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
 	agentSessionID = strings.TrimSpace(agentSessionID)
-	title = titletext.Normalize(title)
+	title = strings.TrimSpace(title)
 	if workspaceID == "" || agentSessionID == "" {
 		return Session{}, ErrInvalidArgument
 	}
