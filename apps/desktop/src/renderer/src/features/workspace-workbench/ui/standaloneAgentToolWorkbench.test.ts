@@ -47,6 +47,14 @@ const standaloneAgentMessageCenterToolPanelSource = readFileSync(
   new URL("./StandaloneAgentMessageCenterToolPanel.tsx", import.meta.url),
   "utf8"
 );
+const standaloneAgentDecisionNotificationsSource = readFileSync(
+  new URL("./StandaloneAgentDecisionNotifications.tsx", import.meta.url),
+  "utf8"
+);
+const workspaceAgentDecisionNotificationsSource = readFileSync(
+  new URL("./useWorkspaceAgentDecisionNotifications.tsx", import.meta.url),
+  "utf8"
+);
 const standaloneAgentIssueManagerToolPanelSource = readFileSync(
   new URL("./StandaloneAgentIssueManagerToolPanel.tsx", import.meta.url),
   "utf8"
@@ -456,6 +464,37 @@ test("standalone Agent message reminders remain activity-driven", () => {
   assert.doesNotMatch(
     standaloneAgentToolSidebarSource,
     /activityService\.load\(workspaceId\)/
+  );
+});
+
+test("standalone Agent reuses the OS decision toast for newly arrived approvals", () => {
+  assert.match(
+    standaloneAgentToolSidebarSource,
+    /<StandaloneAgentDecisionNotifications[\s\S]*?messageCenterOpen=\{activePanel === "messages"\}/
+  );
+  assert.match(
+    standaloneAgentDecisionNotificationsSource,
+    /useWorkspaceAgentDecisionNotifications\(\{[\s\S]*?sendBackgroundNotification: false,[\s\S]*?sessionEngine,[\s\S]*?workspaceId/
+  );
+  assert.doesNotMatch(
+    standaloneAgentDecisionNotificationsSource,
+    /isAgentGuiSessionOpen:/
+  );
+  assert.match(
+    workspaceAgentDecisionNotificationsSource,
+    /toast\.custom\([\s\S]*?<WorkspaceAgentDecisionToast/
+  );
+  assert.match(
+    workspaceAgentDecisionNotificationsSource,
+    /isAgentGuiSessionOpen\?\.\(item\.agentSessionId\) \?\? false/
+  );
+  assert.match(
+    workspaceAgentDecisionNotificationsSource,
+    /type: "interaction\/responseRequested"/
+  );
+  assert.match(
+    workspaceAgentDecisionNotificationsSource,
+    /if \(!seenKeys\) \{[\s\S]*?seenWaitingNotificationKeysRef\.current = currentKeys;[\s\S]*?return;/
   );
 });
 

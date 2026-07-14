@@ -110,6 +110,20 @@ durable Interaction(pending)
   -> approval / question / exit-plan presentation
 ```
 
+The workspace shell and standalone Agent window share one decision-notification
+controller and card presentation. When a new pending interaction arrives while
+the current window is foregrounded and its Message Center is closed, that
+window may surface the actionable card as a persistent top-right toast. Initial
+pending interactions are recorded without replaying historical toasts, and a
+resolved interaction dismisses its active toast. The workspace shell suppresses
+that toast when the same AgentGUI session is already open, while the standalone
+Agent window intentionally keeps the top-right card in addition to the inline
+prompt. The standalone window does not emit a second OS notification; the
+workspace shell remains the owner of the background-only OS face. Toast actions
+dispatch the same canonical
+`interaction/responseRequested` command as AgentGUI and Message Center instead
+of deriving actionability or response identity from transcript messages.
+
 Transcript messages are historical presentation only. A tool-call row with a
 `waiting_input` status must not create an approval dialog, question composer,
 exit-plan prompt, attention item, or pending-interaction view model. Session

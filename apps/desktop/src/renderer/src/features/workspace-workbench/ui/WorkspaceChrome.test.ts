@@ -22,6 +22,13 @@ const messageCenterSource = readFileSync(
   ),
   "utf8"
 );
+const decisionNotificationsSource = readFileSync(
+  resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "useWorkspaceAgentDecisionNotifications.tsx"
+  ),
+  "utf8"
+);
 
 test("workspace chrome header releases the drag region while the message center is open", () => {
   assert.match(
@@ -84,18 +91,21 @@ test("workspace chrome gates the agent decision toast on window focus, message c
   // conversation is already visible.
   assert.match(
     messageCenterSource,
-    /shouldShowWorkspaceAgentDecisionToast\(\{\s*agentGuiSessionOpen: isWorkspaceAgentGuiSessionOpen\(\s*workspace\.id,\s*item\.agentSessionId\s*\),\s*messageCenterOpen: open,\s*windowForeground: windowForegroundVisibility\.isForeground\(\)\s*\}\)/
-  );
-  // The OS notification path (background-only presentation) must remain
-  // unconditional here — it is the mechanism that already correctly gates on
-  // focus for the OS face, and the message-center model/list must keep
-  // reflecting pending items regardless of toast visibility.
-  assert.match(
-    messageCenterSource,
-    /notifications\.notify\(osMessage\);\s*if \(\s*!shouldShowWorkspaceAgentDecisionToast/
+    /const isAgentGuiSessionOpenForWorkspace = useCallback\([\s\S]*?isWorkspaceAgentGuiSessionOpen\(workspace\.id, agentSessionId\)[\s\S]*?useWorkspaceAgentDecisionNotifications\(\{[\s\S]*?isAgentGuiSessionOpen: isAgentGuiSessionOpenForWorkspace,[\s\S]*?sendBackgroundNotification: true/
   );
   assert.match(
-    messageCenterSource,
+    decisionNotificationsSource,
+    /shouldShowWorkspaceAgentDecisionToast\(\{[\s\S]*?agentGuiSessionOpen:[\s\S]*?isAgentGuiSessionOpen\?\.\(item\.agentSessionId\) \?\? false,[\s\S]*?messageCenterOpen,[\s\S]*?windowForeground: windowForegroundVisibility\.isForeground\(\)/
+  );
+  // The OS workspace opts into the background-only face before applying the
+  // foreground toast visibility gate. Standalone reuses the same controller
+  // with this OS face disabled, so opening both renderers cannot duplicate it.
+  assert.match(
+    decisionNotificationsSource,
+    /if \(sendBackgroundNotification\) \{[\s\S]*?notifications\.notify\(osMessage\);[\s\S]*?shouldShowWorkspaceAgentDecisionToast/
+  );
+  assert.match(
+    decisionNotificationsSource,
     /createDocumentNotificationVisibilityState\(\{\s*hasFocus: \(\) => document\.hasFocus\(\),\s*visibilityState: \(\) => document\.visibilityState\s*\}\)/
   );
 });

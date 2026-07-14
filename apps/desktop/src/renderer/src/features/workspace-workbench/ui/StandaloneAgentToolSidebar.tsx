@@ -39,6 +39,7 @@ import {
   type StandaloneAgentFileOpenRequest
 } from "./StandaloneAgentToolSidebarPanel.tsx";
 import { StandaloneAgentToolLoadingState } from "./StandaloneAgentToolLoadingState.tsx";
+import { StandaloneAgentDecisionNotifications } from "./StandaloneAgentDecisionNotifications.tsx";
 
 export type { StandaloneAgentFileOpenRequest } from "./StandaloneAgentToolSidebarPanel.tsx";
 const standaloneAgentToolPanelContentMountDelayMs = 260;
@@ -309,6 +310,12 @@ export function StandaloneAgentToolSidebar({
 
   return (
     <>
+      <StandaloneAgentDecisionNotifications
+        activityService={activityService}
+        i18n={i18n}
+        messageCenterOpen={activePanel === "messages"}
+        workspaceId={workspaceId}
+      />
       <div
         className="workbench-window__header workbench-window__header--custom"
         style={
