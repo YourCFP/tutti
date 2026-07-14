@@ -257,6 +257,11 @@ profiles/
 }
 ```
 
+`icon` 是 Agent 的全局身份图标，不只用于 Agent 选择器：host 必须把验证后的
+本地资源投影为 Target `iconUrl`，供 provider rail、会话列表、消息中心和 @
+引用等共享展示使用。扩展不需要再声明 provider 专用或会话专用图标字段；这些
+界面也不能要求开放 provider 在 renderer 静态图标表中注册。
+
 第三方 manifest 不能选择 Tutti 内部的 Codex app-server、Claude SDK、Cursor special strategy 等可信 adapter strategy。第三方 baseline 只允许 `standard-acp`。
 
 ## 8. Runtime discovery 和标准安装命令
