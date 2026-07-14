@@ -13,6 +13,10 @@ const standaloneWindowPanelHostsSource = readFileSync(
   resolve(currentDirectory, "StandaloneAgentWindowPanelHosts.tsx"),
   "utf8"
 );
+const standaloneHeaderIdentitySource = readFileSync(
+  resolve(currentDirectory, "standaloneAgentHeaderIdentity.ts"),
+  "utf8"
+);
 const standaloneLaunchRoutingSource = readFileSync(
   resolve(currentDirectory, "useStandaloneAgentLaunchRouting.ts"),
   "utf8"
@@ -155,11 +159,20 @@ test("standalone Agent auto-hides the conversation rail below the standalone wid
   );
 });
 
-test("standalone Agent restores the active session title in the window header", () => {
+test("standalone Agent hides home identity and shows it after local session start", () => {
   assert.match(
     standaloneWindowSource,
-    /activitySnapshot\.sessions\s*\.find\([\s\S]*?session\.agentSessionId[\s\S]*?nodeState\.lastActiveAgentSessionId[\s\S]*?\)\s*\?\.title\?\.trim\(\) \|\| null/
+    /resolveStandaloneAgentHeaderIdentity\(\{[\s\S]*?agentTargetId: activeAgentTargetId,[\s\S]*?lastActiveAgentSessionId: nodeState\.lastActiveAgentSessionId,[\s\S]*?sessions: activitySnapshot\.sessions/
   );
+  assert.match(
+    standaloneHeaderIdentitySource,
+    /if \(!input\.lastActiveAgentSessionId\?\.trim\(\)\) \{[\s\S]*?agentTitle: null,[\s\S]*?conversationIconUrl: null,[\s\S]*?conversationTitle: null/
+  );
+  assert.match(
+    standaloneHeaderIdentitySource,
+    /agentTitle: resolveAgentGuiWorkbenchHeaderTitle\(\{[\s\S]*?agentName: agent\?\.name,[\s\S]*?conversationTitle,[\s\S]*?provider/
+  );
+  assert.match(standaloneWindowSource, /agentTitle=\{headerAgentTitle\}/);
   assert.match(
     standaloneWindowSource,
     /conversationTitle=\{headerConversationTitle\}/

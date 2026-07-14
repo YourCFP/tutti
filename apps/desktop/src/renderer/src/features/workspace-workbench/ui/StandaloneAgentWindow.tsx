@@ -23,7 +23,6 @@ import {
   type AgentGuiWorkbenchConversationRailToggleDetail,
   type AgentGuiWorkbenchNewConversationDetail
 } from "@tutti-os/agent-gui/workbench/contribution";
-import { resolveAgentGuiSessionProviderIconUrl } from "@tutti-os/agent-gui/agentGuiSessionProviderIconUrls";
 import type {
   WorkbenchContribution,
   WorkbenchHostHandle,
@@ -34,7 +33,6 @@ import { createDesktopAgentGUIWorkbenchHostInput } from "@renderer/features/work
 import { IAgentsService } from "@renderer/features/workspace-agent/services/agentsService.interface.ts";
 import type { IAgentProviderStatusService as AgentProviderStatusService } from "@renderer/features/workspace-agent/services/agentProviderStatusService.interface.ts";
 import type { IWorkspaceAgentActivityService as WorkspaceAgentActivityService } from "@renderer/features/workspace-agent/services/workspaceAgentActivityService.interface.ts";
-import { resolveDesktopAgentGUIProviderForAgentTarget } from "@renderer/features/workspace-agent/ui/desktopAgentGUIWorkbenchStateHelpers.ts";
 import type { DesktopAgentGUIPrefillPromptRequest } from "@renderer/features/workspace-agent/services/desktopAgentGUIPrefillPromptActivation.ts";
 import { isDesktopAgentGUIProvider } from "@renderer/features/workspace-agent/desktopAgentGUINodeState.ts";
 import {
@@ -72,6 +70,7 @@ import { useWorkspaceSettingsService } from "./useWorkspaceSettingsService";
 import type { WorkspaceWorkbenchCapabilitySettingsTarget } from "../services/workspaceWorkbenchHostService.interface";
 import { resolveDesktopWindowIntent } from "@shared/contracts/windowIntent.ts";
 import { useStandaloneAgentLaunchRouting } from "./useStandaloneAgentLaunchRouting.ts";
+import { resolveStandaloneAgentHeaderIdentity } from "./standaloneAgentHeaderIdentity.ts";
 
 const LazyWorkspaceAccountMenu = lazy(() =>
   import("./WorkspaceAccountMenu").then(({ WorkspaceAccountMenu }) => ({
@@ -427,26 +426,19 @@ export function StandaloneAgentWindow({
     [launchProvider, workspaceId]
   );
   const activeAgentTargetId = nodeState.agentTargetId?.trim() || null;
-  const headerProvider = resolveDesktopAgentGUIProviderForAgentTarget(
-    activeAgentTargetId,
+  const {
+    agentTitle: headerAgentTitle,
+    conversationIconFallbackUrl: headerConversationIconFallbackUrl,
+    conversationIconUrl: headerConversationIconUrl,
+    conversationTitle: headerConversationTitle,
+    provider: headerProvider
+  } = resolveStandaloneAgentHeaderIdentity({
+    agentTargetId: activeAgentTargetId,
     agents,
-    readStandaloneNodeProvider(nodeState, launchProvider)
-  );
-  const headerAgentTarget = activeAgentTargetId
-    ? (agents.find((target) => target.agentTargetId === activeAgentTargetId) ??
-      null)
-    : null;
-  const headerConversationIconFallbackUrl =
-    resolveAgentGuiSessionProviderIconUrl(headerProvider);
-  const headerConversationIconUrl =
-    headerAgentTarget?.iconUrl ?? headerConversationIconFallbackUrl;
-  const headerConversationTitle =
-    activitySnapshot.sessions
-      .find(
-        (session) =>
-          session.agentSessionId === nodeState.lastActiveAgentSessionId
-      )
-      ?.title?.trim() || null;
+    fallbackProvider: readStandaloneNodeProvider(nodeState, launchProvider),
+    lastActiveAgentSessionId: nodeState.lastActiveAgentSessionId,
+    sessions: activitySnapshot.sessions
+  });
   const headerConversationRailWidthPx =
     typeof nodeState.conversationRailWidthPx === "number" &&
     Number.isFinite(nodeState.conversationRailWidthPx)
@@ -654,6 +646,7 @@ export function StandaloneAgentWindow({
         }
         renderHeader={(toolActions) => (
           <AgentGuiWorkbenchHeader
+            agentTitle={headerAgentTitle}
             copy={{
               collapseConversationRail: i18n.t(
                 "workspace.agentGui.collapseConversationRail"

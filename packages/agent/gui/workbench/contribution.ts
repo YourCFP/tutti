@@ -56,6 +56,7 @@ export interface AgentGuiWorkbenchNewConversationDetail {
 }
 
 export interface AgentGuiWorkbenchConversationIdentity {
+  agentTitle?: string | null;
   iconUrl?: string | null;
   title: string | null;
 }
@@ -280,6 +281,7 @@ export function createAgentGuiWorkbenchContribution(
           };
 
           return createElement(AgentGuiWorkbenchHeader, {
+            agentTitle: conversationIdentity?.agentTitle,
             copy,
             conversationIconUrl,
             conversationIconFallbackUrl,

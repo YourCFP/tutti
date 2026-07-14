@@ -60,9 +60,13 @@ export {
   type AgentGuiWorkbenchHeaderCopy,
   type AgentGuiWorkbenchHeaderProps
 } from "./header.ts";
-export { resolveAgentGuiWorkbenchSessionTitle } from "./sessionTitle.ts";
+export {
+  resolveAgentGuiWorkbenchHeaderTitle,
+  resolveAgentGuiWorkbenchSessionTitle
+} from "./sessionTitle.ts";
 export type {
   AgentGuiWorkbenchSessionTitleResult,
+  ResolveAgentGuiWorkbenchHeaderTitleInput,
   ResolveAgentGuiWorkbenchSessionTitleInput
 } from "./sessionTitle.ts";
 export {

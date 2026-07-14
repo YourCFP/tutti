@@ -158,8 +158,13 @@ Unified dock and launchpad chrome should keep the generic Agent title and
 generic Agent artwork instead of provider-branded entries. Workbench Agent node
 headers show the generic Agent title while the conversation rail is expanded;
 standalone native Agent window headers omit that redundant app title. When the
-conversation rail is collapsed, the title area switches to the active session
-identity by showing the session's agent icon and conversation title.
+conversation rail is collapsed, the title area shows the active conversation's
+agent icon and directory name as soon as a local session id exists; it must not
+wait for provider-side session creation or conversation-title persistence. An
+empty new-conversation home does not show this header identity. The conversation
+title remains the detail title while the rail is expanded and the identity used
+by Dock previews; after submission, the expanded detail title area shows the
+agent icon immediately even before conversation-title persistence.
 
 AgentGuiNode may expose agent selection in multiple UI-local entry points,
 including the conversation rail agent grid and the agent select next to the

@@ -6,9 +6,16 @@ import {
   firstAgentGUIUserMessageTitle,
   normalizeAgentGUIProviderIdentity,
   resolveAgentGUIExplicitConversationTitle,
+  resolveAgentGUIProviderDisplayLabel,
   type AgentGUIResolvedProvider
 } from "../shared/agentConversationTitleProjection.ts";
 import type { AgentGuiWorkbenchProvider } from "./types.ts";
+
+export interface ResolveAgentGuiWorkbenchHeaderTitleInput {
+  agentName?: string | null;
+  conversationTitle?: string | null;
+  provider?: string | null;
+}
 
 export interface ResolveAgentGuiWorkbenchSessionTitleInput {
   agentSessionId?: string | null;
@@ -22,6 +29,19 @@ export interface AgentGuiWorkbenchSessionTitleResult {
   agentSessionId: string | null;
   source: "snapshot" | "fallback" | "none";
   title: string | null;
+}
+
+export function resolveAgentGuiWorkbenchHeaderTitle({
+  agentName,
+  conversationTitle,
+  provider
+}: ResolveAgentGuiWorkbenchHeaderTitleInput): string | null {
+  return (
+    stripTitle(agentName) ||
+    stripTitle(resolveAgentGUIProviderDisplayLabel(provider, "")) ||
+    stripTitle(conversationTitle) ||
+    null
+  );
 }
 
 export function resolveAgentGuiWorkbenchSessionTitle({

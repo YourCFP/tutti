@@ -12,6 +12,7 @@ import {
   createAgentGuiWorkbenchContribution,
   type AgentGuiWorkbenchConversationIdentity
 } from "@tutti-os/agent-gui/workbench/contribution";
+import { resolveAgentGuiWorkbenchHeaderTitle } from "@tutti-os/agent-gui/workbench/sessionTitle";
 import { selectWorkspaceAgentConsumerSession } from "@tutti-os/agent-activity-core";
 import type {
   AgentGuiWorkbenchProvider,
@@ -394,6 +395,11 @@ function resolveWorkspaceAgentGuiDockPopupIdentity(
       ? agent.provider
       : null;
   const title = session?.title?.trim() || null;
+  const agentTitle = resolveAgentGuiWorkbenchHeaderTitle({
+    agentName: agent?.name,
+    conversationTitle: title,
+    provider: resolvedProvider
+  });
   // Never fall back to a concrete provider's icon (e.g. codex) while the real
   // provider is still unknown — leave iconUrl null so the header renders a
   // neutral placeholder until the provider resolves.
@@ -405,6 +411,7 @@ function resolveWorkspaceAgentGuiDockPopupIdentity(
         null)
       : null);
   return {
+    agentTitle,
     iconUrl,
     title
   };

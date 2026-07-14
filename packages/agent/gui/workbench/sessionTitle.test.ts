@@ -4,7 +4,32 @@ import {
   type AgentActivityMessage,
   type AgentActivitySession
 } from "@tutti-os/agent-activity-core";
-import { resolveAgentGuiWorkbenchSessionTitle } from "./sessionTitle";
+import {
+  resolveAgentGuiWorkbenchHeaderTitle,
+  resolveAgentGuiWorkbenchSessionTitle
+} from "./sessionTitle";
+
+describe("agent GUI workbench header titles", () => {
+  it("uses the selected agent name before a conversation title exists", () => {
+    expect(
+      resolveAgentGuiWorkbenchHeaderTitle({
+        agentName: "Cursor",
+        conversationTitle: null,
+        provider: "cursor"
+      })
+    ).toBe("Cursor");
+  });
+
+  it("keeps the selected agent name after a conversation title exists", () => {
+    expect(
+      resolveAgentGuiWorkbenchHeaderTitle({
+        agentName: "Cursor",
+        conversationTitle: "Fix the header",
+        provider: "cursor"
+      })
+    ).toBe("Cursor");
+  });
+});
 
 describe("agent GUI workbench session titles", () => {
   it("uses canonical snapshot titles", () => {

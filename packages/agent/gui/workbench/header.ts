@@ -47,6 +47,7 @@ export interface AgentGuiWorkbenchHeaderCopy {
 
 export interface AgentGuiWorkbenchHeaderProps extends HTMLAttributes<HTMLElement> {
   copy: AgentGuiWorkbenchHeaderCopy;
+  agentTitle?: string | null;
   defaultActions?: ReactNode;
   displayMode?: WorkbenchDisplayMode;
   isConversationRailAutoCollapsed: boolean;
@@ -75,6 +76,7 @@ export interface AgentGuiWorkbenchHeaderProps extends HTMLAttributes<HTMLElement
 export function AgentGuiWorkbenchHeader({
   className,
   copy,
+  agentTitle,
   defaultActions: _defaultActions,
   displayMode,
   isConversationRailAutoCollapsed,
@@ -105,8 +107,12 @@ export function AgentGuiWorkbenchHeader({
   const sessionTitle = hasBodyRenderError
     ? ""
     : conversationTitle?.trim() || "";
+  const collapsedTitle = agentTitle?.trim() || sessionTitle;
   const sessionIconUrl = conversationIconUrl?.trim() || "";
   const sessionIconFallbackUrl = conversationIconFallbackUrl?.trim() || "";
+  const hasExpandedIdentity = Boolean(
+    collapsedTitle || sessionIconUrl || sessionIconFallbackUrl
+  );
   const safeDisplayMode = displayMode ?? "floating";
   const safeWindowActions = windowActions ?? {
     close: () => undefined,
@@ -226,7 +232,7 @@ export function AgentGuiWorkbenchHeader({
             onCreateConversation
           })
         : null,
-      isConversationRailCollapsed && sessionTitle
+      isConversationRailCollapsed && collapsedTitle
         ? createElement(
             "span",
             {
@@ -242,7 +248,7 @@ export function AgentGuiWorkbenchHeader({
               {
                 className: "agent-gui-workbench-header__title-text"
               },
-              sessionTitle
+              collapsedTitle
             )
           )
         : null,
@@ -256,13 +262,13 @@ export function AgentGuiWorkbenchHeader({
           )
         : null
     ),
-    !isConversationRailCollapsed && (sessionTitle || secondaryAccessory)
+    !isConversationRailCollapsed && (hasExpandedIdentity || secondaryAccessory)
       ? createElement(
           "div",
           {
             className: "agent-gui-workbench-header__detail"
           },
-          sessionTitle
+          hasExpandedIdentity
             ? createElement(
                 "div",
                 {
@@ -274,13 +280,15 @@ export function AgentGuiWorkbenchHeader({
                   src: sessionIconUrl,
                   testId: "agent-gui-window-detail-title-icon"
                 }),
-                createElement(
-                  "span",
-                  {
-                    className: "agent-gui-workbench-header__title-text"
-                  },
-                  sessionTitle
-                )
+                sessionTitle
+                  ? createElement(
+                      "span",
+                      {
+                        className: "agent-gui-workbench-header__title-text"
+                      },
+                      sessionTitle
+                    )
+                  : null
               )
             : null,
           secondaryAccessory
