@@ -339,15 +339,21 @@ vi.mock("./agentRichText/AgentRichTextEditor", async () => {
 
 vi.mock("./AgentComposerSettingsMenus", () => ({
   AgentProjectDropdown: ({
+    onDismissAutoFocus,
     onProjectMissingChange
   }: {
+    onDismissAutoFocus?: (event: Event) => void;
     onProjectMissingChange?: (isMissing: boolean) => void;
   }) => {
     queueMicrotask(() => {
       onProjectMissingChange?.(mockProjectMissingState.current);
     });
     return (
-      <button type="button" data-testid="agent-project-dropdown">
+      <button
+        type="button"
+        data-testid="agent-project-dropdown"
+        onClick={() => onDismissAutoFocus?.(new Event("focus"))}
+      >
         项目
       </button>
     );
@@ -3285,14 +3291,13 @@ describe("AgentComposer", () => {
     expect(await screen.findByRole("tooltip")).toHaveTextContent("提及上下文");
   });
 
-  it("focuses the shared home draft at the end after switching projects", async () => {
-    const draftContent = createDraft("keep typing here");
-    const { rerender } = render(
+  it("focuses the shared home draft at the end after the project menu dismisses", () => {
+    render(
       <AgentComposer
         workspaceId="workspace-1"
         currentUserId="user-1"
         provider="codex"
-        draftContent={draftContent}
+        draftContent={createDraft("keep typing here")}
         draftScopeKey="home"
         availableCommands={[] satisfies readonly AgentHostAgentSessionCommand[]}
         disabled={false}
@@ -3311,6 +3316,7 @@ describe("AgentComposer", () => {
         isSubmittingPrompt={false}
         labels={createLabels()}
         workspaceUserProjectI18n={workspaceUserProjectI18n}
+        layoutMode="hero"
         onDraftContentChange={vi.fn()}
         onSettingsChange={vi.fn()}
         onSubmit={vi.fn()}
@@ -3323,47 +3329,7 @@ describe("AgentComposer", () => {
     );
 
     mockEditorFocusAtEnd.mockClear();
-    rerender(
-      <AgentComposer
-        workspaceId="workspace-1"
-        currentUserId="user-1"
-        provider="codex"
-        draftContent={draftContent}
-        draftScopeKey="home"
-        availableCommands={[] satisfies readonly AgentHostAgentSessionCommand[]}
-        disabled={false}
-        submitDisabled={false}
-        placeholder="placeholder"
-        composerSettings={createComposerSettings({
-          selectedProjectPath: "/workspace/b"
-        })}
-        queuedPrompts={[]}
-        drainingQueuedPromptId={null}
-        canQueueWhileBusy={false}
-        showStopButton={false}
-        activePrompt={null}
-        isInterrupting={false}
-        isSendingTurn={false}
-        isSubmittingPrompt={false}
-        labels={createLabels()}
-        workspaceUserProjectI18n={workspaceUserProjectI18n}
-        onDraftContentChange={vi.fn()}
-        onSettingsChange={vi.fn()}
-        onSubmit={vi.fn()}
-        onSendQueuedPromptNext={vi.fn()}
-        onRemoveQueuedPrompt={vi.fn()}
-        onEditQueuedPrompt={vi.fn()}
-        onInterruptCurrentTurn={vi.fn()}
-        onSubmitInteractivePrompt={vi.fn()}
-      />
-    );
-
-    await act(async () => {
-      await new Promise<void>((resolve) => {
-        window.setTimeout(resolve, 0);
-      });
-    });
-
+    fireEvent.click(screen.getByTestId("agent-project-dropdown"));
     expect(mockEditorFocusAtEnd).toHaveBeenCalled();
   });
 

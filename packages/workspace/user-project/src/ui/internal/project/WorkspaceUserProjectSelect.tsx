@@ -528,12 +528,15 @@ export function WorkspaceUserProjectSelect({
     }
     if (nextValue === linkExistingProjectOptionValue) {
       void Promise.resolve(effectiveApi.selectDirectory?.())
-        .then((selection) => {
+        .then(async (selection) => {
           const path = selection?.path?.trim() ?? "";
           if (!path) {
             return;
           }
-          void useProjectPath(path, "select_existing");
+          await useProjectPath(path, "select_existing");
+          // Native directory pickers skip Radix close-auto-focus; restore the
+          // caller's preferred focus target after the path settles.
+          onDismissAutoFocus?.(new Event("focus"));
         })
         .catch(() => {});
       return;
