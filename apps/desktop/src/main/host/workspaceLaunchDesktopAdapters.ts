@@ -89,6 +89,7 @@ async function showStandaloneAgentWindow(
     rendererUrl: options.rendererUrl,
     theme: options.getTheme(),
     openerBounds: input.openerBounds,
+    openerWindowKind: input.openerWindowKind,
     windowKind: "agent",
     workspaceAppPreloadPath: options.workspaceAppPreloadPath,
     workspaceID: input.workspaceID

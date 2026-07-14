@@ -19,6 +19,39 @@ export interface ResolveStandaloneAgentWindowBoundsInput {
   workArea: StandaloneAgentWindowWorkArea;
 }
 
+export interface ResolveStandaloneAgentWindowWorkAreaInput {
+  bottomInset: number;
+  fallbackWorkArea: StandaloneAgentWindowWorkArea;
+  openerBounds?: StandaloneAgentWindowWorkArea | null;
+  topInset: number;
+}
+
+export function resolveStandaloneAgentWindowWorkArea({
+  bottomInset,
+  fallbackWorkArea,
+  openerBounds,
+  topInset
+}: ResolveStandaloneAgentWindowWorkAreaInput): StandaloneAgentWindowWorkArea {
+  if (!openerBounds) {
+    return fallbackWorkArea;
+  }
+
+  const normalizedTopInset = Math.max(0, Math.round(topInset));
+  const normalizedBottomInset = Math.max(0, Math.round(bottomInset));
+
+  return {
+    height: Math.max(
+      1,
+      Math.round(openerBounds.height) -
+        normalizedTopInset -
+        normalizedBottomInset
+    ),
+    width: Math.max(1, Math.round(openerBounds.width)),
+    x: Math.round(openerBounds.x),
+    y: Math.round(openerBounds.y) + normalizedTopInset
+  };
+}
+
 export function shouldAnimateStandaloneAgentWindowResize(
   _platform: NodeJS.Platform
 ): boolean {

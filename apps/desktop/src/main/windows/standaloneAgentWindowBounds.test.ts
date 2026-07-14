@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   resolveStandaloneAgentWindowBounds,
   resolveStandaloneAgentWindowContentWidth,
+  resolveStandaloneAgentWindowWorkArea,
   shouldAnimateStandaloneAgentWindowResize
 } from "./standaloneAgentWindowBounds.ts";
 
@@ -10,6 +11,18 @@ test("standalone agent window avoids native resize animation on every platform",
   assert.equal(shouldAnimateStandaloneAgentWindowResize("darwin"), false);
   assert.equal(shouldAnimateStandaloneAgentWindowResize("win32"), false);
   assert.equal(shouldAnimateStandaloneAgentWindowResize("linux"), false);
+});
+
+test("standalone agent window derives its work area from a workspace opener", () => {
+  assert.deepEqual(
+    resolveStandaloneAgentWindowWorkArea({
+      bottomInset: 64,
+      fallbackWorkArea: { height: 1000, width: 1600, x: 0, y: 24 },
+      openerBounds: { height: 900, width: 1440, x: 100, y: 50 },
+      topInset: 52
+    }),
+    { height: 784, width: 1440, x: 100, y: 102 }
+  );
 });
 
 test("standalone agent window opens at 90 percent of the active work area", () => {

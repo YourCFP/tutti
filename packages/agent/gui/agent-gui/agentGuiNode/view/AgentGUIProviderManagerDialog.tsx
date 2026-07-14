@@ -430,7 +430,7 @@ export function AgentGUIProviderManagerDialog({
                   return (
                     <div
                       aria-label={labels.dragAgentToReorder(label)}
-                      className="agent-gui-provider-manager-tile nodrag relative flex min-w-0 cursor-grab flex-col items-center rounded-[10px] px-2 py-1 outline-none transition-[background-color,opacity,box-shadow] hover:bg-[var(--transparency-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] active:cursor-grabbing [-webkit-app-region:no-drag]"
+                      className="agent-gui-provider-manager-tile nodrag relative flex min-w-0 cursor-grab flex-col items-center rounded-[10px] px-2 py-1 outline-none transition-[background-color,opacity,box-shadow] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] active:cursor-grabbing [-webkit-app-region:no-drag]"
                       data-agent-target-id={target.targetId}
                       data-dragging={
                         dragState?.targetId === target.targetId
@@ -545,7 +545,7 @@ export function AgentGUIProviderManagerDialog({
 
           <section
             aria-labelledby="agent-manager-disabled-heading"
-            className="agent-gui-provider-manager-drop-zone mt-3 rounded-[10px] border-t border-[var(--border-1)] p-2 pt-4"
+            className="agent-gui-provider-manager-drop-zone mt-3 rounded-[10px] p-2 pt-4"
             data-drop-active={
               dragOverZone === "disabled" && !disabledDropBlocked
                 ? "true"
@@ -590,7 +590,7 @@ export function AgentGUIProviderManagerDialog({
                   return (
                     <div
                       aria-label={labels.dragAgentToReorder(label)}
-                      className="agent-gui-provider-manager-tile nodrag relative flex min-w-0 cursor-grab flex-col items-center rounded-[10px] px-2 py-1 outline-none transition-[background-color,opacity,box-shadow] hover:bg-[var(--transparency-hover)] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] active:cursor-grabbing [-webkit-app-region:no-drag]"
+                      className="agent-gui-provider-manager-tile nodrag relative flex min-w-0 cursor-grab flex-col items-center rounded-[10px] px-2 py-1 outline-none transition-[background-color,opacity,box-shadow] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] active:cursor-grabbing [-webkit-app-region:no-drag]"
                       data-agent-target-id={target.targetId}
                       data-dragging={
                         dragState?.targetId === target.targetId
@@ -684,7 +684,7 @@ export function AgentGUIProviderManagerDialog({
                 })}
               </div>
             ) : (
-              <p className="rounded-[8px] bg-[var(--transparency-block)] px-3 py-4 text-center text-[12px] text-[var(--text-tertiary)]">
+              <p className="flex min-h-[72px] items-center justify-center rounded-[8px] border border-dashed border-[var(--border-1)] px-3 py-4 text-center text-[12px] text-[var(--text-tertiary)]">
                 {labels.manageAgentsNoDisabled}
               </p>
             )}

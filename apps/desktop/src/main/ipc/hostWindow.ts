@@ -9,6 +9,7 @@ import type { WorkspaceLaunch } from "../host/workspaceLaunch";
 import { getDesktopLogger } from "../logging";
 import { registerDesktopIpcHandler } from "./handle";
 import { resolveOwnerWindowFromEvent } from "./ownerWindow";
+import { getWorkspaceWindowKind } from "../windows/workspaceWindow";
 import {
   resolveStandaloneAgentWindowContentWidth,
   shouldAnimateStandaloneAgentWindowResize
@@ -145,7 +146,11 @@ export function registerHostWindowIpc(deps: HostWindowIpcDependencies): void {
     async (event, input) => {
       const ownerWindow = resolveOwnerWindowFromEvent(event);
       await deps.workspaceLaunch.showAgentWindow(
-        normalizeAgentWindowInput(input, ownerWindow?.getBounds() ?? null)
+        normalizeAgentWindowInput(
+          input,
+          ownerWindow?.getBounds() ?? null,
+          ownerWindow ? getWorkspaceWindowKind(ownerWindow) : null
+        )
       );
       if (!ownerWindow || ownerWindow.isDestroyed()) {
         return;
@@ -216,7 +221,8 @@ export function registerHostWindowIpc(deps: HostWindowIpcDependencies): void {
 
 function normalizeAgentWindowInput(
   input: DesktopHostOpenAgentWindowInput,
-  openerBounds: Electron.Rectangle | null
+  openerBounds: Electron.Rectangle | null,
+  openerWindowKind: "agent" | "workspace" | null
 ) {
   const workspaceID = input.workspaceId.trim();
   if (!workspaceID) {
@@ -229,6 +235,7 @@ function normalizeAgentWindowInput(
     autoSubmit: input.autoSubmit === true,
     draftPrompt: input.draftPrompt?.trim() || null,
     openerBounds,
+    openerWindowKind,
     providerStatusSnapshot: input.providerStatusSnapshot ?? null,
     provider: input.provider?.trim() || null,
     userProjectPath: input.userProjectPath?.trim() || null,

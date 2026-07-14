@@ -7,14 +7,14 @@ export const zhCNAgentGuiProviderIdentity = {
   conversationFilterNexight: "Nexight",
   conversationFilterHermes: "Hermes Agent",
   conversationFilterOpenClaw: "OpenClaw",
-  manageAgents: "管理 Agent",
-  manageAgentsTitle: "管理 Agent",
+  manageAgents: "Agent 栏展示设置",
+  manageAgentsTitle: "Agent 栏展示设置",
   manageAgentsDescription:
     "拖拽调整顺序或在可用与停用分组间移动，长按 Agent 可进入编辑。",
   manageAgentsAvailable: "可用 Agent",
   manageAgentsDisabled: "停用 Agent",
   manageAgentsNoAvailable: "可从下方停用列表添加 Agent。",
-  manageAgentsNoDisabled: "暂无停用 Agent。",
+  manageAgentsNoDisabled: "可以把不希望展示在侧边栏的agent拖到这里",
   manageAgentsKeepOneAvailable: "至少保留一个可用 Agent。",
   manageAgentsRunningBlocked:
     "{{agent}} 正在运行，暂时无法停用。请等待任务结束后再试。",
