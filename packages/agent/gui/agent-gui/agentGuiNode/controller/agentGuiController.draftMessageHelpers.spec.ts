@@ -8,8 +8,7 @@ import {
   areAgentComposerDraftsEqual,
   clearSubmittedDraftIfUnchanged,
   deleteSubmittedDraftSnapshotsForScopes,
-  resolveSubmittedDraftSettleAction,
-  restoreSubmittedDraftIfEmpty
+  deleteUnacceptedSubmittedDraftSnapshot
 } from "./agentGuiController.draftMessageHelpers";
 
 describe("submitted composer draft cleanup", () => {
@@ -129,45 +128,29 @@ describe("submitted composer draft cleanup", () => {
     });
   });
 
-  it("restores the submitted draft when the scope is still empty after send", () => {
-    const drafts = {
-      [sourceScopeKey]: buildAgentComposerDraft({ prompt: "" })
-    };
+  it("drops a snapshot immediately when the engine rejects the submit", () => {
+    const snapshots = { "submit-1": snapshot };
 
-    const result = restoreSubmittedDraftIfEmpty({ drafts, snapshot });
+    deleteUnacceptedSubmittedDraftSnapshot({
+      snapshots,
+      clientSubmitId: "submit-1",
+      accepted: false,
+      queued: false
+    });
 
-    expect(result).not.toBe(drafts);
-    expect(result[sourceScopeKey]).toEqual(snapshot.content);
+    expect(snapshots).toEqual({});
   });
 
-  it("restores into a scope that has no live draft entry", () => {
-    const result = restoreSubmittedDraftIfEmpty({ drafts: {}, snapshot });
+  it("keeps a snapshot while an accepted submit is pending", () => {
+    const snapshots = { "submit-1": snapshot };
 
-    expect(result[sourceScopeKey]).toEqual(snapshot.content);
-  });
+    deleteUnacceptedSubmittedDraftSnapshot({
+      snapshots,
+      clientSubmitId: "submit-1",
+      accepted: true,
+      queued: false
+    });
 
-  it("keeps the in-progress draft when the user has typed since sending", () => {
-    const drafts = {
-      [sourceScopeKey]: buildAgentComposerDraft({ prompt: "A new thought" })
-    };
-
-    expect(restoreSubmittedDraftIfEmpty({ drafts, snapshot })).toBe(drafts);
-  });
-});
-
-describe("submitted draft settlement policy", () => {
-  it("restores only on an explicit rejection", () => {
-    expect(resolveSubmittedDraftSettleAction("failed")).toBe("restore");
-  });
-
-  it("drops the snapshot once the send is accepted, confirmed, or uncertain", () => {
-    expect(resolveSubmittedDraftSettleAction("accepted")).toBe("discard");
-    expect(resolveSubmittedDraftSettleAction("confirmed")).toBe("discard");
-    expect(resolveSubmittedDraftSettleAction("uncertain")).toBe("discard");
-  });
-
-  it("keeps waiting while the intent is still in flight", () => {
-    expect(resolveSubmittedDraftSettleAction("requested")).toBe("retain");
-    expect(resolveSubmittedDraftSettleAction("anything-else")).toBe("retain");
+    expect(snapshots["submit-1"]).toBe(snapshot);
   });
 });

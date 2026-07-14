@@ -483,10 +483,10 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
           onSubmit(submitContent);
         }
       }
-      // The controller owns draft clearing: it clears the composer
-      // optimistically at hand-off and restores this exact content only if the
-      // engine explicitly rejects the send, so a later edit is never overwritten
-      // by an in-flight submission.
+      // The controller owns draft clearing: an in-session send clears the
+      // composer optimistically at hand-off, and a rejected send restores this
+      // exact content, so a later edit is never overwritten by an in-flight
+      // submission.
     }
   );
 

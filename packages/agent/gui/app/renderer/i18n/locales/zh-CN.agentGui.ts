@@ -555,6 +555,7 @@ export const zhCNAgentGui = {
     loadMore: "加载更多",
     loadMoreGroups: "拉取更多",
     loading: "正在加载",
+    loadError: "加载内容失败，请稍后重试",
     previewBinary: "这个文件更像二进制内容",
     previewDecodeFailed: "暂时无法按 UTF-8 文本解码这个文件",
     previewError: "加载预览失败",

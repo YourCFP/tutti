@@ -1,5 +1,4 @@
 import {
-  pendingSubmitRecordListsEqual,
   selectEngineCancelState,
   selectEngineHasVisibleQueuedSubmit,
   selectPendingSubmitsForSession,
@@ -35,11 +34,12 @@ import {
 } from "../../../shared/agentConversation/planImplementationPresentation";
 import {
   clearSubmittedDraftIfUnchanged,
-  resolveSubmittedDraftSettleAction,
-  restoreSubmittedDraftIfEmpty,
+  deleteUnacceptedSubmittedDraftSnapshot,
   GOAL_CLEAR_PROMPT,
   toRuntimeSendContent
 } from "./agentGuiController.draftMessageHelpers";
+import { clearSubmittedAgentGUIHomeDraft } from "./agentGuiController.homeDraftHelpers";
+import { AgentGUIHomeDraftSettlementController } from "./AgentGUIHomeDraftSettlementController";
 import {
   AGENT_RESUME_SESSION_NOT_LOCAL_ERROR,
   buildProviderSessionNotFoundActivationError,
@@ -48,7 +48,6 @@ import {
   isNonRetryableResumeErrorCode
 } from "./agentGuiController.errors";
 import { createAgentGUIConversationId } from "./agentGuiController.promptHelpers";
-import { useEngineSelector } from "../../../shared/engine/useEngineSelector";
 import {
   agentSubmitTraceDiagnostics,
   createAgentSubmitTraceState,
@@ -62,6 +61,7 @@ import {
   type ConversationIntent
 } from "./useAgentConversationSelection";
 import type { useAgentGUIActivation } from "./useAgentGUIActivation";
+import type { AgentGUINewConversationActivationResult } from "./agentGuiNewConversationActivation.types";
 
 interface UseAgentGUISubmitInteractionActionsInput {
   activation: ReturnType<typeof useAgentGUIActivation>;
@@ -109,7 +109,7 @@ interface UseAgentGUISubmitInteractionActionsInput {
   startConversation(
     content: AgentPromptContentBlock[],
     displayPrompt?: string
-  ): void;
+  ): AgentGUINewConversationActivationResult | null;
   submitPromptRef: RefObject<
     (content: AgentPromptContentBlock[], displayPrompt?: string) => void
   >;
@@ -150,26 +150,6 @@ export function useAgentGUISubmitInteractionActions(
     transientConversation,
     workspaceId
   } = input;
-  const pendingSubmitRecords = useEngineSelector(
-    sessionEngine,
-    (state) =>
-      Object.entries(submittedDraftSnapshotsRef.current).flatMap(
-        ([clientSubmitId, snapshot]) => {
-          const agentSessionId =
-            snapshot.targetAgentSessionId ??
-            (snapshot.sourceScopeKey.startsWith("session:")
-              ? snapshot.sourceScopeKey.slice("session:".length)
-              : "");
-          if (!agentSessionId) return [];
-          const record = selectPendingSubmitsForSession(
-            state,
-            agentSessionId
-          ).find((candidate) => candidate.clientSubmitId === clientSubmitId);
-          return record ? [record] : [];
-        }
-      ),
-    pendingSubmitRecordListsEqual
-  );
   const retryActivation = useCallback(() => {
     const agentSessionId = activeConversationIdRef.current;
     if (!agentSessionId) {
@@ -278,26 +258,36 @@ export function useAgentGUISubmitInteractionActions(
           submitTrace.clientSubmitId
         )
       );
+      const accepted = selectPendingSubmitsForSession(
+        sessionEngine.getSnapshot(),
+        agentSessionId
+      ).some((record) => record.clientSubmitId === submitTrace.clientSubmitId);
       submitTrace.queued = queued;
       setDetailError(null);
-      // Clear the composer optimistically the instant the prompt is handed off,
-      // whether it was queued behind a busy turn or sent straight to an idle
-      // session. The snapshot is retained so a rejected send can be restored by
-      // the submit-settlement effect below.
-      if (options?.trackDraft === true) {
-        const snapshot =
-          submittedDraftSnapshotsRef.current[submitTrace.clientSubmitId];
-        if (snapshot) {
-          setDraftByScopeKey((current) => {
-            const next = clearSubmittedDraftIfUnchanged({
-              drafts: current,
-              snapshot
-            });
-            draftByScopeKeyRef.current = next;
-            return next;
+      // Clear the composer optimistically the instant the engine takes the
+      // prompt — whether it was queued behind a busy turn or accepted straight
+      // into an idle session. The snapshot is retained so
+      // AgentGUIHomeDraftSettlementController can restore it if the send is
+      // later rejected. A submit the engine never accepted is left untouched so
+      // its text is not lost (deleteUnacceptedSubmittedDraftSnapshot cleans up).
+      const submittedSnapshot =
+        submittedDraftSnapshotsRef.current[submitTrace.clientSubmitId];
+      if ((accepted || queued) && submittedSnapshot) {
+        setDraftByScopeKey((current) => {
+          const next = clearSubmittedDraftIfUnchanged({
+            drafts: current,
+            snapshot: submittedSnapshot
           });
-        }
+          draftByScopeKeyRef.current = next;
+          return next;
+        });
       }
+      deleteUnacceptedSubmittedDraftSnapshot({
+        snapshots: submittedDraftSnapshotsRef.current,
+        clientSubmitId: submitTrace.clientSubmitId,
+        accepted,
+        queued
+      });
       reportAgentSubmitTraceDiagnostic({
         event: "send_input.requested",
         runtime: agentActivityRuntime,
@@ -318,27 +308,21 @@ export function useAgentGUISubmitInteractionActions(
   }, [executePrompt]);
 
   useEffect(() => {
-    for (const record of pendingSubmitRecords) {
-      const action = resolveSubmittedDraftSettleAction(record.status);
-      if (action === "retain") continue;
-      const snapshot =
-        submittedDraftSnapshotsRef.current[record.clientSubmitId];
-      if (!snapshot) continue;
-      if (action === "restore") {
+    const controller = new AgentGUIHomeDraftSettlementController({
+      applyDraftUpdate: (update) => {
         setDraftByScopeKey((current) => {
-          const next = restoreSubmittedDraftIfEmpty({
-            drafts: current,
-            snapshot
-          });
+          const next = update(current);
           draftByScopeKeyRef.current = next;
           return next;
         });
-      }
-      delete submittedDraftSnapshotsRef.current[record.clientSubmitId];
-    }
+      },
+      engine: sessionEngine,
+      snapshots: submittedDraftSnapshotsRef.current
+    });
+    return controller.attach();
   }, [
     draftByScopeKeyRef,
-    pendingSubmitRecords,
+    sessionEngine,
     setDraftByScopeKey,
     submittedDraftSnapshotsRef
   ]);
@@ -501,7 +485,28 @@ export function useAgentGUISubmitInteractionActions(
             return;
           }
         }
-        startConversation(normalizedContent, displayPromptText);
+        const homeDraftKey = resolveAgentComposerDraftScopeKey({});
+        const submittedHomeDraft = snapshotAgentComposerDraft(
+          draftByScopeKeyRef.current[homeDraftKey] ?? emptyAgentComposerDraft()
+        );
+        const activationResult = startConversation(
+          normalizedContent,
+          displayPromptText
+        );
+        if (activationResult) {
+          draftByScopeKeyRef.current = clearSubmittedAgentGUIHomeDraft({
+            draftKey: homeDraftKey,
+            drafts: draftByScopeKeyRef.current,
+            submittedDraft: submittedHomeDraft
+          });
+          setDraftByScopeKey((current) =>
+            clearSubmittedAgentGUIHomeDraft({
+              draftKey: homeDraftKey,
+              drafts: current,
+              submittedDraft: submittedHomeDraft
+            })
+          );
+        }
         return;
       }
       submitExistingPrompt(

@@ -335,34 +335,14 @@ export function deleteSubmittedDraftSnapshotsForScopes(input: {
   }
 }
 
-/**
- * What to do with a tracked draft once its submit/activation intent reaches a
- * terminal-ish state. The draft was already cleared optimistically at dispatch,
- * so settlement only decides between keeping that clear and undoing it:
- *  - `retain`  — intent still in flight; keep waiting (snapshot stays).
- *  - `discard` — send landed (or its fate is unknowable); drop the snapshot and
- *                leave the composer cleared. Covers `accepted`/`confirmed` and
- *                the `uncertain`/timed-out case, which we deliberately do not
- *                restore (the prompt was most likely delivered).
- *  - `restore` — send was explicitly rejected; put the draft back so the user
- *                does not silently lose their text.
- * Accepts a plain status string so it can serve both PendingSubmitStatus and
- * PendingActivationStatus without coupling to either enum.
- */
-export type SubmittedDraftSettleAction = "retain" | "discard" | "restore";
-
-export function resolveSubmittedDraftSettleAction(
-  status: string
-): SubmittedDraftSettleAction {
-  switch (status) {
-    case "failed":
-      return "restore";
-    case "accepted":
-    case "confirmed":
-    case "uncertain":
-      return "discard";
-    default:
-      return "retain";
+export function deleteUnacceptedSubmittedDraftSnapshot(input: {
+  snapshots: Record<string, SubmittedDraftSnapshot>;
+  clientSubmitId: string;
+  accepted: boolean;
+  queued: boolean;
+}): void {
+  if (!input.accepted && !input.queued) {
+    delete input.snapshots[input.clientSubmitId];
   }
 }
 
@@ -510,28 +490,5 @@ export function clearSubmittedDraftIfUnchanged(input: {
   return {
     ...input.drafts,
     [input.snapshot.sourceScopeKey]: emptyAgentComposerDraft()
-  };
-}
-
-/**
- * Undo an optimistic clear when the submit was rejected. Only restores when the
- * source scope is still empty — if the user has already started a new draft
- * there, their in-progress text wins and the snapshot is dropped without a
- * clobber. Returns the same map reference when nothing changes.
- */
-export function restoreSubmittedDraftIfEmpty(input: {
-  drafts: Record<string, AgentComposerDraft>;
-  snapshot: SubmittedDraftSnapshot;
-}): Record<string, AgentComposerDraft> {
-  const current = input.drafts[input.snapshot.sourceScopeKey];
-  if (
-    current &&
-    !areAgentComposerDraftsEqual(current, emptyAgentComposerDraft())
-  ) {
-    return input.drafts;
-  }
-  return {
-    ...input.drafts,
-    [input.snapshot.sourceScopeKey]: input.snapshot.content
   };
 }

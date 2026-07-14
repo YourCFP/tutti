@@ -16,7 +16,6 @@ import {
   sanitizeComposerSettingsForTarget
 } from "./agentGuiController.composerPresentation";
 import {
-  clearSubmittedDraftIfUnchanged,
   resolveSameProviderActiveSessionModel,
   toRuntimeSendContent
 } from "./agentGuiController.draftMessageHelpers";
@@ -31,7 +30,10 @@ import {
   reportAgentSubmitTraceDiagnostic
 } from "./agentGuiController.reporting";
 import { draftAgentSessionIdFromComposerOptions } from "./agentGuiController.stableHelpers";
-import { type UseAgentGUINewConversationActivationInput } from "./agentGuiNewConversationActivation.types";
+import {
+  type AgentGUINewConversationActivationResult,
+  type UseAgentGUINewConversationActivationInput
+} from "./agentGuiNewConversationActivation.types";
 import { resolveConversationSummaryById } from "./useAgentConversationSelection";
 import { resolveAgentComposerDraftScopeKey } from "../model/agentComposerDraftScope";
 
@@ -42,7 +44,6 @@ export function useAgentGUINewConversationActivation(
     getCachedComposerOptions,
     selectedAgentTargetRef,
     selectedComposerTargetDataRef,
-    latestPendingNewActivation,
     agentTargetsProvidedRef,
     selectedAgentTargetIsExplicitRef,
     setDetailError,
@@ -50,12 +51,12 @@ export function useAgentGUINewConversationActivation(
     onDataChangeRef,
     selectedProjectPathRef,
     draftByScopeKeyRef,
-    setDraftByScopeKey,
     submittedDraftSnapshotsRef,
     draftSettingsBySessionIdRef,
     agentActivityRuntime,
     workspaceId,
     activeConversationIdRef,
+    isComposerHomeRef,
     conversationsRef,
     activeSessionState,
     lastActiveModelByProviderRef,
@@ -69,16 +70,23 @@ export function useAgentGUINewConversationActivation(
     loadSessionState,
     refreshMessagesFromSnapshot,
     persistActiveConversation,
+    setActiveConversationId,
+    setIntent,
+    setIsComposerHome,
+    setIsLoadingMessages,
     conversationListQuery,
     isCurrentConversation,
     isConversationStale
   } = input;
   const startConversation = useCallback(
-    (initialContentInput?: unknown, displayPrompt?: string) => {
+    (
+      initialContentInput?: unknown,
+      displayPrompt?: string
+    ): AgentGUINewConversationActivationResult | null => {
       const target = selectedAgentTargetRef.current;
       const targetData = selectedComposerTargetDataRef.current;
-      if (latestPendingNewActivation !== null || target.disabled === true) {
-        return;
+      if (target.disabled === true) {
+        return null;
       }
       const agentTargetId = targetData.agentTargetId ?? "";
       if (
@@ -87,7 +95,7 @@ export function useAgentGUINewConversationActivation(
           !selectedAgentTargetIsExplicitRef.current)
       ) {
         setDetailError(translate("agentHost.agentGui.agentTargetRequired"));
-        return;
+        return null;
       }
       const normalizedInitialContent = Array.isArray(initialContentInput)
         ? normalizeAgentPromptContentBlocks(
@@ -101,7 +109,9 @@ export function useAgentGUINewConversationActivation(
         initialDisplayPrompt ??
         agentPromptContentDisplayText(normalizedInitialContent);
       const initialConversationTitle =
-        normalizedInitialPrompt || AGENT_PROVIDER_LABEL[targetData.provider];
+        normalizedInitialPrompt ||
+        (AGENT_PROVIDER_LABEL as Record<string, string>)[targetData.provider] ||
+        targetData.provider;
       isCreatingConversationRef.current = true;
       setDetailError(null);
       const provider = targetData.provider;
@@ -168,7 +178,7 @@ export function useAgentGUINewConversationActivation(
           : null;
       const agentSessionId =
         prewarmedSessionId &&
-        activation.stateFor(prewarmedSessionId) !== "active" &&
+        activation.stateFor(prewarmedSessionId) === "inactive" &&
         selectLatestActivationForSession(
           sessionEngine.getSnapshot(),
           prewarmedSessionId
@@ -185,12 +195,10 @@ export function useAgentGUINewConversationActivation(
       const sourceScopeKey = resolveAgentComposerDraftScopeKey({});
       const submittedDraft =
         draftByScopeKeyRef.current[sourceScopeKey] ?? emptyAgentComposerDraft();
-      const submittedSnapshot = {
+      submittedDraftSnapshotsRef.current[submitTrace.clientSubmitId] = {
         sourceScopeKey,
         content: snapshotAgentComposerDraft(submittedDraft)
       };
-      submittedDraftSnapshotsRef.current[submitTrace.clientSubmitId] =
-        submittedSnapshot;
       reportAgentSubmitTraceDiagnostic({
         event: "activation.requested",
         runtime: agentActivityRuntime,
@@ -198,30 +206,28 @@ export function useAgentGUINewConversationActivation(
         workspaceId,
         fields: { mode: "new" }
       });
-      activation.activate({
+      const requestId = activation.activate({
         mode: "new",
         agentSessionId,
         agentTargetId,
         clientSubmitId: submitTrace.clientSubmitId,
         cwd: selectedProjectPath ?? "",
-        initialContent: toRuntimeSendContent(normalizedInitialContent),
+        initialContent: normalizedInitialContent,
         initialDisplayPrompt,
+        runtimeContent: toRuntimeSendContent(normalizedInitialContent),
         submitDiagnostics: agentSubmitTraceDiagnostics(submitTrace),
         title: initialConversationTitle,
         settings
       });
-      // Clear the home composer optimistically at hand-off, mirroring the
-      // existing-session path. The snapshot is retained so a failed activation
-      // can restore the draft (see the activation-settlement effect in the
-      // conversation-selection controller).
-      setDraftByScopeKey((current) => {
-        const next = clearSubmittedDraftIfUnchanged({
-          drafts: current,
-          snapshot: submittedSnapshot
-        });
-        draftByScopeKeyRef.current = next;
-        return next;
-      });
+      if (requestId === null) return null;
+      activeConversationIdRef.current = agentSessionId;
+      setActiveConversationId(agentSessionId);
+      isComposerHomeRef.current = false;
+      setIsComposerHome(false);
+      setIntent({ tag: "active", id: agentSessionId });
+      setIsLoadingMessages(false);
+      persistActiveConversation(agentSessionId);
+      return { agentSessionId, requestId };
     },
     [
       activeSessionState,
@@ -238,8 +244,6 @@ export function useAgentGUINewConversationActivation(
       isCurrentConversation,
       agentActivityRuntime,
       isConversationStale,
-      latestPendingNewActivation,
-      setDraftByScopeKey,
       workspaceId
     ]
   );

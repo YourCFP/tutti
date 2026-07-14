@@ -595,6 +595,7 @@ export const enAgentGui = {
     loadMore: "Load more",
     loadMoreGroups: "Load more",
     loading: "Loading...",
+    loadError: "Couldn't load this content. Try again later.",
     previewBinary: "This file looks like binary content.",
     previewDecodeFailed: "This file couldn't be decoded as UTF-8 text.",
     previewError: "Couldn't load a preview.",
