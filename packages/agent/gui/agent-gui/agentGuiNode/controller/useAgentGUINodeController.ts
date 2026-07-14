@@ -21,7 +21,7 @@ import {
   conversationSummaryFromAgentSession,
   type AgentGUIConversationSummary
 } from "../model/agentGuiConversationModel";
-import { normalizeProjectDraftPath } from "./agentGuiController.composerHelpers";
+import { normalizeAgentComposerDraftProjectPath } from "../model/agentComposerDraftScope";
 import { mergeVisibleConversations } from "./agentGuiController.conversationHelpers";
 import {
   reuseAgentActivityDisplayStatusesIfUnchanged,
@@ -210,7 +210,7 @@ export function useAgentGUINodeController({
   });
   const {
     activeConversationId,
-    draftBySessionId,
+    draftByScopeKey,
     draftSettingsBySessionId,
     intent,
     isComposerHome,
@@ -295,7 +295,7 @@ export function useAgentGUINodeController({
     agentActivitySnapshot,
     conversations,
     data,
-    draftBySessionId,
+    draftByScopeKey,
     draftSettingsBySessionId,
     effectiveSelectedProviderTarget,
     homeComposerTargetOverride,
@@ -318,6 +318,7 @@ export function useAgentGUINodeController({
     conversationIdsRef,
     conversationsRef,
     dataRef,
+    draftByScopeKeyRef,
     draftSettingsBySessionIdRef,
     explicitlyOpenedConversationIdsRef,
     handledOpenSessionSequenceRef,
@@ -482,6 +483,7 @@ export function useAgentGUINodeController({
     currentUserId,
     data,
     dataRef,
+    draftByScopeKeyRef,
     intent,
     isComposerHomeRef,
     isMountedRef,
@@ -493,9 +495,11 @@ export function useAgentGUINodeController({
     sessionEngine,
     setActiveConversationId,
     setDetailError,
+    setDraftByScopeKey: localState.setDraftByScopeKey,
     setIntent,
     setIsComposerHome,
     setIsLoadingMessages,
+    submittedDraftSnapshotsRef: localState.submittedDraftSnapshotsRef,
     workspaceId
   });
   const persistActiveConversation =
@@ -520,7 +524,7 @@ export function useAgentGUINodeController({
         };
       }
     ) => {
-      const normalizedPath = normalizeProjectDraftPath(path);
+      const normalizedPath = normalizeAgentComposerDraftProjectPath(path);
       const project = metadata?.project;
       if (project && normalizedPath && project.path === normalizedPath) {
         const nextProjects = upsertAgentGUIUserProject(

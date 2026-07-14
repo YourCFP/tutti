@@ -12,6 +12,7 @@ import type { useAgentGUIActivation } from "./useAgentGUIActivation";
 import { type AgentGUIConversationListQuery } from "../../../contexts/workspace/presentation/renderer/agentGuiConversationList/useAgentGuiConversationList";
 import { type AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
 import type { AgentComposerDraft } from "../model/agentGuiNodeTypes";
+import { resolveAgentComposerDraftScopeKey } from "../model/agentComposerDraftScope";
 import { getAgentGUIErrorMessage } from "./agentGuiController.errors";
 import {
   reportAgentGUIRuntimeError,
@@ -41,7 +42,7 @@ export interface UseAgentGUIConversationDeletionInput {
   };
   activation: ReturnType<typeof useAgentGUIActivation>;
   agentActivityRuntime: AgentActivityRuntime;
-  setDraftBySessionId: Dispatch<
+  setDraftByScopeKey: Dispatch<
     SetStateAction<Record<string, AgentComposerDraft>>
   >;
   sessionEngine: AgentSessionEngine;
@@ -75,7 +76,7 @@ export function useAgentGUIConversationDeletion(
     sessionViewRef,
     activation,
     agentActivityRuntime,
-    setDraftBySessionId,
+    setDraftByScopeKey,
     sessionEngine,
     deleteAgentSessionView,
     conversationsRef,
@@ -134,9 +135,11 @@ export function useAgentGUIConversationDeletion(
         })
       )
       .then(() => {
-        setDraftBySessionId((current) => {
+        setDraftByScopeKey((current) => {
           const next = { ...current };
-          delete next[target.id];
+          delete next[
+            resolveAgentComposerDraftScopeKey({ agentSessionId: target.id })
+          ];
           return next;
         });
         sessionEngine.dispatch({

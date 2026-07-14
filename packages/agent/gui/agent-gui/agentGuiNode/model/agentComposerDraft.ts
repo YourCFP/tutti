@@ -2,9 +2,11 @@ import { createRichTextMentionMarkdown } from "@tutti-os/ui-rich-text/core";
 import type { AgentPromptContentBlock } from "../../../shared/contracts/dto";
 import type {
   AgentComposerDraft,
+  AgentComposerFileBlock,
   AgentComposerDraftFile,
   AgentComposerDraftLargeText,
   AgentComposerDraftImage,
+  AgentComposerDraftContent,
   AgentGUIProviderSkillOption
 } from "./agentGuiNodeTypes";
 import {
@@ -90,21 +92,125 @@ type AgentPromptImageContentBlock = AgentPromptContentBlock & {
 };
 
 export function emptyAgentComposerDraft(): AgentComposerDraft {
-  return { prompt: "", images: [], files: [] };
+  return [{ type: "text", text: "" }];
+}
+
+export function snapshotAgentComposerDraft(
+  draft: AgentComposerDraft
+): AgentComposerDraft {
+  return draft.map((block) => ({ ...block }));
+}
+
+export function agentComposerDraftPrompt(
+  draft: AgentComposerDraftContent
+): string {
+  return draft.find((block) => block.type === "text")?.text ?? "";
+}
+
+export function agentComposerDraftImages(
+  draft: AgentComposerDraftContent
+): AgentComposerDraftImage[] {
+  return draft
+    .filter(
+      (
+        block
+      ): block is Extract<
+        AgentComposerDraftContent[number],
+        { type: "image" }
+      > => block.type === "image"
+    )
+    .map(({ type: _type, ...image }) => image);
+}
+
+export function agentComposerDraftFiles(
+  draft: AgentComposerDraftContent
+): AgentComposerDraftFile[] {
+  return draft
+    .filter(
+      (
+        block
+      ): block is Extract<
+        AgentComposerDraftContent[number],
+        { type: "file" }
+      > => block.type === "file" && block.kind === "file"
+    )
+    .map(({ type: _type, kind: _kind, text: _text, ...file }) => file);
+}
+
+export function agentComposerDraftLargeTexts(
+  draft: AgentComposerDraftContent
+): AgentComposerDraftLargeText[] {
+  return draft
+    .filter(
+      (
+        block
+      ): block is Extract<
+        AgentComposerDraftContent[number],
+        { type: "file" }
+      > & {
+        text: string;
+      } =>
+        block.type === "file" &&
+        block.kind === AGENT_PASTED_TEXT_BLOCK_KIND &&
+        typeof block.text === "string"
+    )
+    .map(({ type: _type, kind: _kind, ...item }) => item);
+}
+
+export function buildAgentComposerDraft(input: {
+  prompt: string;
+  images?: readonly AgentComposerDraftImage[];
+  files?: readonly AgentComposerDraftFile[];
+  largeTexts?: readonly AgentComposerDraftLargeText[];
+}): AgentComposerDraft {
+  return [
+    { type: "text", text: input.prompt },
+    ...(input.images ?? []).map((image) => ({
+      type: "image" as const,
+      ...image
+    })),
+    ...(input.files ?? []).map((file) => ({
+      type: "file" as const,
+      kind: "file" as const,
+      ...file
+    })),
+    ...(input.largeTexts ?? []).map(
+      (item): AgentComposerFileBlock => ({
+        type: "file" as const,
+        kind: AGENT_PASTED_TEXT_BLOCK_KIND,
+        ...item
+      })
+    )
+  ];
+}
+
+export function updateAgentComposerDraft(
+  draft: AgentComposerDraft,
+  update: Partial<{
+    prompt: string;
+    images: readonly AgentComposerDraftImage[];
+    files: readonly AgentComposerDraftFile[];
+    largeTexts: readonly AgentComposerDraftLargeText[];
+  }>
+): AgentComposerDraft {
+  return buildAgentComposerDraft({
+    prompt: update.prompt ?? agentComposerDraftPrompt(draft),
+    images: update.images ?? agentComposerDraftImages(draft),
+    files: update.files ?? agentComposerDraftFiles(draft),
+    largeTexts: update.largeTexts ?? agentComposerDraftLargeTexts(draft)
+  });
 }
 
 export function agentComposerDraftHasContent(
   draft: AgentComposerDraft
 ): boolean {
-  return (
-    draft.prompt.trim() !== "" ||
-    draft.images.length > 0 ||
-    (draft.files?.length ?? 0) > 0 ||
-    (draft.largeTexts?.some(
-      (item) => item.text.trim() !== "" || Boolean(item.path)
-    ) ??
-      false)
-  );
+  return draft.some((block) => {
+    if (block.type === "text") return block.text.trim() !== "";
+    if (block.type === "image") return true;
+    return block.kind === "file"
+      ? true
+      : (block.text?.trim() ?? "") !== "" || Boolean(block.path);
+  });
 }
 
 export function normalizeAgentPromptContentBlocks(
@@ -246,7 +352,7 @@ export function agentPromptContentToComposerDraft(
   const largeTexts = agentPromptPastedTextBlocks(normalizedContent).map(
     (block) => agentPromptPastedTextBlockToDraftLargeText(block)
   );
-  return {
+  return buildAgentComposerDraft({
     prompt: agentPromptContentDisplayText(normalizedContent),
     images: agentPromptContentImageBlocks(normalizedContent)
       .slice(0, MAX_AGENT_COMPOSER_DRAFT_IMAGES)
@@ -256,8 +362,8 @@ export function agentPromptContentToComposerDraft(
     files: agentPromptFileBlocks(normalizedContent).map((file, index) =>
       agentPromptFileBlockToDraftFile(file, idPrefix, index)
     ),
-    ...(largeTexts.length > 0 ? { largeTexts } : {})
-  };
+    largeTexts
+  });
 }
 
 function agentPromptPastedTextBlockToDraftLargeText(
@@ -279,7 +385,7 @@ export function agentComposerDraftToPromptContent(input: {
   skills: readonly AgentGUIProviderSkillOption[];
 }): AgentPromptContentBlock[] {
   const prompt = promptForProviderSkills({
-    prompt: input.draft.prompt,
+    prompt: agentComposerDraftPrompt(input.draft),
     skills: input.skills
   });
   return normalizeAgentPromptContentBlocks([
@@ -288,7 +394,7 @@ export function agentComposerDraftToPromptContent(input: {
       prompt,
       skills: input.skills
     }),
-    ...input.draft.images
+    ...agentComposerDraftImages(input.draft)
       .slice(0, MAX_AGENT_COMPOSER_DRAFT_IMAGES)
       .filter((image) => !image.uploading && !image.uploadError)
       .map((image) => ({
@@ -302,7 +408,7 @@ export function agentComposerDraftToPromptContent(input: {
             : { data: image.data }),
         name: image.name
       })),
-    ...(input.draft.files ?? [])
+    ...agentComposerDraftFiles(input.draft)
       .filter((file) => !file.uploading && !file.uploadError)
       .map((file) => ({
         type: "file" as const,
@@ -314,7 +420,7 @@ export function agentComposerDraftToPromptContent(input: {
         name: file.name,
         kind: "file"
       })),
-    ...largeTextPromptContent(input.draft.largeTexts ?? [])
+    ...largeTextPromptContent(agentComposerDraftLargeTexts(input.draft))
   ]);
 }
 
@@ -323,8 +429,8 @@ export function agentComposerDraftSubmittedText(
 ): string {
   return agentPromptContentDisplayText(
     normalizeAgentPromptContentBlocks([
-      ...textPromptContent(draft.prompt),
-      ...largeTextPromptContent(draft.largeTexts ?? [])
+      ...textPromptContent(agentComposerDraftPrompt(draft)),
+      ...largeTextPromptContent(agentComposerDraftLargeTexts(draft))
     ])
   );
 }
@@ -332,13 +438,13 @@ export function agentComposerDraftSubmittedText(
 export function agentComposerDraftDisplayPrompt(
   draft: AgentComposerDraft
 ): string | undefined {
-  const largeTexts = draft.largeTexts?.filter(
+  const largeTexts = agentComposerDraftLargeTexts(draft).filter(
     (item) => Boolean(item.path) && !item.uploading && !item.uploadError
   );
-  if (!largeTexts?.length) {
+  if (!largeTexts.length) {
     return undefined;
   }
-  const parts = [draft.prompt.trim()].filter(Boolean);
+  const parts = [agentComposerDraftPrompt(draft).trim()].filter(Boolean);
   parts.push(
     ...largeTexts
       .map((item, index) => pastedTextMentionMarkdown(item, index))

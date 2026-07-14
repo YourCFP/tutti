@@ -14,7 +14,11 @@ import type {
   AgentComposerDraftImage,
   AgentComposerDraftLargeText
 } from "../model/agentGuiNodeTypes";
-import { MAX_AGENT_COMPOSER_DRAFT_IMAGES } from "../model/agentComposerDraft";
+import {
+  buildAgentComposerDraft,
+  MAX_AGENT_COMPOSER_DRAFT_IMAGES,
+  updateAgentComposerDraft
+} from "../model/agentComposerDraft";
 import type {
   AgentRichTextEditorHandle,
   AgentRichTextPastedImage
@@ -111,7 +115,9 @@ export function useComposerDraftAttachments({
         draftPromptRef.current = nextGoalPrompt;
         setPaletteDraftPrompt(nextDraft);
         setIsPaletteOpen(true);
-        onDraftContentChange({ ...draftContent, prompt: nextGoalPrompt });
+        onDraftContentChange(
+          updateAgentComposerDraft(draftContent, { prompt: nextGoalPrompt })
+        );
         return;
       }
       const nextGoalObjective = goalDraftObjectiveFromPrompt(nextDraft);
@@ -120,13 +126,17 @@ export function useComposerDraftAttachments({
         draftPromptRef.current = nextGoalPrompt;
         setPaletteDraftPrompt(nextGoalObjective);
         setIsPaletteOpen(true);
-        onDraftContentChange({ ...draftContent, prompt: nextGoalPrompt });
+        onDraftContentChange(
+          updateAgentComposerDraft(draftContent, { prompt: nextGoalPrompt })
+        );
         return;
       }
       draftPromptRef.current = nextDraft;
       setPaletteDraftPrompt(nextDraft);
       setIsPaletteOpen(true);
-      onDraftContentChange({ ...draftContent, prompt: nextDraft });
+      onDraftContentChange(
+        updateAgentComposerDraft(draftContent, { prompt: nextDraft })
+      );
     }
   );
 
@@ -137,7 +147,9 @@ export function useComposerDraftAttachments({
     const nextPrompt = goalDraftObjective ?? "";
     draftPromptRef.current = nextPrompt;
     setPaletteDraftPrompt(nextPrompt);
-    onDraftContentChange({ ...draftContent, prompt: nextPrompt });
+    onDraftContentChange(
+      updateAgentComposerDraft(draftContent, { prompt: nextPrompt })
+    );
   }, [
     draftContent,
     goalDraftObjective,
@@ -191,12 +203,14 @@ export function useComposerDraftAttachments({
       }));
       const nextDraftImages = [...currentDraftImages, ...nextImages];
       draftImagesRef.current = nextDraftImages;
-      onDraftContentChange({
-        prompt: draftPromptRef.current,
-        images: nextDraftImages,
-        files: draftFilesRef.current,
-        largeTexts: draftLargeTextsRef.current
-      });
+      onDraftContentChange(
+        buildAgentComposerDraft({
+          prompt: draftPromptRef.current,
+          images: nextDraftImages,
+          files: draftFilesRef.current,
+          largeTexts: draftLargeTextsRef.current
+        })
+      );
       if (!uploadPromptContent) {
         return;
       }
@@ -263,12 +277,14 @@ export function useComposerDraftAttachments({
                 : image
             );
             draftImagesRef.current = uploadedDraftImages;
-            onDraftContentChange({
-              prompt: draftPromptRef.current,
-              images: uploadedDraftImages,
-              files: draftFilesRef.current,
-              largeTexts: draftLargeTextsRef.current
-            });
+            onDraftContentChange(
+              buildAgentComposerDraft({
+                prompt: draftPromptRef.current,
+                images: uploadedDraftImages,
+                files: draftFilesRef.current,
+                largeTexts: draftLargeTextsRef.current
+              })
+            );
           })
           .catch((error: unknown) => {
             const message =
@@ -293,12 +309,14 @@ export function useComposerDraftAttachments({
                 : image
             );
             draftImagesRef.current = failedDraftImages;
-            onDraftContentChange({
-              prompt: draftPromptRef.current,
-              images: failedDraftImages,
-              files: draftFilesRef.current,
-              largeTexts: draftLargeTextsRef.current
-            });
+            onDraftContentChange(
+              buildAgentComposerDraft({
+                prompt: draftPromptRef.current,
+                images: failedDraftImages,
+                files: draftFilesRef.current,
+                largeTexts: draftLargeTextsRef.current
+              })
+            );
           });
       }
     },
@@ -317,12 +335,14 @@ export function useComposerDraftAttachments({
         (image) => image.id !== id
       );
       draftImagesRef.current = nextDraftImages;
-      onDraftContentChange({
-        prompt: draftPromptRef.current,
-        images: nextDraftImages,
-        files: draftFilesRef.current,
-        largeTexts: draftLargeTextsRef.current
-      });
+      onDraftContentChange(
+        buildAgentComposerDraft({
+          prompt: draftPromptRef.current,
+          images: nextDraftImages,
+          files: draftFilesRef.current,
+          largeTexts: draftLargeTextsRef.current
+        })
+      );
     },
     [onDraftContentChange]
   );
@@ -333,12 +353,14 @@ export function useComposerDraftAttachments({
         (file) => file.id !== id
       );
       draftFilesRef.current = nextDraftFiles;
-      onDraftContentChange({
-        prompt: draftPromptRef.current,
-        images: draftImagesRef.current,
-        files: nextDraftFiles,
-        largeTexts: draftLargeTextsRef.current
-      });
+      onDraftContentChange(
+        buildAgentComposerDraft({
+          prompt: draftPromptRef.current,
+          images: draftImagesRef.current,
+          files: nextDraftFiles,
+          largeTexts: draftLargeTextsRef.current
+        })
+      );
     },
     [onDraftContentChange]
   );
@@ -349,12 +371,14 @@ export function useComposerDraftAttachments({
         (item) => item.id !== id
       );
       draftLargeTextsRef.current = nextDraftLargeTexts;
-      onDraftContentChange({
-        prompt: draftPromptRef.current,
-        images: draftImagesRef.current,
-        files: draftFilesRef.current,
-        largeTexts: nextDraftLargeTexts
-      });
+      onDraftContentChange(
+        buildAgentComposerDraft({
+          prompt: draftPromptRef.current,
+          images: draftImagesRef.current,
+          files: draftFilesRef.current,
+          largeTexts: nextDraftLargeTexts
+        })
+      );
     },
     [onDraftContentChange]
   );
@@ -379,12 +403,14 @@ export function useComposerDraftAttachments({
       draftPromptRef.current = nextPrompt;
       draftLargeTextsRef.current = nextDraftLargeTexts;
       setPaletteDraftPrompt(nextPrompt);
-      onDraftContentChange({
-        prompt: nextPrompt,
-        images: draftImagesRef.current,
-        files: draftFilesRef.current,
-        largeTexts: nextDraftLargeTexts
-      });
+      onDraftContentChange(
+        buildAgentComposerDraft({
+          prompt: nextPrompt,
+          images: draftImagesRef.current,
+          files: draftFilesRef.current,
+          largeTexts: nextDraftLargeTexts
+        })
+      );
       window.requestAnimationFrame(() => {
         editorHandleRef.current?.focusAtEnd();
       });
@@ -411,12 +437,14 @@ export function useComposerDraftAttachments({
           : normalizedText;
         draftPromptRef.current = nextPrompt;
         setPaletteDraftPrompt(nextPrompt);
-        onDraftContentChange({
-          prompt: nextPrompt,
-          images: draftImagesRef.current,
-          files: draftFilesRef.current,
-          largeTexts: draftLargeTextsRef.current
-        });
+        onDraftContentChange(
+          buildAgentComposerDraft({
+            prompt: nextPrompt,
+            images: draftImagesRef.current,
+            files: draftFilesRef.current,
+            largeTexts: draftLargeTextsRef.current
+          })
+        );
         window.requestAnimationFrame(() => {
           editorHandleRef.current?.focusAtEnd();
         });
@@ -436,12 +464,14 @@ export function useComposerDraftAttachments({
         }
       ];
       draftLargeTextsRef.current = nextDraftLargeTexts;
-      onDraftContentChange({
-        prompt: draftPromptRef.current,
-        images: draftImagesRef.current,
-        files: draftFilesRef.current,
-        largeTexts: nextDraftLargeTexts
-      });
+      onDraftContentChange(
+        buildAgentComposerDraft({
+          prompt: draftPromptRef.current,
+          images: draftImagesRef.current,
+          files: draftFilesRef.current,
+          largeTexts: nextDraftLargeTexts
+        })
+      );
       void uploadPromptContent({
         workspaceId,
         content: [
@@ -473,12 +503,14 @@ export function useComposerDraftAttachments({
                 : item
           );
           draftLargeTextsRef.current = uploadedDraftLargeTexts;
-          onDraftContentChange({
-            prompt: draftPromptRef.current,
-            images: draftImagesRef.current,
-            files: draftFilesRef.current,
-            largeTexts: uploadedDraftLargeTexts
-          });
+          onDraftContentChange(
+            buildAgentComposerDraft({
+              prompt: draftPromptRef.current,
+              images: draftImagesRef.current,
+              files: draftFilesRef.current,
+              largeTexts: uploadedDraftLargeTexts
+            })
+          );
         })
         .catch((error: unknown) => {
           const message =
@@ -489,12 +521,14 @@ export function useComposerDraftAttachments({
               : item
           );
           draftLargeTextsRef.current = failedDraftLargeTexts;
-          onDraftContentChange({
-            prompt: draftPromptRef.current,
-            images: draftImagesRef.current,
-            files: draftFilesRef.current,
-            largeTexts: failedDraftLargeTexts
-          });
+          onDraftContentChange(
+            buildAgentComposerDraft({
+              prompt: draftPromptRef.current,
+              images: draftImagesRef.current,
+              files: draftFilesRef.current,
+              largeTexts: failedDraftLargeTexts
+            })
+          );
         });
     },
     [

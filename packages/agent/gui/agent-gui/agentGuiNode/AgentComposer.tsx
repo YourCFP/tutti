@@ -34,6 +34,12 @@ import {
   EMPTY_PROVIDER_SKILLS
 } from "./composer/AgentComposerChrome";
 import type { AgentComposerProps } from "./composer/AgentComposer.types";
+import {
+  agentComposerDraftFiles,
+  agentComposerDraftImages,
+  agentComposerDraftLargeTexts,
+  agentComposerDraftPrompt
+} from "./model/agentComposerDraft";
 
 export { formatSlashStatusTokenCount };
 
@@ -136,14 +142,14 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     onRequestGitBranches = null,
     contextMentionProviders = EMPTY_CONTEXT_MENTION_PROVIDERS
   } = props;
-  const draftPrompt = draftContent.prompt;
+  const draftPrompt = agentComposerDraftPrompt(draftContent);
   const goalDraftObjective = canGoalControl
     ? goalDraftObjectiveFromPrompt(draftPrompt)
     : null;
   const isGoalModeActive = goalDraftObjective !== null;
-  const draftImages = draftContent.images;
-  const draftFiles = draftContent.files ?? [];
-  const draftLargeTexts = draftContent.largeTexts ?? [];
+  const draftImages = agentComposerDraftImages(draftContent);
+  const draftFiles = agentComposerDraftFiles(draftContent);
+  const draftLargeTexts = agentComposerDraftLargeTexts(draftContent);
   const agentActivityRuntime = useOptionalAgentActivityRuntime();
   const agentHostApi = useOptionalAgentHostApi();
   const getReferenceForFile = agentHostApi?.workspace.getReferenceForFile;

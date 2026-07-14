@@ -37,8 +37,10 @@ import {
   agentComposerDraftDisplayPrompt,
   agentComposerDraftHasContent,
   agentComposerDraftToPromptContent,
+  buildAgentComposerDraft,
   emptyAgentComposerDraft,
-  textPromptContent
+  textPromptContent,
+  updateAgentComposerDraft
 } from "../model/agentComposerDraft";
 import { resolvePermissionModeControlsDisabled } from "../model/composerModeSelection";
 import { GOAL_MODE_SLASH_COMMAND } from "./AgentComposerChrome";
@@ -237,10 +239,11 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         setIsSlashStatusPanelOpen(false);
         setIsReviewPickerOpen(false);
         setIsPaletteOpen(false);
-        onDraftContentChange({
-          ...draftContent,
-          prompt: GOAL_MODE_SLASH_COMMAND
-        });
+        onDraftContentChange(
+          updateAgentComposerDraft(draftContent, {
+            prompt: GOAL_MODE_SLASH_COMMAND
+          })
+        );
         return;
       }
       if (effect.kind === "togglePlanMode") {
@@ -254,7 +257,9 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         const nextDraft = effect.draft;
         draftPromptRef.current = nextDraft;
         setPaletteDraftPrompt(nextDraft);
-        onDraftContentChange({ ...draftContent, prompt: nextDraft });
+        onDraftContentChange(
+          updateAgentComposerDraft(draftContent, { prompt: nextDraft })
+        );
         setIsPaletteOpen(false);
         if (!settingsControlsDisabled) {
           onSettingsChange({ browserUse: true });
@@ -265,7 +270,9 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         const nextDraft = effect.draft;
         draftPromptRef.current = nextDraft;
         setPaletteDraftPrompt(nextDraft);
-        onDraftContentChange({ ...draftContent, prompt: nextDraft });
+        onDraftContentChange(
+          updateAgentComposerDraft(draftContent, { prompt: nextDraft })
+        );
         setIsPaletteOpen(false);
         if (!settingsControlsDisabled) {
           onSettingsChange({ computerUse: true });
@@ -288,7 +295,9 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
       const nextDraft = effect.draft;
       draftPromptRef.current = nextDraft;
       setPaletteDraftPrompt(nextDraft);
-      onDraftContentChange({ ...draftContent, prompt: nextDraft });
+      onDraftContentChange(
+        updateAgentComposerDraft(draftContent, { prompt: nextDraft })
+      );
       setIsPaletteOpen(false);
     },
     [
@@ -362,7 +371,9 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         });
       draftPromptRef.current = nextDraft;
       setPaletteDraftPrompt(nextDraft);
-      onDraftContentChange({ ...draftContent, prompt: nextDraft });
+      onDraftContentChange(
+        updateAgentComposerDraft(draftContent, { prompt: nextDraft })
+      );
       setIsPaletteOpen(false);
     },
     [draftContent, onDraftContentChange, promptBeforeSelection, skillQueryMatch]
@@ -405,13 +416,12 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         return;
       }
       const nextPrompt = draftPromptRef.current;
-      const nextDraftContent = {
-        ...draftContent,
+      const nextDraftContent = buildAgentComposerDraft({
         prompt: nextPrompt,
         images: currentDraftImages,
         files: currentDraftFiles,
         largeTexts: currentDraftLargeTexts
-      };
+      });
       if (!agentComposerDraftHasContent(nextDraftContent)) {
         return;
       }

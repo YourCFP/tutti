@@ -20,6 +20,7 @@ import type {
   AgentComposerDraft,
   AgentGUIProjectConversationDeleteTarget
 } from "../model/agentGuiNodeTypes";
+import { resolveAgentComposerDraftScopeKey } from "../model/agentComposerDraftScope";
 import { getAgentGUIErrorMessage } from "./agentGuiController.errors";
 import {
   normalizeProjectConversationPath,
@@ -49,7 +50,7 @@ export interface UseAgentGUIConversationBatchDeletionInput {
     agentSessionId: string | null | undefined;
     origin: string;
   };
-  setDraftBySessionId: Dispatch<
+  setDraftByScopeKey: Dispatch<
     SetStateAction<Record<string, AgentComposerDraft>>
   >;
   sessionEngine: AgentSessionEngine;
@@ -89,7 +90,7 @@ export function useAgentGUIConversationBatchDeletion(
     setListError,
     deleteAgentSessionView,
     sessionViewRef,
-    setDraftBySessionId,
+    setDraftByScopeKey,
     sessionEngine,
     activeConversationIdRef,
     markSelectedConversationDetailPending,
@@ -155,8 +156,15 @@ export function useAgentGUIConversationBatchDeletion(
       for (const id of targetIds) {
         deleteAgentSessionView(sessionViewRef(id));
       }
-      setDraftBySessionId((current) =>
-        omitConversationLocalState(current, targetIds)
+      setDraftByScopeKey((current) =>
+        omitConversationLocalState(
+          current,
+          new Set(
+            [...targetIds].map((agentSessionId) =>
+              resolveAgentComposerDraftScopeKey({ agentSessionId })
+            )
+          )
+        )
       );
       for (const id of targetIds) {
         sessionEngine.dispatch({

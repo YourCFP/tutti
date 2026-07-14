@@ -29,6 +29,7 @@ import type {
   AgentHomeSuggestionAction,
   AgentGUINodeViewModel
 } from "../model/agentGuiNodeTypes";
+import { updateAgentComposerDraft } from "../model/agentComposerDraft";
 import { projectAgentGUIManagedHomeTargets } from "../model/agentGuiProviderRailOrder";
 import type {
   AgentGUINodeViewProps,
@@ -288,7 +289,9 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       // Don't request focus here: replacing the draft already makes the composer
       // focus the filled prompt (focusAtStart). A second focus (focusAtEnd) would
       // race it and make the cursor/scroll jump — a visible flicker on fill.
-      updateDraftContent({ ...viewModel.composer.draftContent, prompt });
+      updateDraftContent(
+        updateAgentComposerDraft(viewModel.composer.draftContent, { prompt })
+      );
     },
     [updateDraftContent, viewModel.composer.draftContent]
   );

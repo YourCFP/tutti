@@ -2,6 +2,7 @@ import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { AgentGUINodeViewModel } from "./agentGuiNodeTypes";
 import { useAgentGUIViewModel } from "./useAgentGUIViewModel";
+import { buildAgentComposerDraft } from "./agentComposerDraft";
 
 describe("useAgentGUIViewModel render budgets", () => {
   it("keeps composer and rail references stable for a streaming detail update", () => {
@@ -104,7 +105,7 @@ function createViewModel(): AgentGUINodeViewModel {
       availableCommands: [],
       availableSkills: [],
       draftPrompt: "",
-      draftContent: { prompt: "", images: [] },
+      draftContent: buildAgentComposerDraft({ prompt: "" }),
       isCreatingConversation: false,
       isSubmitting: false,
       isInterrupting: false,

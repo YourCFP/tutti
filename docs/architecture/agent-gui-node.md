@@ -1636,6 +1636,35 @@ composer draft + activeConversationId
   -> startConversation or executePrompt
 ```
 
+An unsent composer message is one UI-local `AgentComposerDraftContent` block
+array. Text (including mention/skill syntax), images, regular files, and pasted
+text belong to that same atomic value; pasted text is a file block whose `kind`
+is `pasted-text`. Attachment ids and upload progress/errors remain UI metadata
+on their corresponding blocks. Only the submit boundary converts this array to
+the existing `AgentPromptContentBlock[]` runtime contract, so queue, runtime,
+daemon, and persistence protocols do not own a second draft representation.
+
+Draft content identity is independent from provider, model, and the other
+composer settings. On the home composer, content is cached under the normalized
+selected project path (`project:<path>`, or `project:<none>` without a project).
+An existing conversation uses `session:<agentSessionId>`. Switching providers
+within one project therefore preserves the whole message, switching projects
+restores the destination project's message, and returning home from a session
+restores the current project draft instead of the session draft. Provider/target
+default settings, session settings, optimistic setting updates, model
+inheritance, validation, and fallback keep their existing ownership and keys;
+project identity must not be added to those setting caches.
+
+Each composer submit records a lightweight snapshot of the source scope and its
+full content array, correlated by `clientSubmitId`. A successful first-message
+activation clears its project scope; an accepted/confirmed existing-session
+send, including a queued send, clears its session scope. Failure or an uncertain
+state retains the draft. Before clearing, the controller compares the complete
+current array with the snapshot, including attachment upload metadata, so edits
+made while a request is pending are retained as one new message. Terminal
+results discard the snapshot. Non-composer control sends must not participate in
+this draft cleanup.
+
 User-visible rules:
 
 - Home composer submit with no active conversation starts activation. Detail
