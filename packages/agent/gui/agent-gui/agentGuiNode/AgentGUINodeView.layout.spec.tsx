@@ -6970,6 +6970,7 @@ function createViewModel(
       availableReasoningEfforts: []
     },
     queuedPrompts: [],
+    queueStatus: "active",
     drainingQueuedPromptId: null,
     canQueueWhileBusy: false,
     avoidGroupingEdits: false,
@@ -7241,6 +7242,7 @@ function createLabels(): AgentGUIViewLabels {
     planModeOffLabel: "off",
     planUnavailable: "planUnavailable",
     queuedLabel: "queuedLabel",
+    queuePausedByUserLabel: "queuePausedByUserLabel",
     sendQueuedPromptNext: "sendQueuedPromptNext",
     editQueuedPrompt: "editQueuedPrompt",
     deleteQueuedPrompt: "deleteQueuedPrompt",
