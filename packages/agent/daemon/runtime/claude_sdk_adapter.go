@@ -47,9 +47,14 @@ type claudeSDKAdapterSession struct {
 	pendingRequests   map[string]*pendingInteractiveRequest
 	pendingResponses  map[string]chan claudeSDKSidecarEvent
 	turns             map[string]*claudeSDKTurnWaiter
-	liveState         claudeSDKLiveState
-	sendMu            sync.Mutex
-	readerStarted     bool
+	// turnNormalizers owns each Claude turn's event lifecycle the same way
+	// Codex/ACP use acpTurnNormalizer: track open tool calls while the turn is
+	// live, and Finish* closes dangling calls when the turn reaches a terminal
+	// state. Guarded by the adapter mutex.
+	turnNormalizers map[string]*acpTurnNormalizer
+	liveState       claudeSDKLiveState
+	sendMu          sync.Mutex
+	readerStarted   bool
 	// invalid is guarded by the adapter mutex. Once set, a stale Resume
 	// attempt must never put this session back into the live registry.
 	invalid bool

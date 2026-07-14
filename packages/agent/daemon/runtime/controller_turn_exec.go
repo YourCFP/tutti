@@ -65,9 +65,13 @@ func (c *Controller) runExecTurn(ctx context.Context, session Session, adapter A
 	shouldEmitTerminalEvents := false
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			events = []activityshared.Event{newTurnActivityEvent(session, EventTurnCanceled, turnID, SessionStatusCanceled, "", "", map[string]any{
+			// Keep call-lifecycle close events Exec already produced (for
+			// example Claude finishing open tools on ctx cancel). Replacing the
+			// whole slice would drop those CallFailed updates and leave tool
+			// cards stuck in progress after Stop.
+			events = append(retainTurnCallLifecycleEvents(events, turnID), newTurnActivityEvent(session, EventTurnCanceled, turnID, SessionStatusCanceled, "", "", map[string]any{
 				"error": err.Error(),
-			})}
+			}))
 		} else {
 			events = []activityshared.Event{newTurnActivityEvent(session, EventTurnFailed, turnID, SessionStatusFailed, "", "", map[string]any{
 				"error": err.Error(),

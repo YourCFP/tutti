@@ -79,6 +79,16 @@ func (a *ClaudeCodeSDKAdapter) Exec(
 		}
 		return events, result.err
 	case <-ctx.Done():
+		// Controller cancel interrupts this context before adapter.Cancel.
+		// Close the turn lifecycle here too so dangling tool calls are not
+		// stranded if Cancel later finds no live waiter.
+		events = append(events, a.finishClaudeSDKTurnLifecycle(
+			adapterSession,
+			session,
+			turnID,
+			claudeSDKTurnFinishInterrupted,
+			"user_interrupt",
+		)...)
 		a.unregisterClaudeSDKTurn(adapterSession, turnID, waiter)
 		return events, ctx.Err()
 	}
@@ -141,6 +151,17 @@ func (a *ClaudeCodeSDKAdapter) Cancel(_ context.Context, session Session, _ stri
 		},
 	})
 	events := a.claudeSDKPendingRequestFailureEvents(adapterSession, session, "", errPermissionRequestCanceled)
+	// Finish open turn lifecycles by normalizer ownership, not by the live
+	// waiter registry. Controller Cancel cancels the Exec context first; Claude
+	// Exec then unregisters its waiter before adapter.Cancel runs. If we only
+	// finished live waiters, open Write/tool cards would stay "running" after
+	// the turn already settled canceled.
+	events = append(events, a.finishAllClaudeSDKTurnLifecycles(
+		adapterSession,
+		session,
+		claudeSDKTurnFinishInterrupted,
+		"user_interrupt",
+	)...)
 	for _, turnID := range a.liveClaudeSDKTurnIDs(adapterSession) {
 		if a.turnAlreadySettled(adapterSession, turnID) {
 			continue

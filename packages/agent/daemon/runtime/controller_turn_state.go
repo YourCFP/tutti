@@ -463,6 +463,28 @@ func unemittedActivityEvents(events []activityshared.Event, emitted []activitysh
 	return out
 }
 
+// retainTurnCallLifecycleEvents keeps call.started/completed/failed events for
+// turnID when synthesizing a context-canceled terminal. Controllers must not
+// discard adapter-produced CallFailed closes for open tools.
+func retainTurnCallLifecycleEvents(events []activityshared.Event, turnID string) []activityshared.Event {
+	turnID = strings.TrimSpace(turnID)
+	if len(events) == 0 || turnID == "" {
+		return nil
+	}
+	out := make([]activityshared.Event, 0, len(events))
+	for _, event := range events {
+		switch event.Type {
+		case activityshared.EventCallStarted,
+			activityshared.EventCallCompleted,
+			activityshared.EventCallFailed:
+			if strings.TrimSpace(event.Payload.TurnID) == turnID {
+				out = append(out, event)
+			}
+		}
+	}
+	return out
+}
+
 func activityEventIdentity(event activityshared.Event) string {
 	if event.EventID != "" {
 		return event.EventID

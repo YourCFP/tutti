@@ -37,6 +37,7 @@ The Go runtime under `packages/agent/daemon/runtime` is split by responsibility:
 | `claude_sdk_protocol.go`       | Protocol version and envelope validation                 |
 | `claude_sdk_session.go`        | Session storage, command/env helpers, and state payloads |
 | `claude_sdk_events.go`         | Sidecar event dispatch and lifecycle routing             |
+| `claude_sdk_turn.go`           | Per-turn event lifecycle via shared `acpTurnNormalizer`  |
 | `claude_sdk_activity.go`       | Conversion into normalized activity events               |
 | `claude_sdk_live_state.go`     | Live message, task, and usage state reconciliation       |
 | `claude_sdk_interactive.go`    | Approval and interactive prompt handling                 |
@@ -48,9 +49,14 @@ process/session lifecycle and normalization behind that selection. They must not
 raw SDK envelopes to services or GUI packages. Service-layer provider catalogs,
 composer profiles, targets, status probes, and identity projections consume the
 same `ProviderDescriptor` instead of re-registering Claude Code locally.
-Claude modules do not call ACP-owned helpers; protocol-neutral session and
-interactive activity projection have their own modules, while Claude goal,
-command, usage, and interaction decoding stay inside the Claude SDK boundary.
+Claude modules do not call ACP _protocol_ helpers (session-update decoding,
+standard ACP tool-call envelopes, and similar). Open tool-call bookkeeping and
+turn `Finish*` settlement reuse the shared adapter turn lifecycle
+(`acpTurnNormalizer`), the same entity Codex and standard ACP already use, so
+cancel/fail/complete close dangling tool cards instead of leaving them
+in progress. Protocol-neutral session and interactive activity projection have
+their own modules, while Claude goal, command, usage, and interaction decoding
+stay inside the Claude SDK boundary.
 New normalized session updates use `sessionUpdateKind`; the former ACP-named
 metadata key is accepted only while reading imported or durable historical
 events.

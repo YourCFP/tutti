@@ -608,6 +608,147 @@ func TestClaudeCodeSDKAdapterCancelClearsPendingInteractive(t *testing.T) {
 	}
 }
 
+func TestClaudeCodeSDKAdapterCancelFailsOpenToolCalls(t *testing.T) {
+	adapter := NewClaudeCodeSDKAdapter(nil)
+	session := standardTestSession(ProviderClaudeCode)
+	adapterSession := &claudeSDKAdapterSession{
+		conn:      &recordingClaudeSDKConnection{},
+		liveState: newClaudeSDKLiveState(),
+	}
+	adapter.storeSession(session.AgentSessionID, adapterSession)
+	adapter.registerClaudeSDKTurn(adapterSession, "turn-write", nil)
+
+	started, terminal, err := adapter.sidecarTurnEvents(adapterSession, session, "turn-write", claudeSDKSidecarEvent{
+		Type: "tool_started",
+		Payload: map[string]any{
+			"turnId":     "turn-write",
+			"toolCallId": "toolu-write",
+			"toolName":   "Write",
+			"name":       "Write",
+			"input": map[string]any{
+				"file_path": "/tmp/out.txt",
+				"content":   "partial",
+			},
+		},
+	})
+	if err != nil || terminal {
+		t.Fatalf("tool_started err=%v terminal=%v", err, terminal)
+	}
+	if len(started) != 1 || started[0].Type != activityshared.EventCallStarted {
+		t.Fatalf("started = %#v, want call.started", started)
+	}
+
+	events, err := adapter.Cancel(context.Background(), session, "user")
+	if err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("cancel events = %#v, want failed open Write then interrupted turn", events)
+	}
+	if events[0].Type != activityshared.EventCallFailed ||
+		events[0].EventID != "claude-sdk:tool:toolu-write" ||
+		events[0].Payload.Status != SessionStatusCanceled {
+		t.Fatalf("open tool cancel event = %#v, want call.failed with canceled status", events[0])
+	}
+	if events[1].Type != activityshared.EventTurnCompleted ||
+		events[1].Payload.TurnOutcome != string(activityshared.TurnOutcomeInterrupted) {
+		t.Fatalf("cancel turn event = %#v, want interrupted turn", events[1])
+	}
+
+	late, terminal, err := adapter.sidecarTurnEvents(adapterSession, session, "turn-write", claudeSDKSidecarEvent{
+		Type: "tool_completed",
+		Payload: map[string]any{
+			"turnId":     "turn-write",
+			"toolCallId": "toolu-write",
+			"toolName":   "Write",
+			"name":       "Write",
+			"output":     map[string]any{"text": "done"},
+		},
+	})
+	if err != nil || terminal || len(late) != 0 {
+		t.Fatalf("late tool_completed after cancel = events=%#v terminal=%v err=%v, want dropped", late, terminal, err)
+	}
+}
+
+func TestClaudeCodeSDKAdapterCancelFailsOpenToolsAfterWaiterUnregistered(t *testing.T) {
+	// Mirrors controller Cancel ordering: active.cancel() makes Exec unregister
+	// its waiter before adapter.Cancel runs. Open tools must still close.
+	adapter := NewClaudeCodeSDKAdapter(nil)
+	session := standardTestSession(ProviderClaudeCode)
+	adapterSession := &claudeSDKAdapterSession{
+		conn:      &recordingClaudeSDKConnection{},
+		liveState: newClaudeSDKLiveState(),
+	}
+	adapter.storeSession(session.AgentSessionID, adapterSession)
+	waiter := adapter.registerClaudeSDKTurn(adapterSession, "turn-write", nil)
+
+	if _, _, err := adapter.sidecarTurnEvents(adapterSession, session, "turn-write", claudeSDKSidecarEvent{
+		Type: "tool_started",
+		Payload: map[string]any{
+			"turnId":     "turn-write",
+			"toolCallId": "toolu-write",
+			"toolName":   "Write",
+			"name":       "Write",
+			"input":      map[string]any{"file_path": "/tmp/out.txt", "content": "partial"},
+		},
+	}); err != nil {
+		t.Fatalf("tool_started: %v", err)
+	}
+
+	adapter.unregisterClaudeSDKTurn(adapterSession, "turn-write", waiter)
+	if got := adapter.liveClaudeSDKTurnIDs(adapterSession); len(got) != 0 {
+		t.Fatalf("live turns after unregister = %#v, want empty", got)
+	}
+
+	events, err := adapter.Cancel(context.Background(), session, "user")
+	if err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+	if len(events) != 1 ||
+		events[0].Type != activityshared.EventCallFailed ||
+		events[0].EventID != "claude-sdk:tool:toolu-write" ||
+		events[0].Payload.Status != SessionStatusCanceled {
+		t.Fatalf("cancel events = %#v, want failed open Write even with no live waiter", events)
+	}
+}
+
+func TestClaudeCodeSDKAdapterTurnCanceledFailsOpenToolCalls(t *testing.T) {
+	adapter := NewClaudeCodeSDKAdapter(nil)
+	session := standardTestSession(ProviderClaudeCode)
+	adapterSession := &claudeSDKAdapterSession{liveState: newClaudeSDKLiveState()}
+
+	if _, _, err := adapter.sidecarTurnEvents(adapterSession, session, "turn-write", claudeSDKSidecarEvent{
+		Type: "tool_started",
+		Payload: map[string]any{
+			"turnId":     "turn-write",
+			"toolCallId": "toolu-write",
+			"toolName":   "Write",
+			"name":       "Write",
+			"input":      map[string]any{"file_path": "/tmp/out.txt", "content": "partial"},
+		},
+	}); err != nil {
+		t.Fatalf("tool_started: %v", err)
+	}
+
+	events, terminal, err := adapter.sidecarTurnEvents(adapterSession, session, "turn-write", claudeSDKSidecarEvent{
+		Type:    "turn_canceled",
+		Payload: map[string]any{"turnId": "turn-write"},
+	})
+	if err != nil || !terminal {
+		t.Fatalf("turn_canceled err=%v terminal=%v", err, terminal)
+	}
+	if len(events) < 2 ||
+		events[0].Type != activityshared.EventCallFailed ||
+		events[0].EventID != "claude-sdk:tool:toolu-write" ||
+		events[0].Payload.Status != SessionStatusCanceled {
+		t.Fatalf("turn_canceled events = %#v, want failed open Write then interrupted turn", events)
+	}
+	if events[1].Type != activityshared.EventTurnCompleted ||
+		events[1].Payload.TurnOutcome != string(activityshared.TurnOutcomeInterrupted) {
+		t.Fatalf("turn terminal = %#v, want interrupted", events[1])
+	}
+}
+
 // TestClaudeCodeSDKAdapterReaderFailureFailsPendingInteractive guards against
 // a real bug found while investigating a Feishu report (LENj32): if the
 // sidecar connection/process dies while a permission dialog is still

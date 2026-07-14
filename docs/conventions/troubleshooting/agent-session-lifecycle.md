@@ -573,6 +573,45 @@ Turn state, loading, cancel, restore, rail projection, event updates, imports, a
   [controller.go](../../../packages/agent/daemon/runtime/controller.go)
   [controller_test.go](../../../packages/agent/daemon/runtime/controller_test.go)
 
+### Claude Code cancel leaves Write/tool cards stuck in progress
+
+- Symptom:
+  User stops a Claude Code turn while a tool such as Write is running. The turn
+  settles as canceled/interrupted, but the transcript still shows the tool as
+  in progress.
+- Quick checks:
+  Compare durable tool-call message status with turn outcome. If the turn is
+  interrupted/canceled and the open `tool_call` is still `running`, the Claude
+  SDK turn lifecycle did not finish dangling calls. Confirm Codex/ACP cancel of
+  the same shape closes open tools via `acpTurnNormalizer.FinishInterrupted`.
+- Root cause:
+  Claude Code SDK projected tool events without owning the shared turn event
+  lifecycle (`acpTurnNormalizer`). Cancel and sidecar `turn_canceled` settled
+  the turn without `Finish*`, so open tools never received a terminal
+  `call.failed`.
+- Fix:
+  Attach per-turn `acpTurnNormalizer` on the Claude SDK session. Track
+  `call.started/completed/failed` against that normalizer, and call
+  `FinishInterrupted` / `FinishFailed` / `FinishCompleted` as part of turn
+  terminalization (`Cancel`, sidecar `turn_*`, reader failure). Drop late tool
+  events after the turn is already settled.
+  Also: controller Cancel cancels the Exec context before `adapter.Cancel`.
+  Claude Exec unregisters its waiter on that context cancel, so Cancel must
+  finish open tools from the turn-normalizer map (not only live waiters), and
+  the Exec context-canceled path must retain CallFailed events instead of
+  replacing the whole event slice with a bare turn.canceled.
+- Validation:
+  `go test ./packages/agent/daemon/runtime -run 'TestClaudeCodeSDKAdapter(CancelFailsOpenToolCalls|CancelFailsOpenToolsAfterWaiterUnregistered|TurnCanceledFailsOpenToolCalls)'`.
+  Manually: start a long Write on Claude Code, press Stop, confirm the tool
+  card leaves "in progress". Rebuild/restart desktop so the running `tuttid`
+  binary includes the fix.
+- References:
+  [claude_sdk_turn.go](../../../packages/agent/daemon/runtime/claude_sdk_turn.go)
+  [claude_sdk_events.go](../../../packages/agent/daemon/runtime/claude_sdk_events.go)
+  [claude_sdk_execution.go](../../../packages/agent/daemon/runtime/claude_sdk_execution.go)
+  [controller_turn_exec.go](../../../packages/agent/daemon/runtime/controller_turn_exec.go)
+  [acp_turn_normalizer.go](../../../packages/agent/daemon/runtime/acp_turn_normalizer.go)
+
 ### AgentGUI freezes when session history is large
 
 - Symptom:
