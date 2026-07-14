@@ -8914,7 +8914,16 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
 }
 
 .agent-gui-node__provider-rail-sidebar-footer {
+  padding-bottom: 0;
+}
+
+.agent-gui-node__provider-rail-sidebar-footer:last-child {
   padding-bottom: 12px;
+}
+
+.agent-gui-node__provider-rail-sidebar-footer
+  + .agent-gui-node__provider-rail-config-footer {
+  margin-top: 8px;
 }
 
 .agent-gui-node__provider-rail-config-button {
