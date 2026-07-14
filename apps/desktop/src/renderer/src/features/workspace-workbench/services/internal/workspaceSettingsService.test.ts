@@ -367,12 +367,11 @@ test("WorkspaceSettingsService tolerates provider configs with null models", asy
   assert.deepEqual(notifications.items, []);
 });
 
-test("WorkspaceSettingsService echoes saved managed provider API keys", async () => {
+test("WorkspaceSettingsService keeps saved managed provider API keys redacted", async () => {
   const service = new WorkspaceSettingsService({
     client: createWorkspaceSettingsClient({
       listManagedModelProviders: async () => [
         {
-          apiKey: "agnes-secret",
           baseUrl: "https://apihub.agnes-ai.com/v1",
           enabled: true,
           hasApiKey: true,
@@ -389,7 +388,8 @@ test("WorkspaceSettingsService echoes saved managed provider API keys", async ()
   const agnesProvider = service.store.managedModels.providers.find(
     (provider) => provider.provider === "agnes"
   );
-  assert.equal(agnesProvider?.apiKey, "agnes-secret");
+  assert.equal(agnesProvider?.apiKey, "");
+  assert.equal(agnesProvider?.hasApiKey, true);
 });
 
 test("WorkspaceSettingsService fills detected managed provider models", async () => {
@@ -397,7 +397,6 @@ test("WorkspaceSettingsService fills detected managed provider models", async ()
     client: createWorkspaceSettingsClient({
       listManagedModelProviders: async () => [
         {
-          apiKey: "agnes-secret",
           baseUrl: "https://apihub.agnes-ai.com/v1",
           enabled: true,
           hasApiKey: true,
