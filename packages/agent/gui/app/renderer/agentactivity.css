@@ -2648,19 +2648,6 @@ aside.workspace-agents-status-panel
   min-height: 28px;
   padding-top: 4px;
   padding-bottom: 4px;
-}
-
-.agent-gui-node__mention-palette
-  .rich-text-at-mention-palette__row-button:has(
-    .rich-text-at-mention-row__navigate-into
-  ) {
-  padding-right: 4px;
-}
-
-.agent-gui-node__mention-palette
-  .rich-text-at-mention-palette__row-button:has(
-    .rich-text-at-mention-row__open-references
-  ) {
   padding-right: 4px;
 }
 

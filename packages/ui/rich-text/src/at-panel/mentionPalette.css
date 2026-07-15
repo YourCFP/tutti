@@ -218,7 +218,7 @@
   width: 100%;
   min-width: 0;
   min-height: 36px;
-  padding: 8px 10px;
+  padding: 8px 4px 8px 10px;
   overflow: hidden;
   border-radius: 6px;
   color: var(--rich-text-at-mention-text-primary);
@@ -227,12 +227,6 @@
   transition:
     background-color 200ms ease,
     color 200ms ease;
-}
-
-.rich-text-at-mention-palette__row-button:has(
-  .rich-text-at-mention-row__open-references
-) {
-  padding-right: 4px;
 }
 
 .rich-text-at-mention-palette__row-button > svg,
@@ -262,7 +256,7 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 8px 12px;
+  padding: 8px 4px 8px 12px;
   border-radius: 6px;
   color: var(--rich-text-at-mention-text-secondary);
   font-size: 13px;
