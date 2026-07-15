@@ -190,6 +190,8 @@ vi.mock("./agentRichText/AgentRichTextEditor", async () => {
         {
           disabled,
           onChange,
+          onFocus,
+          onUserContentChange,
           onPasteImages,
           onPasteLargeText,
           onFileMentionSuggestionChange,
@@ -203,6 +205,8 @@ vi.mock("./agentRichText/AgentRichTextEditor", async () => {
           className?: string;
           disabled?: boolean;
           onChange: (value: string) => void;
+          onFocus?: (method: "keyboard" | "pointer" | "programmatic") => void;
+          onUserContentChange?: (value: string) => void;
           onFileMentionSuggestionChange?: (state: any) => void;
           onPasteImages?: (images: unknown[]) => void;
           onPasteLargeText?: (text: string) => void;
@@ -278,7 +282,11 @@ vi.mock("./agentRichText/AgentRichTextEditor", async () => {
               value={value}
               placeholder={placeholder}
               disabled={disabled}
-              onChange={(event) => onChange(event.currentTarget.value)}
+              onChange={(event) => {
+                onUserContentChange?.(event.currentTarget.value);
+                onChange(event.currentTarget.value);
+              }}
+              onFocus={() => onFocus?.("keyboard")}
               onKeyDown={(event) => {
                 if (onKeyDownForPalette?.(event.nativeEvent)) {
                   event.preventDefault();
@@ -4129,12 +4137,14 @@ describe("AgentComposer", () => {
       draftContent = nextDraft;
     });
     const onSubmit = vi.fn();
+    const contentEntered = vi.fn();
     const renderComposer = () => (
       <AgentComposer
         workspaceId="workspace-1"
         currentUserId="user-1"
         provider="codex"
         draftContent={draftContent}
+        engagement={{ contentEntered, focused: vi.fn() }}
         availableCommands={[] satisfies readonly AgentHostAgentSessionCommand[]}
         disabled={false}
         submitDisabled={false}
@@ -4163,6 +4173,10 @@ describe("AgentComposer", () => {
     const { rerender } = render(renderComposer());
 
     fireEvent.click(screen.getByTestId("mock-paste-image"));
+    expect(contentEntered).toHaveBeenCalledWith({
+      contentType: "image",
+      hadPrefill: false
+    });
     rerender(renderComposer());
 
     const sendButton = screen.getByRole("button", { name: "发送" });
@@ -4187,6 +4201,51 @@ describe("AgentComposer", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("reports text entry with the pre-existing draft state", () => {
+    const contentEntered = vi.fn();
+    render(
+      <AgentComposer
+        workspaceId="workspace-1"
+        currentUserId="user-1"
+        provider="codex"
+        draftContent={createDraft("prefilled")}
+        engagement={{ contentEntered, focused: vi.fn() }}
+        availableCommands={[] satisfies readonly AgentHostAgentSessionCommand[]}
+        disabled={false}
+        submitDisabled={false}
+        placeholder="placeholder"
+        composerSettings={createComposerSettings()}
+        queuedPrompts={[]}
+        drainingQueuedPromptId={null}
+        canQueueWhileBusy={false}
+        showStopButton={false}
+        activePrompt={null}
+        isInterrupting={false}
+        isSendingTurn={false}
+        isSubmittingPrompt={false}
+        labels={createLabels()}
+        workspaceUserProjectI18n={workspaceUserProjectI18n}
+        onDraftContentChange={vi.fn()}
+        onSettingsChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onSendQueuedPromptNext={vi.fn()}
+        onRemoveQueuedPrompt={vi.fn()}
+        onEditQueuedPrompt={vi.fn()}
+        onInterruptCurrentTurn={vi.fn()}
+        onSubmitInteractivePrompt={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("placeholder"), {
+      target: { value: "prefilled plus" }
+    });
+
+    expect(contentEntered).toHaveBeenCalledWith({
+      contentType: "text",
+      hadPrefill: true
+    });
+  });
+
   it("keeps pasted large text out of the prompt when staging is unsupported", () => {
     setAgentActivityRuntimeForTests({} as unknown as AgentActivityRuntime);
 
@@ -4194,12 +4253,14 @@ describe("AgentComposer", () => {
     const onDraftContentChange = vi.fn((nextDraft: AgentComposerDraft) => {
       draftContent = nextDraft;
     });
+    const contentEntered = vi.fn();
     render(
       <AgentComposer
         workspaceId="workspace-1"
         currentUserId="user-1"
         provider="codex"
         draftContent={draftContent}
+        engagement={{ contentEntered, focused: vi.fn() }}
         availableCommands={[] satisfies readonly AgentHostAgentSessionCommand[]}
         disabled={false}
         submitDisabled={false}
@@ -4227,6 +4288,11 @@ describe("AgentComposer", () => {
     );
 
     fireEvent.click(screen.getByTestId("mock-paste-large-text"));
+
+    expect(contentEntered).toHaveBeenCalledWith({
+      contentType: "large_text",
+      hadPrefill: true
+    });
 
     expect(agentComposerDraftPrompt(draftContent)).toBe("hello");
     expect(agentComposerDraftLargeTexts(draftContent)[0]).toMatchObject({

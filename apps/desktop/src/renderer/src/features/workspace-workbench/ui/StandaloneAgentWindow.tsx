@@ -418,6 +418,11 @@ export function StandaloneAgentWindow({
       workspaceUserProjectService
     ]
   );
+  const trackStandaloneAgentGUIEngagement = useMemo(
+    () =>
+      agentGuiHostInput.createAgentGUIEngagementEventSink("standalone_agent"),
+    [agentGuiHostInput]
+  );
   const dockPreviewCache = useMemo(
     () => createStandaloneAgentDockPreviewCache(desktopApi.dockPreviewCache),
     [desktopApi.dockPreviewCache]
@@ -478,7 +483,8 @@ export function StandaloneAgentWindow({
       host,
       instanceId,
       instanceKey: standaloneAgentInstanceKey,
-      isFocused: document.hasFocus(),
+      // Standalone has one node; document focus is tracked live by engagement.
+      isFocused: true,
       node: {
         data: {
           activation,
@@ -743,6 +749,7 @@ export function StandaloneAgentWindow({
             trackAgentProviderChatReady={
               agentGuiHostInput.trackAgentProviderChatReady
             }
+            onEngagementEvent={trackStandaloneAgentGUIEngagement}
             trackWorkspaceFileReferences={
               agentGuiHostInput.trackWorkspaceFileReferences
             }

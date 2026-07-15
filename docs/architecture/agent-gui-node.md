@@ -791,6 +791,22 @@ Desktop passes grouped Agent GUI props and runtime interfaces. It must not
 mirror engine entities, implement provider policy switches, or derive session
 truth to make a panel render correctly.
 
+Agent GUI engagement reporting follows the same boundary:
+
+- `AgentGUINodeView` owns DOM exposure observation and the UI-local panel visit.
+  A visit ends when the panel becomes ineligible or its active session/target
+  context changes; events from different session contexts never share a
+  `panelVisitId`.
+- Composer and rich-text modules report semantic focus and accepted user-content
+  signals. Controlled draft hydration, prefill, and programmatic mention-trigger
+  insertion are not user-content events.
+- Workbench presentation visibility enters through `frame.isVisible`. Reusable
+  Agent GUI code must not query desktop workbench class names or data attributes.
+- The package emits a discriminated engagement event through
+  `hostActions.onEngagementEvent`. Desktop owns product event names, surface
+  labels, reporter construction, and analytics transport. Prompt text, file
+  names, paths, mention URIs, and attachment payloads never cross this boundary.
+
 Opening a conversation activates a durable session through the engine. Opening
 it in another panel creates workbench presentation state around the same durable
 session; it does not clone the session. Provider handoff starts a new session

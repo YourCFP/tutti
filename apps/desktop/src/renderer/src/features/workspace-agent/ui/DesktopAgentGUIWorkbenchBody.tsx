@@ -91,6 +91,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
   contextMentionProviders,
   runtimeApi,
   trackAgentProviderChatReady,
+  onEngagementEvent,
   trackWorkspaceFileReferences,
   workspaceFileReferenceAdapter,
   resolveDroppedFileReferences,
@@ -736,6 +737,9 @@ function DesktopAgentGUIWorkbenchBodyImpl({
           desktopSize,
           isMaximized: context.displayMode === "fullscreen",
           isActive: context.isFocused,
+          isVisible:
+            context.presentationMode !== "mission-control" &&
+            context.node.isMinimized !== true,
           embedded: true,
           previewMode,
           conversationRailAutoCollapseWidthPx
@@ -793,6 +797,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
           onShowMessage: handleDesktopAgentGUIShowMessage,
           onUpdateNode: handleUpdateNode,
           onRememberComposerDefaults: handleRememberComposerDefaults,
+          onEngagementEvent: previewMode ? undefined : onEngagementEvent,
           onOpenConversationWindow:
             previewMode || !onOpenAgentConversationWindow
               ? undefined

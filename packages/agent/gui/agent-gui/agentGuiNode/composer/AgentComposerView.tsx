@@ -52,7 +52,11 @@ import type { useComposerPresentation } from "./useComposerPresentation";
 import type { useComposerProviderTargets } from "./useComposerProviderTargets";
 import type { useComposerSlashActions } from "./useComposerSlashActions";
 import type { useMentionPaletteFrame } from "./useMentionPaletteFrame";
-import { agentComposerDraftImages } from "../model/agentComposerDraft";
+import {
+  agentComposerDraftHasContent,
+  agentComposerDraftImages,
+  updateAgentComposerDraft
+} from "../model/agentComposerDraft";
 
 interface Props {
   props: AgentComposerProps;
@@ -101,6 +105,7 @@ export function AgentComposerView(input: Props): React.JSX.Element {
     slashStatus = null,
     usage = null,
     draftContent,
+    engagement,
     availableSkills = EMPTY_PROVIDER_SKILLS,
     composerSettings,
     queueStatus = "active",
@@ -369,6 +374,21 @@ export function AgentComposerView(input: Props): React.JSX.Element {
                     disabled={inputDisabled}
                     className={styles.composerTextarea}
                     onChange={handleDraftChange}
+                    onFocus={(method) => engagement?.focused(method)}
+                    onUserContentChange={(nextPrompt) => {
+                      if (
+                        agentComposerDraftHasContent(
+                          updateAgentComposerDraft(draftContent, {
+                            prompt: nextPrompt
+                          })
+                        )
+                      ) {
+                        engagement?.contentEntered({
+                          contentType: "text",
+                          hadPrefill: agentComposerDraftHasContent(draftContent)
+                        });
+                      }
+                    }}
                     onSubmit={submitCurrentPrompt}
                     onSubmitGuidance={() =>
                       submitCurrentPrompt({ guidance: true })
