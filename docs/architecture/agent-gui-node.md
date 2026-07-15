@@ -1928,6 +1928,13 @@ participate in this draft cleanup.
 Goal set, pause, resume, and clear operations must use the runtime goal-control
 API rather than `executePrompt`. A goal control is thread metadata, not a user
 turn: it must not create a transcript message, pending submit, or pseudo turn.
+When a provider adapter must carry clear through a native command turn, it must
+retain that internally generated turn identity and suppress the turn's native
+assistant/thinking acknowledgement before durable transcript projection. This
+filter is semantic and turn-correlated: do not match provider copy such as
+`Goal cleared:`, hide it only in the renderer, or reparent it into the turn
+that clear interrupted. Goal/session updates and internal terminal handling
+still flow normally.
 Clearing a goal may leave the current turn running; the composer stop control
 and transcript processing row therefore continue to derive from that canonical
 active turn. Successful clear feedback is a transient localized toast, not a
