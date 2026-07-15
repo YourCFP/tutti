@@ -1,14 +1,20 @@
 import { useCallback, useRef, type Dispatch, type SetStateAction } from "react";
+import type { PendingActivationIntentRecord } from "@tutti-os/agent-activity-core";
 import type { AgentActivityRuntime } from "../../../agentActivityRuntime";
 import { translate } from "../../../i18n/index";
 import type { AgentHostAccountUserProfile } from "../../../shared/contracts/dto";
 import type { AgentComposerDraft } from "../model/agentGuiNodeTypes";
 import type { AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
 import { resolveAgentGUIExplicitConversationTitle } from "../model/agentGuiProviderIdentity";
-import { nodeDefaultDraftKey } from "./agentGuiController.composerHelpers";
+import {
+  agentComposerDraftPrompt,
+  emptyAgentComposerDraft,
+  updateAgentComposerDraft
+} from "../model/agentComposerDraft";
+import { resolveAgentComposerDraftScopeKey } from "../model/agentComposerDraftScope";
 import { buildContinueInNewConversationPrompt } from "./agentGuiController.conversationHelpers";
 import { reportAgentGUIActiveConversationCleared } from "./agentGuiController.reporting";
-import type { AgentGUIComposerTargetData } from "./agentGuiController.composerPresentation";
+import { isPendingNewConversationActivationForSession } from "./useAgentGUIActivation";
 import {
   resolveConversationSummaryById,
   type ConversationIntent
@@ -23,18 +29,18 @@ interface UseAgentGUIContinueConversationInput {
     Record<string, AgentHostAccountUserProfile>
   >;
   activeConversationIdRef: CurrentValue<string | null>;
+  activePendingActivation: PendingActivationIntentRecord | null;
   agentActivityRuntime: AgentActivityRuntime;
   conversations: readonly AgentGUIConversationSummary[];
   createConversation(): void;
   currentUserId: string | null | undefined;
-  draftBySessionId: Record<string, AgentComposerDraft>;
+  draftByScopeKey: Record<string, AgentComposerDraft>;
   isComposerHomeRef: CurrentValue<boolean>;
   loadDraftComposerOptions(): void;
   persistActiveConversation(agentSessionId: string | null): void;
-  selectedComposerTargetDataRef: CurrentValue<AgentGUIComposerTargetData>;
   setActiveConversationId: Dispatch<SetStateAction<string | null>>;
   setDetailError: Dispatch<SetStateAction<string | null>>;
-  setDraftBySessionId: Dispatch<
+  setDraftByScopeKey: Dispatch<
     SetStateAction<Record<string, AgentComposerDraft>>
   >;
   setIntent: Dispatch<SetStateAction<ConversationIntent>>;
@@ -43,6 +49,13 @@ interface UseAgentGUIContinueConversationInput {
   transientConversation: AgentGUIConversationSummary | null;
   unactivate(agentSessionId: string): Promise<void>;
   workspaceId: string;
+}
+
+export function buildContinueInNewConversationDraft(input: {
+  sourceDraft: AgentComposerDraft;
+  prompt: string;
+}): AgentComposerDraft {
+  return updateAgentComposerDraft(input.sourceDraft, { prompt: input.prompt });
 }
 
 export function useAgentGUIContinueConversation(
@@ -63,6 +76,11 @@ export function useAgentGUIContinueConversation(
       current.createConversation();
       return;
     }
+    const sourceDraftScopeKey = resolveAgentComposerDraftScopeKey({
+      agentSessionId: currentConversationId
+    });
+    const sourceDraft =
+      current.draftByScopeKey[sourceDraftScopeKey] ?? emptyAgentComposerDraft();
     const nextDraftPrompt = buildContinueInNewConversationPrompt({
       workspaceId: current.workspaceId,
       agentSessionId: activeConversation.id,
@@ -74,8 +92,7 @@ export function useAgentGUIContinueConversation(
       conversationTitle:
         resolveAgentGUIExplicitConversationTitle(activeConversation) ??
         translate("agentHost.workspaceAgentsUntitledTask"),
-      existingDraftPrompt:
-        current.draftBySessionId[currentConversationId]?.prompt ?? ""
+      existingDraftPrompt: agentComposerDraftPrompt(sourceDraft)
     });
     reportAgentGUIActiveConversationCleared({
       details: { sourceConversationId: activeConversation.id },
@@ -84,7 +101,14 @@ export function useAgentGUIContinueConversation(
       runtime: current.agentActivityRuntime,
       workspaceId: current.workspaceId
     });
-    void current.unactivate(currentConversationId);
+    if (
+      !isPendingNewConversationActivationForSession(
+        current.activePendingActivation,
+        currentConversationId
+      )
+    ) {
+      void current.unactivate(currentConversationId);
+    }
     current.setIntent({ tag: "home" });
     current.isComposerHomeRef.current = true;
     current.setIsComposerHome(true);
@@ -92,13 +116,13 @@ export function useAgentGUIContinueConversation(
     current.setActiveConversationId(null);
     current.setIsLoadingMessages(false);
     current.setDetailError(null);
-    const targetData = current.selectedComposerTargetDataRef.current;
-    current.setDraftBySessionId((drafts) => ({
+    current.setDraftByScopeKey((drafts) => ({
       ...drafts,
-      [nodeDefaultDraftKey(targetData.provider, targetData.agentTargetId)]: {
-        prompt: nextDraftPrompt,
-        images: []
-      }
+      [resolveAgentComposerDraftScopeKey({})]:
+        buildContinueInNewConversationDraft({
+          sourceDraft,
+          prompt: nextDraftPrompt
+        })
     }));
     current.persistActiveConversation(null);
     current.loadDraftComposerOptions();

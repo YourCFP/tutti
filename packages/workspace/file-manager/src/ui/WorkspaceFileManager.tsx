@@ -95,6 +95,7 @@ export interface WorkspaceFileManagerProps {
   hostOs?: NodeJS.Platform;
   i18n: WorkspaceFileManagerI18nRuntime;
   session: WorkspaceFileManagerSession;
+  showInternalOpenWithActions?: boolean;
   showPreviewPanel?: boolean;
   surface?: "card" | "embedded";
 }
@@ -114,6 +115,7 @@ export function WorkspaceFileManager({
   renderExternalLocationContent,
   hostOs = "linux",
   session,
+  showInternalOpenWithActions = true,
   showPreviewPanel = true,
   surface = "card"
 }: WorkspaceFileManagerProps): ReactElement {
@@ -573,6 +575,7 @@ export function WorkspaceFileManager({
             openInAppBrowserIcon={openInAppBrowserIcon}
             resolveOpenWithApplicationIcon={resolveOpenWithApplicationIcon}
             session={session}
+            showInternalOpenWithActions={showInternalOpenWithActions}
           />
         </>
       ) : null}

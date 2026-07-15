@@ -9,38 +9,21 @@ import {
   type ReactNode
 } from "react";
 import type { I18nRuntime } from "@tutti-os/ui-i18n-runtime";
-import {
-  buildWorkspaceAgentMessageCenterModelFromEngine,
-  selectWorkspaceAgentMessageCenterPresentation,
-  stabilizeWorkspaceAgentMessageCenterModel,
-  workspaceAgentMessageCenterPromptStatus,
-  WorkspaceAgentMessageCenterPanel,
-  dispatchAgentPlanPromptAction,
-  useEngineSelector,
-  type WorkspaceAgentMessageCenterModel,
-  type WorkspaceAgentMessageCenterPresentation
-} from "@tutti-os/agent-gui/agent-message-center";
-import { selectEnginePendingInteractions } from "@tutti-os/agent-activity-core";
-import { BrowserNode } from "@tutti-os/browser-node/react";
-import type { BrowserNodeI18nKey } from "@tutti-os/browser-node/i18n";
-import { TerminalNode } from "@tutti-os/workspace-terminal/react";
-import type { TerminalTheme } from "@tutti-os/workspace-terminal/contracts";
-import type { TerminalNodeI18nKey } from "@tutti-os/workspace-terminal/i18n";
+import { selectWorkspaceAgentConsumerCounts } from "@tutti-os/agent-activity-core";
 import type {
   WorkbenchContribution,
   WorkbenchHostHandle
 } from "@tutti-os/workbench-surface";
 import { CloseIcon, cn } from "@tutti-os/ui-system";
-import { WorkspaceFileManagerPane } from "@renderer/features/workspace-file-manager";
 import type { WorkspaceAgentActivityService } from "@renderer/features/workspace-agent";
 import type { DesktopBrowserApi } from "@preload/types";
 import { useTranslation } from "@renderer/i18n";
-import { getWorkspaceTerminalSurfaceRuntime } from "../services/workspaceTerminalSurfaceRuntime.ts";
+import type { StandaloneAgentIssueManagerOpenRequest } from "../services/standaloneAgentIssueManagerLaunch.ts";
 import {
   createStandaloneAgentToolSidebarState,
   reduceStandaloneAgentToolSidebarState,
-  type StandaloneAgentSharedToolPanelId,
-  type StandaloneAgentToolPanelId
+  type StandaloneAgentToolPanelId,
+  type StandaloneAgentToolTab
 } from "./standaloneAgentToolSidebarModel.ts";
 import { useStandaloneAgentToolSidebarLayout } from "./useStandaloneAgentToolSidebarLayout.ts";
 import {
@@ -49,18 +32,16 @@ import {
   type ToolSidebarCopy,
   type ToolSidebarReminderCounts
 } from "./StandaloneAgentToolSidebarToolbar.tsx";
-import {
-  createStandaloneAgentDirectToolHost,
-  createStandaloneAgentToolHostGroup,
-  createStandaloneAgentBrowserToolFeature
-} from "./standaloneAgentToolWorkbench.ts";
-import { standaloneAgentBrowserDefaultUrl } from "./standaloneAgentToolWorkbench.ts";
-import { StandaloneAgentAppCenterToolPanel } from "./StandaloneAgentAppCenterToolPanel.tsx";
+import { createStandaloneAgentToolHostGroup } from "./standaloneAgentToolWorkbench.ts";
 import { useExternalStoreValue } from "./useExternalStoreValue.ts";
+import {
+  StandaloneAgentToolSidebarPanel,
+  type StandaloneAgentFileOpenRequest
+} from "./StandaloneAgentToolSidebarPanel.tsx";
+import { StandaloneAgentToolLoadingState } from "./StandaloneAgentToolLoadingState.tsx";
+import { StandaloneAgentDecisionNotifications } from "./StandaloneAgentDecisionNotifications.tsx";
 
-const browserNodeLoadFailedI18nKey: BrowserNodeI18nKey = "loadFailed";
-const terminalCloseGuardDescriptionI18nKey: TerminalNodeI18nKey =
-  "closeGuard.description";
+export type { StandaloneAgentFileOpenRequest } from "./StandaloneAgentToolSidebarPanel.tsx";
 const standaloneAgentToolPanelContentMountDelayMs = 260;
 
 interface StandaloneAgentToolSidebarProps {
@@ -71,20 +52,17 @@ interface StandaloneAgentToolSidebarProps {
   children: ReactNode;
   contributions: readonly WorkbenchContribution[] | undefined;
   fileOpenRequest?: StandaloneAgentFileOpenRequest | null;
+  issueManagerOpenRequest?: StandaloneAgentIssueManagerOpenRequest | null;
   mainContentMinWidthPx?: number;
   renderHeader: (toolActions: ReactNode) => ReactNode;
   onOpenMessageCenterChat: (input: {
     agentSessionId: string;
     provider: string;
   }) => void;
+  onAppsOpen: () => void;
   onToolHostReady: (host: WorkbenchHostHandle | null) => void;
   resizeWindowContentWidth: (width: number) => Promise<{ width: number }>;
   workspaceId: string;
-}
-
-export interface StandaloneAgentFileOpenRequest {
-  path: string;
-  requestID: string;
 }
 
 export function StandaloneAgentToolSidebar({
@@ -95,9 +73,11 @@ export function StandaloneAgentToolSidebar({
   children,
   contributions,
   fileOpenRequest = null,
+  issueManagerOpenRequest = null,
   mainContentMinWidthPx,
   renderHeader,
   onOpenMessageCenterChat,
+  onAppsOpen,
   onToolHostReady,
   resizeWindowContentWidth,
   workspaceId
@@ -108,55 +88,17 @@ export function StandaloneAgentToolSidebar({
     undefined,
     createStandaloneAgentToolSidebarState
   );
-  const activitySnapshot = useExternalStoreValue(
-    (listener) => activityService.subscribe(workspaceId, listener),
-    () => activityService.getSnapshot(workspaceId),
-    () => activityService.getSnapshot(workspaceId)
-  );
   const sessionEngine = useMemo(
     () => activityService.getSessionEngine(workspaceId),
     [activityService, workspaceId]
   );
-  const messageCenterPresentation = useEngineSelector(
-    sessionEngine,
-    selectWorkspaceAgentMessageCenterPresentation
+  const messageCenterWorkingCount = useExternalStoreValue(
+    sessionEngine.subscribe,
+    () =>
+      selectWorkspaceAgentConsumerCounts(sessionEngine.getSnapshot()).working,
+    () =>
+      selectWorkspaceAgentConsumerCounts(sessionEngine.getSnapshot()).working
   );
-  const messageCenterModelRef = useRef<WorkspaceAgentMessageCenterModel | null>(
-    null
-  );
-  const messageCenterItemCutoffUnixMs = useMemo(
-    () => Date.now() - 7 * 24 * 60 * 60 * 1000,
-    [workspaceId]
-  );
-  const messageCenterModel = useMemo(() => {
-    const nextModel = buildWorkspaceAgentMessageCenterModelFromEngine(
-      messageCenterPresentation,
-      activitySnapshot,
-      {
-        itemCutoffUnixMs: messageCenterItemCutoffUnixMs,
-        promptFallbackLabels: {
-          constraintHeader: i18n.t(
-            "workspace.agentMessageCenter.promptConstraintHeader"
-          ),
-          inputHeader: i18n.t("workspace.agentMessageCenter.promptInputHeader"),
-          question: i18n.t("workspace.agentMessageCenter.promptQuestion"),
-          title: i18n.t("workspace.agentMessageCenter.promptTitle")
-        },
-        workspaceRoot: null
-      }
-    );
-    const stableModel = stabilizeWorkspaceAgentMessageCenterModel(
-      messageCenterModelRef.current,
-      nextModel
-    );
-    messageCenterModelRef.current = stableModel;
-    return stableModel;
-  }, [
-    activitySnapshot,
-    i18n,
-    messageCenterItemCutoffUnixMs,
-    messageCenterPresentation
-  ]);
   const copy = useMemo<ToolSidebarCopy>(
     () => ({
       apps: i18n.t("workspace.agentGui.toolSidebar.apps"),
@@ -166,6 +108,7 @@ export function StandaloneAgentToolSidebar({
       expand: i18n.t("workspace.agentGui.toolSidebar.expandPanel"),
       files: i18n.t("workspace.agentGui.toolSidebar.files"),
       messages: i18n.t("workspace.agentGui.toolSidebar.messages"),
+      tasks: i18n.t("workspace.agentGui.toolSidebar.tasks"),
       newTab: i18n.t("workspace.agentGui.toolSidebar.newTab"),
       openRightPanel: i18n.t("workspace.agentGui.toolSidebar.openRightPanel"),
       shrink: i18n.t("workspace.agentGui.toolSidebar.shrinkPanel"),
@@ -177,9 +120,9 @@ export function StandaloneAgentToolSidebar({
   );
   const reminders = useMemo<ToolSidebarReminderCounts>(
     () => ({
-      messages: messageCenterModel.counts.working
+      messages: messageCenterWorkingCount
     }),
-    [messageCenterModel.counts.working]
+    [messageCenterWorkingCount]
   );
   const toolHostGroup = useMemo(createStandaloneAgentToolHostGroup, []);
   useEffect(() => {
@@ -189,9 +132,8 @@ export function StandaloneAgentToolSidebar({
     };
   }, [onToolHostReady, toolHostGroup]);
   const activePanel = state.activePanel;
-  const [contentReadyPanels, setContentReadyPanels] = useState<
-    StandaloneAgentToolPanelId[]
-  >([]);
+  const activeTabId = state.activeTabId;
+  const [contentReadyTabIds, setContentReadyTabIds] = useState<string[]>([]);
   const {
     activePanelLayoutWidth,
     activePanelMaxWidth,
@@ -209,8 +151,29 @@ export function StandaloneAgentToolSidebar({
     mainContentMinWidthPx,
     resizeWindowContentWidth
   });
+  const resizeAnimationFrameRef = useRef<number | null>(null);
+  const scheduleResizeForPanel = useCallback(
+    (panel: StandaloneAgentToolPanelId | null) => {
+      if (resizeAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(resizeAnimationFrameRef.current);
+      }
+      resizeAnimationFrameRef.current = window.requestAnimationFrame(() => {
+        resizeAnimationFrameRef.current = null;
+        void resizeForPanel(panel);
+      });
+    },
+    [resizeForPanel]
+  );
+  useEffect(
+    () => () => {
+      if (resizeAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(resizeAnimationFrameRef.current);
+      }
+    },
+    []
+  );
   useEffect(() => {
-    if (!activePanel || contentReadyPanels.includes(activePanel)) {
+    if (!activeTabId || contentReadyTabIds.includes(activeTabId)) {
       return;
     }
     const delay = window.matchMedia?.("(prefers-reduced-motion: reduce)")
@@ -218,14 +181,17 @@ export function StandaloneAgentToolSidebar({
       ? 0
       : standaloneAgentToolPanelContentMountDelayMs;
     const timer = window.setTimeout(() => {
-      setContentReadyPanels((current) =>
-        current.includes(activePanel) ? current : [...current, activePanel]
+      setContentReadyTabIds((current) =>
+        current.includes(activeTabId) ? current : [...current, activeTabId]
       );
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [activePanel, contentReadyPanels]);
+  }, [activeTabId, contentReadyTabIds]);
   const lastHandledAppOpenIdRef = useRef<string | null>(null);
   const lastHandledFileOpenRequestRef = useRef<string | null>(null);
+  const fileOpenRequestTabIdRef = useRef<string | null>(null);
+  const lastHandledIssueManagerOpenRequestRef = useRef<string | null>(null);
+  const issueManagerOpenRequestTabIdRef = useRef<string | null>(null);
   useEffect(() => {
     const normalizedAppOpenId = appOpenId?.trim() || null;
     if (!normalizedAppOpenId) {
@@ -236,9 +202,14 @@ export function StandaloneAgentToolSidebar({
       return;
     }
     lastHandledAppOpenIdRef.current = normalizedAppOpenId;
-    dispatch({ panel: "apps", type: "open-panel" });
-    void resizeForPanel("apps");
-  }, [appOpenId, resizeForPanel]);
+    onAppsOpen();
+    dispatch({
+      panel: "apps",
+      tabId: resolveToolTabId(state.mountedTabs, "apps"),
+      type: "open-panel"
+    });
+    scheduleResizeForPanel("apps");
+  }, [appOpenId, onAppsOpen, scheduleResizeForPanel, state.mountedTabs]);
   useEffect(() => {
     if (
       !fileOpenRequest ||
@@ -247,50 +218,104 @@ export function StandaloneAgentToolSidebar({
       return;
     }
     lastHandledFileOpenRequestRef.current = fileOpenRequest.requestID;
-    dispatch({ panel: "files", type: "open-panel" });
-    void resizeForPanel("files");
-  }, [fileOpenRequest, resizeForPanel]);
+    const filesTabId = resolveToolTabId(state.mountedTabs, "files");
+    fileOpenRequestTabIdRef.current = filesTabId;
+    dispatch({ panel: "files", tabId: filesTabId, type: "open-panel" });
+    scheduleResizeForPanel("files");
+  }, [fileOpenRequest, scheduleResizeForPanel, state.mountedTabs]);
+  useEffect(() => {
+    if (
+      !issueManagerOpenRequest ||
+      lastHandledIssueManagerOpenRequestRef.current ===
+        issueManagerOpenRequest.requestID
+    ) {
+      return;
+    }
+    lastHandledIssueManagerOpenRequestRef.current =
+      issueManagerOpenRequest.requestID;
+    const tabId = resolveToolTabId(state.mountedTabs, "tasks");
+    issueManagerOpenRequestTabIdRef.current = tabId;
+    dispatch({ panel: "tasks", tabId, type: "open-panel" });
+    scheduleResizeForPanel("tasks");
+  }, [issueManagerOpenRequest, scheduleResizeForPanel, state.mountedTabs]);
   const closePanel = useCallback(() => {
-    dispatch(
-      activePanel === "terminal"
-        ? { type: "toggle-terminal" }
-        : { type: "close" }
-    );
-    void resizeForPanel(null);
-  }, [activePanel, resizeForPanel]);
+    dispatch({ type: "close" });
+    scheduleResizeForPanel(null);
+  }, [scheduleResizeForPanel]);
   const openPanel = useCallback(
     (panel: StandaloneAgentToolPanelId) => {
-      dispatch({ panel, type: "open-panel" });
-      void resizeForPanel(panel);
+      if (panel === "apps") {
+        onAppsOpen();
+      }
+      dispatch({
+        panel,
+        tabId: resolveToolTabId(state.mountedTabs, panel),
+        type: "open-panel"
+      });
+      scheduleResizeForPanel(panel);
     },
-    [resizeForPanel]
+    [onAppsOpen, scheduleResizeForPanel, state.mountedTabs]
+  );
+  const addPanel = useCallback(
+    (panel: StandaloneAgentToolPanelId) => {
+      if (panel === "apps") {
+        onAppsOpen();
+      }
+      dispatch({ panel, tabId: createToolTabId(panel), type: "add-panel" });
+      scheduleResizeForPanel(panel);
+    },
+    [onAppsOpen, scheduleResizeForPanel]
   );
   const toggleSidebar = useCallback(() => {
     const nextPanel = activePanel ?? "files";
     dispatch(
       activePanel === null
-        ? { panel: nextPanel, type: "open-panel" }
+        ? {
+            panel: nextPanel,
+            tabId: resolveToolTabId(state.mountedTabs, nextPanel),
+            type: "open-panel"
+          }
         : { type: "close" }
     );
-    void resizeForPanel(activePanel === null ? nextPanel : null);
-  }, [activePanel, resizeForPanel]);
+    scheduleResizeForPanel(activePanel === null ? nextPanel : null);
+  }, [activePanel, scheduleResizeForPanel, state.mountedTabs]);
   const closePanelTab = useCallback(
-    (panel: StandaloneAgentToolPanelId) => {
-      const nextMountedPanels = state.mountedPanels.filter(
-        (candidate) => candidate !== panel
+    (tabId: string) => {
+      const closingIndex = state.mountedTabs.findIndex(
+        (tab) => tab.id === tabId
       );
-      const nextPanel =
-        activePanel === panel
-          ? (nextMountedPanels[nextMountedPanels.length - 1] ?? null)
-          : activePanel;
-      dispatch({ panel, type: "close-panel" });
-      void resizeForPanel(nextPanel);
+      const remainingTabs = state.mountedTabs.filter((tab) => tab.id !== tabId);
+      const nextTab =
+        activeTabId === tabId
+          ? (remainingTabs[Math.max(0, closingIndex - 1)] ??
+            remainingTabs[0] ??
+            null)
+          : (state.mountedTabs.find((tab) => tab.id === activeTabId) ?? null);
+      dispatch({ tabId, type: "close-tab" });
+      const nextPanel = nextTab?.panel ?? null;
+      scheduleResizeForPanel(nextPanel);
     },
-    [activePanel, resizeForPanel, state.mountedPanels]
+    [activeTabId, scheduleResizeForPanel, state.mountedTabs]
+  );
+  const activatePanelTab = useCallback(
+    (tab: StandaloneAgentToolTab) => {
+      if (tab.panel === "apps") {
+        onAppsOpen();
+      }
+      dispatch({ tabId: tab.id, type: "activate-tab" });
+      scheduleResizeForPanel(tab.panel);
+    },
+    [onAppsOpen, scheduleResizeForPanel]
   );
 
   return (
     <>
+      <StandaloneAgentDecisionNotifications
+        activityService={activityService}
+        i18n={i18n}
+        messageCenterOpen={activePanel === "messages"}
+        workspaceId={workspaceId}
+      />
       <div
         className="workbench-window__header workbench-window__header--custom"
         style={
@@ -317,13 +342,13 @@ export function StandaloneAgentToolSidebar({
                 : undefined
             }
           >
-            {activePanel ? (
+            {activeTabId ? (
               <ToolSidebarTabBar
-                activePanel={activePanel}
+                activeTabId={activeTabId}
                 copy={copy}
-                mountedPanels={state.mountedPanels}
+                mountedTabs={state.mountedTabs}
                 onClosePanel={closePanelTab}
-                onOpenPanel={openPanel}
+                onOpenPanel={activatePanelTab}
               />
             ) : null}
             <StandaloneAgentToolSidebarToolbar
@@ -331,6 +356,7 @@ export function StandaloneAgentToolSidebar({
               copy={copy}
               isExpanded={isActivePanelExpanded}
               reminders={reminders}
+              onAddPanel={addPanel}
               onOpenPanel={openPanel}
               onToggleExpansion={() => {
                 if (activePanel) togglePanelExpansion(activePanel);
@@ -401,43 +427,56 @@ export function StandaloneAgentToolSidebar({
                 />
               ) : null}
               <div className="relative min-h-0 flex-1 overflow-hidden">
-                {state.mountedPanels.map((panel) => (
+                {state.mountedTabs.map((tab) => (
                   <div
-                    aria-hidden={activePanel !== panel}
+                    aria-hidden={activeTabId !== tab.id}
                     className={cn(
                       "absolute inset-0 min-h-0 overflow-hidden",
-                      activePanel !== panel && "invisible pointer-events-none"
+                      activeTabId !== tab.id && "invisible pointer-events-none"
                     )}
-                    key={panel}
+                    key={tab.id}
                   >
-                    {contentReadyPanels.includes(panel) ? (
+                    {contentReadyTabIds.includes(tab.id) ? (
                       <div
                         className={cn(
                           "h-full min-h-0",
-                          panel !== "terminal" &&
+                          tab.panel !== "terminal" &&
                             "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150 motion-reduce:animate-none"
                         )}
                       >
-                        <ToolSidebarPanel
-                          active={activePanel === panel}
+                        <StandaloneAgentToolSidebarPanel
+                          active={activeTabId === tab.id}
                           appI18n={appI18n}
                           activityService={activityService}
-                          activitySnapshot={activitySnapshot}
                           browserApi={browserApi}
                           contributions={contributions}
-                          fileOpenRequest={fileOpenRequest}
+                          fileOpenRequest={
+                            fileOpenRequestTabIdRef.current === tab.id
+                              ? fileOpenRequest
+                              : null
+                          }
+                          instanceId={tab.id}
+                          issueManagerOpenRequest={
+                            issueManagerOpenRequestTabIdRef.current === tab.id
+                              ? issueManagerOpenRequest
+                              : null
+                          }
                           i18n={i18n}
                           locale={locale}
-                          messageCenterModel={messageCenterModel}
-                          messageCenterPresentation={messageCenterPresentation}
-                          messageCenterOpen={activePanel === "messages"}
+                          messageCenterOpen={
+                            activeTabId === tab.id && tab.panel === "messages"
+                          }
                           onCloseMessageCenter={closePanel}
                           onOpenMessageCenterChat={onOpenMessageCenterChat}
-                          panel={panel}
                           setToolHost={toolHostGroup.setHost}
+                          tab={tab}
                           workspaceId={workspaceId}
                         />
                       </div>
+                    ) : activeTabId === tab.id ? (
+                      <StandaloneAgentToolLoadingState
+                        label={i18n.t("common.loading")}
+                      />
                     ) : null}
                   </div>
                 ))}
@@ -451,17 +490,17 @@ export function StandaloneAgentToolSidebar({
 }
 
 function ToolSidebarTabBar({
-  activePanel,
+  activeTabId,
   copy,
-  mountedPanels,
+  mountedTabs,
   onClosePanel,
   onOpenPanel
 }: {
-  activePanel: StandaloneAgentToolPanelId;
+  activeTabId: string;
   copy: ToolSidebarCopy;
-  mountedPanels: StandaloneAgentToolPanelId[];
-  onClosePanel: (panel: StandaloneAgentToolPanelId) => void;
-  onOpenPanel: (panel: StandaloneAgentToolPanelId) => void;
+  mountedTabs: StandaloneAgentToolTab[];
+  onClosePanel: (tabId: string) => void;
+  onOpenPanel: (tab: StandaloneAgentToolTab) => void;
 }): ReactNode {
   return (
     <div
@@ -472,36 +511,33 @@ function ToolSidebarTabBar({
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-        {mountedPanels.map((panel) => (
+        {mountedTabs.map((tab) => (
           <div
             className={cn(
               "group flex h-7 max-w-44 shrink-0 items-center rounded-sm overflow-hidden border text-xs text-[var(--text-tertiary)]",
-              activePanel === panel
+              activeTabId === tab.id
                 ? "border-[var(--line-2)] bg-[var(--background-fronted)] text-[var(--text-primary)]"
                 : "border-transparent"
             )}
-            key={panel}
+            key={tab.id}
           >
             <button
-              aria-selected={activePanel === panel}
+              aria-selected={activeTabId === tab.id}
               className="nodrag flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden px-2 text-left outline-none [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
-              data-standalone-agent-tool-tab={panel}
+              data-standalone-agent-tool-tab={tab.panel}
+              data-standalone-agent-tool-tab-id={tab.id}
               role="tab"
               type="button"
-              onClick={() => onOpenPanel(panel)}
+              onClick={() => onOpenPanel(tab)}
             >
-              <ToolSidebarPanelIcon
-                aria-hidden
-                className="size-3.5 shrink-0"
-                panel={panel}
-              />
-              <span className="truncate">{copy[panel]}</span>
+              <ToolSidebarTabIcon tab={tab} />
+              <span className="truncate">{resolveToolTabLabel(tab, copy)}</span>
             </button>
             <button
-              aria-label={`${copy.close} ${copy[panel]}`}
+              aria-label={`${copy.close} ${resolveToolTabLabel(tab, copy)}`}
               className="nodrag mr-1 rounded p-0.5 opacity-100 hover:bg-[var(--transparency-block)] [-webkit-app-region:no-drag]"
               type="button"
-              onClick={() => onClosePanel(panel)}
+              onClick={() => onClosePanel(tab.id)}
             >
               <CloseIcon aria-hidden className="size-3" />
             </button>
@@ -512,511 +548,44 @@ function ToolSidebarTabBar({
   );
 }
 
-function ToolSidebarPanel({
-  active,
-  appI18n,
-  activityService,
-  activitySnapshot,
-  browserApi,
-  contributions,
-  fileOpenRequest,
-  i18n,
-  locale,
-  messageCenterModel,
-  messageCenterPresentation,
-  messageCenterOpen,
-  onCloseMessageCenter,
-  onOpenMessageCenterChat,
-  panel,
-  setToolHost,
-  workspaceId
-}: {
-  active: boolean;
-  appI18n: I18nRuntime<string>;
-  activityService: WorkspaceAgentActivityService;
-  activitySnapshot: ReturnType<WorkspaceAgentActivityService["getSnapshot"]>;
-  browserApi?: DesktopBrowserApi;
-  contributions: readonly WorkbenchContribution[] | undefined;
-  fileOpenRequest: StandaloneAgentFileOpenRequest | null;
-  i18n: I18nRuntime<string>;
-  locale: ReturnType<typeof useTranslation>["locale"];
-  messageCenterModel: WorkspaceAgentMessageCenterModel;
-  messageCenterPresentation: WorkspaceAgentMessageCenterPresentation;
-  messageCenterOpen: boolean;
-  onCloseMessageCenter: () => void;
-  onOpenMessageCenterChat: (input: {
-    agentSessionId: string;
-    provider: string;
-  }) => void;
-  panel: StandaloneAgentToolPanelId;
-  setToolHost: (
-    typeId: StandaloneAgentSharedToolPanelId,
-    host: WorkbenchHostHandle | null
-  ) => void;
-  workspaceId: string;
-}): ReactNode {
-  if (panel === "files") {
-    return (
-      <WorkspaceFileManagerPane
-        className="h-full"
-        revealIntent={fileOpenRequest}
-        workspaceID={workspaceId}
-      />
-    );
+function resolveToolTabId(
+  tabs: readonly StandaloneAgentToolTab[],
+  panel: StandaloneAgentToolPanelId
+): string {
+  for (let index = tabs.length - 1; index >= 0; index -= 1) {
+    const tab = tabs[index];
+    if (tab?.panel === panel) {
+      return tab.id;
+    }
   }
-  if (panel === "apps") {
-    return (
-      <StandaloneAgentAppCenterToolPanel
-        active={active}
-        backLabel={i18n.t("workspace.appCenter.backToApps")}
-        contributions={contributions}
-        unavailableLabel={i18n.t("workspace.agentGui.toolSidebar.unavailable")}
-        workspaceId={workspaceId}
-      />
-    );
-  }
-  if (panel === "messages") {
-    return (
-      <StandaloneAgentMessageCenterPanel
-        activityService={activityService}
-        activitySnapshot={activitySnapshot}
-        i18n={i18n}
-        locale={locale}
-        model={messageCenterModel}
-        presentationState={messageCenterPresentation}
-        open={messageCenterOpen}
-        workspaceId={workspaceId}
-        onClose={onCloseMessageCenter}
-        onOpenChat={onOpenMessageCenterChat}
-      />
-    );
-  }
-  if (panel === "browser") {
-    return browserApi ? (
-      <StandaloneAgentBrowserToolPanel
-        appI18n={appI18n}
-        browserApi={browserApi}
-        hidden={!active}
-      />
-    ) : null;
-  }
-  if (panel === "terminal") {
-    return (
-      <StandaloneAgentTerminalPanel
-        contributions={contributions}
-        open={active}
-        setToolHost={setToolHost}
-        unavailableLabel={i18n.t("workspace.agentGui.toolSidebar.unavailable")}
-      />
-    );
-  }
-  return null;
+  return createToolTabId(panel);
 }
 
-function StandaloneAgentMessageCenterPanel({
-  activityService,
-  activitySnapshot,
-  i18n,
-  locale,
-  model,
-  presentationState,
-  open,
-  workspaceId,
-  onClose,
-  onOpenChat
+function resolveToolTabLabel(
+  tab: StandaloneAgentToolTab,
+  copy: ToolSidebarCopy
+): string {
+  return copy[tab.panel];
+}
+
+function ToolSidebarTabIcon({
+  tab
 }: {
-  activityService: WorkspaceAgentActivityService;
-  activitySnapshot: ReturnType<WorkspaceAgentActivityService["getSnapshot"]>;
-  i18n: I18nRuntime<string>;
-  locale: ReturnType<typeof useTranslation>["locale"];
-  model: WorkspaceAgentMessageCenterModel;
-  presentationState: WorkspaceAgentMessageCenterPresentation;
-  open: boolean;
-  workspaceId: string;
-  onClose: () => void;
-  onOpenChat: (input: { agentSessionId: string; provider: string }) => void;
+  tab: StandaloneAgentToolTab;
 }): ReactNode {
-  const requestedSessionSummaryIdsRef = useRef(new Set<string>());
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    for (const session of activitySnapshot.sessions.slice(0, 12)) {
-      const agentSessionId = session.agentSessionId.trim();
-      if (
-        !agentSessionId ||
-        requestedSessionSummaryIdsRef.current.has(agentSessionId) ||
-        hasCachedSessionMessages(activitySnapshot, session)
-      ) {
-        continue;
-      }
-      requestedSessionSummaryIdsRef.current.add(agentSessionId);
-      void activityService
-        .listSessionMessages({
-          agentSessionId,
-          limit: 20,
-          order: "desc",
-          workspaceId
-        })
-        .catch(() => {
-          requestedSessionSummaryIdsRef.current.delete(agentSessionId);
-        });
-    }
-  }, [activityService, activitySnapshot, open, workspaceId]);
-
-  const handleSubmitPrompt = useCallback(
-    async (input: {
-      action?: string;
-      agentSessionId: string;
-      optionId?: string;
-      payload?: Record<string, unknown>;
-      promptKind?: string;
-      requestId: string;
-    }) => {
-      const engine = activityService.getSessionEngine(workspaceId);
-      if (input.promptKind === "plan-implementation") {
-        if (
-          input.action === "implement" ||
-          input.action === "feedback" ||
-          input.action === "skip"
-        ) {
-          dispatchAgentPlanPromptAction({
-            action: input.action,
-            agentSessionId: input.agentSessionId,
-            engine,
-            feedbackText:
-              typeof input.payload?.text === "string"
-                ? input.payload.text
-                : undefined,
-            requestId: input.requestId,
-            workspaceId
-          });
-        }
-        return;
-      }
-      const interaction = selectEnginePendingInteractions(
-        engine.getSnapshot(),
-        input.agentSessionId
-      ).find((candidate) => candidate.requestId === input.requestId);
-      if (!interaction) return;
-      engine.dispatch({
-        type: "interaction/responseRequested",
-        agentSessionId: input.agentSessionId,
-        commandId: [
-          workspaceId,
-          input.agentSessionId,
-          interaction.turnId,
-          input.requestId
-        ].join(":"),
-        requestId: input.requestId,
-        turnId: interaction.turnId,
-        workspaceId,
-        ...(input.action ? { action: input.action } : {}),
-        ...(input.optionId ? { optionId: input.optionId } : {}),
-        ...(input.payload ? { payload: input.payload } : {})
-      });
-    },
-    [activityService, workspaceId]
-  );
-
-  const handleOpenChat = useCallback(
-    (input: { agentSessionId: string; provider: string }) => {
-      onOpenChat(input);
-      onClose();
-    },
-    [onClose, onOpenChat]
-  );
-
   return (
-    <WorkspaceAgentMessageCenterPanel
-      i18n={i18n}
-      locale={locale}
-      model={model}
-      open={open}
-      presentation="embedded"
-      onClose={onClose}
-      onOpenChat={handleOpenChat}
-      promptStatus={(item) =>
-        workspaceAgentMessageCenterPromptStatus(presentationState, item)
-      }
-      onSubmitPrompt={handleSubmitPrompt}
+    <ToolSidebarPanelIcon
+      aria-hidden
+      className="size-3.5 shrink-0"
+      panel={tab.panel}
     />
   );
 }
 
-function hasCachedSessionMessages(
-  snapshot: ReturnType<WorkspaceAgentActivityService["getSnapshot"]>,
-  session: ReturnType<
-    WorkspaceAgentActivityService["getSnapshot"]
-  >["sessions"][number]
-): boolean {
-  return [session.agentSessionId, session.providerSessionId]
-    .filter((value): value is string => Boolean(value?.trim()))
-    .some(
-      (sessionId) => (snapshot.sessionMessagesById[sessionId]?.length ?? 0) > 0
-    );
-}
-
-function StandaloneAgentBrowserToolPanel({
-  appI18n,
-  browserApi,
-  hidden
-}: {
-  appI18n: I18nRuntime<string>;
-  browserApi: DesktopBrowserApi;
-  hidden: boolean;
-}): ReactNode {
-  const [nodeId] = useState(createStandaloneAgentBrowserNodeId);
-  const feature = useMemo(
-    () =>
-      createStandaloneAgentBrowserToolFeature({
-        browserApi,
-        i18n: appI18n,
-        nodeId
-      }),
-    [appI18n, browserApi, nodeId]
-  );
-  const [activationFailed, setActivationFailed] = useState(false);
-  const runtimeState = useExternalStoreValue(
-    feature.runtimeStore.subscribe,
-    () => feature.runtimeStore.getNodeState(nodeId),
-    () => feature.runtimeStore.getNodeState(nodeId)
-  );
-
-  useEffect(() => {
-    const disconnect = feature.connect();
-    setActivationFailed(false);
-    void browserApi
-      .activate({
-        navigationPolicy: null,
-        nodeId,
-        profileId: null,
-        sessionMode: "shared",
-        url: standaloneAgentBrowserDefaultUrl
-      })
-      .catch(() => setActivationFailed(true));
-    return () => {
-      disconnect();
-      void browserApi.close({ nodeId }).catch(() => undefined);
-    };
-  }, [browserApi, feature, nodeId]);
-
-  return (
-    <div
-      className="relative h-full min-h-0 overflow-hidden"
-      data-standalone-agent-browser-surface="true"
-    >
-      <BrowserNode
-        defaultUrl={standaloneAgentBrowserDefaultUrl}
-        feature={feature}
-        hidden={hidden}
-        nodeId={nodeId}
-        syncDefaultUrl
-      />
-      {activationFailed && runtimeState.lifecycle === "cold" ? (
-        <div
-          className="absolute inset-0 flex items-center justify-center text-sm text-[var(--text-secondary)]"
-          role="status"
-        >
-          {feature.i18n.t(browserNodeLoadFailedI18nKey)}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function createStandaloneAgentBrowserNodeId(): string {
+function createToolTabId(panel: StandaloneAgentToolPanelId): string {
   const instanceId =
     typeof globalThis.crypto?.randomUUID === "function"
       ? globalThis.crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `browser:standalone-agent-tool:${instanceId}`;
-}
-
-function StandaloneAgentTerminalPanel({
-  contributions,
-  open,
-  setToolHost,
-  unavailableLabel
-}: {
-  contributions: readonly WorkbenchContribution[] | undefined;
-  open: boolean;
-  setToolHost: (
-    panel: StandaloneAgentSharedToolPanelId,
-    host: WorkbenchHostHandle | null
-  ) => void;
-  unavailableLabel: string;
-}): ReactNode {
-  const runtime = useMemo(() => {
-    const contribution = contributions?.find(
-      (candidate) => candidate.id === "workspace-terminal"
-    );
-    return contribution
-      ? getWorkspaceTerminalSurfaceRuntime(contribution)
-      : null;
-  }, [contributions]);
-  const terminalFeature = useMemo(() => {
-    if (!runtime) {
-      return null;
-    }
-    return {
-      ...runtime.feature,
-      resolveTheme(input: Parameters<typeof runtime.feature.resolveTheme>[0]) {
-        const panelTheme = resolveStandaloneAgentTerminalTheme();
-        const terminalTheme = runtime.feature.resolveTheme(input);
-        return {
-          ...panelTheme,
-          ...terminalTheme,
-          background: panelTheme.background ?? terminalTheme.background
-        };
-      }
-    };
-  }, [runtime]);
-  const [nodeId] = useState(createStandaloneAgentTerminalNodeId);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [launchError, setLaunchError] = useState(false);
-  const launchPromiseRef = useRef<Promise<void> | null>(null);
-  const directHost = useMemo(createStandaloneAgentDirectToolHost, []);
-  const externalState = useExternalStoreValue(
-    runtime?.subscribe ?? emptySubscribe,
-    () => runtime?.getExternalState(sessionId) ?? null,
-    () => null
-  );
-
-  useEffect(() => {
-    setToolHost("terminal", directHost.host);
-    return () => setToolHost("terminal", null);
-  }, [directHost, setToolHost]);
-
-  useEffect(() => {
-    directHost.setNode(
-      sessionId
-        ? {
-            instanceId: sessionId,
-            nodeId,
-            resolveCloseEffect: async () => {
-              const latestState = runtime?.getExternalState(sessionId) ?? null;
-              if (
-                !runtime ||
-                !latestState ||
-                latestState.status === "created" ||
-                latestState.status === "exited" ||
-                latestState.status === "failed"
-              ) {
-                return null;
-              }
-              try {
-                const guard = await runtime.feature.closeGuard.check({
-                  sessionId
-                });
-                if (
-                  !guard.requiresConfirmation ||
-                  guard.reason === "not-running" ||
-                  guard.status === "exited" ||
-                  guard.status === "failed"
-                ) {
-                  return null;
-                }
-              } catch {
-                // Preserve the OS terminal's conservative close behavior when
-                // the daemon cannot resolve the guard state.
-              }
-              return {
-                description: runtime.feature.i18n.t(
-                  terminalCloseGuardDescriptionI18nKey
-                ),
-                nodeId,
-                title: latestState.title,
-                typeId: "workspace-terminal"
-              };
-            },
-            title: externalState?.title ?? "",
-            typeId: "workspace-terminal"
-          }
-        : null
-    );
-  }, [directHost, externalState?.title, nodeId, runtime, sessionId]);
-
-  useEffect(() => {
-    if (!open || !runtime || sessionId || launchPromiseRef.current) {
-      return;
-    }
-    setLaunchError(false);
-    const launchPromise = runtime
-      .createSession()
-      .then((session) => setSessionId(session.sessionId))
-      .catch(() => setLaunchError(true))
-      .finally(() => {
-        if (launchPromiseRef.current === launchPromise) {
-          launchPromiseRef.current = null;
-        }
-      });
-    launchPromiseRef.current = launchPromise;
-  }, [open, runtime, sessionId]);
-
-  return (
-    <section
-      aria-hidden={!open}
-      className={cn(
-        "relative h-full min-h-0 overflow-hidden bg-[var(--background-session-sidepanel)]",
-        !open && "pointer-events-none"
-      )}
-      data-standalone-agent-terminal-panel="true"
-      style={
-        {
-          "--tutti-surface": "var(--background-session-sidepanel)"
-        } as CSSProperties
-      }
-    >
-      <div
-        className="h-full min-h-0 overflow-hidden"
-        data-standalone-agent-terminal-surface="true"
-      >
-        {terminalFeature && sessionId ? (
-          <TerminalNode
-            externalState={externalState}
-            feature={terminalFeature}
-            nodeId={nodeId}
-            sessionId={sessionId}
-            showHeader={false}
-          />
-        ) : launchError || !runtime ? (
-          <div
-            className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]"
-            role="status"
-          >
-            {unavailableLabel}
-          </div>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function createStandaloneAgentTerminalNodeId(): string {
-  const instanceId =
-    typeof globalThis.crypto?.randomUUID === "function"
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `workspace-terminal:standalone-agent-tool:${instanceId}`;
-}
-
-function resolveStandaloneAgentTerminalTheme(): TerminalTheme {
-  if (typeof window === "undefined" || typeof document === "undefined") {
-    return {};
-  }
-  const styles = window.getComputedStyle(document.documentElement);
-  const background = styles
-    .getPropertyValue("--background-session-sidepanel")
-    .trim();
-  const foreground = styles.getPropertyValue("--text-primary").trim();
-  return {
-    ...(background ? { background } : {}),
-    ...(foreground ? { cursor: foreground, foreground } : {})
-  };
-}
-
-function emptySubscribe(): () => void {
-  return () => undefined;
+  return `${panel}:${instanceId}`;
 }

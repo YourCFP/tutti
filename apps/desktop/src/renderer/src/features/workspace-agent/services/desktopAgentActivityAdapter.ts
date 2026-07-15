@@ -24,6 +24,7 @@ import {
 } from "./desktopAgentActivityMessageNormalization.ts";
 import { agentActivityComposerOptionsFromTuttidResult } from "../../../lib/agentComposerOptionsProjection.ts";
 import { reportAgentSubmitTraceDiagnostic as reportDesktopAgentSubmitTrace } from "./desktopAgentRuntimeSubmitDiagnostics.ts";
+import { DESKTOP_AGENT_GUI_CURRENT_USER_ID } from "./desktopAgentGuiIdentity.ts";
 
 export interface CreateDesktopAgentActivityAdapterInput {
   composerOptionsRequestTimeoutMs?: number;
@@ -460,6 +461,7 @@ export function agentActivitySessionFromTuttidSession(
   workspaceId: string,
   session: WorkspaceAgentSession
 ): AgentActivitySession {
+  assertProtocolV2SessionContract(session);
   const createdAtUnixMs = session.createdAtUnixMs;
   const updatedAtUnixMs = session.updatedAtUnixMs;
   return {
@@ -468,13 +470,14 @@ export function agentActivitySessionFromTuttidSession(
     agentTargetId: session.agentTargetId ?? null,
     provider: session.provider,
     providerSessionId: session.providerSessionId ?? session.id,
+    userId: DESKTOP_AGENT_GUI_CURRENT_USER_ID,
     cwd: session.cwd ?? "/",
     title: session.title ?? "",
-    activeTurnId: session.activeTurnId ?? null,
+    activeTurnId: session.activeTurnId,
     activeTurn: session.activeTurn ?? null,
     latestTurn: session.latestTurn ?? null,
-    latestTurnInteractions: session.latestTurnInteractions ?? [],
-    pendingInteractions: session.pendingInteractions ?? [],
+    latestTurnInteractions: session.latestTurnInteractions,
+    pendingInteractions: session.pendingInteractions,
     settings: structuredClone(session.settings),
     permissionConfig: structuredClone(session.permissionConfig),
     capabilities: session.capabilities
@@ -496,6 +499,28 @@ export function agentActivitySessionFromTuttidSession(
     createdAtUnixMs,
     updatedAtUnixMs
   };
+}
+
+function assertProtocolV2SessionContract(session: WorkspaceAgentSession): void {
+  const value = session as unknown as Record<string, unknown>;
+  const missing = [
+    "activeTurnId",
+    "latestTurnInteractions",
+    "pendingInteractions"
+  ].filter((field) => !Object.prototype.hasOwnProperty.call(value, field));
+  if (missing.length > 0) {
+    throw new Error(
+      `Protocol v2 contract error: workspace agent session is missing required field(s): ${missing.join(", ")}`
+    );
+  }
+  if (
+    !Array.isArray(value.latestTurnInteractions) ||
+    !Array.isArray(value.pendingInteractions)
+  ) {
+    throw new Error(
+      "Protocol v2 contract error: workspace agent interaction collections must be arrays"
+    );
+  }
 }
 
 export function agentActivityMessageFromTuttidMessage(

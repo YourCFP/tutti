@@ -276,12 +276,11 @@ func TestDefaultPreparerCodexWritesInstructionsSkillManifestAndEnv(t *testing.T)
 		!strings.Contains(string(workspaceAppSkill), "use injected `$tutti-cli`") ||
 		!strings.Contains(string(workspaceAppSkill), "command-guide.md") ||
 		!strings.Contains(string(workspaceAppSkill), "Do not derive filesystem paths from the plugin directory, plugin name, or skill slug") ||
-		!strings.Contains(string(workspaceAppSkill), "inherits the caller agent session working directory") ||
-		!strings.Contains(string(workspaceAppSkill), "turn-resources") ||
-		!strings.Contains(string(workspaceAppSkill), "specific caller session turn") ||
-		!strings.Contains(string(workspaceAppSkill), "agent turn-resources --session-id <caller-session-id> --turn-id <turnId> --json") ||
-		!strings.Contains(string(workspaceAppSkill), "`--image <localPath>`") {
+		!strings.Contains(string(workspaceAppSkill), "inherits the caller agent session working directory") {
 		t.Fatalf("workspace-app skill content = %q", string(workspaceAppSkill))
+	}
+	if strings.Contains(string(workspaceAppSkill), "turn-resources") || strings.Contains(string(workspaceAppSkill), "--image <localPath>") {
+		t.Fatalf("workspace-app skill owns agent image handoff guidance: %q", string(workspaceAppSkill))
 	}
 	if strings.Contains(string(workspaceAppSkill), "read the materialized sibling `tutti-cli/SKILL.md`") {
 		t.Fatalf("workspace-app skill should not ask agents to guess sibling skill paths: %q", string(workspaceAppSkill))
@@ -953,7 +952,7 @@ func TestDefaultPreparerClaudeCodeUsesSessionScopedSystemPrompt(t *testing.T) {
 		!strings.Contains(string(systemPrompt), "bounded shell/script") ||
 		!strings.Contains(string(systemPrompt), "agent wait --session-id <session-id> --json") ||
 		!strings.Contains(string(systemPrompt), "agent session-summary --session-id <session-id> --json") ||
-		!strings.Contains(string(systemPrompt), "hand off, do not do it yourself") {
+		!strings.Contains(string(systemPrompt), "verify with `agent list`; hand off, do not do it yourself") {
 		t.Fatalf("claude system prompt content = %q, want mention handoff fallback guidance", string(systemPrompt))
 	}
 	if !strings.Contains(string(systemPrompt), "# Host App Context") ||
@@ -1037,7 +1036,7 @@ func TestDefaultPreparerClaudeCodeUsesSessionScopedSystemPrompt(t *testing.T) {
 	}
 }
 
-func TestDefaultPreparerClaudeCodeSetsClaudeCodeExecutableFromPath(t *testing.T) {
+func TestDefaultPreparerClaudeCodeSetsFallbackExecutableFromPath(t *testing.T) {
 	binDir := t.TempDir()
 	claudePath := filepath.Join(binDir, "claude")
 	if err := os.WriteFile(claudePath, []byte("#!/bin/sh\n"), 0o755); err != nil {
@@ -1055,8 +1054,41 @@ func TestDefaultPreparerClaudeCodeSetsClaudeCodeExecutableFromPath(t *testing.T)
 	if err != nil {
 		t.Fatalf("Prepare() error = %v", err)
 	}
-	if got := envValue(prepared.Env, "CLAUDE_CODE_EXECUTABLE"); got != claudePath {
-		t.Fatalf("CLAUDE_CODE_EXECUTABLE = %q, want %q", got, claudePath)
+	// A PATH-installed claude is only a fallback: the sidecar prefers a native
+	// SDK binary and the tuttid-provisioned one, so it must arrive via the
+	// fallback env, not the always-wins override.
+	if got := envValue(prepared.Env, claudeCodeFallbackExecutableEnvName); got != claudePath {
+		t.Fatalf("%s = %q, want %q", claudeCodeFallbackExecutableEnvName, got, claudePath)
+	}
+	if got := envValue(prepared.Env, claudeCodeExecutableEnvName); got != "" {
+		t.Fatalf("%s = %q, want empty", claudeCodeExecutableEnvName, got)
+	}
+}
+
+func TestDefaultPreparerClaudeCodePrefersManagedBinaryOverPath(t *testing.T) {
+	binDir := t.TempDir()
+	claudePath := filepath.Join(binDir, "claude")
+	if err := os.WriteFile(claudePath, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	t.Setenv("CLAUDE_CODE_EXECUTABLE", "")
+	stateDir := t.TempDir()
+	managed := filepath.Join(stateDir, "agent-providers", "claude-code", "versions", "2.1.201", "claude")
+	writeFakeExecutable(t, managed)
+	writeManagedClaudePointer(t, stateDir, managed)
+
+	prepared, err := NewDefaultPreparer(stateDir).Prepare(t.Context(), PrepareInput{
+		WorkspaceID:    "workspace-1",
+		AgentSessionID: "session-1",
+		Provider:       "claude-code",
+		Cwd:            t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	if got := envValue(prepared.Env, claudeCodeFallbackExecutableEnvName); got != managed {
+		t.Fatalf("%s = %q, want managed binary %q", claudeCodeFallbackExecutableEnvName, got, managed)
 	}
 }
 

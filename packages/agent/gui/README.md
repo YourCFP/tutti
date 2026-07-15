@@ -27,9 +27,25 @@ Runtime-owned capability declarations are optional and default to enabled:
 - `canSubmitInteractive`: shows approval, ask-user, and plan-decision
   interaction entries.
 - `canGoalControl`: shows goal banner controls, `/goal`, and the goal badge.
-- `canUploadAttachment`: enables prompt attachment upload paths such as pasted
-  images, pasted large text, and dropped or host-local files. Ordinary `@`
-  references and workspace-reference mentions remain available.
+- `canUploadAttachment`: enables prompt attachment paths. Pasted large text
+  additionally requires the explicit `AgentActivityRuntime.stagePastedText`
+  host method; AgentGUI does not infer that capability from generic file
+  upload support. Ordinary `@` references and workspace-reference mentions
+  remain available.
+
+## Pasted Text Staging
+
+AgentGUI classifies plain-text clipboard content before delegating structured
+mention HTML. A trimmed payload of at least 5,000 characters is never inserted
+into the prompt automatically. It becomes a pasted-text draft attachment and
+is passed as raw text to `AgentActivityRuntime.stagePastedText`; the host owns
+local persistence and returns `{ path, name, sizeBytes }`.
+
+If the method is absent or staging fails, the attachment remains in an explicit
+failed state and retains its in-memory text. AgentGUI must not silently put the
+payload back into the input. The user can explicitly choose “Show in text
+field” to do that. Generic `uploadPromptContent` remains the contract for
+images and host-local files; it is not a pasted-text capability signal.
 
 Slash commands come from the runtime session command snapshot. AgentGUI keeps
 legacy provider-default slash entries unless the host passes
@@ -82,6 +98,20 @@ pnpm check:agent-activity-runtime-boundaries
 `hostCapabilities`, `hostActions`, and `renderSlots`. Extend the owning object;
 do not restore flat compatibility props.
 
+## Home Suggestions
+
+The five starter entries below the empty new-session composer are enabled by
+default. External hosts can hide individual entries with the public
+`AgentGUI.disabled` array:
+
+```tsx
+<AgentGUI disabled={["meet-tutti", "import-session"]} {...props} />
+```
+
+The supported stable IDs are `meet-tutti`, `task-breakdown`, `quality-review`,
+`agent-interaction`, and `import-session`. Omitting `disabled` (or passing an
+empty array) renders all five entries.
+
 ## Agent Directory
 
 `AgentGUI` requires the host's `/agents` projection through its `agents` prop.
@@ -93,6 +123,7 @@ export interface AgentGUIAgent {
   agentTargetId: string;
   name: string;
   iconUrl: string;
+  heroImageUrl?: string | null;
   description?: string | null;
   owner?: {
     name?: string | null;
@@ -123,9 +154,10 @@ Runnable provider targets are host-supplied. If the target catalog is absent,
 AgentGUI presents an explicit unavailable state; it does not synthesize local
 targets from presentation metadata.
 
-Agent names and primary icons always come from `agents[].name` and
-`agents[].iconUrl`. `owner.avatarUrl` is rendered separately as an ownership
-badge. Invalid entries and duplicate `agentTargetId` values are discarded by
+Agent names, primary icons, and optional home-carousel artwork come from
+`agents[].name`, `agents[].iconUrl`, and `agents[].heroImageUrl`.
+`owner.avatarUrl` is rendered separately as an ownership badge. Invalid entries
+and duplicate `agentTargetId` values are discarded by
 `normalizeAgentGUIAgents`, with the first occurrence preserving host order.
 
 With one agent, AgentGUI hides the aggregate `All` entry and renders that agent
@@ -158,8 +190,9 @@ for that asset. The WebGL carousel keeps a local programmatic owner marker when
 the remote image cannot be decoded or uploaded safely, while DOM avatar
 surfaces continue using the same shared presentation.
 
-Use `agentsLoading` for directory hydration and `renderAgentsEmpty` for a
-host-specific loaded-empty state. Use `renderAgentUnavailableState` or
+Pass the full `agentDirectory` lifecycle snapshot for directory hydration and
+use `renderAgentsEmpty` for a host-specific loaded-empty state. Use
+`renderAgentUnavailableState` or
 `renderAgentReadinessState` for host-specific availability presentation, and
 handle install/login/refresh requests through `onAgentAvailabilityAction`.
 

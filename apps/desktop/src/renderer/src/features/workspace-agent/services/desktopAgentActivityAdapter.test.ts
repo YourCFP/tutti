@@ -16,6 +16,25 @@ import {
 
 const workspaceId = "workspace-1";
 
+test("desktop agent activity adapter rejects missing protocol v2 session fields", () => {
+  for (const field of [
+    "activeTurnId",
+    "latestTurnInteractions",
+    "pendingInteractions"
+  ] as const) {
+    const malformed = { ...createSession() } as Record<string, unknown>;
+    delete malformed[field];
+    assert.throws(
+      () =>
+        agentActivitySessionFromTuttidSession(
+          workspaceId,
+          malformed as WorkspaceAgentSession
+        ),
+      new RegExp(`Protocol v2 contract error:.*${field}`)
+    );
+  }
+});
+
 test("desktop agent activity adapter preserves a settled latest turn on reload", () => {
   const latestTurn = {
     agentSessionId: "agent-session-1",
@@ -64,6 +83,7 @@ test("desktop agent activity adapter maps typed canonical session control fields
     createSession({
       backgroundAgents: { count: 1, items: [] },
       capabilities: {
+        activeTurnGuidance: false,
         browserUse: false,
         compact: true,
         computerUse: false,
@@ -130,13 +150,14 @@ test("desktop agent activity adapter maps tuttid sessions and messages", async (
     tuttidClient: createTuttidClient({
       async listWorkspaceAgentSessions(
         requestWorkspaceId: string,
-        request?: { limit?: number }
+        request?: { limit?: number; searchQuery?: string }
       ) {
         calls.push({
           args: [requestWorkspaceId, request],
           method: "listSessions"
         });
         return {
+          hasMore: false,
           sessions: [
             createSession({
               cwd: "/repo",
@@ -507,7 +528,7 @@ test("desktop agent activity adapter leaves session event subscription to the se
     runtimeApi: createRuntimeApi(diagnostics)
   });
 
-  assert.equal(adapter.subscribeSessionEvents, undefined);
+  assert.equal("subscribeSessionEvents" in adapter, false);
   assert.deepEqual(diagnostics, []);
 });
 
@@ -611,6 +632,7 @@ test("desktop agent activity adapter normalizes provider composer options", asyn
             planModeExclusiveWithPermissionMode: false
           },
           capabilities: {
+            activeTurnGuidance: true,
             browserUse: true,
             compact: false,
             computerUse: false,
@@ -687,6 +709,7 @@ test("desktop agent activity adapter normalizes provider composer options", asyn
   ]);
   assert.equal(options.capabilities?.planMode, true);
   assert.equal(options.capabilities?.browserUse, true);
+  assert.equal(options.capabilities?.activeTurnGuidance, true);
 });
 
 test("desktop agent activity adapter cancels composer options when caller aborts", async () => {
@@ -1485,7 +1508,7 @@ function createTuttidClient(
       };
     },
     async listWorkspaceAgentSessions() {
-      return { sessions: [createSession()], workspaceId };
+      return { hasMore: false, sessions: [createSession()], workspaceId };
     },
     async getAgentProviderComposerOptions() {
       return {

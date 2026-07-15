@@ -9,13 +9,14 @@ import {
   selectEnginePromptQueue,
   selectEnginePromptQueueError,
   selectEngineSession,
+  selectEngineSessionDeleted,
   selectEngineSessionError,
   selectEngineSessionIsRespondingToInteraction,
+  selectEngineSessionReconcile,
   selectEngineSessionSettingsUpdate,
   selectEngineSubmitAvailability,
   selectLatestActivationForSession,
   selectLatestPendingSubmitForSession,
-  selectPendingActivations,
   selectPendingSubmitsForSession,
   selectSessionHasUnconfirmedSubmit,
   selectSessionIsSubmitting,
@@ -31,19 +32,14 @@ import type {
 import { useEngineSelector } from "../../../shared/engine/useEngineSelector";
 import { EMPTY_QUEUED_PROMPTS } from "./agentGuiController.draftMessageHelpers";
 import { agentActivityInteractionListsEqual } from "./agentGuiController.providerHelpers";
+import { agentGUIQueueStatusFromPromptQueue } from "./agentGuiQueueStatus";
+import { isPendingNewConversationActivation } from "./useAgentGUIActivation";
 
 export function useAgentGUISessionEngineState(input: {
   activeConversationId: string | null;
   sessionEngine: AgentSessionEngine;
 }) {
   const { activeConversationId, sessionEngine } = input;
-  const hasPendingNewActivation = useEngineSelector(sessionEngine, (state) =>
-    selectPendingActivations(state).some(
-      (activation) =>
-        activation.mode === "new" &&
-        (activation.status === "requested" || activation.status === "uncertain")
-    )
-  );
   const activeQueuedPromptSnapshot = useEngineSelector(sessionEngine, (state) =>
     selectEnginePromptQueue(state, activeConversationId)
   );
@@ -65,6 +61,9 @@ export function useAgentGUISessionEngineState(input: {
   const activePendingActivation = useEngineSelector(sessionEngine, (state) =>
     selectLatestActivationForSession(state, activeConversationId)
   );
+  const isCreatingConversation = isPendingNewConversationActivation(
+    activePendingActivation
+  );
   const isSubmitting = useEngineSelector(sessionEngine, (state) =>
     selectSessionIsSubmitting(state, activeConversationId)
   );
@@ -76,6 +75,17 @@ export function useAgentGUISessionEngineState(input: {
   );
   const activeEngineSession = useEngineSelector(sessionEngine, (state) =>
     selectEngineSession(state, activeConversationId)
+  );
+  const activeSessionReconcile = useEngineSelector(sessionEngine, (state) =>
+    selectEngineSessionReconcile(state, activeConversationId)
+  );
+  const activeSessionReconcilePending = Boolean(
+    activeSessionReconcile?.inFlightCommandId ||
+    activeSessionReconcile?.pendingMessages ||
+    activeSessionReconcile?.pendingState
+  );
+  const activeEngineSessionDeleted = useEngineSelector(sessionEngine, (state) =>
+    selectEngineSessionDeleted(state, activeConversationId)
   );
   const activeEngineActiveTurn = useEngineSelector(sessionEngine, (state) =>
     selectEngineActiveTurn(state, activeConversationId)
@@ -180,13 +190,19 @@ export function useAgentGUISessionEngineState(input: {
     activeEngineLatestTurn,
     activeEnginePendingInteractions,
     activeEngineSession,
+    activeEngineSessionDeleted,
     activeLatestPendingSubmit,
     activePendingActivation,
     activePendingSubmits,
     activeQueuedPromptInFlight: activeQueuedPromptSnapshot?.inFlight ?? null,
     activeQueuedPrompts,
+    activeQueueStatus: agentGUIQueueStatusFromPromptQueue(
+      activeQueuedPromptSnapshot
+    ),
     activeSessionState,
-    hasPendingNewActivation,
+    activeSessionReconcilePending,
+    activeSessionReconcileError: activeSessionReconcile?.errorMessage ?? null,
+    isCreatingConversation,
     hasUnconfirmedSubmit,
     isRespondingToInteraction,
     isSubmitting

@@ -124,9 +124,12 @@ func TestServiceUpdateTitleRejectsOverlongTitle(t *testing.T) {
 	service := newIsolatedAgentService(runtime)
 	service.SessionReader = &fakeSessionReader{}
 
-	_, err := service.UpdateTitle(context.Background(), "ws-1", "session-1", strings.Repeat("好", maxSessionTitleRunes+1))
+	_, err := service.UpdateTitle(context.Background(), "ws-1", "session-1", strings.Repeat("好", MaxSessionTitleRunes+1))
 	if !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("UpdateTitle error = %v, want ErrInvalidArgument", err)
+	}
+	if !errors.Is(err, ErrSessionTitleTooLong) {
+		t.Fatalf("UpdateTitle error = %v, want ErrSessionTitleTooLong", err)
 	}
 }
 
@@ -382,8 +385,8 @@ func TestServiceCreateResolvesAgentTargetID(t *testing.T) {
 	if got := runtime.startCalls[0].Provider; got != "codex" {
 		t.Fatalf("runtime provider = %q, want codex", got)
 	}
-	if got := runtime.startCalls[0].ProviderTargetRef["kind"]; got != "local_cli" {
-		t.Fatalf("provider target ref kind = %#v, want local_cli", got)
+	if got := runtime.startCalls[0].ProviderTargetRef["kind"]; got != "builtin_local" {
+		t.Fatalf("provider target ref kind = %#v, want builtin_local", got)
 	}
 	if got := runtime.startCalls[0].ProviderTargetRef["targetId"]; got != "local-codex" {
 		t.Fatalf("provider target ref targetId = %#v, want local-codex", got)
@@ -1092,7 +1095,7 @@ func TestServiceImportPreservesLocalCodexModelAndReasoningEffort(t *testing.T) {
 		map[string]any{
 			"timestamp": now,
 			"type":      "turn_context",
-			"payload":   map[string]any{"turn_id": "turn-1", "cwd": project, "model": "gpt-5.4", "effort": "xhigh"},
+			"payload":   map[string]any{"turn_id": "turn-1", "cwd": project, "model": "gpt-5.4", "effort": "minimal"},
 		},
 		map[string]any{"timestamp": now, "type": "response_item", "payload": map[string]any{
 			"type": "message", "id": "codex-model-1", "role": "user",
@@ -1122,8 +1125,8 @@ func TestServiceImportPreservesLocalCodexModelAndReasoningEffort(t *testing.T) {
 	if session.Settings.Model != "gpt-5.4" {
 		t.Fatalf("settings.Model = %q, want imported turn_context model", session.Settings.Model)
 	}
-	if session.Settings.ReasoningEffort != "xhigh" {
-		t.Fatalf("settings.ReasoningEffort = %q, want imported turn_context effort", session.Settings.ReasoningEffort)
+	if session.Settings.ReasoningEffort != "minimal" {
+		t.Fatalf("settings.ReasoningEffort = %q, want raw catalog-backed turn_context effort", session.Settings.ReasoningEffort)
 	}
 }
 
@@ -1683,6 +1686,85 @@ func TestServiceCreateUsesProviderDefaultModelWhenModelOmitted(t *testing.T) {
 	}
 	if session.Settings == nil || session.Settings.Model != "gpt-5" {
 		t.Fatalf("session settings = %#v, want default model", session.Settings)
+	}
+}
+
+func TestServiceCreateClampsLegacyMaxToSelectedModelCapability(t *testing.T) {
+	runtime := newFakeRuntime()
+	service := newTestService(runtime)
+	service.ModelCatalog = fakeModelCatalog{
+		result: AgentModelCatalogResult{
+			Provider: "codex",
+			Source:   "codex-cli",
+			Models: []AgentModelOption{{
+				ID:                         "gpt-5.3-codex-spark",
+				DefaultReasoningEffort:     "xhigh",
+				ReasoningEffortsAdvertised: true,
+				SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+					{Value: "low"},
+					{Value: "medium"},
+					{Value: "high"},
+					{Value: "xhigh"},
+				},
+			}},
+		},
+	}
+
+	session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
+		AgentSessionID:  "44444444-4444-4444-8444-444444444444",
+		AgentTargetID:   agenttargetbiz.IDLocalCodex,
+		Provider:        "codex",
+		Model:           stringRef("gpt-5.3-codex-spark"),
+		ReasoningEffort: stringRef("max"),
+	})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	if len(runtime.startCalls) != 1 || runtime.startCalls[0].ReasoningEffort != "xhigh" {
+		t.Fatalf("runtime start calls = %#v, want Spark reasoning xhigh", runtime.startCalls)
+	}
+	if session.Settings == nil || session.Settings.ReasoningEffort != "xhigh" {
+		t.Fatalf("session settings = %#v, want Spark reasoning xhigh", session.Settings)
+	}
+}
+
+func TestServiceCreatePreservesAdvertisedReasoningEffort(t *testing.T) {
+	for _, effort := range []string{"minimal", "none"} {
+		t.Run(effort, func(t *testing.T) {
+			runtime := newFakeRuntime()
+			service := newTestService(runtime)
+			service.ModelCatalog = fakeModelCatalog{
+				result: AgentModelCatalogResult{
+					Provider: "codex",
+					Source:   "codex-cli",
+					Models: []AgentModelOption{{
+						ID:                         "gpt-catalog",
+						DefaultReasoningEffort:     "high",
+						ReasoningEffortsAdvertised: true,
+						SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+							{Value: "minimal"}, {Value: "none"}, {Value: "high"},
+						},
+					}},
+				},
+			}
+
+			session, err := service.Create(context.Background(), "ws-1", CreateSessionInput{
+				AgentSessionID:  "55555555-5555-4555-8555-555555555555",
+				AgentTargetID:   agenttargetbiz.IDLocalCodex,
+				Provider:        "codex",
+				Model:           stringRef("gpt-catalog"),
+				ReasoningEffort: stringRef(effort),
+			})
+			if err != nil {
+				t.Fatalf("Create returned error: %v", err)
+			}
+			if len(runtime.startCalls) != 1 || runtime.startCalls[0].ReasoningEffort != effort {
+				t.Fatalf("runtime start calls = %#v, want reasoning %q", runtime.startCalls, effort)
+			}
+			if session.Settings == nil || session.Settings.ReasoningEffort != effort {
+				t.Fatalf("session settings = %#v, want reasoning %q", session.Settings, effort)
+			}
+		})
 	}
 }
 
@@ -2348,10 +2430,12 @@ func TestServiceGetSkillBundleUsesRuntimeRenderer(t *testing.T) {
 	runtime := newFakeRuntime()
 	var renderInput runtimeprep.PrepareInput
 	service := newIsolatedAgentService(runtime)
+	service.AgentTargetStore = fakeAgentTargetStore{targets: defaultTestAgentTargets()}
 	service.RuntimePreparer = fakeSkillBundleRenderer{
 		input: &renderInput,
 		bundle: runtimeprep.SkillBundle{
 			SchemaVersion:  1,
+			AgentTargetID:  agenttargetbiz.IDLocalCodex,
 			Provider:       "codex",
 			AgentSessionID: "run-1",
 			CLICommand:     "tutti-dev",
@@ -2363,14 +2447,15 @@ func TestServiceGetSkillBundleUsesRuntimeRenderer(t *testing.T) {
 
 	bundle, err := service.GetSkillBundle(context.Background(), "ws-1", SkillBundleInput{
 		AgentSessionID: "run-1",
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
 		BrowserUse:     true,
-		Provider:       " codex ",
 	})
 	if err != nil {
 		t.Fatalf("GetSkillBundle returned error: %v", err)
 	}
 	if renderInput.WorkspaceID != "ws-1" ||
 		renderInput.AgentSessionID != "run-1" ||
+		renderInput.AgentTargetID != agenttargetbiz.IDLocalCodex ||
 		renderInput.Provider != "codex" ||
 		!renderInput.BrowserUse ||
 		renderInput.ComputerUse {
@@ -2387,9 +2472,10 @@ func TestServiceGetSkillBundleUsesRuntimeRenderer(t *testing.T) {
 func TestServiceGetSkillBundleRequiresRenderer(t *testing.T) {
 	runtime := newFakeRuntime()
 	service := newIsolatedAgentService(runtime)
+	service.AgentTargetStore = fakeAgentTargetStore{targets: map[string]agenttargetbiz.Target{}}
 	service.RuntimePreparer = fakeRuntimePreparer{}
 
-	_, err := service.GetSkillBundle(context.Background(), "ws-1", SkillBundleInput{Provider: "codex"})
+	_, err := service.GetSkillBundle(context.Background(), "ws-1", SkillBundleInput{AgentTargetID: "missing:agent"})
 	if !errors.Is(err, ErrSkillBundleUnavailable) {
 		t.Fatalf("GetSkillBundle error = %v, want ErrSkillBundleUnavailable", err)
 	}
@@ -2512,6 +2598,58 @@ func TestServiceGetComposerOptionsResolvesProviderFromAgentTargetID(t *testing.T
 	}
 	if options.RuntimeContext["agentTargetId"] != agenttargetbiz.IDLocalCodex {
 		t.Fatalf("runtimeContext agentTargetId = %#v, want %q", options.RuntimeContext["agentTargetId"], agenttargetbiz.IDLocalCodex)
+	}
+}
+
+func TestServiceGetComposerOptionsPreservesExtensionProviderFromAgentTargetID(t *testing.T) {
+	runtime := newFakeRuntime()
+	runtime.startHook = func(input RuntimeStartInput, session ProviderRuntimeSession) ProviderRuntimeSession {
+		if input.Visible != nil && !*input.Visible {
+			session.RuntimeContext = map[string]any{
+				"configOptions": []any{
+					map[string]any{
+						"id": "model",
+						"options": []any{
+							map[string]any{"value": "gemini-2.5-pro", "name": "Gemini 2.5 Pro"},
+						},
+					},
+				},
+			}
+		}
+		return session
+	}
+	service := newIsolatedAgentService(runtime)
+	service.AgentTargetStore = fakeAgentTargetStore{targets: map[string]agenttargetbiz.Target{
+		"extension:gemini": {
+			ID:            "extension:gemini",
+			Provider:      "acp:gemini",
+			LaunchRefJSON: `{"type":"agent_extension","extensionInstallationId":"gemini@1.0.0"}`,
+			Name:          "Gemini CLI",
+			Enabled:       true,
+			Source:        agenttargetbiz.SourceSystem,
+		},
+	}}
+	service.CapabilityLister = &recordingComposerCapabilityLister{}
+
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		AgentTargetID: "extension:gemini",
+		Provider:      "acp:gemini",
+		WorkspaceID:   "workspace-1",
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if options.Provider != "acp:gemini" {
+		t.Fatalf("provider = %q, want acp:gemini", options.Provider)
+	}
+	if options.RuntimeContext["agentTargetId"] != "extension:gemini" {
+		t.Fatalf("runtimeContext agentTargetId = %#v, want extension:gemini", options.RuntimeContext["agentTargetId"])
+	}
+	if !options.ModelConfig.Configurable || len(options.ModelConfig.Options) != 1 || options.ModelConfig.Options[0].Value != "gemini-2.5-pro" {
+		t.Fatalf("modelConfig = %#v, want live extension model options", options.ModelConfig)
+	}
+	if len(runtime.startCalls) != 1 || runtime.startCalls[0].ProviderTargetRef["kind"] != "agent_extension" {
+		t.Fatalf("runtime start calls = %#v, want one target-scoped extension discovery", runtime.startCalls)
 	}
 }
 
@@ -2779,8 +2917,17 @@ func TestServiceGetsComposerOptionsFromOpenCodeModelCatalogWithReasoning(t *test
 			Provider: "opencode",
 			Source:   "opencode-cli",
 			Models: []AgentModelOption{
-				{ID: "openai/gpt-5.3-codex-spark", DisplayName: "GPT-5.3 Codex Spark", IsDefault: true, SupportsImageInput: &imageSupported},
-				{ID: "openai/gpt-5.3-codex", DisplayName: "GPT-5.3 Codex"},
+				{
+					ID:                         "openai/gpt-5.3-codex-spark",
+					DisplayName:                "GPT-5.3 Codex Spark",
+					IsDefault:                  true,
+					SupportsImageInput:         &imageSupported,
+					ReasoningEffortsAdvertised: true,
+					SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+						{Value: "low"}, {Value: "medium"}, {Value: "high"}, {Value: "max"},
+					},
+				},
+				{ID: "opencode/big-pickle", DisplayName: "Big Pickle", ReasoningEffortsAdvertised: true},
 			},
 		},
 	}
@@ -2797,11 +2944,11 @@ func TestServiceGetsComposerOptionsFromOpenCodeModelCatalogWithReasoning(t *test
 	if options.EffectiveSettings.Model != "openai/gpt-5.3-codex-spark" {
 		t.Fatalf("effectiveSettings.model = %q, want openai/gpt-5.3-codex-spark", options.EffectiveSettings.Model)
 	}
-	if options.EffectiveSettings.ReasoningEffort != "high" {
-		t.Fatalf("effectiveSettings.reasoningEffort = %q, want high", options.EffectiveSettings.ReasoningEffort)
+	if options.EffectiveSettings.ReasoningEffort != "low" {
+		t.Fatalf("effectiveSettings.reasoningEffort = %q, want low", options.EffectiveSettings.ReasoningEffort)
 	}
 	configOptions, ok := options.RuntimeContext["configOptions"].([]map[string]any)
-	if !ok || len(configOptions) < 2 {
+	if !ok || len(configOptions) != 1 {
 		t.Fatalf("configOptions = %#v", options.RuntimeContext["configOptions"])
 	}
 	if configOptions[0]["id"] != "model" || configOptions[0]["currentValue"] != "openai/gpt-5.3-codex-spark" {
@@ -2811,17 +2958,20 @@ func TestServiceGetsComposerOptionsFromOpenCodeModelCatalogWithReasoning(t *test
 	if !ok || len(modelOptions) == 0 || modelOptions[0]["supportsImageInput"] != true {
 		t.Fatalf("model options = %#v, want supportsImageInput true", configOptions[0]["options"])
 	}
-	if configOptions[1]["id"] != "effort" || configOptions[1]["currentValue"] != "high" {
-		t.Fatalf("reasoning option = %#v", configOptions[1])
-	}
-	reasoningOptions, ok := configOptions[1]["options"].([]map[string]string)
+	profiles, ok := options.RuntimeContext["modelReasoningOptionsByModel"].(map[string]any)
 	if !ok {
-		t.Fatalf("reasoning options = %#v", configOptions[1]["options"])
+		t.Fatalf("model reasoning profiles = %#v", options.RuntimeContext["modelReasoningOptionsByModel"])
 	}
-	for _, option := range reasoningOptions {
-		if option["value"] == "none" || option["value"] == "minimal" {
-			t.Fatalf("reasoning options = %#v, want only opencode-supported efforts", reasoningOptions)
-		}
+	sparkProfile, ok := profiles["openai/gpt-5.3-codex-spark"].(map[string]any)
+	if !ok || sparkProfile["defaultValue"] != "low" {
+		t.Fatalf("spark reasoning profile = %#v", sparkProfile)
+	}
+	bigPickleProfile, ok := profiles["opencode/big-pickle"].(map[string]any)
+	if !ok {
+		t.Fatalf("Big Pickle reasoning profile = %#v", profiles["opencode/big-pickle"])
+	}
+	if reasoningOptions, ok := bigPickleProfile["options"].([]map[string]string); !ok || len(reasoningOptions) != 0 {
+		t.Fatalf("Big Pickle reasoning options = %#v, want empty", bigPickleProfile["options"])
 	}
 	if options.RuntimeContext["modelCatalogSource"] != "opencode-cli" {
 		t.Fatalf("modelCatalogSource = %#v, want opencode-cli", options.RuntimeContext["modelCatalogSource"])
@@ -2876,7 +3026,189 @@ func TestServiceGetsComposerOptionsWithResolvedCodexDefaultModel(t *testing.T) {
 func TestServiceGetsComposerOptionsPreservesCodexModelCatalogReasoningEffort(t *testing.T) {
 	runtime := newFakeRuntime()
 	service := newIsolatedAgentService(runtime)
-	service.CapabilityLister = &recordingComposerCapabilityLister{}
+	service.ModelCatalog = fakeModelCatalog{
+		result: AgentModelCatalogResult{
+			Provider: "codex",
+			Source:   "codex-cli",
+			Models: []AgentModelOption{
+				{
+					ID:                         "gpt-5.6-sol",
+					DisplayName:                "GPT-5.6-Sol",
+					DefaultReasoningEffort:     "low",
+					IsDefault:                  true,
+					ReasoningEffortsAdvertised: true,
+					SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+						{Value: "low"},
+						{Value: "ultra"},
+					},
+				},
+				{
+					ID:                         "gpt-5.6-luna",
+					DisplayName:                "GPT-5.6-Luna",
+					DefaultReasoningEffort:     "medium",
+					ReasoningEffortsAdvertised: true,
+					SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+						{Value: "low"},
+						{Value: "medium"},
+						{Value: "high"},
+						{Value: "xhigh"},
+						{Value: "max"},
+					},
+				},
+			},
+		},
+	}
+
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		Provider: "codex",
+		Settings: ComposerSettings{
+			Model:           "gpt-5.6-luna",
+			ReasoningEffort: "ultra",
+		},
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if options.EffectiveSettings.ReasoningEffort != "medium" {
+		t.Fatalf("effectiveSettings.reasoningEffort = %q, want medium", options.EffectiveSettings.ReasoningEffort)
+	}
+	values := make([]string, 0, len(options.ReasoningConfig.Options))
+	for _, option := range options.ReasoningConfig.Options {
+		values = append(values, option.Value)
+	}
+	if !slices.Equal(values, []string{"low", "medium", "high", "xhigh", "max"}) {
+		t.Fatalf("reasoningConfig values = %#v, want selected Luna model capabilities", values)
+	}
+	profiles, ok := options.RuntimeContext["modelReasoningOptionsByModel"].(map[string]any)
+	if !ok {
+		t.Fatalf("modelReasoningOptionsByModel = %#v", options.RuntimeContext["modelReasoningOptionsByModel"])
+	}
+	solProfile := profiles["gpt-5.6-sol"].(map[string]any)
+	lunaProfile := profiles["gpt-5.6-luna"].(map[string]any)
+	if len(solProfile["options"].([]map[string]string)) != 2 ||
+		len(lunaProfile["options"].([]map[string]string)) != 5 {
+		t.Fatalf("reasoning profiles = %#v, want model-specific option counts", profiles)
+	}
+}
+
+func TestServiceGetsComposerOptionsPreservesAdvertisedEmptyReasoningEfforts(t *testing.T) {
+	runtime := newFakeRuntime()
+	service := newIsolatedAgentService(runtime)
+	service.ModelCatalog = fakeModelCatalog{
+		result: AgentModelCatalogResult{
+			Provider: "codex",
+			Source:   "codex-cli",
+			Models: []AgentModelOption{
+				{
+					ID:                         "no-reasoning",
+					DisplayName:                "No Reasoning",
+					IsDefault:                  true,
+					ReasoningEffortsAdvertised: true,
+					SupportedReasoningEfforts:  []AgentModelReasoningEffortOption{},
+				},
+			},
+		},
+	}
+
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		Provider: "codex",
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if options.EffectiveSettings.ReasoningEffort != "" || len(options.ReasoningConfig.Options) != 0 {
+		t.Fatalf("reasoningConfig = %#v, want authoritative empty options", options.ReasoningConfig)
+	}
+	profiles, ok := options.RuntimeContext["modelReasoningOptionsByModel"].(map[string]any)
+	if !ok {
+		t.Fatalf("modelReasoningOptionsByModel = %#v", options.RuntimeContext["modelReasoningOptionsByModel"])
+	}
+	profile, ok := profiles["no-reasoning"].(map[string]any)
+	if !ok {
+		t.Fatalf("no-reasoning profile = %#v", profiles["no-reasoning"])
+	}
+	profileOptions, ok := profile["options"].([]map[string]string)
+	if !ok || len(profileOptions) != 0 {
+		t.Fatalf("no-reasoning profile options = %#v, want empty", profile["options"])
+	}
+}
+
+func TestServiceGetsComposerOptionsPreservesAdvertisedMinimalReasoningEffort(t *testing.T) {
+	runtime := newFakeRuntime()
+	service := newIsolatedAgentService(runtime)
+	service.ModelCatalog = fakeModelCatalog{
+		result: AgentModelCatalogResult{
+			Provider: "codex",
+			Source:   "codex-cli",
+			Models: []AgentModelOption{
+				{
+					ID:                         "minimal-only",
+					DisplayName:                "Minimal Only",
+					DefaultReasoningEffort:     "minimal",
+					IsDefault:                  true,
+					ReasoningEffortsAdvertised: true,
+					SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+						{Value: "minimal"},
+					},
+				},
+			},
+		},
+	}
+
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		Provider: "codex",
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if options.EffectiveSettings.ReasoningEffort != "minimal" {
+		t.Fatalf("effectiveSettings.reasoningEffort = %q, want minimal", options.EffectiveSettings.ReasoningEffort)
+	}
+	if options.ReasoningConfig.CurrentValue != "minimal" {
+		t.Fatalf("reasoningConfig.currentValue = %q, want minimal", options.ReasoningConfig.CurrentValue)
+	}
+	if len(options.ReasoningConfig.Options) != 1 || options.ReasoningConfig.Options[0].Value != "minimal" {
+		t.Fatalf("reasoningConfig.options = %#v, want only minimal", options.ReasoningConfig.Options)
+	}
+}
+
+func TestServiceGetsComposerOptionsPreservesSelectedAdvertisedReasoningEffort(t *testing.T) {
+	for _, effort := range []string{"minimal", "none"} {
+		t.Run(effort, func(t *testing.T) {
+			service := NewService(newFakeRuntime())
+			service.ModelCatalog = fakeModelCatalog{
+				result: AgentModelCatalogResult{
+					Provider: "codex",
+					Source:   "codex-cli",
+					Models: []AgentModelOption{{
+						ID:                         "gpt-catalog",
+						DefaultReasoningEffort:     "high",
+						IsDefault:                  true,
+						ReasoningEffortsAdvertised: true,
+						SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+							{Value: "minimal"}, {Value: "none"}, {Value: "high"},
+						},
+					}},
+				},
+			}
+
+			options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+				Provider: "codex",
+				Settings: ComposerSettings{Model: "gpt-catalog", ReasoningEffort: effort},
+			})
+			if err != nil {
+				t.Fatalf("GetComposerOptions returned error: %v", err)
+			}
+			if options.EffectiveSettings.ReasoningEffort != effort || options.ReasoningConfig.CurrentValue != effort {
+				t.Fatalf("composer reasoning = %#v, want %q", options.ReasoningConfig, effort)
+			}
+		})
+	}
+}
+
+func TestServiceGetsComposerOptionsNormalizesCodexMinimalReasoningEffort(t *testing.T) {
+	runtime := newFakeRuntime()
+	service := newIsolatedAgentService(runtime)
 
 	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
 		Provider: "codex",
@@ -3475,6 +3807,104 @@ func TestServiceUpdateSettingsPreservesCodexModelCatalogReasoningEffort(t *testi
 	}
 }
 
+func TestServiceUpdateSettingsPreservesAdvertisedReasoningEffort(t *testing.T) {
+	for _, effort := range []string{"minimal", "none"} {
+		t.Run(effort, func(t *testing.T) {
+			runtime := newFakeRuntime()
+			runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{
+				ID:          "session-1",
+				Provider:    "codex",
+				WorkspaceID: "ws-1",
+				Status:      "working",
+				Settings: &ComposerSettings{
+					Model:           "gpt-catalog",
+					ReasoningEffort: "high",
+				},
+			}
+			service := NewService(runtime)
+			service.ModelCatalog = fakeModelCatalog{
+				result: AgentModelCatalogResult{
+					Provider: "codex",
+					Source:   "codex-cli",
+					Models: []AgentModelOption{{
+						ID:                         "gpt-catalog",
+						DefaultReasoningEffort:     "high",
+						ReasoningEffortsAdvertised: true,
+						SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+							{Value: "minimal"}, {Value: "none"}, {Value: "high"},
+						},
+					}},
+				},
+			}
+
+			session, err := service.UpdateSettings(context.Background(), "ws-1", "session-1", ComposerSettingsPatch{
+				ReasoningEffort: stringRef(effort),
+			})
+			if err != nil {
+				t.Fatalf("UpdateSettings returned error: %v", err)
+			}
+			if session.Settings == nil || session.Settings.ReasoningEffort != effort {
+				t.Fatalf("session settings = %#v, want reasoning %q", session.Settings, effort)
+			}
+		})
+	}
+}
+
+func TestServiceUpdateSettingsDefersModelChangeReasoningClampToLiveRuntime(t *testing.T) {
+	runtime := newFakeRuntime()
+	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{
+		ID:          "session-1",
+		Provider:    "codex",
+		WorkspaceID: "ws-1",
+		Status:      "ready",
+		Settings: &ComposerSettings{
+			Model:           "gpt-5.6-sol",
+			ReasoningEffort: "ultra",
+		},
+	}
+	service := NewService(runtime)
+	service.ModelCatalog = fakeModelCatalog{
+		result: AgentModelCatalogResult{
+			Provider: "codex",
+			Source:   "codex-cli",
+			Models: []AgentModelOption{
+				{
+					ID:                         "gpt-5.6-sol",
+					DefaultReasoningEffort:     "high",
+					ReasoningEffortsAdvertised: true,
+					SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+						{Value: "low"}, {Value: "medium"}, {Value: "high"},
+						{Value: "xhigh"}, {Value: "max"}, {Value: "ultra"},
+					},
+				},
+				{
+					ID:                         "gpt-5.6-luna",
+					DefaultReasoningEffort:     "high",
+					ReasoningEffortsAdvertised: true,
+					SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+						{Value: "low"}, {Value: "medium"}, {Value: "high"},
+						{Value: "xhigh"}, {Value: "max"},
+					},
+				},
+			},
+		},
+	}
+	model := "gpt-5.6-luna"
+
+	session, err := service.UpdateSettings(context.Background(), "ws-1", "session-1", ComposerSettingsPatch{
+		Model: &model,
+	})
+	if err != nil {
+		t.Fatalf("UpdateSettings returned error: %v", err)
+	}
+	// The daemon-side catalog intentionally lacks Luna/ultra, while a live
+	// target may advertise it. The service must not downgrade before the live
+	// adapter gets a chance to resolve its fresher model/list snapshot.
+	if session.Settings == nil || session.Settings.Model != model || session.Settings.ReasoningEffort != "ultra" {
+		t.Fatalf("session settings = %#v, want unclamped Luna/ultra runtime input", session.Settings)
+	}
+}
+
 func TestServiceUpdateSettingsNormalizesClaudeMinimalReasoningEffort(t *testing.T) {
 	runtime := newFakeRuntime()
 	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{
@@ -3951,7 +4381,20 @@ func TestServiceFallsBackToPersistedSessions(t *testing.T) {
 	}
 }
 
-func TestServiceListFilteredMatchesSearchVisibilityLimitAndUpdatedOrder(t *testing.T) {
+type conversationOrderTurnStore struct {
+	failingTurnStore
+	latestTurns map[string]agentactivitybiz.Turn
+}
+
+func (s conversationOrderTurnStore) ListLatestTurns(
+	context.Context,
+	string,
+	[]string,
+) (map[string]agentactivitybiz.Turn, error) {
+	return s.latestTurns, nil
+}
+
+func TestServiceListPageMatchesSearchVisibilityTargetCursorAndTurnStartOrder(t *testing.T) {
 	runtime := newFakeRuntime()
 	olderUpdatedAt := time.UnixMilli(2000)
 	newerUpdatedAt := time.UnixMilli(4000)
@@ -3970,6 +4413,7 @@ func TestServiceListFilteredMatchesSearchVisibilityLimitAndUpdatedOrder(t *testi
 	runtime.sessions["ws-1:session-older"] = ProviderRuntimeSession{
 		ID:              "session-older",
 		WorkspaceID:     "ws-1",
+		AgentTargetID:   "local:codex",
 		Provider:        "codex",
 		Cwd:             "/workspace/older",
 		Status:          "completed",
@@ -3981,6 +4425,7 @@ func TestServiceListFilteredMatchesSearchVisibilityLimitAndUpdatedOrder(t *testi
 	runtime.sessions["ws-1:session-newer"] = ProviderRuntimeSession{
 		ID:              "session-newer",
 		WorkspaceID:     "ws-1",
+		AgentTargetID:   "local:codex",
 		Provider:        "codex",
 		Cwd:             "/workspace/newer",
 		Status:          "working",
@@ -3989,20 +4434,66 @@ func TestServiceListFilteredMatchesSearchVisibilityLimitAndUpdatedOrder(t *testi
 		CreatedAtUnixMS: time.UnixMilli(1000).UnixMilli(),
 		UpdatedAtUnixMS: newerUpdatedAt.UnixMilli(),
 	}
+	runtime.sessions["ws-1:session-other-target"] = ProviderRuntimeSession{
+		ID:              "session-other-target",
+		WorkspaceID:     "ws-1",
+		AgentTargetID:   "local:claude-code",
+		Provider:        "claude-code",
+		Cwd:             "/workspace/other",
+		Status:          "completed",
+		Visible:         true,
+		Title:           "Mention other target",
+		CreatedAtUnixMS: time.UnixMilli(1000).UnixMilli(),
+		UpdatedAtUnixMS: time.UnixMilli(6000).UnixMilli(),
+	}
 
 	service := newIsolatedAgentService(runtime)
-	list, err := service.ListFiltered(context.Background(), "ws-1", ListSessionsInput{
-		SearchQuery: "mention",
-		Limit:       1,
+	service.TurnStore = conversationOrderTurnStore{
+		latestTurns: map[string]agentactivitybiz.Turn{
+			"session-older": {
+				WorkspaceID:     "ws-1",
+				AgentSessionID:  "session-older",
+				TurnID:          "turn-older",
+				Phase:           agentactivitybiz.TurnPhaseSettled,
+				StartedAtUnixMS: 2_000,
+				UpdatedAtUnixMS: 9_000,
+			},
+			"session-newer": {
+				WorkspaceID:     "ws-1",
+				AgentSessionID:  "session-newer",
+				TurnID:          "turn-newer",
+				Phase:           agentactivitybiz.TurnPhaseSettled,
+				StartedAtUnixMS: 4_000,
+				UpdatedAtUnixMS: 4_000,
+			},
+		},
+	}
+	page, err := service.ListPage(context.Background(), "ws-1", ListSessionsInput{
+		AgentTargetID: "local:codex",
+		SearchQuery:   "mention",
+		Limit:         1,
 	})
 	if err != nil {
-		t.Fatalf("ListFiltered returned error: %v", err)
+		t.Fatalf("ListPage returned error: %v", err)
 	}
-	if len(list) != 1 {
-		t.Fatalf("len(list) = %d, want 1", len(list))
+	if len(page.Sessions) != 1 {
+		t.Fatalf("len(page.Sessions) = %d, want 1", len(page.Sessions))
 	}
-	if list[0].ID != "session-newer" {
-		t.Fatalf("list[0].ID = %q, want session-newer", list[0].ID)
+	if page.Sessions[0].ID != "session-newer" || !page.HasMore || page.NextCursor == "" {
+		t.Fatalf("first page = %#v, want newer session with next cursor", page)
+	}
+
+	nextPage, err := service.ListPage(context.Background(), "ws-1", ListSessionsInput{
+		AgentTargetID: "local:codex",
+		Cursor:        page.NextCursor,
+		SearchQuery:   "mention",
+		Limit:         1,
+	})
+	if err != nil {
+		t.Fatalf("ListPage(next) returned error: %v", err)
+	}
+	if len(nextPage.Sessions) != 1 || nextPage.Sessions[0].ID != "session-older" || nextPage.HasMore {
+		t.Fatalf("next page = %#v, want final older session", nextPage)
 	}
 }
 
@@ -4055,6 +4546,7 @@ func TestServiceListSessionSectionsUsesCurrentProjectsAndConversations(t *testin
 					UpdatedAtUnixMS: 5000,
 				}},
 				HasMore:    true,
+				TotalCount: 7,
 				NextCursor: "5000|project-session",
 			},
 			"conversations": {
@@ -4079,6 +4571,7 @@ func TestServiceListSessionSectionsUsesCurrentProjectsAndConversations(t *testin
 					UpdatedAtUnixMS: 3000,
 				}},
 				HasMore:    true,
+				TotalCount: 3,
 				NextCursor: "6000|pinned-session",
 			},
 		},
@@ -4107,6 +4600,9 @@ func TestServiceListSessionSectionsUsesCurrentProjectsAndConversations(t *testin
 	if !page.Pinned.HasMore || page.Pinned.NextCursor != "6000|pinned-session" {
 		t.Fatalf("pinned page state = hasMore %v cursor %q", page.Pinned.HasMore, page.Pinned.NextCursor)
 	}
+	if page.Pinned.TotalCount != 3 {
+		t.Fatalf("pinned total count = %d, want 3", page.Pinned.TotalCount)
+	}
 	if page.Sections[0].Kind != "project" || page.Sections[0].SectionKey != "project:/workspace/project" {
 		t.Fatalf("project section = %#v", page.Sections[0])
 	}
@@ -4115,6 +4611,9 @@ func TestServiceListSessionSectionsUsesCurrentProjectsAndConversations(t *testin
 	}
 	if !page.Sections[0].HasMore || page.Sections[0].NextCursor != "5000|project-session" {
 		t.Fatalf("project page state = hasMore %v cursor %q", page.Sections[0].HasMore, page.Sections[0].NextCursor)
+	}
+	if page.Sections[0].TotalCount != 7 {
+		t.Fatalf("project total count = %d, want 7", page.Sections[0].TotalCount)
 	}
 	if page.Sections[1].Kind != "conversations" || page.Sections[1].SectionKey != "conversations" {
 		t.Fatalf("conversations section = %#v", page.Sections[1])
@@ -4148,7 +4647,7 @@ func TestServiceListSessionSectionPageForwardsStableCursor(t *testing.T) {
 		t.Fatalf("section = %#v", section)
 	}
 	if reader.lastInput.SectionKey != "project:/workspace/project" ||
-		reader.lastInput.CursorUpdatedAtMS != 4000 ||
+		reader.lastInput.CursorSortTimeUnixMS != 4000 ||
 		reader.lastInput.CursorSessionID != "middle" ||
 		reader.lastInput.Limit != 2 ||
 		reader.lastInput.AgentTargetID != "claude-target" {
@@ -4173,11 +4672,93 @@ func TestServiceListPinnedSessionPageForwardsStableCursor(t *testing.T) {
 		t.Fatalf("page = %#v, want empty page without hasMore", page)
 	}
 	if reader.lastInput.SectionKey != agentactivitybiz.PinnedSessionPageKey ||
-		reader.lastInput.CursorUpdatedAtMS != 6000 ||
+		reader.lastInput.CursorSortTimeUnixMS != 6000 ||
 		reader.lastInput.CursorSessionID != "pinned-session" ||
 		reader.lastInput.Limit != 2 ||
 		reader.lastInput.AgentTargetID != "claude-target" {
 		t.Fatalf("reader input = %#v", reader.lastInput)
+	}
+}
+
+func TestServiceListSessionSectionDeletionCandidatesForwardsFilters(t *testing.T) {
+	reader := &fakeSectionReader{
+		deletionCandidates: agentactivitybiz.SessionSectionDeletionCandidates{
+			WorkspaceID: "ws-1", SectionKey: "project:/workspace/project",
+			AgentTargetID: "claude-target", ExcludePinned: true,
+			SessionIDs: []string{"session-1", "session-2"},
+		},
+	}
+	service := newIsolatedAgentService(newFakeRuntime())
+	service.SessionReader = reader
+	service.UserProjectReader = fakeUserProjectReader{projects: []userprojectbiz.Project{{
+		ID: "project-1", Path: "/workspace/project", Label: "Project",
+	}}}
+
+	result, err := service.ListSessionSectionDeletionCandidates(context.Background(), "ws-1", ListSessionSectionDeletionCandidatesInput{
+		SectionKey: "project:/workspace/project", AgentTargetID: "claude-target", ExcludePinned: true,
+	})
+	if err != nil {
+		t.Fatalf("ListSessionSectionDeletionCandidates() error = %v", err)
+	}
+	if !slices.Equal(result.SessionIDs, []string{"session-1", "session-2"}) || !result.ExcludePinned {
+		t.Fatalf("candidates = %#v", result)
+	}
+	if reader.lastDeletionCandidatesInput.AgentTargetID != "claude-target" || !reader.lastDeletionCandidatesInput.ExcludePinned {
+		t.Fatalf("candidate input = %#v", reader.lastDeletionCandidatesInput)
+	}
+}
+
+func TestServiceDeleteSessionsBatchClosesAllRuntimesBeforePersistence(t *testing.T) {
+	runtime := newFakeRuntime()
+	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{ID: "session-1", WorkspaceID: "ws-1"}
+	runtime.sessions["ws-1:session-2"] = ProviderRuntimeSession{ID: "session-2", WorkspaceID: "ws-1"}
+	reader := &fakeSectionReader{batchDeleteResult: agentactivitybiz.DeleteSessionsBatchResult{
+		RemovedSessions: 2, RemovedSessionIDs: []string{"session-1", "session-2"},
+	}}
+	service := newIsolatedAgentService(runtime)
+	service.SessionReader = reader
+
+	result, err := service.DeleteSessionsBatch(context.Background(), "ws-1", DeleteSessionsBatchInput{
+		SessionIDs: []string{" session-1 ", "session-2"},
+	})
+	if err != nil {
+		t.Fatalf("DeleteSessionsBatch() error = %v", err)
+	}
+	if len(runtime.closeCalls) != 2 || reader.batchDeleteCalls != 1 || !slices.Equal(reader.lastBatchDeleteInput.SessionIDs, []string{"session-1", "session-2"}) {
+		t.Fatalf("close calls=%#v batch input=%#v calls=%d", runtime.closeCalls, reader.lastBatchDeleteInput, reader.batchDeleteCalls)
+	}
+	if result.RemovedSessions != 2 {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestServiceDeleteSessionsBatchDoesNotPersistAfterRuntimeCloseFailure(t *testing.T) {
+	runtime := newFakeRuntime()
+	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{ID: "session-1", WorkspaceID: "ws-1"}
+	runtime.closeErr = errors.New("close failed")
+	reader := &fakeSectionReader{}
+	service := newIsolatedAgentService(runtime)
+	service.SessionReader = reader
+
+	if _, err := service.DeleteSessionsBatch(context.Background(), "ws-1", DeleteSessionsBatchInput{SessionIDs: []string{"session-1"}}); err == nil {
+		t.Fatal("DeleteSessionsBatch() error = nil, want close failure")
+	}
+	if reader.batchDeleteCalls != 0 {
+		t.Fatalf("batch delete calls = %d, want 0", reader.batchDeleteCalls)
+	}
+}
+
+func TestServiceDeleteSessionsBatchRejectsBlankAndDuplicateIDs(t *testing.T) {
+	service := newIsolatedAgentService(newFakeRuntime())
+	reader := &fakeSectionReader{}
+	service.SessionReader = reader
+	for _, sessionIDs := range [][]string{nil, {" "}, {"session-1", " session-1 "}} {
+		if _, err := service.DeleteSessionsBatch(context.Background(), "ws-1", DeleteSessionsBatchInput{SessionIDs: sessionIDs}); !errors.Is(err, ErrInvalidArgument) {
+			t.Fatalf("DeleteSessionsBatch(%#v) error = %v, want invalid argument", sessionIDs, err)
+		}
+	}
+	if reader.batchDeleteCalls != 0 {
+		t.Fatalf("batch delete calls = %d, want 0", reader.batchDeleteCalls)
 	}
 }
 
@@ -4680,19 +5261,13 @@ func TestServiceEnsureRuntimeSessionDeletesStalePersistedHiddenLiveModelDiscover
 	}
 }
 
-func TestServiceGetDoesNotReconcileLiveRuntimePendingInteractive(t *testing.T) {
+func TestServiceGetDoesNotReconcileActionableInteractionFromStaleTranscript(t *testing.T) {
 	runtime := newFakeRuntime()
 	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{
 		ID:          "session-1",
 		WorkspaceID: "ws-1",
 		Provider:    "claude-code",
 		Status:      "created",
-		PendingInteractive: &RuntimeInteractivePrompt{
-			Kind:      "exit-plan",
-			RequestID: "plan-1",
-			ToolName:  "ExitPlanMode",
-			Status:    "waiting",
-		},
 	}
 	service := newIsolatedAgentService(runtime)
 	service.SessionReader = fakeSessionReader{
@@ -4833,6 +5408,59 @@ func TestServiceResumesPersistedSessionWithPreparedRuntime(t *testing.T) {
 	}
 }
 
+func TestServiceResumeClampsPersistedReasoningToSelectedModelCatalog(t *testing.T) {
+	runtime := newFakeRuntime()
+	var prepareInput runtimeprep.PrepareInput
+	service := NewService(runtime)
+	service.RuntimePreparer = fakeRuntimePreparer{
+		input:  &prepareInput,
+		result: runtimeprep.PreparedRuntime{Cwd: "/prepared/workdir"},
+	}
+	service.ModelCatalog = fakeModelCatalog{
+		result: AgentModelCatalogResult{
+			Provider: "codex",
+			Source:   "codex-cli",
+			Models: []AgentModelOption{{
+				ID:                         "gpt-5.6-luna",
+				DefaultReasoningEffort:     "high",
+				ReasoningEffortsAdvertised: true,
+				SupportedReasoningEfforts: []AgentModelReasoningEffortOption{
+					{Value: "low"}, {Value: "medium"}, {Value: "high"},
+				},
+			}},
+		},
+	}
+	service.SessionReader = fakeSessionReader{
+		sessions: map[string]PersistedSession{
+			"ws-1:session-1": {
+				ID:          "session-1",
+				WorkspaceID: "ws-1",
+				Provider:    "codex",
+				Cwd:         "/persisted/workdir",
+				Settings: ComposerSettings{
+					Model:           "gpt-5.6-luna",
+					ReasoningEffort: "ultra",
+				},
+			},
+		},
+	}
+
+	if _, err := service.SendInput(
+		context.Background(),
+		"ws-1",
+		"session-1",
+		SendInput{Content: TextPromptContent("hello")},
+	); err != nil {
+		t.Fatalf("SendInput returned error: %v", err)
+	}
+	if prepareInput.ReasoningEffort != "high" {
+		t.Fatalf("prepare reasoning effort = %q, want selected model default high", prepareInput.ReasoningEffort)
+	}
+	if len(runtime.resumeCalls) != 1 || runtime.resumeCalls[0].Settings.ReasoningEffort != "high" {
+		t.Fatalf("resume calls = %#v, want selected model default high", runtime.resumeCalls)
+	}
+}
+
 func TestServiceResumesPersistedSessionWithoutProviderSessionID(t *testing.T) {
 	runtime := newFakeRuntime()
 	service := newIsolatedAgentService(runtime)
@@ -4908,6 +5536,7 @@ type fakeRuntime struct {
 	sessions               map[string]ProviderRuntimeSession
 	submitInteractiveCalls []RuntimeSubmitInteractiveInput
 	submitInteractiveErr   error
+	interactiveDisposition RuntimeInteractiveDisposition
 	startErr               error
 	startCalls             []RuntimeStartInput
 	startHook              func(RuntimeStartInput, ProviderRuntimeSession) ProviderRuntimeSession
@@ -5064,13 +5693,20 @@ func (f *fakeProviderAvailabilityChecker) ListProviderAvailability(_ context.Con
 }
 
 type fakeSessionReader struct {
-	sessions map[string]PersistedSession
+	sessions   map[string]PersistedSession
+	tombstoned map[string]bool
 }
 
 type fakeSectionReader struct {
 	fakeSessionReader
-	lastInput agentactivitybiz.ListSessionSectionInput
-	pages     map[string]agentactivitybiz.SessionSectionPage
+	lastInput                   agentactivitybiz.ListSessionSectionInput
+	lastDeletionCandidatesInput agentactivitybiz.ListSessionSectionDeletionCandidatesInput
+	deletionCandidates          agentactivitybiz.SessionSectionDeletionCandidates
+	lastBatchDeleteInput        agentactivitybiz.DeleteSessionsBatchInput
+	batchDeleteResult           agentactivitybiz.DeleteSessionsBatchResult
+	batchDeleteErr              error
+	batchDeleteCalls            int
+	pages                       map[string]agentactivitybiz.SessionSectionPage
 }
 
 func (f *fakeSectionReader) ListSessionSection(_ context.Context, input agentactivitybiz.ListSessionSectionInput) (agentactivitybiz.SessionSectionPage, bool) {
@@ -5091,6 +5727,22 @@ func (f *fakeSectionReader) ListSessionSection(_ context.Context, input agentact
 	page.WorkspaceID = input.WorkspaceID
 	page.SectionKey = input.SectionKey
 	return page, true
+}
+
+func (f *fakeSectionReader) ListSessionSectionDeletionCandidates(_ context.Context, input agentactivitybiz.ListSessionSectionDeletionCandidatesInput) (agentactivitybiz.SessionSectionDeletionCandidates, bool) {
+	f.lastDeletionCandidatesInput = input
+	result := f.deletionCandidates
+	result.WorkspaceID = input.WorkspaceID
+	result.SectionKey = input.SectionKey
+	result.AgentTargetID = input.AgentTargetID
+	result.ExcludePinned = input.ExcludePinned
+	return result, true
+}
+
+func (f *fakeSectionReader) DeleteSessionsBatch(_ context.Context, input agentactivitybiz.DeleteSessionsBatchInput) (agentactivitybiz.DeleteSessionsBatchResult, error) {
+	f.batchDeleteCalls++
+	f.lastBatchDeleteInput = input
+	return f.batchDeleteResult, f.batchDeleteErr
 }
 
 type fakeUserProjectReader struct {
@@ -5179,12 +5831,23 @@ func (f *fakeRuntime) ValidatePromptContent(_ context.Context, input RuntimeExec
 	return f.validateErr
 }
 
-func (f *fakeRuntime) SubmitInteractive(_ context.Context, input RuntimeSubmitInteractiveInput) error {
+func (f *fakeRuntime) SubmitInteractive(_ context.Context, input RuntimeSubmitInteractiveInput) (RuntimeSubmitInteractiveResult, error) {
 	f.submitInteractiveCalls = append(f.submitInteractiveCalls, input)
-	if f.submitInteractiveErr != nil {
-		return f.submitInteractiveErr
+	disposition := f.interactiveDisposition
+	if disposition == "" && f.submitInteractiveErr == nil {
+		disposition = RuntimeInteractiveDispositionAnswered
 	}
-	return nil
+	if f.submitInteractiveErr != nil {
+		return RuntimeSubmitInteractiveResult{Disposition: disposition}, f.submitInteractiveErr
+	}
+	return RuntimeSubmitInteractiveResult{Disposition: disposition}, nil
+}
+
+func (f *fakeRuntime) InteractiveDisposition(string, string, string, string) RuntimeInteractiveDisposition {
+	if f.interactiveDisposition == "" {
+		return RuntimeInteractiveDispositionUnknown
+	}
+	return f.interactiveDisposition
 }
 
 func (f *fakeRuntime) UpdateSettings(_ context.Context, input RuntimeUpdateSettingsInput) error {
@@ -5278,6 +5941,10 @@ func (f *fakeRuntime) Sessions(workspaceID string) []ProviderRuntimeSession {
 func (f fakeSessionReader) GetSession(workspaceID string, agentSessionID string) (PersistedSession, bool) {
 	session, ok := f.sessions[workspaceID+":"+agentSessionID]
 	return session, ok
+}
+
+func (f fakeSessionReader) SessionDeleted(_ context.Context, workspaceID string, agentSessionID string) (bool, error) {
+	return f.tombstoned[workspaceID+":"+agentSessionID], nil
 }
 
 func (f fakeSessionReader) ListSessions(workspaceID string) ([]PersistedSession, bool) {
@@ -5407,6 +6074,10 @@ func (*activityProjectionRepoStub) GetSession(context.Context, string, string) (
 	return agentactivitybiz.Session{}, false, nil
 }
 
+func (*activityProjectionRepoStub) SessionDeleted(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+
 func (*activityProjectionRepoStub) ListSessions(context.Context, string) ([]agentactivitybiz.Session, bool, error) {
 	return nil, false, nil
 }
@@ -5415,12 +6086,12 @@ func (*activityProjectionRepoStub) ListSessionSection(context.Context, agentacti
 	return agentactivitybiz.SessionSectionPage{}, false, nil
 }
 
-func (*activityProjectionRepoStub) CountSessionSection(context.Context, agentactivitybiz.CountSessionSectionInput) (agentactivitybiz.SessionSectionCount, bool, error) {
-	return agentactivitybiz.SessionSectionCount{}, false, nil
+func (*activityProjectionRepoStub) ListSessionSectionDeletionCandidates(context.Context, agentactivitybiz.ListSessionSectionDeletionCandidatesInput) (agentactivitybiz.SessionSectionDeletionCandidates, bool, error) {
+	return agentactivitybiz.SessionSectionDeletionCandidates{}, false, nil
 }
 
-func (*activityProjectionRepoStub) DeleteSessionSection(context.Context, agentactivitybiz.DeleteSessionSectionInput) (agentactivitybiz.DeleteSessionSectionResult, bool, error) {
-	return agentactivitybiz.DeleteSessionSectionResult{}, false, nil
+func (*activityProjectionRepoStub) DeleteSessionsBatch(context.Context, agentactivitybiz.DeleteSessionsBatchInput) (agentactivitybiz.DeleteSessionsBatchResult, error) {
+	return agentactivitybiz.DeleteSessionsBatchResult{}, nil
 }
 
 func (r *activityProjectionRepoStub) ListSessionMessages(context.Context, agentactivitybiz.ListSessionMessagesInput) (agentactivitybiz.MessagePage, bool, error) {
@@ -5463,7 +6134,7 @@ func (r *activityProjectionRepoStub) ReportActivityState(_ context.Context, inpu
 			Kind:           input.Interaction.Kind,
 			Status:         input.Interaction.Status,
 		}
-		result.InteractionAccepted = true
+		result.InteractionResult = agentactivitybiz.InteractionTransitionApplied
 	}
 	return result, nil
 }
@@ -5558,7 +6229,7 @@ func (r *activityProjectionRepoStub) SettleStaleTurns(context.Context) ([]agenta
 	return nil, r.settleStaleErr
 }
 
-func (*activityProjectionRepoStub) UpsertInteraction(_ context.Context, upsert agentactivitybiz.InteractionUpsert) (agentactivitybiz.Interaction, bool, error) {
+func (*activityProjectionRepoStub) UpsertInteraction(_ context.Context, upsert agentactivitybiz.InteractionUpsert) (agentactivitybiz.Interaction, agentactivitybiz.InteractionTransitionResult, error) {
 	return agentactivitybiz.Interaction{
 		WorkspaceID:    upsert.WorkspaceID,
 		AgentSessionID: upsert.AgentSessionID,
@@ -5566,7 +6237,7 @@ func (*activityProjectionRepoStub) UpsertInteraction(_ context.Context, upsert a
 		TurnID:         upsert.TurnID,
 		Kind:           upsert.Kind,
 		Status:         upsert.Status,
-	}, true, nil
+	}, agentactivitybiz.InteractionTransitionApplied, nil
 }
 
 func (*activityProjectionRepoStub) ListSessionInteractions(context.Context, agentactivitybiz.ListSessionInteractionsInput) ([]agentactivitybiz.Interaction, error) {

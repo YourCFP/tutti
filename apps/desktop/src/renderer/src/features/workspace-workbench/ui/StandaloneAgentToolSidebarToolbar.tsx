@@ -12,6 +12,7 @@ import {
   NavApplicationsLinedIcon,
   PanelIcon,
   RestoreIcon,
+  TaskIcon,
   TerminalLinedIcon,
   Tooltip,
   TooltipContent,
@@ -41,6 +42,7 @@ const toolSidebarPanelIconById = {
   browser: WebIcon,
   files: FolderIcon,
   messages: ChatIcon,
+  tasks: TaskIcon,
   terminal: TerminalLinedIcon
 } satisfies Record<StandaloneAgentToolPanelId, ComponentType<IconProps>>;
 
@@ -57,6 +59,7 @@ export function StandaloneAgentToolSidebarToolbar({
   copy,
   isExpanded,
   reminders,
+  onAddPanel,
   onOpenPanel,
   onToggleExpansion,
   onToggleSidebar
@@ -65,14 +68,11 @@ export function StandaloneAgentToolSidebarToolbar({
   copy: ToolSidebarCopy;
   isExpanded: boolean;
   reminders: ToolSidebarReminderCounts;
+  onAddPanel: (panel: StandaloneAgentToolPanelId) => void;
   onOpenPanel: (panel: StandaloneAgentToolPanelId) => void;
   onToggleExpansion: () => void;
   onToggleSidebar: () => void;
 }): ReactNode {
-  const reminderCount = Object.values(reminders).reduce(
-    (total, value) => total + (value ?? 0),
-    0
-  );
   const label = activePanel ? copy.closeRightPanel : copy.openRightPanel;
 
   return (
@@ -102,7 +102,7 @@ export function StandaloneAgentToolSidebarToolbar({
               className="min-w-36"
               style={{ zIndex: "var(--z-panel-popover)" }}
             >
-              <DropdownMenuItem onSelect={() => onOpenPanel("files")}>
+              <DropdownMenuItem onSelect={() => onAddPanel("files")}>
                 <ToolSidebarPanelIcon
                   aria-hidden
                   className="size-4"
@@ -110,7 +110,7 @@ export function StandaloneAgentToolSidebarToolbar({
                 />
                 <span>{copy.files}</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onOpenPanel("terminal")}>
+              <DropdownMenuItem onSelect={() => onAddPanel("terminal")}>
                 <ToolSidebarPanelIcon
                   aria-hidden
                   className="size-4"
@@ -118,7 +118,7 @@ export function StandaloneAgentToolSidebarToolbar({
                 />
                 <span>{copy.terminal}</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onOpenPanel("browser")}>
+              <DropdownMenuItem onSelect={() => onAddPanel("browser")}>
                 <ToolSidebarPanelIcon
                   aria-hidden
                   className="size-4"
@@ -126,7 +126,15 @@ export function StandaloneAgentToolSidebarToolbar({
                 />
                 <span>{copy.browser}</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onOpenPanel("apps")}>
+              <DropdownMenuItem onSelect={() => onAddPanel("tasks")}>
+                <ToolSidebarPanelIcon
+                  aria-hidden
+                  className="size-4"
+                  panel="tasks"
+                />
+                <span>{copy.tasks}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onAddPanel("apps")}>
                 <ToolSidebarPanelIcon
                   aria-hidden
                   className="size-4"
@@ -134,7 +142,7 @@ export function StandaloneAgentToolSidebarToolbar({
                 />
                 <span>{copy.apps}</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onOpenPanel("messages")}>
+              <DropdownMenuItem onSelect={() => onAddPanel("messages")}>
                 <ToolSidebarPanelIcon
                   aria-hidden
                   className="size-4"
@@ -147,6 +155,22 @@ export function StandaloneAgentToolSidebarToolbar({
         ) : null}
         {activePanel === null ? (
           <>
+            <Button
+              aria-label={copy.tasks}
+              aria-pressed={activePanel === "tasks"}
+              className="relative text-[var(--text-secondary)]"
+              data-standalone-agent-tool-sidebar-quick-action="tasks"
+              size="icon-sm"
+              type="button"
+              variant="chrome"
+              onClick={() => onOpenPanel("tasks")}
+            >
+              <ToolSidebarPanelIcon
+                aria-hidden
+                className="size-4"
+                panel="tasks"
+              />
+            </Button>
             <Button
               aria-label={copy.apps}
               aria-pressed={activePanel === "apps"}
@@ -212,7 +236,6 @@ export function StandaloneAgentToolSidebarToolbar({
               onClick={onToggleSidebar}
             >
               <PanelIcon aria-hidden className="size-[18px] -scale-x-100" />
-              <ReminderBadge count={reminderCount} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">{label}</TooltipContent>

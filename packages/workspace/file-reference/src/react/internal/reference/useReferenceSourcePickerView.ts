@@ -280,6 +280,9 @@ export function useReferenceSourcePickerView({
     (activeTabState.searchQuery.trim() !== "" || activeFilters.length > 0);
 
   const currentChildren = activeTabState?.childrenByKey[currentKey];
+  const contentError = isQuery
+    ? (activeTabState?.searchError ?? null)
+    : (currentChildren?.error ?? null);
 
   // 浏览态内容区:当前选中二级节点(currentNode,本地根时为 null → 源根)的子节点,
   // 递归就地展开成文件树。搜索态:扁平搜索结果。
@@ -288,8 +291,10 @@ export function useReferenceSourcePickerView({
     [currentChildren?.entries, sortNodes]
   );
   const searchResults = useMemo(
-    () => sortNodes(activeTabState?.searchEntries ?? []),
-    [activeTabState?.searchEntries, sortNodes]
+    // Browse arrangement is a presentation preference. Search results keep the
+    // source-owned relevance order regardless of that preference.
+    () => [...(activeTabState?.searchEntries ?? [])] as ReferenceNode[],
+    [activeTabState?.searchEntries]
   );
 
   // 每个源的左栏二级分组(左栏可多源同时展开,故按源全量计算):
@@ -692,7 +697,6 @@ export function useReferenceSourcePickerView({
             mtimeMs: node.mtimeMs ?? null,
             sizeBytes: loadedSizeBytes
           },
-          renderHtml: true,
           target: {
             fileKind: preview.kind,
             name: node.displayName,
@@ -782,6 +786,7 @@ export function useReferenceSourcePickerView({
     currentEntries,
     // 搜索态:扁平搜索结果。
     searchResults,
+    contentError,
     expandedKeys: activeTabState?.expandedKeys ?? {},
     childrenByKey: activeTabState?.childrenByKey ?? {},
     toggleNode: (node: ReferenceNode) => controller.toggleNode(node),

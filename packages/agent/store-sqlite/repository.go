@@ -12,10 +12,10 @@ import "context"
 // All methods are scoped by a host-defined workspace ID.
 type Repository interface {
 	ClearSessions(context.Context, string) (ClearSessionsResult, error)
-	CountSessionSection(context.Context, CountSessionSectionInput) (SessionSectionCount, bool, error)
 	DeleteSession(context.Context, string, string) (bool, error)
-	DeleteSessionSection(context.Context, DeleteSessionSectionInput) (DeleteSessionSectionResult, bool, error)
+	DeleteSessionsBatch(context.Context, DeleteSessionsBatchInput) (DeleteSessionsBatchResult, error)
 	GetSession(context.Context, string, string) (Session, bool, error)
+	SessionDeleted(context.Context, string, string) (bool, error)
 	GetLatestTurn(context.Context, string, string) (Turn, bool, error)
 	GetTurn(context.Context, string, string, string) (Turn, bool, error)
 	ListSessionInteractions(context.Context, ListSessionInteractionsInput) ([]Interaction, error)
@@ -24,6 +24,7 @@ type Repository interface {
 	ListTurnsBySession(context.Context, string, map[string]string) (map[string]Turn, error)
 	ListPendingInteractionsBySession(context.Context, string, []string) (map[string][]Interaction, error)
 	ListSessionSection(context.Context, ListSessionSectionInput) (SessionSectionPage, bool, error)
+	ListSessionSectionDeletionCandidates(context.Context, ListSessionSectionDeletionCandidatesInput) (SessionSectionDeletionCandidates, bool, error)
 	ListSessionTurns(context.Context, string, string) ([]Turn, error)
 	ListSessions(context.Context, string) ([]Session, bool, error)
 	ListWorkspaceGeneratedFiles(context.Context, ListWorkspaceGeneratedFilesInput) (GeneratedFileList, bool, error)
@@ -63,10 +64,12 @@ type ListSessionMessagesInput struct {
 	WorkspaceID    string
 	AgentSessionID string
 	TurnID         string
-	AfterVersion   uint64
-	BeforeVersion  uint64
-	Limit          int
-	Order          MessageOrder
+	// AfterVersion and BeforeVersion are per-session change cursors. Current
+	// message snapshots may skip cursor values when the same message is updated.
+	AfterVersion  uint64
+	BeforeVersion uint64
+	Limit         int
+	Order         MessageOrder
 }
 
 type ListWorkspaceGeneratedFilesInput struct {
@@ -87,37 +90,35 @@ type GeneratedFileList struct {
 }
 
 type ListSessionSectionInput struct {
-	WorkspaceID       string
-	SectionKey        string
-	AgentTargetID     string
-	CursorUpdatedAtMS int64
-	CursorSessionID   string
-	Limit             int
+	WorkspaceID          string
+	SectionKey           string
+	AgentTargetID        string
+	CursorSortTimeUnixMS int64
+	CursorSessionID      string
+	Limit                int
 }
 
-type CountSessionSectionInput struct {
+type ListSessionSectionDeletionCandidatesInput struct {
 	WorkspaceID   string
 	SectionKey    string
 	AgentTargetID string
+	ExcludePinned bool
 }
 
-type SessionSectionCount struct {
+type SessionSectionDeletionCandidates struct {
 	WorkspaceID   string
 	SectionKey    string
 	AgentTargetID string
-	Count         int
+	ExcludePinned bool
+	SessionIDs    []string
 }
 
-type DeleteSessionSectionInput struct {
-	WorkspaceID   string
-	SectionKey    string
-	AgentTargetID string
+type DeleteSessionsBatchInput struct {
+	WorkspaceID string
+	SessionIDs  []string
 }
 
-type DeleteSessionSectionResult struct {
-	WorkspaceID       string
-	SectionKey        string
-	AgentTargetID     string
+type DeleteSessionsBatchResult struct {
 	RemovedMessages   int
 	RemovedSessions   int
 	RemovedSessionIDs []string
@@ -126,12 +127,12 @@ type DeleteSessionSectionResult struct {
 const PinnedSessionPageKey = "pinned"
 
 type SessionSectionPage struct {
-	WorkspaceID   string
-	SectionKey    string
-	Sessions      []Session
-	HasMore       bool
-	NextCursor    string
-	NextUpdatedAt int64
+	WorkspaceID string
+	SectionKey  string
+	Sessions    []Session
+	HasMore     bool
+	TotalCount  int
+	NextCursor  string
 }
 
 type Session struct {
@@ -150,7 +151,9 @@ type Session struct {
 	Title                  string
 	// ActiveTurnID is the protocol v2 turn reference: the id of the turn
 	// currently in flight, empty when the session is idle.
-	ActiveTurnID    string
+	ActiveTurnID string
+	// MessageVersion is the latest accepted per-session message change cursor.
+	// It is a high-water mark, not a count of current message rows.
 	MessageVersion  uint64
 	LastEventUnixMS int64
 	StartedAtUnixMS int64
@@ -170,11 +173,11 @@ type ActivityStateReport struct {
 }
 
 type ActivityStateReportResult struct {
-	State               StateReportResult
-	Turn                Turn
-	TurnAccepted        bool
-	Interaction         Interaction
-	InteractionAccepted bool
+	State             StateReportResult
+	Turn              Turn
+	TurnAccepted      bool
+	Interaction       Interaction
+	InteractionResult InteractionTransitionResult
 }
 
 // Closed protocol v2 turn phase vocabulary. The storage CHECK constraints
@@ -281,6 +284,14 @@ type InteractionUpsert struct {
 	OccurredAtUnixMS int64
 }
 
+type InteractionTransitionResult string
+
+const (
+	InteractionTransitionApplied        InteractionTransitionResult = "applied"
+	InteractionTransitionAlreadyApplied InteractionTransitionResult = "already_applied"
+	InteractionTransitionConflict       InteractionTransitionResult = "conflict"
+)
+
 type ListSessionInteractionsInput struct {
 	WorkspaceID    string
 	AgentSessionID string
@@ -354,9 +365,11 @@ type MessageReportResult struct {
 }
 
 type Message struct {
-	ID                uint64
-	AgentSessionID    string
-	MessageID         string
+	ID             uint64
+	AgentSessionID string
+	MessageID      string
+	// Version is a per-session change cursor for this mutable snapshot. Updating
+	// the same MessageID assigns a newer version, so current rows may have gaps.
 	Version           uint64
 	TurnID            string
 	Role              string
@@ -373,6 +386,8 @@ type Message struct {
 type MessagePage struct {
 	AgentSessionID string
 	Messages       []Message
-	LatestVersion  uint64
-	HasMore        bool
+	// LatestVersion is the largest cursor delivered by this page, or the input
+	// AfterVersion when an ascending page contains no newer snapshots.
+	LatestVersion uint64
+	HasMore       bool
 }

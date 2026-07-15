@@ -1,12 +1,11 @@
 import {
-  selectEngineSession,
+  selectEngineSessionReconcile,
   selectWorkspaceAgentConsumerSession,
   type AgentSessionEngine
 } from "@tutti-os/agent-activity-core";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { useCallback, useEffect } from "react";
 import type { AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
-import { selectAgentGUIConversationId } from "../model/agentGuiConversationModel";
 import {
   normalizeAgentGUIOpenSessionRequest,
   type AgentGUIOpenSessionRequest
@@ -21,7 +20,6 @@ interface UseAgentGUIConversationRoutingInput {
   conversationListQuery: unknown | null;
   conversations: readonly AgentGUIConversationSummary[];
   conversationsRef: RefObject<AgentGUIConversationSummary[]>;
-  explicitlyOpenedConversationIdsRef: RefObject<Set<string>>;
   handledOpenSessionSequenceRef: RefObject<number | null>;
   hasLoadedConversations: boolean;
   intent: ConversationIntent;
@@ -34,7 +32,6 @@ interface UseAgentGUIConversationRoutingInput {
   ): void;
   sessionEngine: AgentSessionEngine;
   setIntent: Dispatch<SetStateAction<ConversationIntent>>;
-  syncConversationListProjection(agentSessionId: string): Promise<void>;
   transientConversation: AgentGUIConversationSummary | null;
   workspaceId: string;
 }
@@ -47,7 +44,6 @@ export function useAgentGUIConversationRouting(
     conversationListQuery,
     conversations,
     conversationsRef,
-    explicitlyOpenedConversationIdsRef,
     handledOpenSessionSequenceRef,
     hasLoadedConversations,
     intent,
@@ -57,7 +53,6 @@ export function useAgentGUIConversationRouting(
     selectConversation,
     sessionEngine,
     setIntent,
-    syncConversationListProjection,
     transientConversation,
     workspaceId
   } = input;
@@ -80,6 +75,17 @@ export function useAgentGUIConversationRouting(
         normalizedAgentSessionId
       );
       if (consumerSession && consumerSession.session.visible !== false) return;
+      const reconcile = selectEngineSessionReconcile(
+        sessionEngine.getSnapshot(),
+        normalizedAgentSessionId
+      );
+      if (
+        reconcile?.inFlightCommandId ||
+        reconcile?.pendingMessages ||
+        reconcile?.pendingState
+      ) {
+        return;
+      }
       sessionEngine.dispatch({
         agentSessionId: normalizedAgentSessionId,
         needsMessages: true,
@@ -116,15 +122,9 @@ export function useAgentGUIConversationRouting(
       ) !== null;
     const resolveCanonicalId = (id: string) =>
       resolveConversationSummaryById(conversations, id, null) !== null;
-    const inSnapshot = (id: string) => {
-      const session = selectEngineSession(sessionEngine.getSnapshot(), id);
-      return Boolean(session && session.visible !== false);
-    };
-
     if (hasExplicitOpenSessionRequest) {
       const requestedId = pendingOpenSessionRequest!.agentSessionId.trim();
       if (!hasLoadedConversations) return;
-      explicitlyOpenedConversationIdsRef.current.add(requestedId);
       pendingOpenSessionRequestRef.current = null;
       selectConversation(requestedId, { reloadConversations: false });
       ensureTransientOpenSessionConversation(requestedId);
@@ -135,62 +135,23 @@ export function useAgentGUIConversationRouting(
       case "home":
         return;
       case "active":
-        if (resolveCanonicalId(intent.id)) {
-          explicitlyOpenedConversationIdsRef.current.delete(intent.id);
-          return;
-        }
+        if (resolveCanonicalId(intent.id)) return;
         if (resolveId(intent.id)) return;
+        // An active intent is produced by an explicit user/session selection.
+        // Rail pages are bounded and may not contain that selected session yet;
+        // list absence must not demote it into the requested/fallback flow.
+        if (activeConversationIdRef.current === intent.id) return;
         if (!hasLoadedConversations) return;
-        if (
-          inSnapshot(intent.id) &&
-          activeConversationIdRef.current === intent.id
-        ) {
-          ensureTransientOpenSessionConversation(intent.id);
-          return;
-        }
-        if (
-          explicitlyOpenedConversationIdsRef.current.has(intent.id) &&
-          activeConversationIdRef.current === intent.id
-        ) {
-          return;
-        }
         setIntent({ tag: "requested", id: intent.id });
         return;
       case "requested":
         if (!hasLoadedConversations) return;
-        if (resolveId(intent.id)) {
-          if (activeConversationIdRef.current === intent.id) {
-            setIntent({ tag: "active", id: intent.id });
-            return;
-          }
-          selectConversation(intent.id, { reloadConversations: false });
-          return;
-        }
-        if (inSnapshot(intent.id)) {
-          if (activeConversationIdRef.current === intent.id) {
-            ensureTransientOpenSessionConversation(intent.id);
-            setIntent({ tag: "active", id: intent.id });
-          }
-          return;
-        }
-        setIntent({ tag: "resolving", id: intent.id });
-        void syncConversationListProjection(intent.id);
+        // Persisted/external selection is authoritative. The bounded list may
+        // not contain it after restart, so activate it and reconcile detail
+        // instead of replacing it with the first visible rail row.
+        selectConversation(intent.id, { reloadConversations: false });
+        ensureTransientOpenSessionConversation(intent.id);
         return;
-      case "resolving": {
-        if (resolveId(intent.id)) {
-          selectConversation(intent.id, { reloadConversations: false });
-          return;
-        }
-        const fallback = selectAgentGUIConversationId(
-          conversations,
-          activeConversationIdRef.current
-        );
-        if (fallback) {
-          selectConversation(fallback, { reloadConversations: false });
-        } else {
-          setIntent({ tag: "home" });
-        }
-      }
     }
   }, [
     conversationListQuery,
@@ -201,7 +162,6 @@ export function useAgentGUIConversationRouting(
     openSessionRequest,
     previewMode,
     selectConversation,
-    syncConversationListProjection,
     transientConversation
   ]);
 }

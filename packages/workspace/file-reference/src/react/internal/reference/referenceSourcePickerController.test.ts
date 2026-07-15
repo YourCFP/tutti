@@ -132,6 +132,39 @@ test("open 加载 tabs、默认选中首个并加载其根", async () => {
   );
 });
 
+test("首次加载保留 source 声明的业务顺序", async () => {
+  const controller = createReferenceSourcePickerController({
+    aggregator: fakeAggregator({
+      tabs: [tabsTwo[1]!],
+      children: {
+        [`app-artifact:${SOURCE_ROOT_NODE_ID}`]: {
+          entries: [
+            folder("app-artifact", "project-new", "Untitled"),
+            folder("app-artifact", "project-beta", "Beta"),
+            folder("app-artifact", "project-alpha", "Alpha")
+          ],
+          nextCursor: null,
+          ordered: true
+        }
+      }
+    }),
+    scope,
+    searchDebounceMs: 0
+  });
+
+  controller.open();
+  await flush();
+
+  const root =
+    controller.getSnapshot().bySource["app-artifact"]?.childrenByKey[
+      ROOT_CHILDREN_KEY
+    ];
+  assert.deepEqual(
+    root?.entries.map((node) => node.displayName),
+    ["Untitled", "Beta", "Alpha"]
+  );
+});
+
 test("toggleNode 展开 folder 并懒加载子节点", async () => {
   const controller = createReferenceSourcePickerController({
     aggregator: fakeAggregator({
@@ -207,6 +240,38 @@ test("refreshChildren reloads an already loaded app group", async () => {
     entries.map((node) => node.ref.nodeId),
     ["new.png"]
   );
+});
+
+test("failed app group loading is retained as content state instead of empty data", async () => {
+  const appGroup = folder("app-artifact", "app:broken", "Broken App");
+  const expected = new Error("reference endpoint unavailable");
+  const controller = createReferenceSourcePickerController({
+    aggregator: {
+      ...fakeAggregator({ tabs: [tabsTwo[1]!], children: {} }),
+      async listChildren(_scope, ref: NodeRef): Promise<ListChildrenResult> {
+        if (ref.nodeId === SOURCE_ROOT_NODE_ID) {
+          return { entries: [appGroup], nextCursor: null };
+        }
+        throw expected;
+      }
+    },
+    scope,
+    searchDebounceMs: 0
+  });
+
+  controller.open();
+  await flush();
+  controller.refreshChildren(appGroup);
+  await flush();
+
+  const state =
+    controller.getSnapshot().bySource["app-artifact"]?.childrenByKey[
+      nodeRefKey(appGroup.ref)
+    ];
+  assert.equal(state?.loaded, false);
+  assert.equal(state?.loading, false);
+  assert.equal(state?.entries.length, 0);
+  assert.equal(state?.error, expected);
 });
 
 test("toggleSingleSelectionAndExpand single-selects and expands folders", async () => {
@@ -487,6 +552,47 @@ test("search 在当前 tab 生效", async () => {
   assert.equal(
     controller.getSnapshot().bySource["workspace-file"]?.mode,
     "browse"
+  );
+});
+
+test("search 保留 source 返回的相关性顺序", async () => {
+  const controller = createReferenceSourcePickerController({
+    aggregator: fakeAggregator({
+      tabs: tabsTwo,
+      children: {
+        [`workspace-file:${SOURCE_ROOT_NODE_ID}`]: {
+          entries: [],
+          nextCursor: null
+        }
+      },
+      search: {
+        "workspace-file:load_log": {
+          entries: [
+            file("workspace-file", "/Movies/load_log", "load_log"),
+            folder(
+              "workspace-file",
+              "/Music/downloaded_catalog_data",
+              "downloaded_catalog_data"
+            )
+          ],
+          nextCursor: null
+        }
+      }
+    }),
+    scope,
+    searchDebounceMs: 0
+  });
+
+  controller.open();
+  await flush();
+  controller.setSearchQuery("load_log");
+  await flush();
+
+  assert.deepEqual(
+    controller
+      .getSnapshot()
+      .bySource["workspace-file"]?.searchEntries.map((node) => node.ref.nodeId),
+    ["/Movies/load_log", "/Music/downloaded_catalog_data"]
   );
 });
 

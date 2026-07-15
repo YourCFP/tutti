@@ -261,6 +261,11 @@ describe("AgentTranscriptView", () => {
       expect(locator).toHaveStyle({
         "--agent-message-locator-height": "66px"
       });
+      expect(
+        locator.querySelector(".agent-gui-message-locator__track-segment")
+      ).toHaveStyle({
+        "--agent-message-locator-segment-position": "33px"
+      });
       fireEvent.mouseEnter(locator);
       const panel = screen.getByTestId("agent-message-locator-panel");
       expect(within(panel).getByText("User asks for a fix")).toBeTruthy();
@@ -301,6 +306,53 @@ describe("AgentTranscriptView", () => {
       vi.useRealTimers();
       HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
     }
+  });
+
+  it("formats rich mention syntax as plain text in user message locator previews", () => {
+    const mentionPrompt =
+      "[@我打算去泰国旅游，你制定下旅游计划](mention://agent-session/session-source?workspaceId=workspace-1) 这个计划你锐评一下";
+    const displayPrompt =
+      "@我打算去泰国旅游，你制定下旅游计划 这个计划你锐评一下";
+    const base = detailViewModel();
+
+    render(
+      <AgentTranscriptView
+        conversation={projectAgentConversationVM(
+          detailViewModel({
+            turns: [
+              {
+                ...base.turns[0]!,
+                userMessage: { id: "user-1", body: mentionPrompt },
+                userMessages: [{ id: "user-1", body: mentionPrompt }]
+              },
+              {
+                id: "turn-2",
+                userMessage: { id: "user-2", body: "啊？" },
+                userMessages: [{ id: "user-2", body: "啊？" }],
+                agentMessages: [],
+                toolCalls: [],
+                toolCallCount: 0,
+                hasFailedToolCall: false,
+                agentItems: []
+              }
+            ]
+          })
+        )}
+        labels={{
+          thinkingLabel: "Thought process",
+          toolCallsLabel: (count) => `Tool calls (${count})`,
+          processing: "Planning next moves",
+          turnSummary: "Changed files",
+          userMessageLocator: "User messages"
+        }}
+      />
+    );
+
+    fireEvent.mouseEnter(screen.getByTestId("agent-message-locator"));
+    const panel = screen.getByTestId("agent-message-locator-panel");
+    expect(within(panel).getByText(displayPrompt)).toBeTruthy();
+    expect(within(panel).getByText("啊？")).toBeTruthy();
+    expect(within(panel).queryByText(mentionPrompt)).toBeNull();
   });
 
   it("locates the nearest user message when clicking the locator rail around a dot", () => {
@@ -1046,6 +1098,11 @@ describe("AgentTranscriptView", () => {
         conversation={projectAgentConversationVM(
           detailViewModel({
             session: normalizeAgentActivitySession({
+              ...{
+                activeTurnId: null,
+                latestTurnInteractions: [],
+                pendingInteractions: []
+              },
               workspaceId: "workspace-1",
               agentSessionId: "session-1",
               userId: "user-1",
@@ -1720,6 +1777,11 @@ function detailViewModel(
       userAvatarUrl: ""
     },
     session: normalizeAgentActivitySession({
+      ...{
+        activeTurnId: null,
+        latestTurnInteractions: [],
+        pendingInteractions: []
+      },
       workspaceId: "workspace-1",
       agentSessionId: "session-1",
       userId: "user-1",

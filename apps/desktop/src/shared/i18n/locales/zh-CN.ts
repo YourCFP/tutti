@@ -141,7 +141,8 @@ export const zhCN = {
       expandConversationRail: "显示侧边栏",
       fallbackAgentLabel: "Agent",
       newConversation: "新建会话",
-      openDetachedWindow: "在独立窗口打开",
+      openDetachedWindow: "独立agent窗口模式",
+      openNewWindow: "打开新窗口",
       openSessionUnavailableDescription: "这个 Agent 会话已不存在或无法打开。",
       openSessionUnavailableTitle: "会话不可用",
       toolSidebar: {
@@ -156,6 +157,7 @@ export const zhCN = {
         openRightPanel: "展开右侧面板",
         resizeSidebar: "调整工具侧栏宽度",
         shrinkPanel: "缩小面板",
+        tasks: "任务",
         terminal: "终端",
         tool: "工具",
         unavailable: "Agent 独立窗口暂未接入{{tool}}。"

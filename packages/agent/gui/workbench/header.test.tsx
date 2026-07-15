@@ -172,6 +172,81 @@ describe("AgentGuiWorkbenchHeader", () => {
     expect(primary).toContainElement(actions);
   });
 
+  it("shows the selected agent identity in the collapsed header", () => {
+    render(
+      <AgentGuiWorkbenchHeader
+        agentTitle="Cursor"
+        copy={{
+          collapseConversationRail: "Collapse conversations",
+          expandConversationRail: "Expand conversations",
+          fallbackAgentLabel: "Agent",
+          newConversation: "New conversation"
+        }}
+        conversationIconUrl="asset://cursor.png"
+        conversationTitle="Fix the header"
+        isConversationRailAutoCollapsed={false}
+        isConversationRailCollapsed
+        nodeId="agent-gui-node-1"
+        onToggleConversationRail={() => {}}
+      />
+    );
+
+    expect(screen.getByText("Cursor")).toBeInTheDocument();
+    expect(screen.queryByText("Fix the header")).not.toBeInTheDocument();
+    expect(screen.getByTestId("agent-gui-window-session-icon")).toHaveAttribute(
+      "src",
+      "asset://cursor.png"
+    );
+  });
+
+  it("keeps the conversation title in the expanded detail header", () => {
+    render(
+      <AgentGuiWorkbenchHeader
+        agentTitle="Cursor"
+        copy={{
+          collapseConversationRail: "Collapse conversations",
+          expandConversationRail: "Expand conversations",
+          fallbackAgentLabel: "Agent",
+          newConversation: "New conversation"
+        }}
+        conversationTitle="Fix the header"
+        isConversationRailAutoCollapsed={false}
+        isConversationRailCollapsed={false}
+        nodeId="agent-gui-node-1"
+        onToggleConversationRail={() => {}}
+      />
+    );
+
+    expect(
+      screen.getByTestId("agent-gui-window-detail-title")
+    ).toHaveTextContent("Fix the header");
+    expect(screen.queryByText("Cursor")).not.toBeInTheDocument();
+  });
+
+  it("shows the selected agent icon before an expanded conversation has a title", () => {
+    render(
+      <AgentGuiWorkbenchHeader
+        agentTitle="Cursor"
+        copy={{
+          collapseConversationRail: "Collapse conversations",
+          expandConversationRail: "Expand conversations",
+          fallbackAgentLabel: "Agent",
+          newConversation: "New conversation"
+        }}
+        conversationIconUrl="asset://cursor.png"
+        isConversationRailAutoCollapsed={false}
+        isConversationRailCollapsed={false}
+        nodeId="agent-gui-node-1"
+        onToggleConversationRail={() => {}}
+      />
+    );
+
+    expect(
+      screen.getByTestId("agent-gui-window-detail-title-icon")
+    ).toHaveAttribute("src", "asset://cursor.png");
+    expect(screen.queryByText("Cursor")).not.toBeInTheDocument();
+  });
+
   it("uses the open-link-lined asset for the detached window action", () => {
     render(
       <AgentGuiWorkbenchHeader

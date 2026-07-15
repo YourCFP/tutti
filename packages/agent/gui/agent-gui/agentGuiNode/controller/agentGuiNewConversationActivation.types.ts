@@ -1,7 +1,4 @@
-import {
-  type AgentSessionEngine,
-  type PendingActivationIntentRecord
-} from "@tutti-os/agent-activity-core";
+import { type AgentSessionEngine } from "@tutti-os/agent-activity-core";
 import { type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { AgentActivityRuntime } from "../../../agentActivityRuntime";
 import { type AgentGUIConversationListQuery } from "../../../contexts/workspace/presentation/renderer/agentGuiConversationList/useAgentGuiConversationList";
@@ -11,8 +8,13 @@ import type {
 } from "../../../shared/agentSessionTypes";
 import type { AgentGUINodeData, AgentGUIAgentTarget } from "../../../types";
 import { type AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
+import type {
+  AgentComposerDraft,
+  SubmittedDraftSnapshot
+} from "../model/agentGuiNodeTypes";
 import { type AgentGUIComposerTargetData } from "./agentGuiController.composerPresentation";
 import type { useAgentGUIActivation } from "./useAgentGUIActivation";
+import type { ConversationIntent } from "./useAgentConversationSelection";
 
 export interface UseAgentGUINewConversationActivationInput {
   getCachedComposerOptions: () =>
@@ -20,7 +22,6 @@ export interface UseAgentGUINewConversationActivationInput {
     | null;
   selectedAgentTargetRef: RefObject<AgentGUIAgentTarget>;
   selectedComposerTargetDataRef: RefObject<AgentGUIComposerTargetData>;
-  latestPendingNewActivation: PendingActivationIntentRecord | null;
   agentTargetsProvidedRef: RefObject<boolean>;
   selectedAgentTargetIsExplicitRef: RefObject<boolean>;
   setDetailError: Dispatch<SetStateAction<string | null>>;
@@ -29,12 +30,15 @@ export interface UseAgentGUINewConversationActivationInput {
     (updater: (current: AgentGUINodeData) => AgentGUINodeData) => void
   >;
   selectedProjectPathRef: RefObject<string | null>;
+  draftByScopeKeyRef: RefObject<Record<string, AgentComposerDraft>>;
+  submittedDraftSnapshotsRef: RefObject<Record<string, SubmittedDraftSnapshot>>;
   draftSettingsBySessionIdRef: RefObject<
     Record<string, AgentSessionComposerSettings>
   >;
   agentActivityRuntime: AgentActivityRuntime;
   workspaceId: string;
   activeConversationIdRef: RefObject<string | null>;
+  isComposerHomeRef: RefObject<boolean>;
   conversationsRef: RefObject<AgentGUIConversationSummary[]>;
   activeSessionState: AgentSessionState | null;
   lastActiveModelByProviderRef: RefObject<Record<string, string>>;
@@ -42,6 +46,10 @@ export interface UseAgentGUINewConversationActivationInput {
   conversationListQuery: AgentGUIConversationListQuery | null;
   currentUserId: string | null | undefined;
   persistActiveConversation: (agentSessionId: string | null) => void;
+  setActiveConversationId: Dispatch<SetStateAction<string | null>>;
+  setIntent: Dispatch<SetStateAction<ConversationIntent>>;
+  setIsComposerHome: Dispatch<SetStateAction<boolean>>;
+  setIsLoadingMessages: Dispatch<SetStateAction<boolean>>;
   activation: ReturnType<typeof useAgentGUIActivation>;
   isCurrentConversation: (agentSessionId: string) => boolean;
   isConversationStale: (agentSessionId: string) => boolean;
@@ -56,4 +64,9 @@ export interface UseAgentGUINewConversationActivationInput {
   data: AgentGUINodeData;
   defaultReasoningEffort: string;
   refreshMessagesFromSnapshot: (agentSessionId: string) => void;
+}
+
+export interface AgentGUINewConversationActivationResult {
+  agentSessionId: string;
+  requestId: string;
 }

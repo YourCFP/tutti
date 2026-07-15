@@ -1,10 +1,8 @@
 import { AGENT_PROVIDER_LABEL } from "../contexts/settings/domain/agentSettings.providerMeta.ts";
-import type { UiLanguage } from "../contexts/settings/domain/agentSettings.ts";
 import { translateInUiLanguage } from "../i18n/runtime.ts";
 import { resolveAgentGUIProviderCatalogIdentity } from "../providerIdentityCatalog.ts";
 import type { AgentGUIProvider } from "../types.ts";
 import type { WorkspaceAgentActivityTimelineItem } from "./workspaceAgentTimelineTypes.ts";
-import { formatAgentSessionMentionText } from "./utils/agentSessionMentionText.ts";
 import { normalizeAgentTitleText } from "./utils/agentTitleText.ts";
 
 export type AgentGUIResolvedProvider = AgentGUIProvider | "unknown";
@@ -16,11 +14,6 @@ export function isAgentGUIProviderUnresolved(
   value: AgentGUIResolvedProvider
 ): value is "unknown" {
   return value === AGENT_GUI_UNRESOLVED_PROVIDER;
-}
-
-export interface AgentGUIConversationPlainTitleOptions {
-  fallbackAgentLabel?: string;
-  language?: UiLanguage;
 }
 
 export interface AgentGUIConversationTitleMessage {
@@ -42,11 +35,19 @@ export interface AgentGUIConversationTitleMessage {
 export function normalizeAgentGUIProviderIdentity(
   provider: string | null | undefined
 ): AgentGUIResolvedProvider {
-  const providerId =
-    resolveAgentGUIProviderCatalogIdentity(provider)?.providerId;
-  return providerId && Object.hasOwn(AGENT_PROVIDER_LABEL, providerId)
-    ? (providerId as AgentGUIProvider)
-    : "unknown";
+  const normalized = provider?.trim().toLowerCase() ?? "";
+  const catalogIdentity = resolveAgentGUIProviderCatalogIdentity(normalized);
+  if (catalogIdentity) {
+    return catalogIdentity.providerId as AgentGUIProvider;
+  }
+  if (!/^[a-z][a-z0-9._:-]{0,127}$/.test(normalized)) {
+    return "unknown";
+  }
+  return normalized as AgentGUIProvider;
+}
+
+function providerLabel(provider: AgentGUIProvider): string {
+  return (AGENT_PROVIDER_LABEL as Record<string, string>)[provider] ?? provider;
 }
 
 export function resolveAgentGUIProviderIdentity(input: {
@@ -77,9 +78,7 @@ export function resolveAgentGUIConversationTitle(
   title: string;
   titleFallback: AgentGUIConversationTitleFallback;
 } {
-  const normalizedTitle = stripAgentGUITitleTrailingPeriod(
-    normalizeAgentTitleText(title)
-  );
+  const normalizedTitle = stripAgentGUITitleTrailingPeriod(title?.trim() ?? "");
   if (normalizedTitle) {
     return {
       title: normalizedTitle,
@@ -93,7 +92,7 @@ export function resolveAgentGUIConversationTitle(
     };
   }
   return {
-    title: AGENT_PROVIDER_LABEL[provider],
+    title: providerLabel(provider),
     titleFallback: null
   };
 }
@@ -106,32 +105,12 @@ export function resolveAgentGUIConversationDisplayTitle(
   fallbackAgentLabel: string
 ): string {
   if (input.title) {
-    return stripAgentGUITitleTrailingPeriod(
-      normalizeAgentTitleText(input.title)
-    );
+    return stripAgentGUITitleTrailingPeriod(input.title.trim());
   }
   if (input.titleFallback === "generic-agent") {
     return stripAgentGUITitleTrailingPeriod(fallbackAgentLabel);
   }
   return "";
-}
-
-export function formatAgentGUIConversationPlainTitle(
-  input: {
-    title: string;
-    titleFallback?: AgentGUIConversationTitleFallback;
-  },
-  options: AgentGUIConversationPlainTitleOptions = {}
-): string {
-  return formatAgentSessionMentionText(
-    resolveAgentGUIConversationDisplayTitle(
-      input,
-      options.fallbackAgentLabel ?? "Agent"
-    ),
-    {
-      language: options.language
-    }
-  );
 }
 
 export function resolveAgentGUIDockConversationTitle(input: {
@@ -151,9 +130,7 @@ export function resolveAgentGUIExplicitConversationTitle(input: {
     return null;
   }
 
-  const title = stripAgentGUITitleTrailingPeriod(
-    normalizeAgentTitleText(input.title)
-  );
+  const title = stripAgentGUITitleTrailingPeriod(input.title.trim());
   if (!title) {
     return null;
   }
@@ -161,10 +138,7 @@ export function resolveAgentGUIExplicitConversationTitle(input: {
     return null;
   }
 
-  if (
-    input.provider !== "unknown" &&
-    title === AGENT_PROVIDER_LABEL[input.provider]
-  ) {
+  if (input.provider !== "unknown" && title === providerLabel(input.provider)) {
     return null;
   }
 
@@ -179,7 +153,7 @@ export function resolveAgentGUIProviderDisplayLabel(
   if (resolvedProvider === "unknown") {
     return fallbackAgentLabel;
   }
-  return AGENT_PROVIDER_LABEL[resolvedProvider];
+  return providerLabel(resolvedProvider);
 }
 
 export function firstAgentGUIUserMessageTitle(

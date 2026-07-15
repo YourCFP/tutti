@@ -37,6 +37,7 @@ func (a *standardACPAdapter) Exec(
 		if len(next) == 0 {
 			return
 		}
+		next = a.stampTurnLifecycleSnapshots(acpSession, next)
 		events = append(events, next...)
 		if emit != nil {
 			emit(next)
@@ -138,6 +139,29 @@ execLoop:
 					"error": err.Error(),
 				}))
 				emitEvents(terminalEvents)
+			} else if planLimitMessage, ok := acpProviderPlanLimitMessage(err); ok {
+				// Match cursor-agent's soft plan-gate path: show the provider
+				// copy as a warning notice and settle the turn successfully so
+				// the next send is not a scary red turn-failed card.
+				if notice, ok := acpPlanLimitNoticeEvent(session, turnID, planLimitMessage); ok {
+					emitEvents([]activityshared.Event{notice})
+				}
+				terminalEvents := normalizer.FinishCompleted(session, turnID)
+				terminalEvents = append(terminalEvents, newTurnActivityEvent(session, EventTurnCompleted, turnID, SessionStatusReady, "", "", map[string]any{
+					"stopReason": "end_turn",
+					"planLimit":  true,
+				}))
+				emitEvents(terminalEvents)
+				slog.Info("agent session ACP exec settled plan-limit without failure card",
+					"event", "agent_session.acp.exec.plan_limit",
+					"provider", a.config.provider,
+					"adapter", a.config.adapterName,
+					"room_id", session.RoomID,
+					"agent_session_id", session.AgentSessionID,
+					"provider_session_id", session.ProviderSessionID,
+					"turn_id", turnID,
+					"plan_limit_message", planLimitMessage,
+				)
 			} else {
 				terminalEvents := normalizer.FinishFailed(session, turnID)
 				terminalEvents = append(terminalEvents, newTurnActivityEvent(session, EventTurnFailed, turnID, SessionStatusFailed, "", "", map[string]any{
@@ -164,9 +188,11 @@ execLoop:
 			"emitted_event_type_counts", activityEventTypeCounts(events),
 		)
 		if a.config.autoContinueRetriableTurnError && acpStopReasonEndsTurnNormally(stopReason) {
-			if errLine, ok := acpRetriableTurnTailError(normalizer.CurrentAssistantText()); ok {
+			assistantText := normalizer.CurrentAssistantText()
+			if errLine, ok := acpRetriableTurnTailError(assistantText); ok {
 				if autoContinueAttempts < acpAutoContinueMaxAttempts {
 					autoContinueAttempts++
+					hasUsefulProgress := acpAutoContinueHasUsefulProgress(assistantText, normalizer.SeenToolCallCount())
 					// Close out the error-text segment so the continuation
 					// streams into a fresh message instead of appending to it.
 					emitEvents(normalizer.Finish(session, turnID, messageStreamStateCompleted))
@@ -184,8 +210,9 @@ execLoop:
 						"attempt", autoContinueAttempts,
 						"max_attempts", acpAutoContinueMaxAttempts,
 						"error_line", errLine,
+						"has_useful_progress", hasUsefulProgress,
 					)
-					promptParams = acpAutoContinuePromptContent()
+					promptParams = acpAutoContinuePromptContent(hasUsefulProgress)
 					continue execLoop
 				}
 				// The retries were cut short too: surface the turn as failed
@@ -266,7 +293,7 @@ func (a *standardACPAdapter) submitPermissionOption(ctx context.Context, session
 	if optionID == "" {
 		return "", errors.New("permission option id is required")
 	}
-	pending := a.getPendingApproval(session.AgentSessionID, requestID)
+	pending := a.getPendingApproval(session.AgentSessionID, input.TurnID, requestID)
 	if pending == nil {
 		return "", fmt.Errorf("%w: permission request %q", ErrInteractiveRequestNotLive, requestID)
 	}
@@ -277,25 +304,30 @@ func (a *standardACPAdapter) submitPermissionOption(ctx context.Context, session
 	if !ok {
 		return "", fmt.Errorf("permission option %q is not available for request %q", optionID, requestID)
 	}
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	case pending.response <- pendingInteractiveResponse{
+	if _, err := pending.dispatchResponse(ctx, pendingInteractiveResponse{
 		optionID: resolvedOptionID,
 		result:   acpPermissionResponseResult(resolvedOptionID),
-	}:
-		return resolvedOptionID, nil
-	default:
-		return "", fmt.Errorf("%w: permission request %q", ErrInteractiveAlreadyAnswered, requestID)
+	}); err != nil {
+		return "", err
 	}
+	if state, err := pending.waitForDisposition(ctx); err != nil {
+		return "", err
+	} else if state != pendingInteractiveRequestStateAnswered {
+		return "", interactiveDispositionError(requestID, state)
+	}
+	return resolvedOptionID, nil
 }
 
 func (a *standardACPAdapter) SubmitInteractive(ctx context.Context, session Session, input SubmitInteractiveInput) (SubmitInteractiveResult, error) {
+	turnID := strings.TrimSpace(input.TurnID)
+	if turnID == "" {
+		return SubmitInteractiveResult{}, errors.New("interactive turn id is required")
+	}
 	requestID := strings.TrimSpace(input.RequestID)
 	if requestID == "" {
 		return SubmitInteractiveResult{}, errors.New("interactive request id is required")
 	}
-	pending := a.getPendingApproval(session.AgentSessionID, requestID)
+	pending := a.getPendingApproval(session.AgentSessionID, turnID, requestID)
 	if pending == nil {
 		return SubmitInteractiveResult{}, fmt.Errorf("%w: %q", ErrInteractiveRequestNotLive, requestID)
 	}
@@ -310,6 +342,7 @@ func (a *standardACPAdapter) SubmitInteractive(ctx context.Context, session Sess
 		resolvedOptionID, err := a.submitPermissionOption(ctx, session, PermissionOptionInput{
 			RoomID:         input.RoomID,
 			AgentSessionID: input.AgentSessionID,
+			TurnID:         turnID,
 			RequestID:      requestID,
 			OptionID:       optionID,
 		})
@@ -321,27 +354,37 @@ func (a *standardACPAdapter) SubmitInteractive(ctx context.Context, session Sess
 			RequestID:      requestID,
 			Accepted:       true,
 			OptionID:       resolvedOptionID,
+			Disposition:    InteractiveDispositionAnswered,
 		}, nil
 	}
 	optionID := strings.TrimSpace(input.OptionID)
 	action := strings.TrimSpace(input.Action)
 	payload := clonePayload(input.Payload)
 	result := acpInteractiveResponseResult(action, optionID, payload)
-	select {
-	case <-ctx.Done():
-		return SubmitInteractiveResult{}, ctx.Err()
-	case pending.response <- pendingInteractiveResponse{
+	if _, err := pending.dispatchResponse(ctx, pendingInteractiveResponse{
 		optionID: optionID,
 		action:   action,
 		payload:  payload,
 		result:   result,
-	}:
-	default:
-		return SubmitInteractiveResult{}, fmt.Errorf("%w: %q", ErrInteractiveAlreadyAnswered, requestID)
+	}); err != nil {
+		return SubmitInteractiveResult{}, err
+	}
+	if state, err := pending.waitForDisposition(ctx); err != nil {
+		return SubmitInteractiveResult{}, err
+	} else if state != pendingInteractiveRequestStateAnswered {
+		return SubmitInteractiveResult{}, interactiveDispositionError(requestID, state)
 	}
 	return SubmitInteractiveResult{
 		AgentSessionID: session.AgentSessionID,
 		RequestID:      requestID,
 		Accepted:       true,
+		Disposition:    InteractiveDispositionAnswered,
 	}, nil
+}
+
+func (a *standardACPAdapter) InteractiveDisposition(session Session, turnID string, requestID string) InteractiveDisposition {
+	if pending := a.getPendingApproval(session.AgentSessionID, turnID, requestID); pending != nil {
+		return runtimeInteractiveDisposition(pending)
+	}
+	return a.terminalInteractiveDisposition(session.AgentSessionID, turnID, requestID)
 }

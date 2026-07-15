@@ -227,7 +227,7 @@ function createTransportClient(
     async deleteWorkspaceAgentSession() {
       throw new Error("not used");
     },
-    async deleteWorkspaceAgentSessionSection() {
+    async deleteWorkspaceAgentSessionsBatch() {
       throw new Error("not used");
     },
     async updateWorkspaceAgentSessionTitle() {
@@ -423,11 +423,11 @@ function createTransportClient(
       return { terminals: [], workspaceId: workspaceID };
     },
     async listWorkspaceAgentSessions(workspaceID) {
-      return { sessions: [], workspaceId: workspaceID };
+      return { hasMore: false, sessions: [], workspaceId: workspaceID };
     },
     async listWorkspaceAgentSessionSections(workspaceID) {
       return {
-        pinned: { hasMore: false, sessions: [] },
+        pinned: { hasMore: false, sessions: [], totalCount: 0 },
         sections: [],
         workspaceId: workspaceID
       };
@@ -435,7 +435,7 @@ function createTransportClient(
     async listWorkspaceAgentSessionSectionPage() {
       throw new Error("not used");
     },
-    async countWorkspaceAgentSessionSection() {
+    async listWorkspaceAgentSessionSectionDeletionCandidates() {
       throw new Error("not used");
     },
     async listWorkspaceAgentPinnedSessionPage() {

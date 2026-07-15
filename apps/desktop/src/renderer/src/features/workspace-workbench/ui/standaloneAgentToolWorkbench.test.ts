@@ -20,8 +20,43 @@ const standaloneAgentToolSidebarSource = readFileSync(
   new URL("./StandaloneAgentToolSidebar.tsx", import.meta.url),
   "utf8"
 );
+const standaloneAgentToolSidebarPanelSource = readFileSync(
+  new URL("./StandaloneAgentToolSidebarPanel.tsx", import.meta.url),
+  "utf8"
+);
+const workspaceFileManagerPaneSource = readFileSync(
+  new URL(
+    "../../workspace-file-manager/ui/WorkspaceFileManagerPane.tsx",
+    import.meta.url
+  ),
+  "utf8"
+);
+const standaloneAgentBrowserToolPanelSource = readFileSync(
+  new URL("./StandaloneAgentBrowserToolPanel.tsx", import.meta.url),
+  "utf8"
+);
+const standaloneAgentTerminalPanelSource = readFileSync(
+  new URL("./StandaloneAgentTerminalPanel.tsx", import.meta.url),
+  "utf8"
+);
 const standaloneAgentToolSidebarToolbarSource = readFileSync(
   new URL("./StandaloneAgentToolSidebarToolbar.tsx", import.meta.url),
+  "utf8"
+);
+const standaloneAgentMessageCenterToolPanelSource = readFileSync(
+  new URL("./StandaloneAgentMessageCenterToolPanel.tsx", import.meta.url),
+  "utf8"
+);
+const standaloneAgentDecisionNotificationsSource = readFileSync(
+  new URL("./StandaloneAgentDecisionNotifications.tsx", import.meta.url),
+  "utf8"
+);
+const workspaceAgentDecisionNotificationsSource = readFileSync(
+  new URL("./useWorkspaceAgentDecisionNotifications.tsx", import.meta.url),
+  "utf8"
+);
+const standaloneAgentIssueManagerToolPanelSource = readFileSync(
+  new URL("./StandaloneAgentIssueManagerToolPanel.tsx", import.meta.url),
   "utf8"
 );
 const workspaceAgentStatusPetIconSource = readFileSync(
@@ -33,29 +68,29 @@ const workspaceAgentMessageCenterActionSource = readFileSync(
   "utf8"
 );
 
-test("standalone Agent browser and terminal mount their OS node UI directly", () => {
-  assert.match(standaloneAgentToolSidebarSource, /<BrowserNode/);
-  assert.match(standaloneAgentToolSidebarSource, /hidden=\{hidden\}/);
+test("standalone Agent tools load their OS node UI on demand", () => {
+  assert.match(standaloneAgentBrowserToolPanelSource, /<LazyBrowserNode/);
+  assert.match(standaloneAgentBrowserToolPanelSource, /hidden=\{hidden\}/);
   assert.match(
-    standaloneAgentToolSidebarSource,
+    standaloneAgentToolSidebarPanelSource,
     /<StandaloneAgentBrowserToolPanel[\s\S]*?hidden=\{!active\}/
   );
-  assert.match(standaloneAgentToolSidebarSource, /<TerminalNode/);
+  assert.match(standaloneAgentTerminalPanelSource, /<LazyTerminalNode/);
   assert.doesNotMatch(standaloneAgentToolSidebarSource, /<WorkbenchHost/);
   assert.match(
-    standaloneAgentToolSidebarSource,
-    /<StandaloneAgentAppCenterToolPanel/
+    standaloneAgentToolSidebarPanelSource,
+    /<LazyStandaloneAgentAppCenterToolPanel/
   );
   assert.doesNotMatch(
-    standaloneAgentToolSidebarSource,
+    standaloneAgentToolSidebarPanelSource,
     /<WorkspaceAppCenterPane/
   );
   assert.match(
-    standaloneAgentToolSidebarSource,
+    standaloneAgentToolSidebarPanelSource,
     /workspace\.appCenter\.backToApps/
   );
   assert.match(
-    standaloneAgentToolSidebarSource,
+    standaloneAgentMessageCenterToolPanelSource,
     /<WorkspaceAgentMessageCenterPanel[\s\S]*?presentation="embedded"/
   );
 });
@@ -87,23 +122,23 @@ test("standalone Agent right sidebar uses the AgentGUI sidepanel background", ()
 
 test("standalone Agent terminal matches the sidepanel background without a duplicate close button", () => {
   assert.doesNotMatch(
-    standaloneAgentToolSidebarSource,
+    standaloneAgentTerminalPanelSource,
     /data-standalone-agent-terminal-close/
   );
   assert.match(
-    standaloneAgentToolSidebarSource,
+    standaloneAgentTerminalPanelSource,
     /relative h-full min-h-0 overflow-hidden bg-\[var\(--background-session-sidepanel\)\]/
   );
   assert.match(
-    standaloneAgentToolSidebarSource,
+    standaloneAgentTerminalPanelSource,
     /"--tutti-surface": "var\(--background-session-sidepanel\)"/
   );
   assert.match(
-    standaloneAgentToolSidebarSource,
+    standaloneAgentTerminalPanelSource,
     /getPropertyValue\("--background-session-sidepanel"\)/
   );
   assert.match(
-    standaloneAgentToolSidebarSource,
+    standaloneAgentTerminalPanelSource,
     /background: panelTheme\.background \?\? terminalTheme\.background/
   );
 });
@@ -202,7 +237,7 @@ test("standalone Agent panel tabs and tools share the 44-pixel header height", (
 test("standalone Agent panel tab buttons switch the active mounted panel", () => {
   assert.match(
     standaloneAgentToolSidebarSource,
-    /data-standalone-agent-tool-tab=\{panel\}[\s\S]*?role="tab"[\s\S]*?onClick=\{\(\) => onOpenPanel\(panel\)\}/
+    /data-standalone-agent-tool-tab=\{tab\.panel\}[\s\S]*?role="tab"[\s\S]*?onClick=\{\(\) => onOpenPanel\(tab\)\}/
   );
   assert.match(
     standaloneAgentToolSidebarSource,
@@ -213,7 +248,7 @@ test("standalone Agent panel tab buttons switch the active mounted panel", () =>
 test("standalone Agent panel tabs render semantic icons before their labels", () => {
   assert.match(
     standaloneAgentToolSidebarSource,
-    /<ToolSidebarPanelIcon[\s\S]*?className="size-3\.5 shrink-0"[\s\S]*?panel=\{panel\}[\s\S]*?<span className="truncate">\{copy\[panel\]\}<\/span>/
+    /<ToolSidebarTabIcon tab=\{tab\} \/>[\s\S]*?resolveToolTabLabel\(tab, copy\)/
   );
   assert.match(
     standaloneAgentToolSidebarToolbarSource,
@@ -235,14 +270,14 @@ test("standalone Agent selected panel tab uses the fronted background and line-2
   );
   assert.match(
     standaloneAgentToolSidebarSource,
-    /activePanel === panel\s*\? "border-\[var\(--line-2\)\] bg-\[var\(--background-fronted\)\] text-\[var\(--text-primary\)\]"\s*: "border-transparent"/
+    /activeTabId === tab\.id\s*\? "border-\[var\(--line-2\)\] bg-\[var\(--background-fronted\)\] text-\[var\(--text-primary\)\]"\s*: "border-transparent"/
   );
 });
 
 test("standalone Agent terminal menu uses the dedicated lined icon", () => {
   assert.match(
     standaloneAgentToolSidebarToolbarSource,
-    /onOpenPanel\("terminal"\)[\s\S]{0,240}<ToolSidebarPanelIcon[\s\S]*?panel="terminal"/
+    /onAddPanel\("terminal"\)[\s\S]{0,240}<ToolSidebarPanelIcon[\s\S]*?panel="terminal"/
   );
   assert.match(
     standaloneAgentToolSidebarToolbarSource,
@@ -282,15 +317,30 @@ test("standalone Agent right sidebar reserves layout space and reveals requested
   );
   assert.match(
     standaloneAgentToolSidebarSource,
-    /dispatch\(\{ panel: "files", type: "open-panel" \}\)/
+    /fileOpenRequestTabIdRef\.current = filesTabId;[\s\S]*?dispatch\(\{ panel: "files", tabId: filesTabId, type: "open-panel" \}\)/
   );
   assert.match(
-    standaloneAgentToolSidebarSource,
-    /<WorkspaceFileManagerPane[\s\S]*?revealIntent=\{fileOpenRequest\}/
+    standaloneAgentToolSidebarPanelSource,
+    /<LazyWorkspaceFileManagerPane[\s\S]*?revealIntent=\{fileOpenRequest\}[\s\S]*?showPreviewPanel=\{false\}/
   );
 });
 
-test("standalone Agent right sidebar transitions without a rebound curve before mounting heavy content", () => {
+test("standalone Agent hides internal open-with actions without changing the OS default", () => {
+  assert.match(
+    standaloneAgentToolSidebarPanelSource,
+    /<LazyWorkspaceFileManagerPane[\s\S]*?showInternalOpenWithActions=\{false\}/
+  );
+  assert.match(
+    workspaceFileManagerPaneSource,
+    /showInternalOpenWithActions = true/
+  );
+  assert.match(
+    workspaceFileManagerPaneSource,
+    /<WorkspaceFileManager[\s\S]*?showInternalOpenWithActions=\{showInternalOpenWithActions\}/
+  );
+});
+
+test("standalone Agent right sidebar transitions renderer-first before mounting heavy content", () => {
   assert.match(
     standaloneAgentToolSidebarSource,
     /overflow-hidden transition-\[width\] duration-\[260ms\] ease-in-out/
@@ -301,7 +351,11 @@ test("standalone Agent right sidebar transitions without a rebound curve before 
   );
   assert.match(
     standaloneAgentToolSidebarSource,
-    /dispatch\(\{ panel, type: "open-panel" \}\);\s*void resizeForPanel\(panel\)/
+    /tabId: resolveToolTabId\(state\.mountedTabs, panel\),\s*type: "open-panel"[\s\S]*?scheduleResizeForPanel\(panel\)/
+  );
+  assert.match(
+    standaloneAgentToolSidebarSource,
+    /window\.requestAnimationFrame\(\(\) => \{[\s\S]*?void resizeForPanel\(panel\)/
   );
   assert.match(
     standaloneAgentToolSidebarSource,
@@ -309,11 +363,19 @@ test("standalone Agent right sidebar transitions without a rebound curve before 
   );
   assert.match(
     standaloneAgentToolSidebarSource,
-    /contentReadyPanels\.includes\(panel\)[\s\S]*?motion-safe:animate-in[\s\S]*?<ToolSidebarPanel/
+    /contentReadyTabIds\.includes\(tab\.id\)[\s\S]*?motion-safe:animate-in[\s\S]*?<StandaloneAgentToolSidebarPanel/
   );
 });
 
 test("standalone Agent exposes one unified right-panel trigger", () => {
+  const toggleStart = standaloneAgentToolSidebarToolbarSource.indexOf(
+    'data-standalone-agent-tool-sidebar-toggle="true"'
+  );
+  const toggleEnd = standaloneAgentToolSidebarToolbarSource.indexOf(
+    "</Button>",
+    toggleStart
+  );
+
   assert.match(
     standaloneAgentToolSidebarToolbarSource,
     /data-standalone-agent-tool-sidebar-toggle="true"[\s\S]*?<PanelIcon[\s\S]*?aria-hidden[\s\S]*?className="size-\[18px\] -scale-x-100"/
@@ -321,6 +383,52 @@ test("standalone Agent exposes one unified right-panel trigger", () => {
   assert.doesNotMatch(
     standaloneAgentToolSidebarToolbarSource,
     /data-standalone-agent-tool-menu-trigger|ToolsIcon/
+  );
+  assert.ok(toggleStart >= 0);
+  assert.ok(toggleEnd > toggleStart);
+  assert.doesNotMatch(
+    standaloneAgentToolSidebarToolbarSource.slice(toggleStart, toggleEnd),
+    /ReminderBadge/
+  );
+});
+
+test("standalone Agent toolbar exposes task management in the unified panel", () => {
+  assert.match(
+    standaloneAgentToolSidebarToolbarSource,
+    /data-standalone-agent-tool-sidebar-quick-action="tasks"[\s\S]*?onClick=\{\(\) => onOpenPanel\("tasks"\)\}/
+  );
+  assert.match(
+    standaloneAgentToolSidebarToolbarSource,
+    /onSelect=\{\(\) => onAddPanel\("tasks"\)\}[\s\S]*?panel="tasks"/
+  );
+  assert.match(standaloneAgentToolSidebarToolbarSource, /tasks: TaskIcon/);
+  assert.match(
+    standaloneAgentToolSidebarPanelSource,
+    /<LazyStandaloneAgentIssueManagerToolPanel/
+  );
+  assert.match(
+    standaloneAgentIssueManagerToolPanelSource,
+    /candidate\.id === "workspace-issue-manager"/
+  );
+  assert.doesNotMatch(
+    standaloneAgentIssueManagerToolPanelSource,
+    /IssueManagerEmbeddedToolbar/
+  );
+  assert.match(
+    standaloneAgentIssueManagerToolPanelSource,
+    /\[issueManagerTopicSelectorPlacementDataKey\]: "sidebar"[\s\S]*?resolved\.definition\.renderBody\(context\)/
+  );
+  assert.match(
+    standaloneAgentIssueManagerToolPanelSource,
+    /const context: WorkbenchHostNodeBodyContext = \{\s*activation,/
+  );
+  assert.match(
+    standaloneAgentToolSidebarSource,
+    /const tabId = resolveToolTabId\(state\.mountedTabs, "tasks"\)[\s\S]*?dispatch\(\{ panel: "tasks", tabId, type: "open-panel" \}\)/
+  );
+  assert.match(
+    standaloneAgentIssueManagerToolPanelSource,
+    /source\.subscribe\?\.\(updateState\)/
   );
 });
 
@@ -335,19 +443,58 @@ test("standalone Agent message reminders remain activity-driven", () => {
   );
   assert.match(
     standaloneAgentToolSidebarSource,
-    /messages: messageCenterModel\.counts\.working/
+    /selectWorkspaceAgentConsumerCounts\(sessionEngine\.getSnapshot\(\)\)\.working/
+  );
+  assert.match(
+    standaloneAgentToolSidebarSource,
+    /messages: messageCenterWorkingCount/
   );
   assert.doesNotMatch(
     standaloneAgentToolSidebarSource,
-    /messages:\s*messageCenterModel\.waitingCount/
+    /messages:\s*\w+\.waitingCount/
   );
   assert.match(
+    standaloneAgentToolSidebarToolbarSource,
+    /ReminderBadge count=\{reminders\.messages\}/
+  );
+  assert.doesNotMatch(
     standaloneAgentToolSidebarToolbarSource,
     /Object\.values\(reminders\)/
   );
   assert.doesNotMatch(
     standaloneAgentToolSidebarSource,
     /activityService\.load\(workspaceId\)/
+  );
+});
+
+test("standalone Agent reuses the OS decision toast for newly arrived approvals", () => {
+  assert.match(
+    standaloneAgentToolSidebarSource,
+    /<StandaloneAgentDecisionNotifications[\s\S]*?messageCenterOpen=\{activePanel === "messages"\}/
+  );
+  assert.match(
+    standaloneAgentDecisionNotificationsSource,
+    /useWorkspaceAgentDecisionNotifications\(\{[\s\S]*?sendBackgroundNotification: false,[\s\S]*?sessionEngine,[\s\S]*?workspaceId/
+  );
+  assert.doesNotMatch(
+    standaloneAgentDecisionNotificationsSource,
+    /isAgentGuiSessionOpen:/
+  );
+  assert.match(
+    workspaceAgentDecisionNotificationsSource,
+    /toast\.custom\([\s\S]*?<WorkspaceAgentDecisionToast/
+  );
+  assert.match(
+    workspaceAgentDecisionNotificationsSource,
+    /isAgentGuiSessionOpen\?\.\(item\.agentSessionId\) \?\? false/
+  );
+  assert.match(
+    workspaceAgentDecisionNotificationsSource,
+    /type: "interaction\/responseRequested"/
+  );
+  assert.match(
+    workspaceAgentDecisionNotificationsSource,
+    /if \(!seenKeys\) \{[\s\S]*?seenWaitingNotificationKeysRef\.current = currentKeys;[\s\S]*?return;/
   );
 });
 
@@ -459,13 +606,14 @@ test("standalone Agent browser tool uses the BrowserNode event lifecycle for its
     isLoading: false,
     isOccluded: false,
     lifecycle: "active",
-    nodeId: "browser:standalone-agent-tool:one",
+    nodeId: "browser:standalone-agent-tool:one:tab:1",
     title: "Tutti",
     type: "state",
     url: "https://tutti.app/"
   });
   assert.equal(
-    feature.runtimeStore.getNodeState("browser:standalone-agent-tool:one").url,
+    feature.runtimeStore.getNodeState("browser:standalone-agent-tool:one:tab:1")
+      .url,
     "https://tutti.app/"
   );
   assert.equal(

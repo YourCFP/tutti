@@ -140,7 +140,7 @@ test("shared tuttid client unwraps agent target responses", async () => {
               id: "local:codex",
               provider: "codex",
               launchRef: {
-                type: "local_cli",
+                type: "builtin_local",
                 provider: "codex"
               },
               name: "Codex",
@@ -167,7 +167,7 @@ test("shared tuttid client unwraps agent target responses", async () => {
         id: "local:codex",
         provider: "codex",
         launchRef: {
-          type: "local_cli",
+          type: "builtin_local",
           provider: "codex"
         },
         name: "Codex",
@@ -196,7 +196,7 @@ test("shared tuttid client updates system agent target visibility", async () => 
       return Response.json({
         id: "local:tutti-agent",
         provider: "tutti-agent",
-        launchRef: { type: "local_cli", provider: "tutti-agent" },
+        launchRef: { type: "builtin_local", provider: "tutti-agent" },
         name: "Tutti Agent",
         iconKey: "tutti-agent",
         enabled: false,
@@ -513,6 +513,80 @@ test("shared tuttid client lists workspace agent sessions with query params", as
     cursor: "1000|session-1",
     limit: "30",
     sectionKey: "project:/workspace/project"
+  });
+});
+
+test("shared tuttid client lists section deletion candidates with pinned exclusion", async () => {
+  let requestPath = "";
+  let requestQueryEntries: Record<string, string> = {};
+  const client = createTuttidClient({
+    fetch: async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      const url = new URL(request.url);
+      requestPath = url.pathname;
+      requestQueryEntries = Object.fromEntries(url.searchParams.entries());
+      return new Response(
+        JSON.stringify({
+          excludePinned: true,
+          sectionKey: "conversations",
+          sessionIds: ["session-1"],
+          workspaceId: "ws-1"
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+  });
+
+  const result =
+    await client.listWorkspaceAgentSessionSectionDeletionCandidates("ws-1", {
+      agentTargetId: "codex-target",
+      excludePinned: true,
+      sectionKey: "conversations"
+    });
+
+  assert.equal(
+    requestPath,
+    "/v1/workspaces/ws-1/agent-session-sections/deletion-candidates"
+  );
+  assert.deepEqual(requestQueryEntries, {
+    agentTargetId: "codex-target",
+    excludePinned: "true",
+    sectionKey: "conversations"
+  });
+  assert.deepEqual(result.sessionIds, ["session-1"]);
+});
+
+test("shared tuttid client deletes an exact session ID batch in one request", async () => {
+  let requestMethod = "";
+  let requestPath = "";
+  let requestBody: unknown;
+  const client = createTuttidClient({
+    fetch: async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requestMethod = request.method;
+      requestPath = new URL(request.url).pathname;
+      requestBody = await request.json();
+      return new Response(
+        JSON.stringify({
+          removedMessages: 2,
+          removedSessionIds: ["session-1", "session-2"],
+          removedSessions: 2
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+  });
+
+  await client.deleteWorkspaceAgentSessionsBatch("ws-1", {
+    sessionIds: ["session-1", "session-2"]
+  });
+
+  assert.equal(requestMethod, "DELETE");
+  assert.equal(requestPath, "/v1/workspaces/ws-1/agent-sessions/batch");
+  assert.deepEqual(requestBody, {
+    sessionIds: ["session-1", "session-2"]
   });
 });
 

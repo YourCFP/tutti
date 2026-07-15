@@ -18,6 +18,31 @@ import (
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 )
 
+func TestStandardACPAdapterStampsAuthoritativeTurnLifecycle(t *testing.T) {
+	t.Parallel()
+
+	adapter := &standardACPAdapter{}
+	adapterSession := &standardACPSession{}
+	session := reportTestSession()
+	session.Provider = "acp:gemini"
+	events := adapter.stampTurnLifecycleSnapshots(adapterSession, []activityshared.Event{
+		newTurnActivityEvent(session, EventTurnStarted, "turn-1", SessionStatusWorking, "", "", nil),
+		newTurnActivityEvent(session, EventTurnFailed, "turn-1", SessionStatusFailed, "", "", map[string]any{"error": "quota exceeded"}),
+	})
+
+	if len(events) != 2 {
+		t.Fatalf("stamped event count = %d, want 2", len(events))
+	}
+	started, ok := activityshared.TurnLifecycleSnapshotFromEvent(events[0])
+	if !ok || started.Origin != activityshared.TurnLifecycleOriginAdapter || started.ActiveTurnID != "turn-1" || started.Phase != "running" || started.Seq != 1 {
+		t.Fatalf("started lifecycle snapshot = %#v, %v", started, ok)
+	}
+	failed, ok := activityshared.TurnLifecycleSnapshotFromEvent(events[1])
+	if !ok || failed.Origin != activityshared.TurnLifecycleOriginAdapter || failed.ActiveTurnID != "" || failed.Phase != "settled" || failed.Outcome != "failed" || failed.Seq != 2 {
+		t.Fatalf("failed lifecycle snapshot = %#v, %v", failed, ok)
+	}
+}
+
 func TestStandardACPAdapterProviderLaunchPrepareMutatesSpecAndCleansUpOnClose(t *testing.T) {
 	t.Parallel()
 
@@ -333,6 +358,7 @@ func TestCursorAdapterAgentTierPromptsForPermission(t *testing.T) {
 	})
 
 	if _, err := adapter.SubmitInteractive(context.Background(), session, SubmitInteractiveInput{
+		TurnID:    "turn-1",
 		RequestID: "permission-1",
 		OptionID:  "reject",
 	}); err != nil {
@@ -349,6 +375,146 @@ func TestCursorAdapterAgentTierPromptsForPermission(t *testing.T) {
 	if got := transport.conn.permissionOptionID(); got != "reject" {
 		t.Fatalf("permission option id = %q, want the user's reject", got)
 	}
+}
+
+// TestCursorPermissionRequestFallsBackToKnownToolCallInput reproduces a real
+// Cursor CLI ACP trace: `session/update` streams a `tool_call` with
+// `rawInput.command`, then `session/request_permission` repeats only
+// `toolCallId`/`title`/`kind` for that same call (no `rawInput`). Without a
+// fallback to the earlier tool_call, the approval card has no command detail
+// to show — only the title and options.
+func TestCursorPermissionRequestFallsBackToKnownToolCallInput(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Cursor Agent", "cursor-session-fallback")
+	adapter := newCursorAdapterWithHostMetadata(transport, LegacyHostMetadata(), nil)
+	session := standardTestSession(ProviderCursor)
+	normalizer := newACPTurnNormalizer()
+
+	started := standardACPUpdateEvents(standardACPConfig{provider: ProviderCursor}, session, "turn-1", json.RawMessage(`{
+		"update": {
+			"sessionUpdate": "tool_call",
+			"toolCallId": "toolu_bdrk_01Q5tgfQbZyrAVBAUp71Eq8A",
+			"title": "`+"`echo hello-from-permission-probe`"+`",
+			"kind": "execute",
+			"status": "pending",
+			"rawInput": {"command": "echo hello-from-permission-probe"}
+		}
+	}`), normalizer)
+	if len(started) != 1 || started[0].Type != activityshared.EventCallStarted {
+		t.Fatalf("started events = %#v, want one call.started", started)
+	}
+
+	events, pending, err := standardACPPermissionRequested(adapter, session, "turn-1", json.RawMessage(`2`), json.RawMessage(`{
+		"toolCall": {
+			"toolCallId": "toolu_bdrk_01Q5tgfQbZyrAVBAUp71Eq8A",
+			"title": "`+"`echo hello-from-permission-probe`"+`",
+			"kind": "execute",
+			"status": "pending",
+			"content": [{"type": "content", "content": {"type": "text", "text": "Not in allowlist: echo"}}]
+		},
+		"options": [
+			{"optionId": "allow-once", "name": "Allow once", "kind": "allow_once"},
+			{"optionId": "allow-always", "name": "Allow always", "kind": "allow_always"},
+			{"optionId": "reject-once", "name": "Reject", "kind": "reject_once"}
+		]
+	}`), normalizer)
+	if err != nil {
+		t.Fatalf("standardACPPermissionRequested: %v", err)
+	}
+	if len(events) == 0 {
+		t.Fatal("events = empty, want at least the waiting-approval turn event")
+	}
+	if pending == nil {
+		t.Fatal("pending = nil, want a stored pending approval")
+	}
+	if got := asString(pending.input["command"]); got != "echo hello-from-permission-probe" {
+		t.Fatalf("pending.input[command] = %q, want the command captured from the earlier tool_call", got)
+	}
+}
+
+// TestCursorPermissionRequestKeepsKnownInputAfterEmptyToolCallUpdate reproduces
+// the live Cursor sequence behind blank approval cards: tool_call carries
+// rawInput.command, a later tool_call_update for the same id repeats only
+// title/kind/status/content (no rawInput), then session/request_permission
+// also omits rawInput. The empty update must not wipe the pending snapshot, or
+// KnownToolCallInput has nothing left to backfill onto the approval card.
+func TestCursorPermissionRequestKeepsKnownInputAfterEmptyToolCallUpdate(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Cursor Agent", "cursor-session-empty-update")
+	adapter := newCursorAdapterWithHostMetadata(transport, LegacyHostMetadata(), nil)
+	session := standardTestSession(ProviderCursor)
+	normalizer := newACPTurnNormalizer()
+	config := standardACPConfig{provider: ProviderCursor}
+	toolCallID := "call-4341cda2-656d-41c2-8ec3-80f0b3b6d09a-0\nfc_918c4886-f213-9396-8439-d721f380bc12_0"
+	command := `echo "hello from bash" && pwd && date`
+
+	started := standardACPUpdateEvents(config, session, "turn-1", json.RawMessage(`{
+		"update": {
+			"sessionUpdate": "tool_call",
+			"toolCallId": `+jsonString(toolCallID)+`,
+			"title": `+jsonString("`"+command+"`")+`,
+			"kind": "execute",
+			"status": "pending",
+			"rawInput": {"command": `+jsonString(command)+`}
+		}
+	}`), normalizer)
+	if len(started) != 1 || started[0].Type != activityshared.EventCallStarted {
+		t.Fatalf("started events = %#v, want one call.started", started)
+	}
+	if got := asString(payloadMap(started[0].Payload.Metadata, "input")["command"]); got != command {
+		t.Fatalf("started input.command = %q, want %q", got, command)
+	}
+
+	updated := standardACPUpdateEvents(config, session, "turn-1", json.RawMessage(`{
+		"update": {
+			"sessionUpdate": "tool_call_update",
+			"toolCallId": `+jsonString(toolCallID)+`,
+			"title": `+jsonString("`"+command+"`")+`,
+			"kind": "execute",
+			"status": "pending",
+			"content": [{"type": "content", "content": {"type": "text", "text": "Not in allowlist: echo"}}]
+		}
+	}`), normalizer)
+	if len(updated) == 0 {
+		t.Fatal("updated events = empty, want the tool_call_update projection")
+	}
+	if got := normalizer.KnownToolCallInput(toolCallID); asString(got["command"]) != command {
+		t.Fatalf("KnownToolCallInput after empty update = %#v, want command %q preserved", got, command)
+	}
+
+	_, pending, err := standardACPPermissionRequested(adapter, session, "turn-1", json.RawMessage(`0`), json.RawMessage(`{
+		"toolCall": {
+			"toolCallId": `+jsonString(toolCallID)+`,
+			"title": `+jsonString("`"+command+"`")+`,
+			"kind": "execute",
+			"status": "pending",
+			"content": [{"type": "content", "content": {"type": "text", "text": "Not in allowlist: echo"}}]
+		},
+		"options": [
+			{"optionId": "allow-once", "name": "Allow once", "kind": "allow_once"},
+			{"optionId": "allow-always", "name": "Allow always", "kind": "allow_always"},
+			{"optionId": "reject-once", "name": "Reject", "kind": "reject_once"}
+		]
+	}`), normalizer)
+	if err != nil {
+		t.Fatalf("standardACPPermissionRequested: %v", err)
+	}
+	if pending == nil {
+		t.Fatal("pending = nil, want a stored pending approval")
+	}
+	if got := asString(pending.input["command"]); got != command {
+		t.Fatalf("pending.input[command] = %q, want command preserved across empty tool_call_update", got)
+	}
+}
+
+func jsonString(value string) string {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return string(encoded)
 }
 
 func TestCursorAutoApprovePermissionDecision(t *testing.T) {
@@ -937,6 +1103,14 @@ func TestStandardACPToolCallEventInfersCompletedStatusFromRawOutput(t *testing.T
 	}
 }
 
+func TestStandardACPToolAliasOverridesProviderToolIDDeclaratively(t *testing.T) {
+	update := map[string]any{"title": "replace", "toolCallId": "call-1"}
+	applyStandardACPToolAlias(standardACPConfig{toolAliases: map[string]string{"replace": "Edit"}}, update)
+	if got := update["toolName"]; got != "Edit" {
+		t.Fatalf("toolName = %#v, want Edit", got)
+	}
+}
+
 func TestStandardACPToolCallEventInfersFailedStatusFromRawOutput(t *testing.T) {
 	t.Parallel()
 
@@ -1015,9 +1189,15 @@ func TestStandardACPAdapterSessionStateExposesPendingAskUserPrompt(t *testing.T)
 	}
 	session.ProviderSessionID = "hermes-session-interactive-1"
 
+	var mu sync.Mutex
+	var emittedActivity []activityshared.Event
 	execDone := make(chan error, 1)
 	go func() {
-		_, err := adapter.Exec(context.Background(), session, textPrompt("choose renderer"), "", "turn-ask-user", func([]activityshared.Event) {}, nil)
+		_, err := adapter.Exec(context.Background(), session, textPrompt("choose renderer"), "", "turn-ask-user", func(events []activityshared.Event) {
+			mu.Lock()
+			emittedActivity = append(emittedActivity, events...)
+			mu.Unlock()
+		}, nil)
 		execDone <- err
 	}()
 
@@ -1039,10 +1219,32 @@ func TestStandardACPAdapterSessionStateExposesPendingAskUserPrompt(t *testing.T)
 	if len(questions) == 0 {
 		t.Fatalf("interactive input = %#v, want questions", snapshot.PendingInteractive.Input)
 	}
+	mu.Lock()
+	events := append([]activityshared.Event(nil), emittedActivity...)
+	mu.Unlock()
+	if requested := eventsOfType(events, activityshared.EventInteractionRequested); len(requested) != 1 ||
+		requested[0].Payload.Interaction == nil || requested[0].Payload.Interaction.Kind != "question" {
+		t.Fatalf("ask-user events = %#v, want explicit question interaction.requested", events)
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := adapter.SubmitInteractive(canceled, session, SubmitInteractiveInput{
+		RoomID:         session.RoomID,
+		AgentSessionID: session.AgentSessionID,
+		TurnID:         "turn-ask-user",
+		RequestID:      "permission-1",
+		Action:         "submit",
+	}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled SubmitInteractive error = %v, want context canceled", err)
+	}
+	if pending := adapter.getPendingApproval(session.AgentSessionID, "turn-ask-user", "permission-1"); pending == nil || pending.disposition() != pendingInteractiveRequestStatePending {
+		t.Fatalf("pending disposition after canceled submit = %v, want pending", runtimeInteractiveDisposition(pending))
+	}
 
 	_, err := adapter.SubmitInteractive(context.Background(), session, SubmitInteractiveInput{
 		RoomID:         session.RoomID,
 		AgentSessionID: session.AgentSessionID,
+		TurnID:         "turn-ask-user",
 		RequestID:      "permission-1",
 		Action:         "submit",
 		// Canonical GUI ask-user payload: flat display list + keyed map.
@@ -1100,6 +1302,7 @@ func TestStandardACPAdapterSessionStateExposesPendingExitPlanPrompt(t *testing.T
 	_, err := adapter.SubmitInteractive(context.Background(), session, SubmitInteractiveInput{
 		RoomID:         session.RoomID,
 		AgentSessionID: session.AgentSessionID,
+		TurnID:         "turn-plan",
 		RequestID:      "permission-1",
 		Action:         "allow",
 		OptionID:       "acceptEdits",
@@ -1825,6 +2028,11 @@ func TestHermesAdapterStartPreservesCommandsAdvertisedDuringNewSession(t *testin
 		snapshot.Commands[0].InputHint != "query" {
 		t.Fatalf("command snapshot = %#v ok=%v, want command update preserved from session/new", snapshot, ok)
 	}
+	state := adapter.SessionState(session)
+	commands, ok := state.RuntimeContext["availableCommands"].([]map[string]any)
+	if !ok || len(commands) != 1 || commands[0]["name"] != "web" || commands[0]["description"] != "Search the web" || commands[0]["inputHint"] != "query" {
+		t.Fatalf("runtime availableCommands = %#v", state.RuntimeContext["availableCommands"])
+	}
 }
 
 func TestControllerPublishesIdleStandardACPCommandUpdatesAfterStart(t *testing.T) {
@@ -2219,6 +2427,13 @@ type standardACPConnection struct {
 	// cursor-agent's transient-failure shape: an "Error: RetriableError: ..."
 	// text chunk followed by a normal end_turn result.
 	retriableErrorPrompts int
+	// retriableErrorPriorText, when set, is streamed as an agent_message_chunk
+	// before the RetriableError tail so tests can exercise mid-task
+	// auto-continue wording (useful progress before the drop).
+	retriableErrorPriorText string
+	// planLimitPromptError makes session/prompt fail with Cursor's plan-gate
+	// copy so the adapter can soft-settle instead of emitting a red failure.
+	planLimitPromptError bool
 	// omitAssistantTextInPromptResults drops the agent_message_chunk from
 	// normal prompt results, emulating a tool-calls-only turn.
 	omitAssistantTextInPromptResults bool
@@ -2433,7 +2648,37 @@ func (c *standardACPConnection) Send(data []byte) error {
 			c.promptCallCount++
 			promptCall := c.promptCallCount
 			c.mu.Unlock()
+			if c.planLimitPromptError {
+				c.sendJSON(map[string]any{
+					"jsonrpc": "2.0",
+					"id":      message.ID,
+					"error": map[string]any{
+						"code":    -32000,
+						"message": "Upgrade your plan to continue",
+					},
+				})
+				return nil
+			}
 			if promptCall <= c.retriableErrorPrompts {
+				c.mu.Lock()
+				priorText := c.retriableErrorPriorText
+				c.mu.Unlock()
+				if priorText != "" {
+					c.sendJSON(map[string]any{
+						"jsonrpc": "2.0",
+						"method":  acpMethodUpdate,
+						"params": map[string]any{
+							"sessionId": c.sessionID,
+							"update": map[string]any{
+								"sessionUpdate": "agent_message_chunk",
+								"content": map[string]any{
+									"type": "text",
+									"text": priorText,
+								},
+							},
+						},
+					})
+				}
 				c.sendJSON(map[string]any{
 					"jsonrpc": "2.0",
 					"method":  acpMethodUpdate,

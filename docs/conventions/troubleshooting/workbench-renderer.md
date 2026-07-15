@@ -2,6 +2,156 @@
 
 [Back to troubleshooting index](./README.md)
 
+### Tabbed standalone Browser remains in `Sleeping` state
+
+- Symptom:
+  A standalone Browser shows its default URL and tab title, but the guest area
+  stays blank and the navigation bar keeps showing `Sleeping` after multi-tab
+  support is enabled. The same Browser may work in an OS-mode Workbench window.
+- Quick checks:
+  Compare the surface node ID with the node ID in Browser runtime events. A
+  tabbed surface owns a parent such as `browser:surface` while its controller
+  and guest emit events for child IDs such as `browser:surface:tab:1`.
+- Root cause:
+  A host event adapter still accepts only exact parent-node matches. Activation
+  succeeds for the child guest, but its returned `active` event is discarded,
+  leaving the renderer runtime at its default cold lifecycle. The address bar
+  can still show the configured default URL, which makes this look like a
+  webview loading failure rather than an event-scope mismatch.
+- Fix:
+  Use the Browser Node package-owned surface-event predicate. It accepts the
+  exact parent ID and the parent's `:tab:*` children while rejecting sibling
+  Browser surfaces. Do not restore a second manual activation path or duplicate
+  the child-ID convention in the host.
+- Validation:
+  Cover parent and child state events, sibling rejection, and `open-url` events
+  whose ownership comes from `sourceNodeId`. Then run Browser Node tests and the
+  host's focused Browser lifecycle test.
+- References:
+  [eventScope.ts](../../../packages/browser/workbench-node/src/core/eventScope.ts)
+  [standaloneAgentToolWorkbench.ts](../../../apps/desktop/src/renderer/src/features/workspace-workbench/ui/standaloneAgentToolWorkbench.ts)
+  [browser-node-package.md](../../architecture/browser-node-package.md)
+
+### Inline custom-header menu is clipped to the Workbench title bar
+
+- Symptom:
+  A shared header menu works in a standalone surface but appears empty, only a
+  few pixels tall, or completely hidden when the same header renders inside an
+  OS-mode Workbench window. Dialogs opened from the menu may be unreachable
+  because the menu item that opens them is clipped.
+- Quick checks:
+  Confirm both shells render the same menu component, then inspect ancestor
+  boxes between the trigger and the Workbench node body. In particular, check
+  `.workbench-window__header--custom`, whose default `overflow: hidden` keeps
+  ordinary custom-header content inside the title-bar row.
+- Root cause:
+  An inline menu extends below the custom-header row, but the Workbench row
+  clips descendants before stacking order can place the menu over the node
+  body. Raising the menu z-index cannot escape ancestor overflow clipping.
+- Fix:
+  Keep the shared inline menu and mark only headers that own intentional inline
+  overlays with `data-workbench-custom-header-overflow="visible"`. Workbench
+  uses that semantic opt-in to allow overflow on the custom-header row; do not
+  copy the menu into the OS shell or globally disable clipping for every custom
+  header. The outer `.workbench-window` remains the window-bounds clip.
+- Validation:
+  Run the Browser Node and Workbench Surface package tests, typecheck the
+  affected packages, and build the desktop renderer. In both Agent-only and OS
+  modes, open the Browser three-dot menu and verify the same nested actions and
+  Browser settings dialog are usable above the guest webview.
+- References:
+  [BrowserNodeChrome.tsx](../../../packages/browser/workbench-node/src/react/BrowserNodeChrome.tsx)
+  [workbench.css](../../../packages/workbench/surface/src/styles/workbench.css)
+  [browser-node-package.md](../../architecture/browser-node-package.md)
+
+### Standalone Agent dev window stays black during cold startup
+
+- Symptom:
+  A local development launch creates the standalone Agent native window, but
+  only the window chrome is visible for several seconds before the Agent header,
+  rail, conversation, and composer appear. A related failure leaves the window
+  black permanently because the renderer root throws before AgentGUI mounts.
+- Quick checks:
+  Check `tutti-desktop.log` for `react.uncaught` before profiling cold startup.
+  If the error is `agent_gui_workbench.invalid_provider`, compare the encoded
+  Agent window intent with the standalone route's launch-provider resolution.
+  A primary standalone Agent startup may legitimately omit both provider and
+  Agent Target metadata while the directory is still loading.
+  Compare desktop-ready, first renderer diagnostic, standalone route mount,
+  AgentGUI body mount, and composer-ready timestamps. Time the daemon workspace,
+  session-list, rail, target, and provider-status endpoints independently. If
+  normal workspace/session calls finish in milliseconds while the first
+  renderer diagnostics arrive seconds later, the delay is in renderer module
+  transformation/evaluation rather than SQLite or workspace hydration. Also
+  time provider statuses per provider; one slow CLI probe can dominate a serial
+  all-provider scan.
+- Root cause:
+  For the permanent-black variant, an optional startup provider can be passed
+  directly to the strict workbench provider normalizer. The generic primary
+  Agent window starts with workspace identity only, so normalizing that absent
+  value throws during React render even while the daemon and provider probes
+  remain healthy.
+  Development Vite transforms source modules on demand. An Agent-only route can
+  therefore remain on a black Suspense fallback while nested lazy boundaries
+  discover large dependency graphs. In the desktop renderer, enabling Babel
+  React Compiler during `serve` makes every cold TSX request substantially more
+  expensive; a body import that reaches hundreds of TSX modules can spend
+  several seconds compiling even though all source files are local. A warm
+  request completing quickly distinguishes this from disk or loopback HTTP
+  throughput. Static imports for Browser, Terminal, File
+  Manager, App Center, Message Center, settings/import panels, or account UI
+  enlarge the shell graph even when those surfaces are closed. Starting
+  Workspace App polling at mount can also prepare every app runtime during the
+  same cold compile. Separately, a single global in-flight provider-status
+  promise makes the active provider wait behind a slow all-provider scan.
+- Fix:
+  Resolve the absent startup provider to the existing workbench default at the
+  standalone route boundary, then use the strict normalizer only for a supplied
+  provider. Keep malformed non-empty values as errors, and keep Agent Target
+  directory resolution authoritative once it loads.
+  Keep workspace and standalone Agent routes separate. Let both already-lazy
+  routes statically own the full AgentGUI body so neither adds a second import
+  waterfall beneath its route fallback. Render
+  the same structured shell at the route Suspense, workspace hydration,
+  host-session binding, and AgentGUI-body boundaries; a plain background at any
+  one of those boundaries brings the apparent black screen back. Keep the
+  reusable body shell in the narrow `@tutti-os/agent-gui/startup-shell` entry;
+  let desktop compose standalone window chrome around it. Keep React Compiler
+  settings aligned between development and production; do not hide a cold
+  transform bottleneck by changing compiler semantics only in development.
+  Reduce the initial module graph, precompile a stable package boundary, or
+  schedule non-blocking preload work instead. Keep the
+  right side shaped like the empty-home/new-conversation hero, not a selected
+  conversation timeline with a bottom dock. Keep the fallback hero composer
+  non-interactive until the real controller owns its draft.
+  Load tool bodies on first open, show a panel-local busy state while they load,
+  defer non-critical panel hosts until after the first frame, and start
+  Workspace App polling only for an explicit Apps/app open. Key provider-status
+  requests by request scope, prioritize the selected provider, merge responses
+  per provider, and ignore stale results for a provider already refreshed by a
+  newer request.
+- Validation:
+  Keep a focused regression test for an Agent window intent with no provider;
+  it must reach the startup shell without weakening extension-provider
+  validation.
+  Run focused provider concurrency and standalone tool-lifecycle tests, desktop
+  typecheck, renderer boundary checks, and a production desktop build. Inspect
+  the generated chunks to confirm the standalone shell does not statically
+  import the full AgentGUI body and that heavy optional App Center, Message
+  Center, settings, import, and account presentation modules stay in separate
+  async chunks. Keep a source-level regression test that verifies every
+  pre-controller return path renders the structured startup shell and every
+  deferred tool body has a non-empty loading fallback.
+  Finally cold-start local dev and compare the same timestamp landmarks; this
+  manual renderer verification requires explicit user approval. If the dynamic
+  import still dominates, compare cold and warm module-graph timings before
+  investigating daemon hydration or provider discovery.
+- References:
+  [agent-gui-node.md](../../architecture/agent-gui-node.md)
+  [WorkspaceWindow.tsx](../../../apps/desktop/src/renderer/src/app/windows/workspace/WorkspaceWindow.tsx)
+  [StandaloneAgentToolSidebar.tsx](../../../apps/desktop/src/renderer/src/features/workspace-workbench/ui/StandaloneAgentToolSidebar.tsx)
+  [desktopAgentProviderStatusService.ts](../../../apps/desktop/src/renderer/src/features/workspace-agent/services/internal/desktopAgentProviderStatusService.ts)
+
 ### Renderer body requests fail with `ERR_H2_OR_QUIC_REQUIRED`
 
 - Symptom:
@@ -251,22 +401,38 @@
   Do not leave it enabled during normal development: it tracks every component
   and hook, and restoring a large AgentGUI session directory can then block the
   renderer long enough to keep Workbench hydration and the Dock non-interactive.
+  For AgentGUI render storms, trace the full
+  `engine -> selector -> projection -> controller -> section` chain. Separate
+  real summary-field changes from reference-only array, object, or callback
+  changes; a memoized leaf cannot contain churn created at the selector boundary.
 - Root cause:
   React StrictMode can intentionally replay setup/cleanup in development, but a
   continuously increasing render count usually means a parent is passing a new
   object/function every render or an effect writes state from a dependency that
-  changes on every render.
+  changes on every render. An external-store selector can also project a fresh
+  list for every unrelated engine event, after which a container rebuilds command
+  callbacks and fans one update out to every list section. A render-budget test
+  that injects an already-stable view model bypasses this production chain and
+  cannot detect that regression.
 - Fix:
   Stabilize the value at the ownership boundary, or remove derived presentation
   values from bidirectional state. For external/workbench state, only sync
-  canonical identifiers and derive display text from the owning service.
+  canonical identifiers and derive display text from the owning service. In
+  AgentGUI, select the narrow render projection with a render-field equality
+  function, keep command callbacks stable, and derive the active row from the
+  same stabilized conversation list.
 - Validation:
   With why-did-you-render enabled, reproduce once and confirm the noisy
   component lists the expected prop or hook difference. Then disable the tool
-  and run the affected renderer tests plus desktop typecheck.
+  and run the affected renderer tests plus desktop typecheck. AgentGUI budget
+  tests must dispatch a real engine update and assert the unrelated Rail subtree
+  stays at zero renders; do not replace this with a manual view-model rerender
+  that reuses the Rail reference by construction.
 - References:
   [main.tsx](../../../apps/desktop/src/renderer/src/main.tsx)
   [whyDidYouRender.ts](../../../apps/desktop/src/renderer/src/lib/whyDidYouRender.ts)
+  [useAgentGUIConversationRailQuery.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUIConversationRailQuery.ts)
+  [useAgentGUIConversationRailQuery.search.spec.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUIConversationRailQuery.search.spec.tsx)
 
 ### Dense list panel stutters when mounted or resized
 
@@ -334,3 +500,54 @@
 - References:
   [StandaloneAgentToolSidebar.tsx](../../../apps/desktop/src/renderer/src/features/workspace-workbench/ui/StandaloneAgentToolSidebar.tsx)
   [standaloneAgentWindowBounds.ts](../../../apps/desktop/src/main/windows/standaloneAgentWindowBounds.ts)
+
+### Dialog action reacts to Enter but ignores pointer clicks
+
+- Symptom:
+  A dialog action succeeds from an input's Enter handler, but clicking its
+  visible action button does nothing. No request, caught error, or busy state is
+  produced.
+- Quick checks:
+  Trace `pointerdown`, `pointerup`, `click`, and the command boundary without
+  logging field contents. If both pointer events arrive but `click` and the
+  command do not, stop debugging the daemon or persistence layer.
+- Root cause:
+  Electron, a modal interaction layer, or surrounding Workbench chrome can
+  suppress the synthesized `click` even though the button receives the pointer
+  sequence. A handler wired only to `onClick` therefore never runs.
+- Fix:
+  Handle the primary `pointerup` as the pointer activation boundary. Preserve
+  keyboard activation explicitly, retain an assistive-technology click path,
+  and guard the async action with a synchronous in-flight ref so multiple event
+  paths cannot dispatch the command twice.
+- Validation:
+  Cover pointer activation, the following synthesized mouse click, keyboard
+  activation, blank input, and cancellation. Assert the command runs exactly
+  once for each accepted action.
+- References:
+  [AgentGUIRenameConversationDialog.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIRenameConversationDialog.tsx)
+
+### Daemon validation error appears as untranslated developer text
+
+- Symptom:
+  A renderer action shows an English daemon message such as a validation
+  failure while the UI locale is not English.
+- Quick checks:
+  Inspect the protocol error's `code`, `reason`, and `params`. If the reason is
+  generic and the UI falls through to `developerMessage`, the transport lost
+  the stable domain identity needed by i18n.
+- Root cause:
+  The daemon classified a specific business validation error as a generic
+  request failure. The renderer then had no stable key and exposed diagnostic
+  text as user-facing copy.
+- Fix:
+  Define a stable daemon error identity, publish a documented protocol `reason`
+  with interpolation-only `params`, then translate that reason in the owning UI
+  package. Never infer user-facing errors by matching developer-message text.
+- Validation:
+  Test service error identity, protocol classification and params, every locale
+  dictionary, and renderer mapping while an English `developerMessage` is
+  present. Run API-generation and i18n consistency checks.
+- References:
+  [apierrors.go](../../../services/tuttid/apierrors/apierrors.go)
+  [agentGuiController.errors.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/agentGuiController.errors.ts)

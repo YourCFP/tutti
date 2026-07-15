@@ -14,10 +14,12 @@ import type {
   AgentComposerDraft,
   AgentGUIComposerSettingsVM,
   AgentGUIProviderSkillOption,
+  AgentGUIQueueStatus,
   AgentGUIQueuedPromptVM
 } from "../model/agentGuiNodeTypes";
 import type { AgentGUIProvider, AgentGUIAgentTarget } from "../../../types";
 import type { WorkspaceReferencePickResult } from "./useComposerDraftAttachments";
+import type { AgentGUIComposerEngagement } from "../engagement/agentGUIEngagement.types";
 
 export interface AgentComposerSubmitOptions {}
 
@@ -29,6 +31,9 @@ export interface AgentComposerProps {
   slashStatus?: AgentComposerSlashStatus | null;
   usage?: AgentComposerUsage | null;
   draftContent: AgentComposerDraft;
+  engagement?: AgentGUIComposerEngagement;
+  /** Stable project/session owner for async draft attachment work. */
+  draftScopeKey?: string;
   availableCommands: readonly AgentSessionCommand[];
   hasCompactableContext?: boolean;
   compactSupported?: boolean | null;
@@ -38,6 +43,7 @@ export interface AgentComposerProps {
   submitDisabled: boolean;
   placeholder: string;
   composerSettings: AgentGUIComposerSettingsVM;
+  queueStatus?: AgentGUIQueueStatus;
   queuedPrompts: readonly AgentGUIQueuedPromptVM[];
   drainingQueuedPromptId: string | null;
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
@@ -129,6 +135,7 @@ export interface AgentComposerProps {
     computerUseCapabilitySettingsLabel: string;
     computerUseCapabilitySettingsDescription: string;
     queuedLabel: string;
+    queuePausedByUserLabel: string;
     sendQueuedPromptNext: string;
     editQueuedPrompt: string;
     deleteQueuedPrompt: string;
@@ -236,7 +243,10 @@ export interface AgentComposerProps {
     };
   };
   workspaceUserProjectI18n: WorkspaceUserProjectI18nRuntime;
-  onDraftContentChange: (draftContent: AgentComposerDraft) => void;
+  onDraftContentChange: (
+    draftContent: AgentComposerDraft,
+    sourceScopeKey?: string
+  ) => void;
   onProjectPathChange?: (
     path: string | null,
     metadata?: AgentProjectPathChangeMetadata
@@ -254,6 +264,7 @@ export interface AgentComposerProps {
   onCapabilitySettingsRequest?: (
     capability: AgentComposerCapabilitySettingsTarget
   ) => void;
+  onSlashStatusOpen?: () => void;
   onSubmit: (
     content: AgentPromptContentBlock[],
     displayPrompt?: string,
@@ -329,6 +340,7 @@ export interface AgentComposerSlashStatus {
   } | null;
   limits?: readonly AgentComposerSlashStatusLimit[];
   limitsLoading?: boolean;
+  limitsUnavailable?: boolean;
 }
 
 export interface AgentComposerSlashStatusLimit {

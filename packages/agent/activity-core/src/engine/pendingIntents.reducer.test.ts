@@ -203,10 +203,12 @@ test("a late successful send result confirms against an already settled turn", (
 
 test("activation intent owns the transport command and confirmation deadline", () => {
   const result = reduce(createInitialPendingIntentsState(), activation());
-  assert.equal(
-    result.state.activationsByRequestId["activation-1"]?.status,
-    "requested"
-  );
+  const pendingActivation = result.state.activationsByRequestId["activation-1"];
+  assert.equal(pendingActivation?.status, "requested");
+  assert.equal(pendingActivation?.displayPrompt, "/browser");
+  assert.deepEqual(pendingActivation?.content, [
+    { type: "text", text: "hello" }
+  ]);
   assert.deepEqual(result.commands, [
     {
       dueAtUnixMs: 120_000,
@@ -220,7 +222,8 @@ test("activation intent owns the transport command and confirmation deadline", (
       commandId: "activate:activation-1",
       correlationId: "activation-1",
       cwd: "/workspace",
-      initialContent: [{ type: "text", text: "hello" }],
+      initialContent: [{ type: "text", text: "runtime instructions" }],
+      initialDisplayPrompt: "/browser",
       submitDiagnostics: { submittedAtUnixMs: 1 },
       mode: "new",
       settings: { model: "model-1" },
@@ -259,6 +262,18 @@ test("timed out activation remains uncertain until its exact session appears", (
   }).state;
   assert.equal(
     state.activationsByRequestId["activation-1"]?.status,
+    "confirmed"
+  );
+});
+
+test("a realtime session upsert confirms its pending activation", () => {
+  const state = reduce(createInitialPendingIntentsState(), activation()).state;
+  const confirmed = reduce(state, {
+    session: { ...session("session-new"), createdAtUnixMs: 1 },
+    type: "session/upserted"
+  });
+  assert.equal(
+    confirmed.state.activationsByRequestId["activation-1"]?.status,
     "confirmed"
   );
 });
@@ -308,6 +323,11 @@ test("activation confirmation requires an exact workspace-scoped fresh snapshot"
   state = reduce(state, {
     sessions: [
       {
+        ...{
+          activeTurnId: null,
+          latestTurnInteractions: [],
+          pendingInteractions: []
+        },
         ...session("session-new"),
         createdAtUnixMs: 1,
         workspaceId: "workspace-other"
@@ -529,6 +549,8 @@ function activation() {
     content: [{ type: "text" as const, text: "hello" }],
     cwd: "/workspace",
     expiresAtUnixMs: 120_000,
+    initialDisplayPrompt: "/browser",
+    runtimeContent: [{ type: "text" as const, text: "runtime instructions" }],
     submitDiagnostics: { submittedAtUnixMs: 1 },
     mode: "new" as const,
     requestedAtUnixMs: 1,
@@ -541,10 +563,13 @@ function activation() {
 
 function session(agentSessionId: string) {
   return {
+    activeTurnId: null,
     agentSessionId,
     cwd: "/workspace",
     createdAtUnixMs: 1,
     provider: "codex",
+    latestTurnInteractions: [],
+    pendingInteractions: [],
     status: "ready",
     title: "Session",
     workspaceId: "workspace-1"

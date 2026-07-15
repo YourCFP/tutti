@@ -16,12 +16,13 @@ import type {
   AgentGUIProviderReadinessGate,
   AgentGUIAgentTarget
 } from "../../../types";
+import type { AgentGUIDetailViewModel } from "../model/agentGuiNodeTypes";
 import {
   AGENT_GUI_RUNTIME_SESSION_ORIGIN,
   conversationSummaryFromAgentSession,
   type AgentGUIConversationSummary
 } from "../model/agentGuiConversationModel";
-import { normalizeProjectDraftPath } from "./agentGuiController.composerHelpers";
+import { normalizeAgentComposerDraftProjectPath } from "../model/agentComposerDraftScope";
 import { mergeVisibleConversations } from "./agentGuiController.conversationHelpers";
 import {
   reuseAgentActivityDisplayStatusesIfUnchanged,
@@ -210,7 +211,7 @@ export function useAgentGUINodeController({
   });
   const {
     activeConversationId,
-    draftBySessionId,
+    draftByScopeKey,
     draftSettingsBySessionId,
     intent,
     isComposerHome,
@@ -238,8 +239,7 @@ export function useAgentGUINodeController({
     conversationFilter,
     conversationListQuery,
     conversationListState,
-    conversations,
-    pendingNewActivationProjection
+    conversations
   } = conversationList;
   const isNoProjectPath = agentHostApi.userProjects?.isNoProjectPath;
   const hasLoadedConversations = conversationListState?.initialized ?? false;
@@ -254,10 +254,8 @@ export function useAgentGUINodeController({
     activePendingSubmits,
     activeQueuedPrompts,
     activeSessionState,
-    hasPendingNewActivation
+    isCreatingConversation
   } = sessionEngineState;
-  const latestPendingNewActivation = pendingNewActivationProjection;
-  const isCreatingConversation = hasPendingNewActivation;
   // Bridges submitInteractivePrompt
   // updateComposerSettings (defined later); assigned right after the
   // callback's definition.
@@ -295,7 +293,7 @@ export function useAgentGUINodeController({
     agentActivitySnapshot,
     conversations,
     data,
-    draftBySessionId,
+    draftByScopeKey,
     draftSettingsBySessionId,
     effectiveSelectedProviderTarget,
     homeComposerTargetOverride,
@@ -319,7 +317,6 @@ export function useAgentGUINodeController({
     conversationsRef,
     dataRef,
     draftSettingsBySessionIdRef,
-    explicitlyOpenedConversationIdsRef,
     handledOpenSessionSequenceRef,
     isComposerHomeRef,
     isMountedRef,
@@ -485,7 +482,6 @@ export function useAgentGUINodeController({
     intent,
     isComposerHomeRef,
     isMountedRef,
-    latestPendingNewActivation,
     loadDraftComposerOptions: () => loadDraftComposerOptionsRef.current(),
     markSelectedConversationDetailPending,
     onDataChangeRef,
@@ -520,7 +516,7 @@ export function useAgentGUINodeController({
         };
       }
     ) => {
-      const normalizedPath = normalizeProjectDraftPath(path);
+      const normalizedPath = normalizeAgentComposerDraftProjectPath(path);
       const project = metadata?.project;
       if (project && normalizedPath && project.path === normalizedPath) {
         const nextProjects = upsertAgentGUIUserProject(
@@ -575,7 +571,6 @@ export function useAgentGUINodeController({
     conversationListQuery,
     conversations,
     conversationsRef,
-    explicitlyOpenedConversationIdsRef,
     handledOpenSessionSequenceRef,
     hasLoadedConversations,
     intent,
@@ -585,7 +580,6 @@ export function useAgentGUINodeController({
     selectConversation,
     sessionEngine,
     setIntent,
-    syncConversationListProjection,
     transientConversation,
     workspaceId
   });
@@ -640,7 +634,6 @@ export function useAgentGUINodeController({
     data,
     defaultAgentTargetId,
     isExplicitAgentGUIAgentTarget,
-    latestPendingNewActivation,
     loadDraftComposerOptions,
     normalizedExplicitProviderTargets,
     normalizedProviderTargets,
@@ -657,6 +650,20 @@ export function useAgentGUINodeController({
     updateComposerSettingsRef,
     workspaceId
   });
+  const isLoadingMessages =
+    localState.isLoadingMessages ||
+    sessionEngineState.activeSessionReconcilePending;
+  const detailAvailability: AgentGUIDetailViewModel["availability"] =
+    activeConversationId === null
+      ? "ready"
+      : sessionEngineState.activeEngineSessionDeleted
+        ? "not_found"
+        : isLoadingMessages
+          ? "loading"
+          : sessionEngineState.activeSessionReconcileError ||
+              localState.detailError
+            ? "error"
+            : "ready";
   return useAgentGUIViewAssembly({
     ...providerCatalogSelection,
     ...localState,
@@ -690,10 +697,11 @@ export function useAgentGUINodeController({
     data,
     defaultAgentTargetId,
     errorFor: activation.errorFor,
+    detailAvailability,
     isCreatingConversation,
     isLoadingConversations,
+    isLoadingMessages,
     loadComposerOptionsForTarget,
-    latestPendingNewActivation,
     normalizedComingSoonProviders,
     operationActions,
     persistActiveConversation,

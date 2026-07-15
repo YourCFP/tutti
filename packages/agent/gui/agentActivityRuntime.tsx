@@ -56,6 +56,8 @@ export interface AgentActivityRuntimeListGeneratedFilesInput {
 }
 
 export interface AgentActivityRuntimeListSessionsPageInput {
+  agentTargetId?: string | null;
+  cursor?: string;
   limit?: number;
   searchQuery?: string;
   signal?: AbortSignal;
@@ -109,12 +111,14 @@ export interface AgentActivityRuntimeSessionSection {
   userProject?: AgentActivityRuntimeUserProject;
   sessions: AgentActivitySession[];
   hasMore: boolean;
+  totalCount: number;
   nextCursor?: string;
 }
 
 export interface AgentActivityRuntimeSessionPage {
   sessions: AgentActivitySession[];
   hasMore: boolean;
+  totalCount: number;
   nextCursor?: string;
 }
 
@@ -255,27 +259,49 @@ export interface AgentActivityRuntimeUploadPromptContentResult {
   content: AgentActivityRuntimePromptContentBlock[];
 }
 
+/**
+ * Dedicated host boundary for turning an in-memory text paste into a local
+ * prompt asset. The runtime owns persistence and returns a sendable host path;
+ * AgentGUI must not infer this capability from generic file-upload support.
+ */
+export interface AgentActivityRuntimeStagePastedTextInput {
+  name: string;
+  text: string;
+  workspaceId: string;
+}
+
+export interface AgentActivityRuntimeStagePastedTextResult {
+  name: string;
+  path: string;
+  sizeBytes: number;
+}
+
 export interface AgentActivityRuntimeSessionSectionScopeInput {
   agentTargetId?: string | null;
+  excludePinned?: boolean;
   sectionKey: string;
   signal?: AbortSignal;
   workspaceId: string;
 }
 
-export interface AgentActivityRuntimeSessionSectionCount {
+export interface AgentActivityRuntimeSessionSectionDeletionCandidates {
   agentTargetId?: string | null;
-  count: number;
+  excludePinned: boolean;
   sectionKey: string;
+  sessionIds: string[];
   workspaceId: string;
 }
 
-export interface AgentActivityRuntimeDeleteSessionSectionResult {
-  agentTargetId?: string | null;
+export interface AgentActivityRuntimeDeleteSessionsBatchInput {
+  sessionIds: string[];
+  signal?: AbortSignal;
+  workspaceId: string;
+}
+
+export interface AgentActivityRuntimeDeleteSessionsBatchResult {
   removedMessages: number;
   removedSessionIds: string[];
   removedSessions: number;
-  sectionKey: string;
-  workspaceId: string;
 }
 
 export interface AgentActivityRuntimeSessionAttachment {
@@ -360,12 +386,12 @@ export interface AgentActivityRuntime {
   listSessionSectionPage?(
     input: AgentActivityRuntimeListSessionSectionPageInput
   ): Promise<AgentActivityRuntimeSessionSection>;
-  countSessionSection?(
+  listSessionSectionDeletionCandidates?(
     input: AgentActivityRuntimeSessionSectionScopeInput
-  ): Promise<AgentActivityRuntimeSessionSectionCount>;
-  deleteSessionSection?(
-    input: AgentActivityRuntimeSessionSectionScopeInput
-  ): Promise<AgentActivityRuntimeDeleteSessionSectionResult>;
+  ): Promise<AgentActivityRuntimeSessionSectionDeletionCandidates>;
+  deleteSessionsBatch?(
+    input: AgentActivityRuntimeDeleteSessionsBatchInput
+  ): Promise<AgentActivityRuntimeDeleteSessionsBatchResult>;
   listPinnedSessionsPage?(
     input: AgentActivityRuntimeListPinnedSessionsPageInput
   ): Promise<AgentActivityRuntimeSessionPage>;
@@ -382,6 +408,9 @@ export interface AgentActivityRuntime {
   uploadPromptContent?(
     input: AgentActivityRuntimeUploadPromptContentInput
   ): Promise<AgentActivityRuntimeUploadPromptContentResult>;
+  stagePastedText?(
+    input: AgentActivityRuntimeStagePastedTextInput
+  ): Promise<AgentActivityRuntimeStagePastedTextResult>;
   readSessionAttachment?(
     input: AgentActivityRuntimeReadSessionAttachmentInput
   ): Promise<AgentActivityRuntimeSessionAttachment>;

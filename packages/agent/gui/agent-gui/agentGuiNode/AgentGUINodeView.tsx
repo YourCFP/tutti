@@ -14,6 +14,7 @@ import {
 } from "@tutti-os/workspace-file-reference/ui";
 import { TooltipProvider } from "@tutti-os/ui-system";
 import { openAgentEnvPanel } from "../../shared/agentEnv/agentEnvPanelStore";
+import { resolveAgentGUIProviderCatalogIdentity } from "../../providerIdentityCatalog";
 import { openWorkspaceSettingsPanel } from "../../shared/workspaceSettingsPanel/workspaceSettingsPanelStore";
 import { SettingsLinedIcon } from "../../app/renderer/components/icons/SettingsLinedIcon";
 import {
@@ -21,7 +22,6 @@ import {
   type AgentMessageMarkdownAgentTarget
 } from "../../shared/AgentTargetPresentationContext";
 import type { AgentGUINodeViewModel } from "./model/agentGuiNodeTypes";
-import type { AgentMessageMarkdownWorkspaceAppIcon } from "../../shared/AgentMessageMarkdown";
 import styles from "./AgentGUINode.styles";
 import {
   fallbackWorkspaceFileReferenceCopy,
@@ -33,18 +33,17 @@ import {
   AgentGUIConfigMenu
 } from "./view/AgentGUIAccountConfig";
 import { AgentGUIProviderRail } from "./view/AgentGUIProviderRail";
-import {
-  AgentGUIConversationRailPane,
-  type AgentGUIConversationRailState
-} from "./view/AgentGUIConversationRailPane";
+import { type AgentGUIConversationRailState } from "./view/AgentGUIConversationRailPane";
+import { AgentGUIConversationRailController } from "./controller/AgentGUIConversationRailController";
 import {
   AgentGUIDetailPane,
+  EMPTY_WORKSPACE_APP_ICONS,
   mergeWorkspaceAppIconsFromCommands
 } from "./view/AgentGUIDetailPane";
 import { AgentGUIRenameConversationDialog } from "./view/AgentGUIRenameConversationDialog";
 import { useAgentGUIWorkspaceReferencePicker } from "./view/useAgentGUIWorkspaceReferencePicker";
 import type { AgentGUINodeViewProps } from "./view/AgentGUINodeView.types";
-
+import { useAgentGUINodeEngagement } from "./engagement/useAgentGUINodeEngagement";
 export type {
   AgentGUINodeViewProps,
   AgentGUIAgentsEmptyRenderer,
@@ -67,14 +66,10 @@ export {
   resolveSlashStatus,
   useStableSlashStatus
 } from "./view/agentGUIDetailModelHelpers";
-export { updateConversationSectionsFromSummaries } from "./view/agentGUIConversationRailData";
 export {
   resolveAgentGUIHeroIconUrl,
   shouldEmphasizeEmptyHeroProvider
 } from "./view/AgentGUIEmptyState";
-
-const EMPTY_WORKSPACE_APP_ICONS: readonly AgentMessageMarkdownWorkspaceAppIcon[] =
-  [];
 
 export function AgentGUINodeView({
   viewModel,
@@ -87,11 +82,14 @@ export function AgentGUINodeView({
   capabilityMenuState,
   onCapabilitySettingsRequest,
   isActive = true,
+  isVisible = true,
+  onEngagementEvent,
   composerFocusRequestSequence = null,
   newConversationRequestSequence = null,
   isAgentProviderReady,
   slashStatusLimits = [],
   slashStatusLimitsLoading = false,
+  slashStatusLimitsUnavailable = false,
   providerAuthAccountLabels,
   railConfigProvider,
   railSlashStatusLimits,
@@ -100,6 +98,7 @@ export function AgentGUINodeView({
   slashStatusUsageAttempted = false,
   onAgentConfigMenuOpen,
   onAgentUsageRefresh,
+  onSlashStatusOpen,
   accountMenuState = null,
   previewMode = false,
   onAgentProviderLogin,
@@ -129,7 +128,15 @@ export function AgentGUINodeView({
   workspaceAppIcons = EMPTY_WORKSPACE_APP_ICONS
 }: AgentGUINodeViewProps): React.JSX.Element {
   "use memo";
-  const layoutElementRef = useRef<HTMLDivElement | null>(null);
+  const { composerEngagement, layoutElementRef } = useAgentGUINodeEngagement({
+    composerReady: isAgentProviderReady,
+    isActive,
+    isVisible,
+    onEvent: onEngagementEvent,
+    previewMode,
+    viewModel
+  });
+  const [providerManagerOpen, setProviderManagerOpen] = useState(false);
   const railResizeInteractionRef = useRef<{
     lastWidthPx: number;
     pointerId: number;
@@ -166,7 +173,6 @@ export function AgentGUINodeView({
     workspaceFileReferenceCopy
   });
   const createConversationDisabled =
-    viewModel.composer.isCreatingConversation ||
     viewModel.rail.selectedAgentTarget.disabled === true;
   const createConversationAction = useStableEventCallback(
     actions.createConversation
@@ -259,7 +265,6 @@ export function AgentGUINodeView({
       workspaceAppIcons
     ]
   );
-
   const clampConversationRailWidth = useCallback(
     (widthPx: number) =>
       Math.min(
@@ -414,9 +419,10 @@ export function AgentGUINodeView({
   const shouldShowProviderRailConfigButton =
     viewModel.rail.conversationFilter.kind === "all" ||
     viewModel.rail.selectedAgentTarget?.disabled !== true;
-  const shouldShowProviderRailConfigMenu =
-    shouldShowProviderRailConfigButton &&
-    viewModel.rail.conversationFilter.kind !== "all";
+  const shouldShowProviderRailConfigMenu = shouldShowProviderRailConfigButton;
+  const environmentSetupVisible = !!resolveAgentGUIProviderCatalogIdentity(
+    effectiveRailConfigProvider ?? ""
+  );
   const effectiveProviderAuthAccountLabel = useMemo(() => {
     const provider =
       (effectiveRailConfigProvider ?? viewModel.shell.data.provider)?.trim() ??
@@ -456,23 +462,15 @@ export function AgentGUINodeView({
   const [renameConversationDialogOpen, setRenameConversationDialogOpen] =
     useState(false);
   const requestRenameConversation = useCallback(
-    (agentSessionId: string) => {
-      const target =
-        viewModel.rail.conversations.find(
-          (conversation) => conversation.id === agentSessionId
-        ) ??
-        (viewModel.rail.activeConversation?.id === agentSessionId
-          ? viewModel.rail.activeConversation
-          : null);
-      if (target) {
-        setRenameConversationTarget(target);
-        setRenameConversationDialogOpen(true);
-      }
+    (conversation: AgentGUINodeViewModel["rail"]["conversations"][number]) => {
+      setRenameConversationTarget(conversation);
+      setRenameConversationDialogOpen(true);
     },
-    [viewModel.rail.activeConversation, viewModel.rail.conversations]
+    []
   );
   const conversationRailStoreState = useMemo<AgentGUIConversationRailState>(
     () => ({
+      activeConversation: viewModel.rail.activeConversation,
       activeConversationId: viewModel.rail.activeConversationId,
       pendingDeleteConversationId:
         viewModel.operations.pendingDeleteConversation?.id ?? null,
@@ -532,6 +530,7 @@ export function AgentGUINodeView({
       toggleConversationPinned,
       uiLanguage,
       viewModel.rail.conversationFilter,
+      viewModel.rail.activeConversation,
       viewModel.rail.activeConversationId,
       viewModel.operations.isDeletingConversation,
       viewModel.operations.isDeletingProjectConversations,
@@ -578,10 +577,12 @@ export function AgentGUINodeView({
             inert={conversationRailCollapsed ? true : undefined}
           >
             <AgentGUIProviderRail
+              activeConversation={viewModel.rail.activeConversation}
+              activeConversationId={viewModel.rail.activeConversationId}
               conversationFilter={viewModel.rail.conversationFilter}
+              conversations={viewModel.rail.conversations}
               labels={labels}
               previewMode={previewMode}
-              workspaceId={viewModel.shell.workspaceId}
               selectedAgentTarget={viewModel.rail.selectedAgentTarget}
               agentTargets={viewModel.rail.agentTargets}
               agentTargetsLoading={viewModel.rail.agentTargetsLoading}
@@ -589,12 +590,28 @@ export function AgentGUINodeView({
               renderProviderRailEmpty={renderProviderRailEmpty}
               providerRailAllPresentation={providerRailAllPresentation}
               comingSoonProviders={viewModel.rail.comingSoonProviders}
+              managerOpen={providerManagerOpen}
+              onManagerOpenChange={setProviderManagerOpen}
+              onSelectHomeComposerAgentTarget={
+                actions.selectHomeComposerAgentTarget
+              }
               onSelectConversationFilterTarget={
                 actions.selectConversationFilterTarget
               }
               onUpdateConversationFilter={actions.updateConversationFilter}
               onRequestComposerFocus={requestComposerFocus}
             />
+            {renderSidebarFooter ? (
+              <div
+                className={`${styles.providerRailFooter} ${styles.providerRailSidebarFooter} nodrag tsh-desktop-no-drag`}
+                data-testid="agent-gui-sidebar-footer-slot"
+              >
+                {renderSidebarFooter({
+                  currentUserId: viewModel.shell.currentUserId,
+                  activeConversation: viewModel.rail.activeConversation
+                })}
+              </div>
+            ) : null}
             {shouldShowProviderRailConfigButton ? (
               <div
                 className={`${styles.providerRailFooter} ${styles.providerRailConfigFooter} nodrag tsh-desktop-no-drag`}
@@ -602,8 +619,12 @@ export function AgentGUINodeView({
               >
                 {shouldShowProviderRailConfigMenu ? (
                   <AgentGUIConfigMenu
+                    environmentSetupVisible={environmentSetupVisible}
                     labels={labels}
                     previewMode={previewMode}
+                    providerScopedActionsVisible={
+                      viewModel.rail.conversationFilter.kind !== "all"
+                    }
                     slashStatusLimits={effectiveRailSlashStatusLimits}
                     slashStatusLimitsLoading={slashStatusLimitsLoading}
                     slashStatusUsageCapturedAtUnixMs={
@@ -614,6 +635,7 @@ export function AgentGUINodeView({
                     providerAuthAccountLabel={effectiveProviderAuthAccountLabel}
                     onAgentConfigMenuOpen={onAgentConfigMenuOpen}
                     onAgentUsageRefresh={onAgentUsageRefresh}
+                    onOpenAgentManager={() => setProviderManagerOpen(true)}
                     onOpenAgentEnvSetup={openAgentEnvSetup}
                     onOpenAgentSettings={openAgentSettings}
                   />
@@ -635,17 +657,6 @@ export function AgentGUINodeView({
                 )}
               </div>
             ) : null}
-            {renderSidebarFooter ? (
-              <div
-                className={`${styles.providerRailFooter} ${styles.providerRailSidebarFooter} nodrag tsh-desktop-no-drag`}
-                data-testid="agent-gui-sidebar-footer-slot"
-              >
-                {renderSidebarFooter({
-                  currentUserId: viewModel.shell.currentUserId,
-                  activeConversation: viewModel.rail.activeConversation
-                })}
-              </div>
-            ) : null}
           </aside>
         ) : null}
         <aside
@@ -656,7 +667,7 @@ export function AgentGUINodeView({
           aria-hidden={conversationRailCollapsed ? "true" : undefined}
           inert={conversationRailCollapsed ? true : undefined}
         >
-          <AgentGUIConversationRailPane
+          <AgentGUIConversationRailController
             {...conversationRailStoreState}
             conversations={viewModel.rail.conversations}
             userProjects={viewModel.rail.userProjects}
@@ -705,6 +716,7 @@ export function AgentGUINodeView({
         <section id="agent-gui-detail" className={styles.detailPanel}>
           <AgentGUIDetailPane
             viewModel={viewModel}
+            composerEngagement={composerEngagement}
             actions={actions}
             labels={labels}
             uiLanguage={uiLanguage}
@@ -715,6 +727,8 @@ export function AgentGUINodeView({
             isAgentProviderReady={isAgentProviderReady}
             slashStatusLimits={slashStatusLimits}
             slashStatusLimitsLoading={slashStatusLimitsLoading}
+            slashStatusLimitsUnavailable={slashStatusLimitsUnavailable}
+            onSlashStatusOpen={onSlashStatusOpen}
             onLinkAction={onLinkAction}
             onHandoffConversation={onHandoffConversation}
             capabilityMenuState={capabilityMenuState}

@@ -49,9 +49,6 @@ import type {
   CopyWorkspaceFileEntryData,
   CopyWorkspaceFileEntryErrors,
   CopyWorkspaceFileEntryResponses,
-  CountWorkspaceAgentSessionSectionData,
-  CountWorkspaceAgentSessionSectionErrors,
-  CountWorkspaceAgentSessionSectionResponses,
   CreateWorkspaceAgentSessionData,
   CreateWorkspaceAgentSessionErrors,
   CreateWorkspaceAgentSessionResponses,
@@ -94,9 +91,9 @@ import type {
   DeleteWorkspaceAgentSessionData,
   DeleteWorkspaceAgentSessionErrors,
   DeleteWorkspaceAgentSessionResponses,
-  DeleteWorkspaceAgentSessionSectionData,
-  DeleteWorkspaceAgentSessionSectionErrors,
-  DeleteWorkspaceAgentSessionSectionResponses,
+  DeleteWorkspaceAgentSessionsBatchData,
+  DeleteWorkspaceAgentSessionsBatchErrors,
+  DeleteWorkspaceAgentSessionsBatchResponses,
   DeleteWorkspaceAppData,
   DeleteWorkspaceAppErrors,
   DeleteWorkspaceAppFactoryJobData,
@@ -236,6 +233,9 @@ import type {
   ListWorkspaceAgentSessionMessagesErrors,
   ListWorkspaceAgentSessionMessagesResponses,
   ListWorkspaceAgentSessionsData,
+  ListWorkspaceAgentSessionSectionDeletionCandidatesData,
+  ListWorkspaceAgentSessionSectionDeletionCandidatesErrors,
+  ListWorkspaceAgentSessionSectionDeletionCandidatesResponses,
   ListWorkspaceAgentSessionSectionPageData,
   ListWorkspaceAgentSessionSectionPageErrors,
   ListWorkspaceAgentSessionSectionPageResponses,
@@ -1123,7 +1123,7 @@ export const reloadLocalWorkspaceApp = <ThrowOnError extends boolean = false>(
 /**
  * Get workspace-app agent preference projection
  *
- * Read-only subset of desktop agent preferences for one workspace app runtime. Intended for workspace app server tokens; exposes default provider selection and developer-gated provider visibility only. Deprecated for Agent integrations: use `tutti --json agent providers` through `@tutti-os/agent-acp-kit/tutti`. Removal is gated by the production-usage telemetry and release criteria in `docs/conventions/deprecated-workspace-app-agent-apis.md`.
+ * Read-only subset of desktop agent preferences for one workspace app runtime. Intended for workspace app server tokens; exposes default provider selection and developer-gated provider visibility only. Deprecated for Agent integrations: use the current agent catalog (`tutti --json agent list`) through `@tutti-os/agent-acp-kit/tutti`. Removal is gated by the production-usage telemetry and release criteria in `docs/conventions/deprecated-workspace-app-agent-apis.md`.
  *
  *
  * @deprecated
@@ -1146,7 +1146,7 @@ export const getWorkspaceAppAgentPreferences = <
 /**
  * Get agent provider availability for one workspace app
  *
- * Workspace-app scoped alias of `GET /v1/agent-providers/status` for app server tokens. When `providers` is omitted, returns provider statuses for enabled daemon-owned Agent Targets visible to Agent GUI. When `providers` is supplied, it narrows that Agent Target set and cannot expose providers outside it. Deprecated for Agent integrations: use `tutti --json agent providers` through `@tutti-os/agent-acp-kit/tutti`. Removal is gated by the production-usage telemetry and release criteria in `docs/conventions/deprecated-workspace-app-agent-apis.md`.
+ * Workspace-app scoped alias of `GET /v1/agent-providers/status` for app server tokens. When `providers` is omitted, returns provider statuses for enabled daemon-owned Agent Targets visible to Agent GUI. When `providers` is supplied, it narrows that Agent Target set and cannot expose providers outside it. Deprecated for Agent integrations: use the current agent catalog (`tutti --json agent list`) through `@tutti-os/agent-acp-kit/tutti`. Removal is gated by the production-usage telemetry and release criteria in `docs/conventions/deprecated-workspace-app-agent-apis.md`.
  *
  *
  * @deprecated
@@ -1169,7 +1169,7 @@ export const getWorkspaceAppAgentProviderStatuses = <
 /**
  * Get agent provider composer options for one workspace app
  *
- * Workspace-app scoped alias of `POST /v1/agent-providers/{provider}/composer-options` for app server tokens. Deprecated for Agent integrations: use `tutti --json agent composer-options --provider <providerId>` through `@tutti-os/agent-acp-kit/tutti`. Removal is gated by the production-usage telemetry and release criteria in `docs/conventions/deprecated-workspace-app-agent-apis.md`.
+ * Workspace-app scoped alias of `POST /v1/agent-providers/{provider}/composer-options` for app server tokens. Deprecated for Agent integrations: use `tutti --json agent composer-options --agent-id <agentId>` through `@tutti-os/agent-acp-kit/tutti`. Removal is gated by the production-usage telemetry and release criteria in `docs/conventions/deprecated-workspace-app-agent-apis.md`.
  *
  *
  * @deprecated
@@ -1706,21 +1706,25 @@ export const createWorkspaceAgentSession = <
   });
 
 /**
- * Delete all agent sessions in one rail section for one workspace
+ * Delete an exact snapshot of agent sessions for one workspace
  */
-export const deleteWorkspaceAgentSessionSection = <
+export const deleteWorkspaceAgentSessionsBatch = <
   ThrowOnError extends boolean = false
 >(
-  options: Options<DeleteWorkspaceAgentSessionSectionData, ThrowOnError>
+  options: Options<DeleteWorkspaceAgentSessionsBatchData, ThrowOnError>
 ) =>
   (options.client ?? client).delete<
-    DeleteWorkspaceAgentSessionSectionResponses,
-    DeleteWorkspaceAgentSessionSectionErrors,
+    DeleteWorkspaceAgentSessionsBatchResponses,
+    DeleteWorkspaceAgentSessionsBatchErrors,
     ThrowOnError
   >({
     security: [{ scheme: "bearer", type: "http" }],
-    url: "/v1/workspaces/{workspaceID}/agent-session-sections",
-    ...options
+    url: "/v1/workspaces/{workspaceID}/agent-sessions/batch",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
   });
 
 /**
@@ -1760,20 +1764,23 @@ export const listWorkspaceAgentSessionSectionPage = <
   });
 
 /**
- * Count agent sessions in one rail section for one workspace
+ * List the exact agent session deletion candidates in one rail section
  */
-export const countWorkspaceAgentSessionSection = <
+export const listWorkspaceAgentSessionSectionDeletionCandidates = <
   ThrowOnError extends boolean = false
 >(
-  options: Options<CountWorkspaceAgentSessionSectionData, ThrowOnError>
+  options: Options<
+    ListWorkspaceAgentSessionSectionDeletionCandidatesData,
+    ThrowOnError
+  >
 ) =>
   (options.client ?? client).get<
-    CountWorkspaceAgentSessionSectionResponses,
-    CountWorkspaceAgentSessionSectionErrors,
+    ListWorkspaceAgentSessionSectionDeletionCandidatesResponses,
+    ListWorkspaceAgentSessionSectionDeletionCandidatesErrors,
     ThrowOnError
   >({
     security: [{ scheme: "bearer", type: "http" }],
-    url: "/v1/workspaces/{workspaceID}/agent-session-sections/count",
+    url: "/v1/workspaces/{workspaceID}/agent-session-sections/deletion-candidates",
     ...options
   });
 
@@ -2179,6 +2186,8 @@ export const updateWorkspaceAgentSessionSettings = <
 
 /**
  * Update one workspace agent session title
+ *
+ * Titles longer than 120 Unicode characters return `invalid_request` with reason `workspace_agent_session_title_too_long` and `params.maxCharacters` set to 120.
  */
 export const updateWorkspaceAgentSessionTitle = <
   ThrowOnError extends boolean = false

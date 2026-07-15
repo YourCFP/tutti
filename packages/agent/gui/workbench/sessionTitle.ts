@@ -2,23 +2,22 @@ import type {
   AgentActivityMessage,
   AgentActivitySession
 } from "@tutti-os/agent-activity-core";
-import type { UiLanguage } from "../contexts/settings/domain/agentSettings";
 import {
   firstAgentGUIUserMessageTitle,
-  formatAgentGUIConversationPlainTitle,
   normalizeAgentGUIProviderIdentity,
   resolveAgentGUIExplicitConversationTitle,
+  resolveAgentGUIProviderDisplayLabel,
   type AgentGUIResolvedProvider
 } from "../shared/agentConversationTitleProjection.ts";
-import { formatAgentSessionMentionText } from "../shared/utils/agentSessionMentionText.ts";
 import type { AgentGuiWorkbenchProvider } from "./types.ts";
 
-export interface AgentGuiSessionTitleFormatOptions {
-  fallbackAgentLabel?: string;
-  language?: UiLanguage;
+export interface ResolveAgentGuiWorkbenchHeaderTitleInput {
+  agentName?: string | null;
+  conversationTitle?: string | null;
+  provider?: string | null;
 }
 
-export interface ResolveAgentGuiWorkbenchSessionTitleInput extends AgentGuiSessionTitleFormatOptions {
+export interface ResolveAgentGuiWorkbenchSessionTitleInput {
   agentSessionId?: string | null;
   fallbackTitle?: string | null;
   provider: AgentGuiWorkbenchProvider | string;
@@ -32,27 +31,22 @@ export interface AgentGuiWorkbenchSessionTitleResult {
   title: string | null;
 }
 
-export function formatAgentGuiSessionPlainTitle(
-  title: string | null | undefined,
-  options: AgentGuiSessionTitleFormatOptions = {}
-): string {
-  return formatAgentSessionMentionText(title, { language: options.language });
-}
-
-export function formatAgentGuiConversationPlainTitle(
-  conversation: {
-    title: string;
-    titleFallback?: "generic-agent" | null;
-  },
-  options: AgentGuiSessionTitleFormatOptions = {}
-): string {
-  return formatAgentGUIConversationPlainTitle(conversation, options);
+export function resolveAgentGuiWorkbenchHeaderTitle({
+  agentName,
+  conversationTitle,
+  provider
+}: ResolveAgentGuiWorkbenchHeaderTitleInput): string | null {
+  return (
+    stripTitle(agentName) ||
+    stripTitle(resolveAgentGUIProviderDisplayLabel(provider, "")) ||
+    stripTitle(conversationTitle) ||
+    null
+  );
 }
 
 export function resolveAgentGuiWorkbenchSessionTitle({
   agentSessionId,
   fallbackTitle,
-  language,
   provider,
   messages = [],
   session = null
@@ -68,8 +62,7 @@ export function resolveAgentGuiWorkbenchSessionTitle({
   const snapshotTitle = resolveDisplayableSnapshotSessionTitle({
     messages,
     provider: normalizedProvider,
-    sessionTitle: session?.title ?? "",
-    language
+    sessionTitle: session?.title ?? ""
   });
   if (snapshotTitle) {
     return {
@@ -87,10 +80,7 @@ export function resolveAgentGuiWorkbenchSessionTitle({
     };
   }
 
-  const fallbackDisplayTitle = formatAgentGuiConversationPlainTitle(
-    { title: fallbackTitle ?? "", titleFallback: null },
-    { language }
-  );
+  const fallbackDisplayTitle = stripTitle(fallbackTitle);
   return fallbackDisplayTitle
     ? {
         agentSessionId: normalizedAgentSessionId,
@@ -108,10 +98,8 @@ function resolveDisplayableSnapshotSessionTitle(input: {
   messages: readonly AgentActivityMessage[];
   provider: AgentGUIResolvedProvider;
   sessionTitle: string;
-  language?: UiLanguage;
 }): string {
   const explicitSessionTitle = explicitConversationTitle({
-    language: input.language,
     provider: input.provider,
     title: input.sessionTitle
   });
@@ -119,25 +107,24 @@ function resolveDisplayableSnapshotSessionTitle(input: {
     return explicitSessionTitle;
   }
   return explicitConversationTitle({
-    language: input.language,
     provider: input.provider,
     title: firstAgentGUIUserMessageTitle(input.messages)
   });
 }
 
 function explicitConversationTitle(input: {
-  language?: UiLanguage;
   provider: AgentGUIResolvedProvider;
   title: string | null | undefined;
 }): string {
   return (
     resolveAgentGUIExplicitConversationTitle({
       provider: input.provider,
-      title: formatAgentGuiConversationPlainTitle(
-        { title: input.title ?? "", titleFallback: null },
-        { language: input.language }
-      ),
+      title: stripTitle(input.title),
       titleFallback: null
     }) ?? ""
   );
+}
+
+function stripTitle(value: string | null | undefined): string {
+  return value?.trim() ?? "";
 }

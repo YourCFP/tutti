@@ -61,13 +61,12 @@ export {
   type AgentGuiWorkbenchHeaderProps
 } from "./header.ts";
 export {
-  formatAgentGuiConversationPlainTitle,
-  formatAgentGuiSessionPlainTitle,
+  resolveAgentGuiWorkbenchHeaderTitle,
   resolveAgentGuiWorkbenchSessionTitle
 } from "./sessionTitle.ts";
 export type {
-  AgentGuiSessionTitleFormatOptions,
   AgentGuiWorkbenchSessionTitleResult,
+  ResolveAgentGuiWorkbenchHeaderTitleInput,
   ResolveAgentGuiWorkbenchSessionTitleInput
 } from "./sessionTitle.ts";
 export {

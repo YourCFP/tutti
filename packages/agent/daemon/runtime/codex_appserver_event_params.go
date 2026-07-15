@@ -24,7 +24,7 @@ func appServerThreadStartParams(session Session, cwd string) map[string]any {
 		params["model"] = model
 	}
 	config := map[string]any{}
-	if reasoning := codexACPReasoningEffortValue(settings.ReasoningEffort); reasoning != "" {
+	if reasoning := codexAppServerReasoningEffortValue(settings.ReasoningEffort); reasoning != "" {
 		config["model_reasoning_effort"] = reasoning
 	}
 	if summary := appServerThreadReasoningSummaryConfig(settings.Model); summary != "" {
@@ -73,7 +73,7 @@ func appServerTurnStartParams(
 	if model := strings.TrimSpace(settings.Model); model != "" {
 		params["model"] = model
 	}
-	if reasoning := codexACPReasoningEffortValue(settings.ReasoningEffort); reasoning != "" {
+	if reasoning := codexAppServerReasoningEffortValue(settings.ReasoningEffort); reasoning != "" {
 		params["effort"] = reasoning
 	}
 	if summary := codexACPReasoningSummaryOverride(settings.Model); summary != "" {
@@ -133,7 +133,7 @@ func appServerCollaborationMode(
 		"model":                  model,
 		"developer_instructions": appServerCollaborationModeDeveloperInstructions(modeMask),
 	}
-	if effort := codexACPReasoningEffortValue(settings.ReasoningEffort); effort != "" {
+	if effort := codexAppServerReasoningEffortValue(settings.ReasoningEffort); effort != "" {
 		collaborationSettings["reasoning_effort"] = effort
 	} else if settings.PlanMode {
 		if presetEffort := strings.TrimSpace(asString(modeMask["reasoning_effort"])); presetEffort != "" {

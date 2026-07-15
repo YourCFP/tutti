@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AgentInteractivePromptSurface,
-  buildWorkspaceAgentInteractivePromptLabels,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from "react";
+import {
   buildWorkspaceAgentMessageCenterModelFromEngine,
-  isWaitingMessageCenterItem,
   selectWorkspaceAgentMessageCenterPresentation,
   stabilizeWorkspaceAgentMessageCenterModel,
   workspaceAgentMessageCenterPromptStatus,
@@ -11,7 +15,6 @@ import {
   WorkspaceAgentMessageCenterPanel,
   dispatchAgentPlanPromptAction,
   useEngineSelector,
-  type WorkspaceAgentMessageCenterItem,
   type WorkspaceAgentMessageCenterModel
 } from "@tutti-os/agent-gui/agent-message-center";
 import {
@@ -23,32 +26,20 @@ import type { WorkspaceSummary } from "@tutti-os/client-tuttid-ts";
 import type { WorkbenchHostChromeRenderContext } from "@tutti-os/workbench-surface";
 import {
   Button,
-  CloseIcon,
-  StatusDot,
-  toast,
   Tooltip,
   TooltipContent,
   TooltipTrigger
 } from "@tutti-os/ui-system";
-import { INotificationService } from "@tutti-os/ui-notifications";
-import {
-  createDocumentNotificationVisibilityState,
-  type CompositeNotificationMessage
-} from "@renderer/lib/compositeNotificationService";
 import { useService } from "@tutti-os/infra/di";
 import { MessageCenterOpenedReporter } from "@renderer/features/analytics/reporters/message-center-opened/messageCenterOpenedReporter.ts";
 import { MessageCenterNotificationActionedReporter } from "@renderer/features/analytics/reporters/message-center-notification-actioned/messageCenterNotificationActionedReporter.ts";
 import { IReporterService } from "@renderer/features/analytics";
 import { IWorkspaceAgentActivityService } from "@renderer/features/workspace-agent/services/workspaceAgentActivityService.interface.ts";
+import { IAgentsService } from "@renderer/features/workspace-agent/services/agentsService.interface.ts";
 import { runDesktopAgentGUILinkAction } from "@renderer/features/workspace-agent/services/desktopAgentGUILinkActions.ts";
 import { useTranslation } from "@renderer/i18n";
 import { cn } from "@renderer/lib/format";
 import { useWorkspaceWorkbenchHostService } from "./useWorkspaceWorkbenchHostService";
-import {
-  buildWorkspaceAgentDecisionNotification,
-  type WorkspaceAgentDecisionSubmitInput
-} from "../services/workspaceAgentDecisionNotification";
-import { shouldShowWorkspaceAgentDecisionToast } from "../services/workspaceAgentDecisionToastVisibility";
 import { resolveWorkspaceAgentMessageCenterTrigger } from "../services/workspaceAgentMessageCenterTrigger";
 import { toggleWorkspaceAgentMessageCenter } from "../services/workspaceAgentMessageCenterToggle";
 import { registerWorkspaceMessageCenterOpenHandler } from "../services/workspaceMessageCenterCoordinator";
@@ -60,13 +51,11 @@ import { requestWorkspaceIssueManagerLaunch } from "../services/workspaceIssueMa
 import { requestGroupChatLaunch } from "../services/groupChatLaunchCoordinator";
 import { resolveWorkspaceAgentStatusPetMood } from "../services/workspaceAgentStatusPetMood";
 import { WorkspaceAgentStatusPetIcon } from "./WorkspaceAgentStatusPetIcon";
+import { useWorkspaceAgentDecisionNotifications } from "./useWorkspaceAgentDecisionNotifications";
 
 const MESSAGE_CENTER_SUMMARY_MESSAGE_LIMIT = 20;
 const MESSAGE_CENTER_SUMMARY_PREFETCH_ITEM_LIMIT = 12;
 const MESSAGE_CENTER_VISIBLE_HISTORY_MS = 7 * 24 * 60 * 60 * 1000;
-const WORKSPACE_AGENT_DECISION_TOAST_DURATION = Infinity;
-const workspaceAgentDecisionToastClassName = "workspace-agent-decision-toast";
-
 export function WorkspaceAgentMessageCenterAction({
   launchNode,
   open,
@@ -82,27 +71,20 @@ export function WorkspaceAgentMessageCenterAction({
   const workspaceAgentActivityService = useService(
     IWorkspaceAgentActivityService
   );
-  const reporterService = useService(IReporterService);
-  const notifications = useService(INotificationService);
-  const workbenchHostService = useWorkspaceWorkbenchHostService();
-  const windowForegroundVisibility = useMemo(
-    () =>
-      createDocumentNotificationVisibilityState({
-        hasFocus: () => document.hasFocus(),
-        visibilityState: () => document.visibilityState
-      }),
-    []
+  const agentsService = useService(IAgentsService);
+  const agentDirectory = useSyncExternalStore(
+    (listener) => agentsService.subscribe(listener),
+    () => agentsService.getSnapshot(),
+    () => agentsService.getSnapshot()
   );
+  const reporterService = useService(IReporterService);
+  const workbenchHostService = useWorkspaceWorkbenchHostService();
   const [highlightedMessageCenterItemId, setHighlightedMessageCenterItemId] =
     useState<string | null>(null);
   const [sessionMessagesById, setSessionMessagesById] = useState<
     Record<string, AgentActivityMessage[]>
   >({});
   const requestedMessageSummarySessionIdsRef = useRef<Set<string>>(new Set());
-  const seenWaitingNotificationKeysRef = useRef<Set<string> | null>(null);
-  const activeWaitingNotificationToastIdsRef = useRef<Map<string, string>>(
-    new Map()
-  );
   const messageCenterModelRef = useRef<WorkspaceAgentMessageCenterModel | null>(
     null
   );
@@ -129,6 +111,7 @@ export function WorkspaceAgentMessageCenterAction({
       messageCenterPresentation,
       { sessionMessagesById, workspaceId: workspace.id },
       {
+        agentPresentations: agentDirectory.agentTargets,
         promptFallbackLabels: {
           constraintHeader: t(
             "workspace.agentMessageCenter.promptConstraintHeader"
@@ -149,15 +132,25 @@ export function WorkspaceAgentMessageCenterAction({
     return stableModel;
   }, [
     messageCenterPresentation,
+    agentDirectory.agentTargets,
     messageCenterItemCutoffUnixMs,
     sessionMessagesById,
     t,
     workspace.id
   ]);
-  const waitingItems = useMemo(
-    () => model.items.filter(isWaitingMessageCenterItem),
-    [model.items]
+  const isAgentGuiSessionOpenForWorkspace = useCallback(
+    (agentSessionId: string) =>
+      isWorkspaceAgentGuiSessionOpen(workspace.id, agentSessionId),
+    [workspace.id]
   );
+  useWorkspaceAgentDecisionNotifications({
+    isAgentGuiSessionOpen: isAgentGuiSessionOpenForWorkspace,
+    messageCenterOpen: open,
+    model,
+    sendBackgroundNotification: true,
+    sessionEngine,
+    workspaceId: workspace.id
+  });
   const triggerPetMood = useEngineSelector(
     sessionEngine,
     resolveWorkspaceAgentStatusPetMood
@@ -184,11 +177,6 @@ export function WorkspaceAgentMessageCenterAction({
   useEffect(() => {
     requestedMessageSummarySessionIdsRef.current.clear();
     setSessionMessagesById({});
-    seenWaitingNotificationKeysRef.current = null;
-    for (const toastId of activeWaitingNotificationToastIdsRef.current.values()) {
-      toast.dismiss(toastId);
-    }
-    activeWaitingNotificationToastIdsRef.current.clear();
     setHighlightedMessageCenterItemId(null);
   }, [workspace.id]);
 
@@ -210,164 +198,6 @@ export function WorkspaceAgentMessageCenterAction({
     },
     [launchNode, setOpen]
   );
-
-  useEffect(() => {
-    const waitingEntries = waitingItems.map(
-      (item) => [waitingNotificationKey(item), item] as const
-    );
-    const currentKeys = new Set(waitingEntries.map(([key]) => key));
-    for (const [
-      notificationKey,
-      toastId
-    ] of activeWaitingNotificationToastIdsRef.current) {
-      if (!currentKeys.has(notificationKey)) {
-        toast.dismiss(toastId);
-        activeWaitingNotificationToastIdsRef.current.delete(notificationKey);
-      }
-    }
-    const seenKeys = seenWaitingNotificationKeysRef.current;
-    if (!seenKeys) {
-      seenWaitingNotificationKeysRef.current = currentKeys;
-      return;
-    }
-    const nextSeenKeys = new Set(seenKeys);
-    for (const key of currentKeys) {
-      nextSeenKeys.add(key);
-    }
-    seenWaitingNotificationKeysRef.current = nextSeenKeys;
-    const newWaitingEntries = waitingEntries.filter(
-      ([key]) => !seenKeys.has(key)
-    );
-    for (const [notificationKey, item] of newWaitingEntries) {
-      const notification = buildWorkspaceAgentDecisionNotification(item, {
-        commandLabel: t(
-          "workspace.agentMessageCenter.waitingNotificationCommand"
-        ),
-        fallbackAgentName: t("workspace.agentGui.fallbackAgentLabel"),
-        planModes: [
-          {
-            id: "acceptEdits",
-            label: t(
-              "workspace.agentMessageCenter.waitingNotificationPlanAcceptEdits"
-            )
-          },
-          {
-            id: "default",
-            label: t(
-              "workspace.agentMessageCenter.waitingNotificationPlanAskFirst"
-            )
-          },
-          {
-            id: "bypassPermissions",
-            label: t(
-              "workspace.agentMessageCenter.waitingNotificationPlanAllowAll"
-            )
-          }
-        ]
-      });
-      if (!notification || notification.options.length === 0) {
-        continue;
-      }
-      const osMessage: CompositeNotificationMessage = {
-        description: notification.description,
-        level: "warning",
-        navigation: {
-          agentSessionId: item.agentSessionId,
-          provider: item.provider,
-          workspaceId: workspace.id
-        },
-        // The decision toast below already covers the in-app face; only
-        // raise the OS notification while the window is in the background.
-        presentation: "background-only",
-        title: t("workspace.agentMessageCenter.waitingNotificationTitle", {
-          title: notification.conversationTitle || notification.agentName
-        })
-      };
-      notifications.notify(osMessage);
-      if (
-        !shouldShowWorkspaceAgentDecisionToast({
-          agentGuiSessionOpen: isWorkspaceAgentGuiSessionOpen(
-            workspace.id,
-            item.agentSessionId
-          ),
-          messageCenterOpen: open,
-          windowForeground: windowForegroundVisibility.isForeground()
-        })
-      ) {
-        continue;
-      }
-      const toastId = `workspace-agent-waiting:${workspace.id}:${notificationKey}`;
-      activeWaitingNotificationToastIdsRef.current.set(
-        notificationKey,
-        toastId
-      );
-      toast.custom(
-        (id) => (
-          <WorkspaceAgentDecisionToast
-            agentIconUrl={notification.agentIconUrl}
-            agentName={notification.agentName}
-            closeLabel={t("common.close")}
-            conversationTitle={notification.conversationTitle}
-            prompt={notification.prompt}
-            promptLabels={buildWorkspaceAgentInteractivePromptLabels(
-              t as unknown as Parameters<
-                typeof buildWorkspaceAgentInteractivePromptLabels
-              >[0],
-              item.provider
-            )}
-            waitingStatusLabel={t(
-              "workspace.agentMessageCenter.waitingNotificationStatus"
-            )}
-            onClose={() => {
-              activeWaitingNotificationToastIdsRef.current.delete(
-                notificationKey
-              );
-              toast.dismiss(id);
-            }}
-            onSubmit={async (input) => {
-              const interaction = selectEnginePendingInteractions(
-                sessionEngine.getSnapshot(),
-                item.agentSessionId
-              ).find((candidate) => candidate.requestId === input.requestId);
-              if (!interaction) return;
-              sessionEngine.dispatch({
-                type: "interaction/responseRequested",
-                workspaceId: workspace.id,
-                agentSessionId: item.agentSessionId,
-                requestId: input.requestId,
-                turnId: interaction.turnId,
-                commandId: interactionCommandId({
-                  workspaceId: workspace.id,
-                  agentSessionId: item.agentSessionId,
-                  requestId: input.requestId
-                }),
-                ...(input.action ? { action: input.action } : {}),
-                ...(input.optionId ? { optionId: input.optionId } : {}),
-                ...(input.payload ? { payload: input.payload } : {})
-              });
-              activeWaitingNotificationToastIdsRef.current.delete(
-                notificationKey
-              );
-              toast.dismiss(id);
-            }}
-          />
-        ),
-        {
-          className: workspaceAgentDecisionToastClassName,
-          id: toastId,
-          duration: WORKSPACE_AGENT_DECISION_TOAST_DURATION
-        }
-      );
-    }
-  }, [
-    notifications,
-    open,
-    t,
-    waitingItems,
-    windowForegroundVisibility,
-    workspace.id,
-    sessionEngine
-  ]);
 
   useEffect(() => {
     if (!open) {
@@ -464,11 +294,14 @@ export function WorkspaceAgentMessageCenterAction({
   const handleLinkAction = useCallback(
     (action: Parameters<typeof runDesktopAgentGUILinkAction>[0]) => {
       void runDesktopAgentGUILinkAction(action, {
+        getAgentSession: ({ agentSessionId, workspaceId }) =>
+          workspaceAgentActivityService.getSession(workspaceId, agentSessionId),
         homeDirectory: workbenchHostService.getHomeDirectory(),
         launchAgentGui: async (input) => {
           const nodeId = await launchNode?.(
             createWorkspaceAgentGuiSessionLaunchRequest({
               agentSessionId: input.agentSessionId,
+              agentTargetId: input.agentTargetId,
               provider: input.provider
             })
           );
@@ -481,7 +314,12 @@ export function WorkspaceAgentMessageCenterAction({
         workspaceId: workspace.id
       });
     },
-    [launchNode, workbenchHostService, workspace.id]
+    [
+      launchNode,
+      workbenchHostService,
+      workspace.id,
+      workspaceAgentActivityService
+    ]
   );
   const closeMessageCenter = useCallback(() => {
     setOpen(false);
@@ -640,112 +478,6 @@ function interactionCommandId(input: {
     input.agentSessionId,
     input.turnId ?? "interaction",
     input.requestId
-  ].join(":");
-}
-
-function WorkspaceAgentDecisionToast({
-  agentIconUrl,
-  agentName,
-  closeLabel,
-  conversationTitle,
-  prompt,
-  promptLabels,
-  waitingStatusLabel,
-  onClose,
-  onSubmit
-}: {
-  agentIconUrl: string;
-  agentName: string;
-  closeLabel: string;
-  conversationTitle: string;
-  prompt: NonNullable<WorkspaceAgentMessageCenterItem["pendingPrompt"]>;
-  promptLabels: ReturnType<typeof buildWorkspaceAgentInteractivePromptLabels>;
-  waitingStatusLabel: string;
-  onClose: () => void;
-  onSubmit: (input: WorkspaceAgentDecisionSubmitInput) => Promise<void>;
-}) {
-  "use memo";
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const displayTitle = conversationTitle || agentName;
-
-  return (
-    <article className="relative w-full min-w-0 overflow-visible rounded-[12px] border border-[var(--tutti-purple-border)] bg-[var(--tutti-purple-bg)] p-3.5">
-      <span
-        aria-hidden="true"
-        className="workspace-agent-decision-toast__edge-glow agent-gui-edge-glow pointer-events-none inset-0 rounded-[12px]"
-        style={{ position: "absolute" }}
-      />
-      <Button
-        type="button"
-        aria-label={closeLabel}
-        className="workspace-agent-decision-toast__close absolute top-0 right-0 z-[2] size-6 translate-x-[35%] -translate-y-[35%] rounded-full border-[var(--line-2)] bg-[var(--background-panel)] text-[var(--text-secondary)] shadow-sm hover:bg-[var(--background-fronted)] hover:text-[var(--text-primary)] focus-visible:ring-[color-mix(in_srgb,var(--border-focus)_30%,transparent)]"
-        size="icon-xs"
-        variant="chrome"
-        onClick={onClose}
-      >
-        <CloseIcon className="size-4" />
-      </Button>
-      <div className="workspace-agent-decision-toast__content relative z-[1] grid min-w-0 gap-2.5 transition-opacity">
-        <div className="flex min-w-0 items-center justify-between gap-2.5 pr-2">
-          <h3 className="min-w-0 truncate text-[13px] font-bold leading-5 text-[var(--text-secondary)]">
-            {displayTitle}
-          </h3>
-          <span
-            className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold leading-4 text-[var(--text-secondary)]"
-            data-status="waiting"
-            title={waitingStatusLabel}
-          >
-            <StatusDot
-              tone="amber"
-              pulse
-              size="sm"
-              title={waitingStatusLabel}
-            />
-            <span>{waitingStatusLabel}</span>
-          </span>
-        </div>
-        <div className="workspace-agent-decision-toast__prompt min-w-0">
-          <AgentInteractivePromptSurface
-            embedded
-            keyboardShortcuts={false}
-            prompt={prompt}
-            isSubmitting={isSubmitting}
-            labels={promptLabels}
-            onSubmit={(input) => {
-              setIsSubmitting(true);
-              void onSubmit(input).catch(() => {
-                setIsSubmitting(false);
-              });
-            }}
-          />
-        </div>
-        <div className="flex min-w-0 items-center gap-2 text-[13px] font-normal leading-5 text-[var(--text-secondary)]">
-          <span className="inline-flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--line-1)] bg-[var(--transparency-block)]">
-            <img
-              src={agentIconUrl}
-              alt={agentName}
-              className="size-full object-cover"
-              decoding="async"
-              draggable={false}
-            />
-          </span>
-          <span className="min-w-0 truncate">{agentName}</span>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function waitingNotificationKey(item: WorkspaceAgentMessageCenterItem): string {
-  const requestId = item.pendingPrompt?.requestId.trim();
-  if (requestId) {
-    return `${item.agentSessionId}:prompt:${requestId}`;
-  }
-  return [
-    item.agentSessionId,
-    "attention",
-    item.needsAttentionKind ?? "waiting",
-    item.sortTimeUnixMs
   ].join(":");
 }
 

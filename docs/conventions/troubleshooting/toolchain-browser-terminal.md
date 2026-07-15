@@ -2,6 +2,39 @@
 
 [Back to troubleshooting index](./README.md)
 
+### Temporary Git fixture turns a linked worktree bare
+
+- Symptom:
+  A test run leaves the shared repository config with `core.bare=true`, writes
+  fixture author identity into `.git/config`, or creates an `init` commit that
+  deletes most tracked files from a linked-worktree branch.
+- Quick checks:
+  Run `git config --show-origin --get core.bare`, inspect local `user.name` and
+  `user.email`, then inspect the affected branch reflog for a fixture-authored
+  commit. Search the responsible test for temporary-repository Git commands
+  whose child environment inherits `GIT_DIR` or `GIT_WORK_TREE`.
+- Root cause:
+  `mkdtemp` isolates files, not Git repository selection. An inherited
+  linked-worktree `GIT_DIR` overrides the fixture cwd, so `git init` reinitializes
+  the caller's private worktree metadata and updates its shared common config.
+  Later fixture `add` and `commit` commands can then stage the fixture tree
+  against the real branch.
+- Fix:
+  Remove repository-local Git environment variables for every fixture Git
+  command using case-insensitive name matching, set `GIT_CEILING_DIRECTORIES` to
+  the fixture root, stop on any command failure, verify `--absolute-git-dir`
+  after initialization, and pass fixture author identity through commit-local
+  `-c` arguments instead of `git config`.
+- Validation:
+  Run the fixture tests with poisoned `GIT_DIR`, `GIT_WORK_TREE`, and
+  `GIT_CONFIG_*` inputs that point only at disposable paths. Confirm the fixture
+  initializes its own `.git`, then verify the caller's config, index, branch,
+  and worktree remain unchanged.
+- References:
+  [git-environment.mjs](../../../tools/scripts/git-environment.mjs)
+  [check-agent-gui-degradation.test.mjs](../../../tools/scripts/check-agent-gui-degradation.test.mjs)
+  [static-analysis.md](../static-analysis.md)
+
 ### Dynamic CLI input rejects plausible flags
 
 - Symptom:
@@ -364,6 +397,35 @@ delimited by ---`, and the composer skill picker may show partial or
   [packages/browser/workbench-node/src/workbench/index.ts](../../../packages/browser/workbench-node/src/workbench/index.ts)
   [packages/workspace/issue-manager/package.json](../../../packages/workspace/issue-manager/package.json)
   [packages/workspace/issue-manager/src/workbench/index.ts](../../../packages/workspace/issue-manager/src/workbench/index.ts)
+
+### New release CDN namespace returns an S3 403
+
+- Symptom:
+  Release artifacts upload successfully and `s3api head-object` finds them,
+  but the corresponding CloudFront URL returns HTTP 403 with
+  `server: AmazonS3` and `x-cache: Error from cloudfront`.
+- Quick checks:
+  Compare the requested path with the distribution's ordered cache behaviors,
+  identify the selected origin, and inspect the origin bucket policy for a
+  matching `s3:GetObject` resource prefix. Do not treat a successful S3 upload
+  or invalidation as proof that the CDN route exists.
+- Root cause:
+  The new release namespace was uploaded before its CloudFront path behavior
+  and S3 read policy were provisioned. The request fell through to an unrelated
+  default origin, which correctly returned AccessDenied.
+- Fix:
+  Add a read-only cache behavior for the namespace that targets the intended S3
+  origin, append the narrow bucket-policy resource prefix, wait for the
+  distribution deployment, and invalidate the new namespace. Preserve every
+  unrelated distribution behavior and use the current distribution ETag when
+  updating it.
+- Validation:
+  Download mutable index metadata, immutable release metadata, and the artifact
+  from the public CDN. Require HTTP 200 and rerun signature, SHA-256, and byte
+  size verification against those downloaded files.
+- References:
+  [Agent Extensions](../../architecture/agent-extensions.md) and the concrete
+  Agent repository's release workflow.
 
 ### Browser Node focus pings miss iframe-hosted editors
 

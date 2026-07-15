@@ -71,6 +71,10 @@ func (a *CodexAppServerAdapter) Start(ctx context.Context, session Session) (eve
 	if codexAppServerNeedsSynchronousModels(session) {
 		models = a.fetchModels(ctx, client, session, trace)
 	}
+	if len(models) > 0 {
+		effectiveSettings := codexAppServerEffectiveSettings(models, session, nil)
+		session.Settings = &effectiveSettings
+	}
 	planModeMask, defaultModeMask := a.fetchCollaborationModeMasks(ctx, client, session, trace)
 
 	threadParams := appServerThreadStartParams(session, a.sessionCWD(session))
@@ -135,6 +139,7 @@ func (a *CodexAppServerAdapter) Start(ctx context.Context, session Session) (eve
 		threadID:               threadID,
 		serverInfo:             serverInfo,
 		account:                account,
+		models:                 cloneCodexAppServerModels(models),
 		startupModelsReady:     len(models) > 0,
 		startupRateLimitsReady: false,
 		planModeMask:           planModeMask,
@@ -213,6 +218,18 @@ func (a *CodexAppServerAdapter) Resume(ctx context.Context, session Session) (er
 	if codexAppServerNeedsSynchronousModels(session) {
 		models = a.fetchModels(ctx, client, session, trace)
 	}
+	if len(models) > 0 && strings.TrimSpace(session.SettingsValue().ReasoningEffort) != "" {
+		hasExplicitModel := strings.TrimSpace(session.SettingsValue().Model) != ""
+		effectiveSettings := codexAppServerEffectiveSettings(models, session, nil)
+		// The catalog default is needed to validate an effort-only persisted
+		// setting, but it must not become a thread/resume model override. The
+		// existing thread remains authoritative until the resume result reports
+		// its actual model.
+		if !hasExplicitModel {
+			effectiveSettings.Model = ""
+		}
+		session.Settings = &effectiveSettings
+	}
 	planModeMask, defaultModeMask := a.fetchCollaborationModeMasks(ctx, client, session, trace)
 
 	params := appServerThreadStartParams(session, a.sessionCWD(session))
@@ -244,6 +261,10 @@ func (a *CodexAppServerAdapter) Resume(ctx context.Context, session Session) (er
 	if err != nil {
 		return classifyACPResumeError(session, appServerMethodThreadResume, err)
 	}
+	if len(models) > 0 {
+		effectiveSettings := codexAppServerEffectiveSettings(models, session, threadResult)
+		session.Settings = &effectiveSettings
+	}
 	liveState := newACPLiveState()
 	liveState.currentMode = codexACPEffectiveModeID(session)
 	liveState.availableCommands = codexAppServerCommands()
@@ -260,6 +281,7 @@ func (a *CodexAppServerAdapter) Resume(ctx context.Context, session Session) (er
 		threadID:               strings.TrimSpace(session.ProviderSessionID),
 		serverInfo:             serverInfo,
 		account:                account,
+		models:                 cloneCodexAppServerModels(models),
 		startupModelsReady:     len(models) > 0,
 		startupRateLimitsReady: false,
 		planModeMask:           planModeMask,

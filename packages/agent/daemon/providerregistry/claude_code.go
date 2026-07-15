@@ -83,7 +83,8 @@ func claudeCodeDescriptor() ProviderDescriptor {
 				"tokenUsage",
 				"rateLimits",
 				"planMode",
-				"interrupt",
+				CapabilityInterrupt,
+				CapabilityActiveTurnGuidance,
 				"permissionModeChangeDuringTurn",
 			},
 			PermissionConfigurable:  true,
@@ -138,11 +139,6 @@ func claudeCodeDescriptor() ProviderDescriptor {
 		},
 		Sidecar: SidecarDescriptor{MentionRouting: SidecarMentionRoutingClaudeNamespaced, ExecutionEnvironment: SidecarExecutionEnvironmentClaudeIPC},
 		Desktop: DesktopIntegrationDescriptor{Managed: true, ManagedOrder: 1, StatusProbePriority: 2, UsageProbeKind: DesktopUsageProbeClaudeCode, DeveloperLogs: true, DefaultProviderEligible: true, DefaultProviderPriority: 2},
-		CLI: CLIIntegrationDescriptor{StartAlias: CLIStartAliasDescriptor{
-			AppID: "agent-claude-code", CommandName: "claude",
-			Description: "Start a Claude Code agent session in the current workspace. Use --show to request AgentGUI activation.",
-			Summary:     "Start a Claude Code agent session",
-		}},
 		ExternalImport: ExternalImportDescriptor{
 			Enabled:               true,
 			RootEnvVar:            "CLAUDE_CONFIG_DIR",

@@ -145,10 +145,10 @@ func codexAppServerCapabilities(planMode bool) []string {
 		CapabilityImageInput,
 		CapabilitySkills,
 		CapabilityInterrupt,
+		CapabilityActiveTurnGuidance,
 		CapabilityCompact,
 		CapabilityRateLimits,
 		CapabilityTokenUsage,
-		"steer",
 		"review",
 		"goal",
 		CapabilityGoalPause,
@@ -165,126 +165,6 @@ func codexAppServerCapabilities(planMode bool) []string {
 		capabilities = append(capabilities, CapabilityPlanMode)
 	}
 	return capabilities
-}
-
-func codexAppServerConfigOptionDescriptors(
-	models []map[string]any,
-	session Session,
-	threadResult json.RawMessage,
-) []map[string]any {
-	settings := session.SettingsValue()
-	currentModel := strings.TrimSpace(settings.Model)
-	currentEffort := codexACPReasoningEffortValue(settings.ReasoningEffort)
-	var threadInfo struct {
-		Model           string `json:"model"`
-		ReasoningEffort string `json:"reasoningEffort"`
-	}
-	if len(threadResult) > 0 {
-		if err := json.Unmarshal(threadResult, &threadInfo); err == nil {
-			currentModel = firstNonEmpty(currentModel, strings.TrimSpace(threadInfo.Model))
-			currentEffort = firstNonEmpty(currentEffort, strings.TrimSpace(threadInfo.ReasoningEffort))
-		}
-	}
-
-	modelOptions := make([]any, 0, len(models))
-	modelOptionValues := map[string]struct{}{}
-	var effortValues []string
-	for _, model := range models {
-		if hidden, _ := model["hidden"].(bool); hidden {
-			continue
-		}
-		value := firstNonEmpty(asString(model["model"]), asString(model["id"]))
-		if value == "" {
-			continue
-		}
-		modelOptions = append(modelOptions, map[string]any{
-			"value": value,
-			"name":  firstNonEmpty(asString(model["displayName"]), value),
-		})
-		modelOptionValues[value] = struct{}{}
-		if value == currentModel || (currentModel == "" && truthyBool(model["isDefault"])) {
-			effortValues = appServerSupportedEfforts(model)
-			if currentModel == "" {
-				currentModel = value
-			}
-			if currentEffort == "" {
-				currentEffort = asString(model["defaultReasoningEffort"])
-			}
-		}
-	}
-	if currentModel != "" {
-		if _, ok := modelOptionValues[currentModel]; !ok {
-			modelOptions = append(modelOptions, map[string]any{
-				"value": currentModel,
-				"name":  currentModel,
-			})
-		}
-	}
-	if len(effortValues) == 0 {
-		effortValues = []string{"minimal", "low", "medium", "high", "xhigh"}
-	}
-	effortOptions := make([]any, 0, len(effortValues))
-	for _, value := range effortValues {
-		effortOptions = append(effortOptions, map[string]any{
-			"value": value,
-			"name":  strings.ToUpper(value[:1]) + value[1:],
-		})
-	}
-
-	descriptors := make([]map[string]any, 0, 2)
-	if len(modelOptions) > 0 {
-		descriptors = append(descriptors, map[string]any{
-			"id":           "model",
-			"name":         "Model",
-			"type":         "select",
-			"category":     "model",
-			"currentValue": currentModel,
-			"options":      modelOptions,
-		})
-	}
-	descriptors = append(descriptors, map[string]any{
-		"id":           "reasoning_effort",
-		"name":         "Reasoning Effort",
-		"type":         "select",
-		"category":     "thought_level",
-		"currentValue": firstNonEmpty(currentEffort, "medium"),
-		"options":      effortOptions,
-	})
-	descriptors = append(descriptors, map[string]any{
-		"id":           "service_tier",
-		"name":         "Speed",
-		"type":         "select",
-		"category":     "speed",
-		"currentValue": firstNonEmpty(strings.TrimSpace(settings.Speed), "standard"),
-		"options": []any{
-			map[string]any{"value": "standard", "name": "Standard"},
-			map[string]any{"value": "fast", "name": "Fast"},
-		},
-	})
-	return descriptors
-}
-
-func appServerSupportedEfforts(model map[string]any) []string {
-	raw, _ := model["supportedReasoningEfforts"].([]any)
-	out := make([]string, 0, len(raw))
-	for _, entry := range raw {
-		switch typed := entry.(type) {
-		case string:
-			if trimmed := strings.TrimSpace(typed); trimmed != "" {
-				out = append(out, trimmed)
-			}
-		case map[string]any:
-			if value := firstNonEmpty(asString(typed["reasoningEffort"]), asString(typed["effort"]), asString(typed["value"])); value != "" {
-				out = append(out, value)
-			}
-		}
-	}
-	return dedupeStrings(out)
-}
-
-func truthyBool(value any) bool {
-	typed, _ := value.(bool)
-	return typed
 }
 
 // asStringRaw returns string values without trimming, so streaming deltas keep

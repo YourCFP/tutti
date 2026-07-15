@@ -177,6 +177,7 @@ describe("composer target presentation", () => {
       capabilities: null,
       models: [{ value: "current-model", label: "Current" }],
       reasoningEfforts: [{ value: "high", label: "High" }],
+      reasoningConfigurable: true,
       speeds: [],
       skills: [],
       behavior: {
@@ -204,5 +205,60 @@ describe("composer target presentation", () => {
         }
       }).model
     ).toBeNull();
+  });
+
+  it("clears a remembered effort when the selected model advertises no reasoning variants", () => {
+    const settings = { model: "opencode/big-pickle", reasoningEffort: "high" };
+    const options = {
+      provider: "opencode",
+      capabilities: null,
+      models: [{ value: "opencode/big-pickle", label: "Big Pickle" }],
+      reasoningEfforts: [],
+      reasoningConfigurable: true,
+      reasoningOptionsByModel: {
+        "opencode/big-pickle": { defaultValue: null, options: [] }
+      },
+      speeds: [],
+      skills: [],
+      behavior: {
+        collapseModelOptionsToLatest: false,
+        modelOptionsAuthoritative: false,
+        refreshModelOptionsAfterSettings: true,
+        prewarmDraftSession: false,
+        planModeExclusiveWithPermissionMode: false
+      },
+      loadedAtUnixMs: 1
+    };
+
+    expect(sanitizeComposerSettingsForOptions(settings, options)).toMatchObject(
+      {
+        model: "opencode/big-pickle",
+        reasoningEffort: null
+      }
+    );
+  });
+
+  it("clears reasoning effort when the target does not advertise it", () => {
+    const settings = { model: "gpt-5.2", reasoningEffort: "high" };
+    const cleared = sanitizeComposerSettingsForOptions(settings, {
+      provider: "cursor",
+      capabilities: null,
+      models: [{ value: "gpt-5.2", label: "gpt-5.2" }],
+      reasoningEfforts: [],
+      reasoningConfigurable: false,
+      speeds: [],
+      skills: [],
+      behavior: {
+        collapseModelOptionsToLatest: true,
+        modelOptionsAuthoritative: false,
+        refreshModelOptionsAfterSettings: false,
+        prewarmDraftSession: false,
+        planModeExclusiveWithPermissionMode: false
+      },
+      loadedAtUnixMs: 1
+    });
+
+    expect(cleared.model).toBe("gpt-5.2");
+    expect(cleared.reasoningEffort).toBeNull();
   });
 });

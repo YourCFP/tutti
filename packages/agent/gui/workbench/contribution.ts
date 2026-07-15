@@ -2,7 +2,6 @@ import { createElement, type ReactNode } from "react";
 import {
   type WorkbenchContribution,
   type WorkbenchFrame,
-  type WorkbenchHostLaunchRequest,
   type WorkbenchHostNodeBodyContext
 } from "@tutti-os/workbench-surface";
 import {
@@ -31,7 +30,7 @@ import type {
   AgentGuiWorkbenchProvider,
   AgentGuiWorkbenchState
 } from "./types.ts";
-import type { AgentGUIAgent } from "../types.ts";
+import type { AgentGUIAgentDirectoryPort } from "../types.ts";
 
 export const AGENT_GUI_WORKBENCH_CONVERSATION_RAIL_TOGGLE_EVENT =
   "tutti:agent-gui-workbench-conversation-rail-toggle";
@@ -57,6 +56,7 @@ export interface AgentGuiWorkbenchNewConversationDetail {
 }
 
 export interface AgentGuiWorkbenchConversationIdentity {
+  agentTitle?: string | null;
   iconUrl?: string | null;
   title: string | null;
 }
@@ -78,22 +78,21 @@ export type AgentGuiWorkbenchContributionCopyOverrides =
   Partial<AgentGuiWorkbenchContributionCopy>;
 
 export interface AgentGuiWorkbenchRenderBodyHelpers {
+  agentDirectory: AgentGUIAgentDirectoryPort;
   nodeTypeId: string;
   onStateChange(state: AgentGuiWorkbenchState): void;
   provider: AgentGuiWorkbenchProvider;
 }
 
 export interface CreateAgentGuiWorkbenchContributionInput {
+  agentDirectory: AgentGUIAgentDirectoryPort;
   copy?: AgentGuiWorkbenchContributionCopyOverrides;
   defaultProvider?: AgentGuiWorkbenchProvider | null;
-  defaultAgentTargetId?: string | null;
   dockIconUrls?: Partial<Record<AgentGuiWorkbenchProvider, string>>;
   dockSectionId?: string;
   frame?: WorkbenchFrame;
   id?: string;
   providerAvailability?: AgentGuiWorkbenchProviderAvailability;
-  agents?: readonly AgentGUIAgent[] | null;
-  agentsLoading?: boolean;
   renderBody(
     context: WorkbenchHostNodeBodyContext<
       AgentGuiWorkbenchState | null,
@@ -121,15 +120,9 @@ export interface CreateAgentGuiWorkbenchContributionInput {
   resolveDockPopupIdentity?: (
     state: AgentGuiWorkbenchState | null
   ) => AgentGuiWorkbenchConversationIdentity | null;
-  resolveDockLaunchPayload?: (input: {
-    dockEntryId?: string | null;
-    payload: unknown;
-    reason: WorkbenchHostLaunchRequest["reason"];
-  }) => unknown | null | undefined;
   onOpenDetachedWindow?: (input: {
     agentSessionId?: string | null;
     agentTargetId?: string | null;
-    agents?: readonly AgentGUIAgent[];
     provider: AgentGuiWorkbenchProvider;
     workspaceId: string;
   }) => void | Promise<void>;
@@ -147,17 +140,15 @@ export function createAgentGuiWorkbenchContribution(
   const copy = resolveAgentGuiWorkbenchContributionCopy(input.copy);
   return {
     dockEntries: buildAgentGuiDockEntries({
+      agentDirectory: input.agentDirectory,
       defaultProvider: input.defaultProvider,
-      defaultAgentTargetId: input.defaultAgentTargetId,
       dockIconUrls: input.dockIconUrls,
       label: copy.nodeTitle,
       providerAvailability: input.providerAvailability,
-      agentsLoading: input.agentsLoading,
       renderPreview: input.renderPreview,
       resolveDockPopupIdentity: input.resolveDockPopupIdentity,
       resolveDockPopupTitle: input.resolveDockPopupTitle,
       sectionId: input.dockSectionId ?? "agents",
-      agents: input.agents,
       unifiedDockIconUrl: input.unifiedDockIconUrl
     }),
     externalStateSource: nodeStateSource.externalStateSource,
@@ -176,6 +167,7 @@ export function createAgentGuiWorkbenchContribution(
               unknown
             >,
             {
+              agentDirectory: input.agentDirectory,
               nodeTypeId: agentGuiWorkbenchTypeId,
               onStateChange: (state) => {
                 nodeStateSource.writeNodeState({
@@ -289,6 +281,7 @@ export function createAgentGuiWorkbenchContribution(
           };
 
           return createElement(AgentGuiWorkbenchHeader, {
+            agentTitle: conversationIdentity?.agentTitle,
             copy,
             conversationIconUrl,
             conversationIconFallbackUrl,
@@ -312,7 +305,6 @@ export function createAgentGuiWorkbenchContribution(
                   void input.onOpenDetachedWindow?.({
                     agentSessionId: workbenchState.lastActiveAgentSessionId,
                     agentTargetId: nodeState.agentTargetId,
-                    agents: input.agents ?? undefined,
                     provider,
                     workspaceId: input.workspaceId
                   });
@@ -364,6 +356,7 @@ export function createAgentGuiWorkbenchContribution(
             kind: "component",
             providePreview: (item) =>
               createAgentGuiWorkbenchPreviewContent({
+                agentDirectory: input.agentDirectory,
                 item,
                 renderPreview: input.renderMinimizedPreview,
                 resolveDockPopupTitle: input.resolveDockPopupTitle
@@ -379,10 +372,12 @@ export function createAgentGuiWorkbenchContribution(
       }
 
       const launchPayload = resolveAgentGuiWorkbenchLaunchPayload(request, {
-        resolveDockLaunchPayload: input.resolveDockLaunchPayload
+        agentDirectory: input.agentDirectory,
+        defaultProvider: input.defaultProvider,
+        providerAvailability: input.providerAvailability
       });
       if (
-        input.agents != null &&
+        !hasAgentSessionId(launchPayload) &&
         !providerTargetLaunchPayloadFromRequest(
           launchPayload,
           providerFromState(launchPayload) ?? "codex"
@@ -481,6 +476,17 @@ export function createAgentGuiWorkbenchContribution(
       };
     }
   };
+}
+
+function hasAgentSessionId(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return false;
+  }
+  return (
+    typeof (payload as { agentSessionId?: unknown }).agentSessionId ===
+      "string" &&
+    (payload as { agentSessionId: string }).agentSessionId.trim().length > 0
+  );
 }
 
 import {

@@ -13,29 +13,35 @@ import {
   standaloneAgentToolPanelDefaultWidthById
 } from "./standaloneAgentToolSidebarModel.ts";
 
-test("standalone agent tool sidebar opens, swaps, and closes one top-level panel at a time", () => {
+test("standalone agent tool sidebar opens, swaps, and hides one active tab at a time", () => {
   const initial = createStandaloneAgentToolSidebarState();
   const filesOpen = reduceStandaloneAgentToolSidebarState(initial, {
     panel: "files",
-    type: "toggle-panel"
+    tabId: "files:1",
+    type: "open-panel"
   });
   const appsOpen = reduceStandaloneAgentToolSidebarState(filesOpen, {
     panel: "apps",
-    type: "toggle-panel"
+    tabId: "apps:1",
+    type: "open-panel"
   });
   const appsClosed = reduceStandaloneAgentToolSidebarState(appsOpen, {
-    panel: "apps",
-    type: "toggle-panel"
+    type: "close"
   });
 
   assert.equal(filesOpen.activePanel, "files");
+  assert.equal(filesOpen.activeTabId, "files:1");
   assert.equal(appsOpen.activePanel, "apps");
   assert.equal(appsClosed.activePanel, null);
-  assert.deepEqual(appsClosed.mountedPanels, ["files", "apps"]);
+  assert.equal(appsClosed.activeTabId, null);
+  assert.deepEqual(appsClosed.mountedTabs, [
+    { id: "files:1", panel: "files" },
+    { id: "apps:1", panel: "apps" }
+  ]);
 });
 
 test("standalone agent right-sidebar panels are mutually exclusive for every switch", () => {
-  const panels = ["files", "browser", "apps", "messages"] as const;
+  const panels = ["files", "browser", "apps", "tasks", "messages"] as const;
 
   for (const previousPanel of panels) {
     for (const nextPanel of panels) {
@@ -44,20 +50,21 @@ test("standalone agent right-sidebar panels are mutually exclusive for every swi
       }
       const previousOpen = reduceStandaloneAgentToolSidebarState(
         createStandaloneAgentToolSidebarState(),
-        previousPanel === "browser"
-          ? { panel: previousPanel, type: "select-tool" }
-          : { panel: previousPanel, type: "toggle-panel" }
+        {
+          panel: previousPanel,
+          tabId: `${previousPanel}:1`,
+          type: "open-panel"
+        }
       );
-      const nextOpen = reduceStandaloneAgentToolSidebarState(
-        previousOpen,
-        nextPanel === "browser"
-          ? { panel: nextPanel, type: "select-tool" }
-          : { panel: nextPanel, type: "toggle-panel" }
-      );
+      const nextOpen = reduceStandaloneAgentToolSidebarState(previousOpen, {
+        panel: nextPanel,
+        tabId: `${nextPanel}:1`,
+        type: "open-panel"
+      });
 
       assert.equal(nextOpen.activePanel, nextPanel);
       assert.equal(
-        nextOpen.mountedPanels.filter((panel) => panel === nextPanel).length,
+        nextOpen.mountedTabs.filter((tab) => tab.panel === nextPanel).length,
         1
       );
     }
@@ -67,132 +74,97 @@ test("standalone agent right-sidebar panels are mutually exclusive for every swi
 test("standalone agent tool sidebar opens a requested panel without toggling it closed", () => {
   const filesOpen = reduceStandaloneAgentToolSidebarState(
     createStandaloneAgentToolSidebarState(),
-    { panel: "files", type: "open-panel" }
+    { panel: "files", tabId: "files:1", type: "open-panel" }
   );
   const filesRequestedAgain = reduceStandaloneAgentToolSidebarState(filesOpen, {
     panel: "files",
+    tabId: "files:2",
     type: "open-panel"
   });
   const appsOpen = reduceStandaloneAgentToolSidebarState(filesRequestedAgain, {
     panel: "apps",
+    tabId: "apps:1",
     type: "open-panel"
   });
 
   assert.equal(filesRequestedAgain.activePanel, "files");
-  assert.deepEqual(filesRequestedAgain.mountedPanels, ["files"]);
+  assert.equal(filesRequestedAgain.activeTabId, "files:1");
+  assert.deepEqual(filesRequestedAgain.mountedTabs, [
+    { id: "files:1", panel: "files" }
+  ]);
   assert.equal(appsOpen.activePanel, "apps");
-  assert.deepEqual(appsOpen.mountedPanels, ["files", "apps"]);
-});
-
-test("standalone agent tool sidebar switches between mounted file and terminal tabs", () => {
-  const filesOpen = reduceStandaloneAgentToolSidebarState(
-    createStandaloneAgentToolSidebarState(),
-    { panel: "files", type: "open-panel" }
-  );
-  const terminalOpen = reduceStandaloneAgentToolSidebarState(filesOpen, {
-    panel: "terminal",
-    type: "open-panel"
-  });
-  const filesReopened = reduceStandaloneAgentToolSidebarState(terminalOpen, {
-    panel: "files",
-    type: "open-panel"
-  });
-
-  assert.equal(terminalOpen.activePanel, "terminal");
-  assert.equal(filesReopened.activePanel, "files");
-  assert.deepEqual(filesReopened.mountedPanels, ["files", "terminal"]);
-});
-
-test("standalone agent tool sidebar opens terminal in the right panel", () => {
-  const initial = createStandaloneAgentToolSidebarState();
-  const browserOpen = reduceStandaloneAgentToolSidebarState(initial, {
-    panel: "browser",
-    type: "select-tool"
-  });
-  const terminalOpen = reduceStandaloneAgentToolSidebarState(browserOpen, {
-    panel: "terminal",
-    type: "select-tool"
-  });
-  const filesOpen = reduceStandaloneAgentToolSidebarState(terminalOpen, {
-    panel: "files",
-    type: "toggle-panel"
-  });
-  const browserReopened = reduceStandaloneAgentToolSidebarState(filesOpen, {
-    panel: "browser",
-    type: "select-tool"
-  });
-  const browserClosed = reduceStandaloneAgentToolSidebarState(browserReopened, {
-    type: "close"
-  });
-
-  assert.deepEqual(browserOpen, {
-    activePanel: "browser",
-    mountedPanels: ["browser"],
-    terminalMounted: false,
-    terminalOpen: false
-  });
-  assert.deepEqual(terminalOpen, {
-    activePanel: "terminal",
-    mountedPanels: ["browser", "terminal"],
-    terminalMounted: true,
-    terminalOpen: true
-  });
-  assert.equal(browserReopened.activePanel, "browser");
-  assert.equal(browserReopened.terminalOpen, true);
-  assert.equal(browserClosed.activePanel, null);
-  assert.equal(browserClosed.terminalOpen, true);
-  assert.deepEqual(browserClosed.mountedPanels, [
-    "browser",
-    "terminal",
-    "files"
+  assert.deepEqual(appsOpen.mountedTabs, [
+    { id: "files:1", panel: "files" },
+    { id: "apps:1", panel: "apps" }
   ]);
 });
 
-test("standalone agent terminal remains mounted while right-sidebar panels switch", () => {
-  const panels = ["files", "browser", "apps", "messages"] as const;
-  let state = reduceStandaloneAgentToolSidebarState(
+test("standalone agent add menu creates another tab for an already mounted tool", () => {
+  const filesOpen = reduceStandaloneAgentToolSidebarState(
     createStandaloneAgentToolSidebarState(),
-    { panel: "terminal", type: "select-tool" }
+    { panel: "files", tabId: "files:1", type: "add-panel" }
+  );
+  const secondFilesOpen = reduceStandaloneAgentToolSidebarState(filesOpen, {
+    panel: "files",
+    tabId: "files:2",
+    type: "add-panel"
+  });
+
+  assert.equal(secondFilesOpen.activePanel, "files");
+  assert.equal(secondFilesOpen.activeTabId, "files:2");
+  assert.deepEqual(secondFilesOpen.mountedTabs, [
+    { id: "files:1", panel: "files" },
+    { id: "files:2", panel: "files" }
+  ]);
+});
+
+test("standalone agent tool sidebar activates and closes individual duplicate tabs", () => {
+  const firstFilesOpen = reduceStandaloneAgentToolSidebarState(
+    createStandaloneAgentToolSidebarState(),
+    { panel: "files", tabId: "files:1", type: "add-panel" }
+  );
+  const secondFilesOpen = reduceStandaloneAgentToolSidebarState(
+    firstFilesOpen,
+    { panel: "files", tabId: "files:2", type: "add-panel" }
+  );
+  const firstFilesActivated = reduceStandaloneAgentToolSidebarState(
+    secondFilesOpen,
+    { tabId: "files:1", type: "activate-tab" }
+  );
+  const firstFilesClosed = reduceStandaloneAgentToolSidebarState(
+    firstFilesActivated,
+    { tabId: "files:1", type: "close-tab" }
   );
 
-  for (const panel of panels) {
-    state = reduceStandaloneAgentToolSidebarState(
-      state,
-      panel === "browser"
-        ? { panel, type: "select-tool" }
-        : { panel, type: "toggle-panel" }
-    );
-    assert.equal(state.activePanel, panel);
-    assert.equal(state.terminalMounted, true);
-    assert.equal(state.terminalOpen, true);
-  }
+  assert.equal(firstFilesActivated.activeTabId, "files:1");
+  assert.equal(firstFilesClosed.activeTabId, "files:2");
+  assert.deepEqual(firstFilesClosed.mountedTabs, [
+    { id: "files:2", panel: "files" }
+  ]);
 });
 
 test("standalone agent tool sidebar reports browser and terminal as one active group", () => {
   assert.equal(
     isStandaloneAgentToolGroupActive({
       activePanel: "browser",
-      mountedPanels: [],
-      terminalMounted: false,
-      terminalOpen: false
+      activeTabId: "browser:1",
+      mountedTabs: [{ id: "browser:1", panel: "browser" }]
     }),
     true
   );
   assert.equal(
     isStandaloneAgentToolGroupActive({
       activePanel: "terminal",
-      mountedPanels: [],
-      terminalMounted: true,
-      terminalOpen: true
+      activeTabId: "terminal:1",
+      mountedTabs: [{ id: "terminal:1", panel: "terminal" }]
     }),
     true
   );
   assert.equal(
     isStandaloneAgentToolGroupActive({
       activePanel: "apps",
-      mountedPanels: [],
-      terminalMounted: true,
-      terminalOpen: false
+      activeTabId: "apps:1",
+      mountedTabs: [{ id: "apps:1", panel: "apps" }]
     }),
     false
   );
@@ -243,6 +215,19 @@ test("standalone agent messages open wide enough for message cards", () => {
       width: standaloneAgentToolPanelDefaultWidthById.messages
     }),
     440
+  );
+});
+
+test("standalone agent tasks open at the issue-manager workbench width", () => {
+  assert.equal(standaloneAgentToolPanelDefaultWidthById.tasks, 860);
+  assert.equal(
+    clampStandaloneAgentToolPanelWidth({
+      mainContentMinWidth: 332,
+      panel: "tasks",
+      viewportWidth: 1440,
+      width: standaloneAgentToolPanelDefaultWidthById.tasks
+    }),
+    860
   );
 });
 

@@ -83,6 +83,7 @@ type ComposerSkillOption struct {
 	Description string
 	PluginName  string
 	Path        string
+	Invocation  string
 }
 
 type ComposerCapabilityOption struct {
@@ -127,7 +128,12 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		if err != nil {
 			return ComposerOptions{}, err
 		}
-		provider = agentprovider.Normalize(launch.Provider)
+		// The Agent Target is the authority for an extension-owned provider
+		// identity. Preserve open provider ids (for example acp:gemini) after the
+		// target lookup has validated the launch binding; the closed built-in
+		// normalizer would otherwise erase them and reject target-scoped composer
+		// option requests before the runtime can start.
+		provider = agentprovider.NormalizeOpen(launch.Provider)
 		input.Provider = provider
 		input.AgentTargetID = agentTargetID
 		input.providerTargetRef = clonePayload(launch.ProviderTargetRef)
@@ -144,6 +150,11 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		ReasoningEffort:  strings.TrimSpace(input.Settings.ReasoningEffort),
 		Speed:            strings.TrimSpace(input.Settings.Speed),
 	})
+	if providerTargetRefKind(input.providerTargetRef) == "agent_extension" {
+		settings.Model = strings.TrimSpace(input.Settings.Model)
+		settings.PermissionModeID = strings.TrimSpace(input.Settings.PermissionModeID)
+		settings.PlanMode = input.Settings.PlanMode
+	}
 	effectiveSettings := resolveComposerEffectiveSettings(
 		ctx,
 		provider,
@@ -156,20 +167,28 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 	if composerProfileFor(provider).Behavior.ModelOptionsAuthoritative {
 		modelOptions = []ComposerConfigOptionValue{}
 	}
+	reasoningOptions := composerReasoningOptionValues(provider, effectiveSettings.ReasoningEffort, locale)
 	capabilities := composerProviderCapabilities(provider, s.computerUseAvailable())
 	runtimeContext := map[string]any{
 		"capabilities":     capabilities,
-		"configOptions":    composerConfigOptions(provider, effectiveSettings, modelOptions),
+		"configOptions":    composerConfigOptions(provider, effectiveSettings, modelOptions, reasoningOptions),
 		"model":            nullableString(effectiveSettings.Model),
 		"permissionModeId": nullableString(effectiveSettings.PermissionModeID),
 		"reasoningEffort":  nullableString(effectiveSettings.ReasoningEffort),
 		"speed":            nullableString(effectiveSettings.Speed),
 	}
+	if commands := s.composerCommandsFromRunningSession(
+		input.WorkspaceID,
+		provider,
+		agentTargetID,
+	); len(commands) > 0 {
+		runtimeContext["availableCommands"] = commands
+	}
 	slashCommandPolicy := composerSlashCommandPolicy(provider)
 	if agentTargetID != "" {
 		runtimeContext["agentTargetId"] = agentTargetID
 	}
-	skills := s.discoverComposerSkillOptions(provider, input.Cwd, nil)
+	skills := s.discoverComposerSkillOptionsForLaunch(ctx, provider, input.Cwd, nil, input.providerTargetRef)
 	capabilityCatalog := []ComposerCapabilityOption{}
 	capabilityErrors := []string(nil)
 	if composerOptionsIncludeCapabilityCatalog(input) {
@@ -183,7 +202,6 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 	if composerOptionsProviderUsesModelCatalog(provider) {
 		if catalogProjection, ok := composerModelOptionsFromCatalog(ctx, s.ModelCatalog, provider, effectiveSettings.Model); ok {
 			modelOptions = s.enrichModelCapabilityOptions(ctx, provider, catalogProjection.ModelOptions)
-			runtimeContext["configOptions"] = composerConfigOptions(provider, effectiveSettings, modelOptions)
 			runtimeContext["modelCatalogSource"] = catalogProjection.Source
 			if len(catalogProjection.ReasoningProfiles) > 0 {
 				runtimeContext["modelReasoningOptionsByModel"] = composerModelReasoningOptionsRuntimeContext(
@@ -192,6 +210,22 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 					catalogProjection.ReasoningProfiles,
 				)
 			}
+			if profile, advertised := catalogProjection.ReasoningProfiles[effectiveSettings.Model]; advertised {
+				effectiveSettings.ReasoningEffort = resolveAdvertisedReasoningEffort(
+					provider,
+					effectiveSettings.ReasoningEffort,
+					profile.DefaultReasoningEffort,
+					profile.ReasoningEfforts,
+				)
+				reasoningOptions = composerAdvertisedReasoningOptionValues(
+					provider,
+					effectiveSettings.ReasoningEffort,
+					locale,
+					profile.ReasoningEfforts,
+				)
+				runtimeContext["reasoningEffort"] = nullableString(effectiveSettings.ReasoningEffort)
+			}
+			runtimeContext["configOptions"] = composerConfigOptions(provider, effectiveSettings, modelOptions, reasoningOptions)
 		}
 	}
 	options := ComposerOptions{
@@ -199,7 +233,7 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		Capabilities:       capabilities,
 		ModelConfig:        composerModelConfig(provider, effectiveSettings.Model, modelOptions),
 		PermissionConfig:   permissionConfig,
-		ReasoningConfig:    composerReasoningConfig(provider, effectiveSettings.ReasoningEffort, locale),
+		ReasoningConfig:    composerReasoningConfigFromOptions(provider, effectiveSettings.ReasoningEffort, reasoningOptions),
 		SpeedConfig:        composerSpeedConfig(provider, effectiveSettings.Speed, locale),
 		EffectiveSettings:  effectiveSettings,
 		RuntimeContext:     runtimeContext,
@@ -208,7 +242,8 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		Behavior:           composerProfileFor(provider).Behavior,
 		SlashCommandPolicy: slashCommandPolicy,
 	}
-	if composerProfileFor(provider).LiveModelDiscovery {
+	if composerProfileFor(provider).LiveModelDiscovery ||
+		providerTargetRefKind(input.providerTargetRef) == "agent_extension" {
 		var err error
 		options, err = s.mergeLiveComposerModelsForComposerOptions(ctx, input, effectiveSettings, options)
 		if err != nil {
@@ -345,7 +380,12 @@ func composerSlashCommandPolicy(provider string) *providerregistry.SlashCommandP
 	}
 }
 
-func composerConfigOptions(provider string, settings ComposerSettings, modelOptions []ComposerConfigOptionValue) []map[string]any {
+func composerConfigOptions(
+	provider string,
+	settings ComposerSettings,
+	modelOptions []ComposerConfigOptionValue,
+	reasoningOptions []ComposerConfigOptionValue,
+) []map[string]any {
 	profile := composerProfileFor(provider)
 	if !profile.ModelSelection && !profile.ReasoningEffort && !profile.Speed {
 		return []map[string]any{}
@@ -365,12 +405,14 @@ func composerConfigOptions(provider string, settings ComposerSettings, modelOpti
 			"options":      composerConfigOptionValuesToRuntimeModelOptions(modelOptions),
 		})
 	}
-	if profile.ReasoningEffort {
-		options = append(options, map[string]any{
-			"currentValue": nullableString(settings.ReasoningEffort),
-			"id":           reasoningConfigOptionID(provider),
-			"options":      reasoningEffortOptions(provider, settings.ReasoningEffort),
-		})
+	if profile.ReasoningEffort && profile.ReasoningEffortOptions != providerregistry.ReasoningEffortOptionsStrictModelCatalog {
+		if len(reasoningOptions) > 0 {
+			options = append(options, map[string]any{
+				"currentValue": nullableString(settings.ReasoningEffort),
+				"id":           reasoningConfigOptionID(provider),
+				"options":      composerReasoningOptionValuesToRuntimeOptions(reasoningOptions),
+			})
+		}
 	}
 	if profile.Speed {
 		options = append(options, map[string]any{
@@ -421,6 +463,23 @@ func normalizeComposerSettingsForProvider(provider string, settings ComposerSett
 	return settings
 }
 
+// normalizeObservedComposerSettingsForProvider normalizes settings attached to
+// an already-established runtime or persisted session. Open provider identities
+// have already been authorized through their Agent Target at session creation,
+// so their provider-owned settings must not be clamped by the closed built-in
+// composer registry.
+func normalizeObservedComposerSettingsForProvider(provider string, settings ComposerSettings) ComposerSettings {
+	if agentprovider.Normalize(provider) != "" || agentprovider.NormalizeOpen(provider) == "" {
+		return normalizeComposerSettingsForProvider(provider, settings)
+	}
+	settings.Model = strings.TrimSpace(settings.Model)
+	settings.PermissionModeID = strings.TrimSpace(settings.PermissionModeID)
+	settings.ReasoningEffort = strings.TrimSpace(settings.ReasoningEffort)
+	settings.Speed = strings.TrimSpace(settings.Speed)
+	settings.ConversationDetailMode = normalizeComposerConversationDetailMode(settings.ConversationDetailMode)
+	return settings
+}
+
 func normalizeComposerConversationDetailMode(value string) string {
 	if strings.TrimSpace(value) == "" {
 		return ""
@@ -448,6 +507,13 @@ func clampComposerModelForProvider(provider string, model string) string {
 		return ""
 	}
 	return strings.TrimSpace(model)
+}
+
+func clampComposerModelForLaunch(provider string, providerTargetRef map[string]any, model string) string {
+	if providerTargetRefKind(providerTargetRef) == "agent_extension" {
+		return strings.TrimSpace(model)
+	}
+	return clampComposerModelForProvider(provider, model)
 }
 
 // clampComposerPlanModeForProvider forces plan mode off for providers whose
@@ -516,7 +582,10 @@ func normalizeComposerSettingsPointerForProvider(provider string, settings *Comp
 	if settings == nil {
 		return nil
 	}
-	normalized := normalizeComposerSettingsForProvider(provider, *settings)
+	normalized := normalizeObservedComposerSettingsForProvider(provider, *settings)
+	if composerProviderUsesModelReasoningCatalog(provider) {
+		normalized.ReasoningEffort = strings.TrimSpace(settings.ReasoningEffort)
+	}
 	return &normalized
 }
 
@@ -592,9 +661,12 @@ func composerModelConfig(provider string, selected string, options []ComposerCon
 }
 
 type composerModelCatalogProjection struct {
-	ModelOptions      []ComposerConfigOptionValue
-	ReasoningProfiles map[string]composerModelReasoningProfile
-	Source            string
+	ModelOptions               []ComposerConfigOptionValue
+	ReasoningProfiles          map[string]composerModelReasoningProfile
+	DefaultReasoningEffort     string
+	ReasoningEfforts           []AgentModelReasoningEffortOption
+	ReasoningEffortsAdvertised bool
+	Source                     string
 }
 
 func composerModelOptionsFromCatalog(ctx context.Context, catalog AgentModelCatalog, provider string, selectedModel string) (composerModelCatalogProjection, bool) {
@@ -647,11 +719,17 @@ func composerModelOptionsFromCatalog(ctx context.Context, catalog AgentModelCata
 	if selected != "" && !containsModelOption(options, selected) {
 		options = append(options, ComposerConfigOptionValue{ID: selected, Label: selected, Value: selected})
 	}
-	return composerModelCatalogProjection{
+	projection := composerModelCatalogProjection{
 		ModelOptions:      options,
 		ReasoningProfiles: reasoningProfiles,
 		Source:            strings.TrimSpace(result.Source),
-	}, true
+	}
+	if profile, ok := reasoningProfiles[selected]; ok {
+		projection.DefaultReasoningEffort = profile.DefaultReasoningEffort
+		projection.ReasoningEfforts = append([]AgentModelReasoningEffortOption(nil), profile.ReasoningEfforts...)
+		projection.ReasoningEffortsAdvertised = true
+	}
+	return projection, true
 }
 
 func containsModelOption(options []ComposerConfigOptionValue, value string) bool {

@@ -5,7 +5,6 @@ import (
 
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	"github.com/tutti-os/tutti/services/tuttid/biz/agentprovider"
-	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
 )
 
 type composerModelReasoningProfile struct {
@@ -58,22 +57,17 @@ func composerReasoningConfigFromOptions(
 	options []ComposerConfigOptionValue,
 ) ComposerConfigOption {
 	selected = strings.TrimSpace(selected)
+	profile := composerProfileFor(provider)
+	configurable := profile.ReasoningEffort
+	if profile.ReasoningEffortOptions == providerregistry.ReasoningEffortOptionsStrictModelCatalog {
+		configurable = len(options) > 0
+	}
 	return ComposerConfigOption{
-		Configurable: composerProfileFor(provider).ReasoningEffort,
+		Configurable: configurable,
 		CurrentValue: selected,
 		DefaultValue: selected,
 		Options:      cloneComposerConfigOptionValues(options),
 	}
-}
-
-func reasoningEffortOptions(provider string, selected string) []map[string]string {
-	return composerReasoningOptionValuesToRuntimeOptions(
-		composerReasoningOptionValues(
-			provider,
-			selected,
-			preferencesbiz.DefaultDesktopLocale,
-		),
-	)
 }
 
 func reasoningEffortValuesForProvider(provider string) []string {
@@ -85,6 +79,15 @@ func reasoningEffortValuesForProvider(provider string) []string {
 		return nil
 	}
 	return append([]string(nil), profile.ReasoningEffortValues...)
+}
+
+// composerProviderUsesModelReasoningCatalog identifies providers whose model
+// catalog is authoritative for reasoning values, including strict catalogs
+// that intentionally expose no provider-level fallback options.
+func composerProviderUsesModelReasoningCatalog(provider string) bool {
+	kind := composerProfileFor(provider).ReasoningEffortOptions
+	return kind == providerregistry.ReasoningEffortOptionsModelCatalog ||
+		kind == providerregistry.ReasoningEffortOptionsStrictModelCatalog
 }
 
 func composerReasoningOptionValues(provider string, selected string, locale string) []ComposerConfigOptionValue {
@@ -197,7 +200,8 @@ func normalizeReasoningEffortForProvider(provider string, value string) string {
 	// Model-catalog values are model-specific and authoritative. A generic
 	// provider-level normalizer must not rewrite values such as "minimal" or
 	// "none" that the selected model explicitly advertises.
-	if profile.ReasoningEffortOptions == providerregistry.ReasoningEffortOptionsModelCatalog {
+	if profile.ReasoningEffortOptions == providerregistry.ReasoningEffortOptionsModelCatalog ||
+		profile.ReasoningEffortOptions == providerregistry.ReasoningEffortOptionsStrictModelCatalog {
 		return normalized
 	}
 	if (normalized == "minimal" || normalized == "none") &&

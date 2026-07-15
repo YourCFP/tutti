@@ -33,6 +33,7 @@ export function useAgentGUIViewModel(
   const detail = useMemo(
     () => candidate.detail,
     [
+      candidate.detail.availability,
       candidate.detail.avoidGroupingEdits,
       candidate.detail.backgroundAgentCount,
       candidate.detail.conversation,
@@ -63,6 +64,7 @@ export function useAgentGUIViewModel(
       candidate.composer.isInterrupting,
       candidate.composer.isSubmitting,
       candidate.composer.promptImagesSupported,
+      candidate.composer.queueStatus,
       candidate.composer.queuedPrompts
     ]
   );

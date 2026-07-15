@@ -1,6 +1,7 @@
 package agentruntime
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -84,6 +85,7 @@ type ResumeInput struct {
 	Status            string
 	Visible           *bool
 	RuntimeContext    map[string]any
+	ProviderTargetRef map[string]any
 	PermissionModeID  string
 	Settings          *SessionSettings
 	CreatedAtUnixMS   int64
@@ -118,6 +120,7 @@ type CancelInput struct {
 type PermissionOptionInput struct {
 	RoomID         string
 	AgentSessionID string
+	TurnID         string
 	RequestID      string
 	OptionID       string
 }
@@ -125,10 +128,36 @@ type PermissionOptionInput struct {
 type SubmitInteractiveInput struct {
 	RoomID         string
 	AgentSessionID string
+	TurnID         string
 	RequestID      string
 	Action         string
 	OptionID       string
 	Payload        map[string]any
+}
+
+type InteractiveDisposition string
+
+const (
+	InteractiveDispositionPending     InteractiveDisposition = "pending"
+	InteractiveDispositionResolving   InteractiveDisposition = "resolving"
+	InteractiveDispositionAnswered    InteractiveDisposition = "answered"
+	InteractiveDispositionSuperseded  InteractiveDisposition = "superseded"
+	InteractiveDispositionInterrupted InteractiveDisposition = "interrupted"
+	InteractiveDispositionUnknown     InteractiveDisposition = "unknown"
+)
+
+type interactiveRequestKey struct {
+	agentSessionID string
+	turnID         string
+	requestID      string
+}
+
+func newInteractiveRequestKey(agentSessionID string, turnID string, requestID string) interactiveRequestKey {
+	return interactiveRequestKey{
+		agentSessionID: strings.TrimSpace(agentSessionID),
+		turnID:         strings.TrimSpace(turnID),
+		requestID:      strings.TrimSpace(requestID),
+	}
 }
 
 type UpdateSettingsInput struct {
@@ -311,11 +340,12 @@ type CancelResult struct {
 }
 
 type SubmitInteractiveResult struct {
-	AgentSessionID string  `json:"agentSessionId"`
-	RequestID      string  `json:"requestId"`
-	Accepted       bool    `json:"accepted"`
-	OptionID       string  `json:"optionId,omitempty"`
-	Events         []Event `json:"events"`
+	AgentSessionID string                 `json:"agentSessionId"`
+	RequestID      string                 `json:"requestId"`
+	Accepted       bool                   `json:"accepted"`
+	OptionID       string                 `json:"optionId,omitempty"`
+	Disposition    InteractiveDisposition `json:"-"`
+	Events         []Event                `json:"events"`
 }
 
 type UpdateSettingsResult struct {

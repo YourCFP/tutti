@@ -37,6 +37,51 @@ Approval gates, plan exits, parent/child event attribution, background agents, a
   [.github/workflows/external-pr-review-gate-review-signal.yml](../../../.github/workflows/external-pr-review-gate-review-signal.yml)
   [.github/workflows/external-pr-review-gate-review-refresh.yml](../../../.github/workflows/external-pr-review-gate-review-refresh.yml)
 
+### Cursor approval card shows only title and options, no command/path detail
+
+- Symptom:
+  A Cursor provider approval prompt renders its title (for example "Cursor
+  requests your authorization") and the allow/reject options, but the detail
+  row that should show the command, file path, or query is empty — unlike the
+  same prompt for Codex or Claude Code.
+- Quick checks:
+  Speak ACP directly to a local `cursor-agent acp` process (initialize,
+  `session/new`, `session/set_mode` to `agent`, then a prompt that requires a
+  shell/file tool) and inspect the raw `session/request_permission` payload.
+  Cursor's permission `toolCall` repeats only `toolCallId`/`title`/`kind`/
+  `status`/`content` for a call that already streamed via an earlier
+  `session/update` `tool_call`; it does not repeat `rawInput`. Compare against
+  the preceding `tool_call` notification for the same `toolCallId`, which does
+  carry `rawInput.command`.
+- Root cause:
+  Cursor omits `rawInput` on `session/request_permission`, so approval detail
+  must be backfilled from an earlier same-id `tool_call`. A later
+  `tool_call_update` that repeats only `title`/`kind`/`status`/`content` used
+  to replace the pending snapshot wholesale and wipe `input.command`;
+  `KnownToolCallInput` then returned empty, the durable Interaction stored no
+  structured detail, and AgentGUI (which only renders command/path/query, not
+  `toolCall.title`) showed a blank approval card.
+- Fix:
+  Keep per-turn tool-call snapshots in `acpTurnNormalizer`, merge later empty
+  or partial updates into the prior `input` instead of replacing it, expose the
+  preserved input via `KnownToolCallInput`, and let
+  `normalizedApprovalDisplayInput` fill missing `command`/`file_path`/`query`
+  fields from that known input. Other ACP-style interactive paths (Codex
+  app-server, Claude SDK) keep passing `nil` for this fallback.
+- Validation:
+  `cd packages/agent/daemon && go test ./runtime/... -run
+'TestCursorPermissionRequestFallsBackToKnownToolCallInput|TestCursorPermissionRequestKeepsKnownInputAfterEmptyToolCallUpdate'`.
+  For a live check, restart tuttidi, trigger a Cursor ask-for-approval shell
+  command, and confirm `~/.tutti-dev/logs/tuttid.log` shows
+  `agent_session.acp.permission_approval.projected` with
+  `has_display_detail=true` and `known_input_has_command=true`. An empty update
+  that would previously wipe detail now logs
+  `agent_session.acp.pending_tool_call.preserved_detail`.
+- References:
+  [acp_turn_normalizer.go](../../../packages/agent/daemon/runtime/acp_turn_normalizer.go)
+  [interactive_projection.go](../../../packages/agent/daemon/runtime/interactive_projection.go)
+  [standard_acp_events.go](../../../packages/agent/daemon/runtime/standard_acp_events.go)
+
 ### Agent approval controls submit stale permission requests after restart
 
 - Symptom:
@@ -217,14 +262,21 @@ Approval gates, plan exits, parent/child event attribution, background agents, a
   resumes parent work after a background agent, the sidecar must emit
   `turn_started` for the synthetic continuation and the Go adapter must map it
   to `EventTurnStarted`; keep the background-agent wait banner separate from
-  this turn lifecycle. Top-level assistant text and thinking must be keyed by
-  SDK message/content-block segments rather than by turn id. Treat the live
-  `content_block.index` as a stream locator only, not as durable message
-  identity. Consolidated assistant messages are fallback/tail compensation only,
-  because their content array indexes can differ from live `stream_event` block
-  indexes when thinking or tools are present. Projection code that merges
-  repeated tool-message updates should remove stale `error` data when the
-  canonical status becomes completed.
+  this turn lifecycle. The adapter must also forward that synthetic turn's
+  `turn_completed` / `turn_failed` / `turn_canceled` through the same session
+  event sink. Synthetic turns never register an Exec waiter; treating every
+  waiter-less terminal as an untracked orphan drops the close event, leaves
+  durable `activeTurn.phase=running`, and keeps AgentGUI on
+  "正在规划下一步" after the final assistant message is already complete. Only
+  terminals for turns that never published `EventTurnStarted` on the session
+  sink should stay dropped (true queued orphans). Top-level assistant text and
+  thinking must be keyed by SDK message/content-block segments rather than by
+  turn id. Treat the live `content_block.index` as a stream locator only, not
+  as durable message identity. Consolidated assistant messages are
+  fallback/tail compensation only, because their content array indexes can
+  differ from live `stream_event` block indexes when thinking or tools are
+  present. Projection code that merges repeated tool-message updates should
+  remove stale `error` data when the canonical status becomes completed.
 - Validation:
   Add sidecar normalizer coverage for `parentToolUseId`/task steps and adapter
   coverage that terminal-after events still reach DB/UI through the session
@@ -233,8 +285,10 @@ Approval gates, plan exits, parent/child event attribution, background agents, a
   copy clears when the background agent finishes. Add service coverage that
   runtime `backgroundAgents.count > 0` suppresses stale resume reconciliation
   even when there is no active parent turn. Add sidecar/adapter coverage for
-  synthetic continuation `turn_started`, plus projection coverage that a
-  completed tool update drops an earlier failed `error` payload. For alias
+  synthetic continuation `turn_started` plus the matching waiter-less
+  `turn_completed` closing through the session sink, and projection coverage
+  that a completed tool update drops an earlier failed `error` payload. Keep
+  coverage that never-started queued orphan terminals still drop. For alias
   binding, keep sidecar coverage that an unknown `task_id` racing ahead of its
   own launch does not bind to another running task, and Go adapter coverage
   that an alias conflict with a different recorded parent tool call keeps two

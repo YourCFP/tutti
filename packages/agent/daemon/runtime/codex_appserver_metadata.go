@@ -192,32 +192,6 @@ func (a *CodexAppServerAdapter) fetchCollaborationModeMasks(
 	return planModeMask, defaultModeMask
 }
 
-// codexAppServerDefaultModel resolves the default model id from model/list,
-// used to satisfy the required CollaborationMode.settings.model field.
-func codexAppServerDefaultModel(models []map[string]any) string {
-	for _, model := range models {
-		if isDefault, _ := model["isDefault"].(bool); isDefault {
-			if id := strings.TrimSpace(firstNonEmpty(asString(model["id"]), asString(model["model"]))); id != "" {
-				return id
-			}
-		}
-	}
-	for _, model := range models {
-		if id := strings.TrimSpace(firstNonEmpty(asString(model["id"]), asString(model["model"]))); id != "" {
-			return id
-		}
-	}
-	return ""
-}
-
-func codexAppServerNeedsSynchronousModels(session Session) bool {
-	return strings.TrimSpace(session.SettingsValue().Model) == ""
-}
-
-func codexAppServerSessionDefaultModel(session Session, models []map[string]any) string {
-	return firstNonEmpty(strings.TrimSpace(session.SettingsValue().Model), codexAppServerDefaultModel(models))
-}
-
 func codexAppServerTraceThreadStartParams(session Session, params map[string]any, resume bool) map[string]any {
 	settings := session.SettingsValue()
 	fields := map[string]any{
@@ -444,27 +418,6 @@ func defaultStartupModelRetryBackoffs() []time.Duration {
 		backoffs = append(backoffs, 30*time.Second)
 	}
 	return backoffs
-}
-
-func (a *CodexAppServerAdapter) applyStartupModels(
-	agentSessionID string,
-	session Session,
-	threadResult json.RawMessage,
-	models []map[string]any,
-) bool {
-	if len(models) == 0 {
-		return false
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	appSession := a.sessions[strings.TrimSpace(agentSessionID)]
-	if appSession == nil {
-		return false
-	}
-	applyACPConfigOptionDescriptors(&appSession.acpLiveState, codexAppServerConfigOptionDescriptors(models, session, threadResult))
-	appSession.defaultModel = codexAppServerSessionDefaultModel(session, models)
-	appSession.startupModelsReady = true
-	return true
 }
 
 // nextTurnLifecycleSeq allocates the next per-session lifecycle snapshot

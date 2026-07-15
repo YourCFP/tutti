@@ -13,7 +13,7 @@ import {
 } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { Button, cn, StatusDot } from "@tutti-os/ui-system";
-import { getActiveUiLanguage, useTranslation } from "../i18n/index";
+import { useTranslation } from "../i18n/index";
 import { AgentInteractivePromptSurface } from "../shared/agentConversation/components/AgentInteractivePromptSurface";
 import { AgentMessageMarkdown } from "../shared/AgentMessageMarkdown";
 import { AgentVerticalScrollArea } from "../shared/AgentVerticalScrollArea";
@@ -23,7 +23,6 @@ import {
   isWaitingMessageCenterItem,
   type WorkspaceAgentMessageCenterItem
 } from "./workspaceAgentMessageCenterModel";
-import { formatAgentGuiConversationPlainTitle } from "../workbench/sessionTitle";
 import {
   LazyMessageCenterTooltip,
   MessageCenterIdentityAvatarMark,
@@ -101,9 +100,7 @@ export const WorkspaceAgentMessageCenterCard = memo(
     "use memo";
     const { t } = useTranslation();
     const prompt = item.pendingPrompt;
-    const displayTitle = formatAgentGuiConversationPlainTitle(item, {
-      language: getActiveUiLanguage()
-    });
+    const displayTitle = item.title.trim();
     const summary = messageCenterVisibleSummary(item);
     const displayStatus = statusClass(item);
     const statusTone = messageCenterStatusTone(item);
@@ -336,6 +333,7 @@ export const WorkspaceAgentMessageCenterStack = memo(
               <div className="flex min-w-0 items-center justify-between gap-2 px-0.5 pb-1.5">
                 <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold leading-4 text-[var(--text-tertiary)]">
                   <MessageCenterIdentityAvatarMark
+                    agentAvatarUrl={items[0]?.agentAvatarUrl}
                     identity={items[0]?.identity ?? null}
                     provider={items[0]?.provider ?? ""}
                     userId={items[0]?.userId ?? null}
@@ -521,6 +519,7 @@ function MessageCenterStackSummary({
         <span className="flex min-w-0 items-center justify-between gap-2.5">
           <span className="flex min-w-0 items-center gap-2">
             <MessageCenterIdentityAvatarMark
+              agentAvatarUrl={firstItem.agentAvatarUrl}
               identity={firstItem.identity}
               provider={firstItem.provider}
               userId={firstItem.userId}
@@ -588,20 +587,6 @@ export function MessageCenterSummary({
     summaryRef,
     shouldRenderRichSummary
   );
-  const handleLinkAction = useCallback(
-    (action: WorkspaceLinkAction): void => {
-      const agentTargetId = item.agentTargetId?.trim() || null;
-      onLinkAction?.(
-        action.type === "open-agent-session" &&
-          !action.agentTargetId &&
-          agentTargetId
-          ? { ...action, agentTargetId }
-          : action
-      );
-    },
-    [item.agentTargetId, onLinkAction]
-  );
-
   useEffect(() => {
     if (!shouldMeasureOverflow) {
       setIsOverflowing(false);
@@ -644,7 +629,7 @@ export function MessageCenterSummary({
         <AgentMessageMarkdown
           content={summary}
           className="[&_a]:text-[var(--tutti-purple)] [&_code]:text-[var(--text-secondary)] [&_hr]:border-t-[color-mix(in_srgb,var(--text-primary)_14%,transparent)] [&_ol]:!bg-transparent [&_p]:m-0 [&_th]:bg-[color-mix(in_srgb,var(--background-panel)_94%,var(--text-primary))] [&_th]:text-[var(--text-primary)] [&_ul]:!bg-transparent text-[var(--text-primary)]"
-          onLinkAction={handleLinkAction}
+          onLinkAction={onLinkAction}
           workspaceLinkContext={{
             workspaceRoot: item.cwd || null,
             basePath: item.cwd,

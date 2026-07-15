@@ -86,6 +86,42 @@ func TestCreateSessionInputFromPersistedPreservesBrowserUse(t *testing.T) {
 	}
 }
 
+func TestCreateSessionInputFromPersistedPreservesCatalogReasoningEffort(t *testing.T) {
+	input := createSessionInputFromPersisted(PersistedSession{
+		ID:       "session-1",
+		Provider: "codex",
+		Settings: ComposerSettings{
+			Model:           "gpt-catalog",
+			ReasoningEffort: "minimal",
+		},
+	})
+	if input.ReasoningEffort == nil || *input.ReasoningEffort != "minimal" {
+		t.Fatalf("ReasoningEffort = %#v, want minimal", input.ReasoningEffort)
+	}
+}
+
+func TestCreateSessionInputFromPersistedNormalizesLegacyReasoningEffort(t *testing.T) {
+	input := createSessionInputFromPersisted(PersistedSession{
+		ID:       "session-1",
+		Provider: "claude-code",
+		Settings: ComposerSettings{ReasoningEffort: "minimal"},
+	})
+	if input.ReasoningEffort == nil || *input.ReasoningEffort != "high" {
+		t.Fatalf("ReasoningEffort = %#v, want high", input.ReasoningEffort)
+	}
+}
+
+func TestCreateSessionInputFromPersistedPreservesOpenCodeModelReasoningEffort(t *testing.T) {
+	input := createSessionInputFromPersisted(PersistedSession{
+		ID:       "session-1",
+		Provider: "opencode",
+		Settings: ComposerSettings{ReasoningEffort: "none"},
+	})
+	if input.ReasoningEffort == nil || *input.ReasoningEffort != "none" {
+		t.Fatalf("ReasoningEffort = %#v, want none", input.ReasoningEffort)
+	}
+}
+
 func TestCreateSessionInputFromPersistedCarriesExternalRolloutSourcePath(t *testing.T) {
 	input := createSessionInputFromPersisted(PersistedSession{
 		ID:       "session-1",

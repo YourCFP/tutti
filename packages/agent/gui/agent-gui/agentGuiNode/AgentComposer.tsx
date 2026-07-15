@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type HTMLAttributes } from "react";
 import type {
+  AgentComposerDraft,
   AgentComposerDraftFile,
   AgentComposerDraftImage,
   AgentComposerDraftLargeText
@@ -34,6 +35,15 @@ import {
   EMPTY_PROVIDER_SKILLS
 } from "./composer/AgentComposerChrome";
 import type { AgentComposerProps } from "./composer/AgentComposer.types";
+import {
+  agentComposerDraftAttachmentProjection,
+  agentComposerDraftFiles,
+  agentComposerDraftImages,
+  agentComposerDraftLargeTexts,
+  agentComposerDraftHasContent,
+  agentComposerDraftPrompt
+} from "./model/agentComposerDraft";
+import type { AgentGUIComposerContentType } from "./engagement/agentGUIEngagement.types";
 
 export { formatSlashStatusTokenCount };
 
@@ -88,6 +98,8 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     provider,
     slashStatus = null,
     draftContent,
+    engagement,
+    draftScopeKey = "current",
     availableCommands,
     hasCompactableContext = true,
     compactSupported = null,
@@ -130,20 +142,23 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     onPromptImagesUnsupported,
     onSubmitInteractivePrompt,
     onCapabilitySettingsRequest,
+    onSlashStatusOpen,
     onLinkAction,
     onRequestWorkspaceReferences = null,
     resolveDroppedFileReferences = null,
     onRequestGitBranches = null,
     contextMentionProviders = EMPTY_CONTEXT_MENTION_PROVIDERS
   } = props;
-  const draftPrompt = draftContent.prompt;
+  const draftPrompt = agentComposerDraftPrompt(draftContent);
   const goalDraftObjective = canGoalControl
     ? goalDraftObjectiveFromPrompt(draftPrompt)
     : null;
   const isGoalModeActive = goalDraftObjective !== null;
-  const draftImages = draftContent.images;
-  const draftFiles = draftContent.files ?? [];
-  const draftLargeTexts = draftContent.largeTexts ?? [];
+  const {
+    images: draftImages,
+    files: draftFiles,
+    largeTexts: draftLargeTexts
+  } = agentComposerDraftAttachmentProjection(draftContent);
   const agentActivityRuntime = useOptionalAgentActivityRuntime();
   const agentHostApi = useOptionalAgentHostApi();
   const getReferenceForFile = agentHostApi?.workspace.getReferenceForFile;
@@ -155,6 +170,17 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
   const promptFilesSupported = Boolean(
     resolveDroppedFileReferences && promptFileUploadSupported
   );
+  const pastedTextStagingSupported = Boolean(
+    canUploadAttachment && agentActivityRuntime?.stagePastedText
+  );
+  const reportContentEntered = (
+    contentType: AgentGUIComposerContentType
+  ): void => {
+    engagement?.contentEntered({
+      contentType,
+      hadPrefill: agentComposerDraftHasContent(draftContent)
+    });
+  };
   const [isPaletteOpen, setIsPaletteOpen] = useState(true);
   const [isReviewPickerOpen, setIsReviewPickerOpen] = useState(false);
   const [isHandoffIconPlaying, setIsHandoffIconPlaying] = useState(false);
@@ -202,6 +228,10 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
   const draftFilesRef = useRef<AgentComposerDraftFile[]>(draftFiles);
   const draftLargeTextsRef =
     useRef<AgentComposerDraftLargeText[]>(draftLargeTexts);
+  const draftByScopeKeyRef = useRef<Record<string, AgentComposerDraft>>({
+    [draftScopeKey]: draftContent
+  });
+  draftByScopeKeyRef.current[draftScopeKey] = draftContent;
   const promptTipRef = useRef<HTMLSpanElement | null>(null);
   const mentionControllerRef = useRef<AgentMentionSearchController | null>(
     null
@@ -334,23 +364,19 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     if (isExternalDraftReplacement && draftPrompt) {
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          editorHandleRef.current?.focusAtStart();
+          // Prefer end so continued typing (and shared home drafts after a
+          // project switch) keep the caret after the text, not at the start.
+          editorHandleRef.current?.focusAtEnd();
         });
       });
     }
   }, [draftPrompt, goalDraftObjective]);
 
   useEffect(() => {
-    draftImagesRef.current = draftImages;
-  }, [draftImages]);
-
-  useEffect(() => {
-    draftFilesRef.current = draftFiles;
-  }, [draftFiles]);
-
-  useEffect(() => {
-    draftLargeTextsRef.current = draftLargeTexts;
-  }, [draftLargeTexts]);
+    draftImagesRef.current = agentComposerDraftImages(draftContent);
+    draftFilesRef.current = agentComposerDraftFiles(draftContent);
+    draftLargeTextsRef.current = agentComposerDraftLargeTexts(draftContent);
+  }, [draftContent]);
 
   useEffect(() => {
     if (
@@ -378,11 +404,13 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     onSubmit,
     onSubmitGuidance,
     onCapabilitySettingsRequest,
+    onSlashStatusOpen,
     onPromptImagesUnsupported,
     onRequestGitBranches,
     draftContent,
     selectedProjectPath,
     slashStatusAgentSessionId,
+    isSlashStatusPanelOpen,
     slashCommandPolicy,
     skillQueryMatch,
     promptBeforeSelection,
@@ -447,11 +475,14 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     workspaceId,
     workspacePath,
     draftContent,
+    draftScopeKey,
+    draftByScopeKeyRef,
     goalDraftObjective,
     isGoalModeActive,
     promptImagesSupported: canUploadAttachment && promptImagesSupported,
     promptFileUploadSupported,
     promptFilesSupported,
+    pastedTextStagingSupported,
     editorHandleRef,
     draftPromptRef,
     draftImagesRef,
@@ -462,6 +493,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     clearActiveFileMentionTrigger,
     onDraftContentChange,
     onPromptImagesUnsupported,
+    onContentEntered: reportContentEntered,
     onRequestWorkspaceReferences,
     resolveDroppedFileReferences,
     onLinkAction
@@ -487,6 +519,13 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     defaultHandoffMenuLabel: labels.handoffConversationMenu
   });
   const { inputDisabled, isHeroLayout } = providerState;
+  const restoreComposerCaretAfterProjectMenu = (event: Event): void => {
+    event.preventDefault();
+    if (inputDisabled) {
+      return;
+    }
+    editorHandleRef.current?.focusAtEnd();
+  };
   const focusAndDrop = useComposerFocusAndDrop({
     composerControlsHardDisabled,
     inputDisabled,
@@ -583,6 +622,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
       mentionControllerRef={mentionControllerRef}
       getReferenceForFile={getReferenceForFile}
       promptFilesSupported={promptFilesSupported}
+      onDismissProjectMenuAutoFocus={restoreComposerCaretAfterProjectMenu}
       paletteDraftPrompt={paletteDraftPrompt}
       showFileMentionPalette={showFileMentionPalette}
       showSlashPalette={showSlashPalette}

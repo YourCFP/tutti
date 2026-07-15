@@ -103,6 +103,10 @@ func (s *SQLiteStore) GetSession(ctx context.Context, workspaceID string, agentS
 	return s.agentStore().GetSession(ctx, workspaceID, agentSessionID)
 }
 
+func (s *SQLiteStore) SessionDeleted(ctx context.Context, workspaceID string, agentSessionID string) (bool, error) {
+	return s.agentStore().SessionDeleted(ctx, workspaceID, agentSessionID)
+}
+
 func (s *SQLiteStore) ListSessions(ctx context.Context, workspaceID string) ([]agentactivitybiz.Session, bool, error) {
 	return s.agentStore().ListSessions(ctx, workspaceID)
 }
@@ -111,8 +115,8 @@ func (s *SQLiteStore) ListSessionSection(ctx context.Context, input agentactivit
 	return s.agentStore().ListSessionSection(ctx, input)
 }
 
-func (s *SQLiteStore) CountSessionSection(ctx context.Context, input agentactivitybiz.CountSessionSectionInput) (agentactivitybiz.SessionSectionCount, bool, error) {
-	return s.agentStore().CountSessionSection(ctx, input)
+func (s *SQLiteStore) ListSessionSectionDeletionCandidates(ctx context.Context, input agentactivitybiz.ListSessionSectionDeletionCandidatesInput) (agentactivitybiz.SessionSectionDeletionCandidates, bool, error) {
+	return s.agentStore().ListSessionSectionDeletionCandidates(ctx, input)
 }
 
 func (s *SQLiteStore) ListSessionMessages(ctx context.Context, input agentactivitybiz.ListSessionMessagesInput) (agentactivitybiz.MessagePage, bool, error) {
@@ -127,8 +131,8 @@ func (s *SQLiteStore) DeleteSession(ctx context.Context, workspaceID string, age
 	return s.agentStore().DeleteSession(ctx, workspaceID, agentSessionID)
 }
 
-func (s *SQLiteStore) DeleteSessionSection(ctx context.Context, input agentactivitybiz.DeleteSessionSectionInput) (agentactivitybiz.DeleteSessionSectionResult, bool, error) {
-	return s.agentStore().DeleteSessionSection(ctx, input)
+func (s *SQLiteStore) DeleteSessionsBatch(ctx context.Context, input agentactivitybiz.DeleteSessionsBatchInput) (agentactivitybiz.DeleteSessionsBatchResult, error) {
+	return s.agentStore().DeleteSessionsBatch(ctx, input)
 }
 
 func (s *SQLiteStore) ClearSessions(ctx context.Context, workspaceID string) (agentactivitybiz.ClearSessionsResult, error) {
@@ -297,6 +301,8 @@ func agentTargetToStore(target agenttargetbiz.Target) agentstore.Target {
 		LaunchRefJSON:   target.LaunchRefJSON,
 		Name:            target.Name,
 		IconKey:         target.IconKey,
+		IconURL:         target.IconURL,
+		HeroImageURL:    target.HeroImageURL,
 		Enabled:         target.Enabled,
 		Source:          target.Source,
 		SortOrder:       target.SortOrder,
@@ -312,6 +318,8 @@ func agentTargetFromStore(target agentstore.Target) agenttargetbiz.Target {
 		LaunchRefJSON:   target.LaunchRefJSON,
 		Name:            target.Name,
 		IconKey:         target.IconKey,
+		IconURL:         target.IconURL,
+		HeroImageURL:    target.HeroImageURL,
 		Enabled:         target.Enabled,
 		Source:          target.Source,
 		SortOrder:       target.SortOrder,

@@ -9,6 +9,7 @@ import {
 } from "../../../agentTargets";
 import type { AgentGUINodeData, AgentGUIAgentTarget } from "../../../types";
 import type { AgentComposerDraft } from "../model/agentGuiNodeTypes";
+import { resolveAgentComposerDraftScopeKey } from "../model/agentComposerDraftScope";
 import {
   applyAgentGUIConversationProjects,
   resolveAgentGUIConversationProject,
@@ -35,7 +36,7 @@ interface UseAgentGUIConversationPresentationInput {
   data: AgentGUINodeData;
   dataRef: CurrentValue<AgentGUINodeData>;
   defaultAgentTargetId: string | null;
-  draftBySessionId: Record<string, AgentComposerDraft>;
+  draftByScopeKey: Record<string, AgentComposerDraft>;
   hasUnconfirmedSubmit: boolean;
   isCreatingConversation: boolean;
   isNoProjectPath?: (input: { path: string }) => boolean;
@@ -56,11 +57,57 @@ interface UseAgentGUIConversationPresentationInput {
 export function useAgentGUIConversationPresentation(
   input: UseAgentGUIConversationPresentationInput
 ) {
-  const activeConversation = useMemo(() => {
-    const resolved = resolveConversationSummaryById(
+  const visibleConversationsRef = useRef<AgentGUIConversationSummary[] | null>(
+    null
+  );
+  const visibleConversations = useMemo(() => {
+    const source = mergeVisibleConversations(
       input.conversations,
-      input.activeConversationId,
       input.transientConversation
+    );
+    const mapped = source.map((conversation) => {
+      const activityBusyStatus =
+        conversationBusyStatusFromAgentActivityDisplayStatus(
+          input.activityDisplayStatuses.get(conversation.id)
+        );
+      return activityBusyStatus && conversation.status !== activityBusyStatus
+        ? { ...conversation, status: activityBusyStatus }
+        : conversation;
+    });
+    const next = applyAgentGUIConversationProjects(mapped, input.userProjects, {
+      isNoProjectPath: input.isNoProjectPath
+    });
+    const stableNext = stableConversationSummaryList(
+      visibleConversationsRef.current,
+      next
+    );
+    visibleConversationsRef.current = stableNext;
+    return stableNext;
+  }, [
+    input.activityDisplayStatuses,
+    input.conversations,
+    input.isNoProjectPath,
+    input.transientConversation,
+    input.userProjects
+  ]);
+  const activeConversationRef = useRef<AgentGUIConversationSummary[] | null>(
+    null
+  );
+
+  const activeConversation = useMemo(() => {
+    const stabilize = (
+      next: AgentGUIConversationSummary | null
+    ): AgentGUIConversationSummary | null => {
+      const stable = stableConversationSummaryList(
+        activeConversationRef.current,
+        next ? [next] : []
+      );
+      activeConversationRef.current = stable;
+      return stable[0] ?? null;
+    };
+    const resolved = resolveConversationSummaryById(
+      visibleConversations,
+      input.activeConversationId
     );
     if (resolved) {
       const activityDisplayStatus = input.activityDisplayStatuses.get(
@@ -84,19 +131,23 @@ export function useAgentGUIConversationPresentation(
         (input.activeLatestPendingSubmitTurnId || input.isSubmitting)
           ? ("working" as const)
           : resolved.status);
-      return status === resolved.status ? resolved : { ...resolved, status };
+      return stabilize(
+        status === resolved.status ? resolved : { ...resolved, status }
+      );
     }
-    if (!input.activeConversationId) return null;
+    if (!input.activeConversationId) return stabilize(null);
     const providerLabel =
-      AGENT_PROVIDER_LABEL[input.data.provider] ??
+      (AGENT_PROVIDER_LABEL as Record<string, string>)[input.data.provider] ??
       input.data.provider ??
       translate("sidebar.fallbackAgentLabel");
     const fallbackStatus =
       input.isSubmitting ||
       input.isCreatingConversation ||
       Object.prototype.hasOwnProperty.call(
-        input.draftBySessionId,
-        input.activeConversationId
+        input.draftByScopeKey,
+        resolveAgentComposerDraftScopeKey({
+          agentSessionId: input.activeConversationId
+        })
       )
         ? ("working" as const)
         : ("ready" as const);
@@ -104,8 +155,12 @@ export function useAgentGUIConversationPresentation(
       conversationBusyStatusFromAgentActivityDisplayStatus(
         input.activityDisplayStatuses.get(input.activeConversationId)
       );
-    const fallbackUpdatedAtUnixMs = Date.now();
-    return {
+    const previousActiveConversation = activeConversationRef.current?.[0];
+    const fallbackUpdatedAtUnixMs =
+      previousActiveConversation?.id === input.activeConversationId
+        ? previousActiveConversation.updatedAtUnixMs
+        : Date.now();
+    return stabilize({
       id: input.activeConversationId,
       userId: input.currentUserId?.trim() || undefined,
       provider: input.data.provider,
@@ -120,21 +175,20 @@ export function useAgentGUIConversationPresentation(
       ),
       sortTimeUnixMs: fallbackUpdatedAtUnixMs,
       updatedAtUnixMs: fallbackUpdatedAtUnixMs
-    };
+    });
   }, [
     input.activeConversationId,
     input.activeLatestPendingSubmitTurnId,
     input.activityDisplayStatuses,
-    input.conversations,
     input.currentUserId,
     input.data.provider,
-    input.draftBySessionId,
+    input.draftByScopeKey,
     input.hasUnconfirmedSubmit,
     input.isCreatingConversation,
     input.isNoProjectPath,
     input.isSubmitting,
-    input.transientConversation,
     input.userProjects,
+    visibleConversations,
     input.workspacePath
   ]);
 
@@ -210,40 +264,6 @@ export function useAgentGUIConversationPresentation(
     input.agentTargetsLoading,
     input.shouldUseStaticProviderTargets,
     input.transientConversation
-  ]);
-
-  const visibleConversationsRef = useRef<AgentGUIConversationSummary[] | null>(
-    null
-  );
-  const visibleConversations = useMemo(() => {
-    const source = mergeVisibleConversations(
-      input.conversations,
-      input.transientConversation
-    );
-    const mapped = source.map((conversation) => {
-      const activityBusyStatus =
-        conversationBusyStatusFromAgentActivityDisplayStatus(
-          input.activityDisplayStatuses.get(conversation.id)
-        );
-      return activityBusyStatus && conversation.status !== activityBusyStatus
-        ? { ...conversation, status: activityBusyStatus }
-        : conversation;
-    });
-    const next = applyAgentGUIConversationProjects(mapped, input.userProjects, {
-      isNoProjectPath: input.isNoProjectPath
-    });
-    const stableNext = stableConversationSummaryList(
-      visibleConversationsRef.current,
-      next
-    );
-    visibleConversationsRef.current = stableNext;
-    return stableNext;
-  }, [
-    input.activityDisplayStatuses,
-    input.conversations,
-    input.isNoProjectPath,
-    input.transientConversation,
-    input.userProjects
   ]);
 
   return { activeConversation, visibleConversations };

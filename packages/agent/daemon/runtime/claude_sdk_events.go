@@ -74,39 +74,52 @@ func (a *ClaudeCodeSDKAdapter) sidecarTurnEvents(adapterSession *claudeSDKAdapte
 	case "assistant_delta":
 		messageID := firstNonEmptyString(payloadString(event.Payload, "messageId"), adapterSession.assistantMessageID(turnID))
 		content := firstNonEmpty(payloadString(event.Payload, "snapshot"), payloadString(event.Payload, "content"))
-		return []activityshared.Event{newTurnActivityEventWithID(session, messageID, EventMessage, turnID, messageStreamStateStreaming, RoleAssistant, content, map[string]any{
-			"adapter":     claudeSDKSidecarAdapterName,
-			"messageId":   messageID,
-			"contentMode": messageContentModeSnapshot,
-		})}, false, nil
+		return a.claudeSDKAssistantEvents(adapterSession, session, turnID, messageID, content, false), false, nil
 	case "assistant_completed":
 		messageID := firstNonEmptyString(payloadString(event.Payload, "messageId"), adapterSession.assistantMessageID(turnID))
-		return []activityshared.Event{newTurnActivityEventWithID(session, messageID, EventMessage, turnID, messageStreamStateCompleted, RoleAssistant, payloadString(event.Payload, "content"), map[string]any{
-			"adapter":     claudeSDKSidecarAdapterName,
-			"messageId":   messageID,
-			"contentMode": messageContentModeSnapshot,
-		})}, false, nil
+		return a.claudeSDKAssistantEvents(
+			adapterSession,
+			session,
+			turnID,
+			messageID,
+			payloadString(event.Payload, "content"),
+			true,
+		), false, nil
 	case "thinking_delta":
 		messageID := firstNonEmptyString(payloadString(event.Payload, "messageId"), adapterSession.thinkingMessageID(turnID))
 		content := firstNonEmpty(payloadString(event.Payload, "snapshot"), payloadString(event.Payload, "content"))
-		return []activityshared.Event{newTurnActivityEventWithID(session, messageID, EventMessage, turnID, messageStreamStateStreaming, RoleAssistantThinking, content, map[string]any{
-			"adapter":     claudeSDKSidecarAdapterName,
-			"messageId":   messageID,
-			"contentMode": messageContentModeSnapshot,
-		})}, false, nil
+		return a.claudeSDKThinkingEvents(adapterSession, session, turnID, messageID, content, false), false, nil
 	case "thinking_completed":
 		messageID := firstNonEmptyString(payloadString(event.Payload, "messageId"), adapterSession.thinkingMessageID(turnID))
-		return []activityshared.Event{newTurnActivityEventWithID(session, messageID, EventMessage, turnID, messageStreamStateCompleted, RoleAssistantThinking, payloadString(event.Payload, "content"), map[string]any{
-			"adapter":     claudeSDKSidecarAdapterName,
-			"messageId":   messageID,
-			"contentMode": messageContentModeSnapshot,
-		})}, false, nil
+		return a.claudeSDKThinkingEvents(
+			adapterSession,
+			session,
+			turnID,
+			messageID,
+			payloadString(event.Payload, "content"),
+			true,
+		), false, nil
 	case "tool_started", "tool_updated":
-		return adapterSession.claudeSDKToolEvents(session, turnID, event.Payload, EventCallStarted, messageStreamStateStreaming, event.Type), false, nil
+		if a.turnAlreadySettled(adapterSession, turnID) {
+			return nil, false, nil
+		}
+		events := adapterSession.claudeSDKToolEvents(session, turnID, event.Payload, EventCallStarted, messageStreamStateStreaming, event.Type)
+		a.trackClaudeSDKTurnCallEvents(adapterSession, events)
+		return events, false, nil
 	case "tool_completed":
-		return adapterSession.claudeSDKToolEvents(session, turnID, event.Payload, EventCallCompleted, messageStreamStateCompleted, event.Type), false, nil
+		if a.turnAlreadySettled(adapterSession, turnID) {
+			return nil, false, nil
+		}
+		events := adapterSession.claudeSDKToolEvents(session, turnID, event.Payload, EventCallCompleted, messageStreamStateCompleted, event.Type)
+		a.trackClaudeSDKTurnCallEvents(adapterSession, events)
+		return events, false, nil
 	case "tool_failed":
-		return adapterSession.claudeSDKToolEvents(session, turnID, event.Payload, EventCallFailed, messageStreamStateFailed, event.Type), false, nil
+		if a.turnAlreadySettled(adapterSession, turnID) {
+			return nil, false, nil
+		}
+		events := adapterSession.claudeSDKToolEvents(session, turnID, event.Payload, EventCallFailed, messageStreamStateFailed, event.Type)
+		a.trackClaudeSDKTurnCallEvents(adapterSession, events)
+		return events, false, nil
 	case "task_started", "task_progress", "task_completed":
 		return adapterSession.claudeSDKTaskLifecycleEvents(session, turnID, event.Type, event.Payload), false, nil
 	case "plan_updated":
@@ -137,23 +150,26 @@ func (a *ClaudeCodeSDKAdapter) sidecarTurnEvents(adapterSession *claudeSDKAdapte
 		events = append(events, newSessionActivityEvent(session, EventSessionUpdated, firstNonEmpty(session.Status, SessionStatusReady), claudeSDKRuntimeContext(session, adapterSession)))
 		return events, false, nil
 	case "turn_completed":
-		events := []activityshared.Event{newTurnActivityEvent(session, EventTurnCompleted, turnID, SessionStatusReady, "", "", map[string]any{
+		events := a.finishClaudeSDKTurnLifecycle(adapterSession, session, turnID, claudeSDKTurnFinishCompleted, "")
+		events = append(events, newTurnActivityEvent(session, EventTurnCompleted, turnID, SessionStatusReady, "", "", map[string]any{
 			"adapter":    claudeSDKSidecarAdapterName,
 			"stopReason": firstNonEmpty(payloadString(event.Payload, "stopReason"), "end_turn"),
-		})}
+		}))
 		events = append(events, a.goalEventsOnTurnSettled(adapterSession, session, turnID, true)...)
 		return events, true, nil
 	case "turn_canceled":
-		events := []activityshared.Event{newTurnActivityEvent(session, EventTurnCanceled, turnID, SessionStatusCanceled, "", "", map[string]any{
+		events := a.finishClaudeSDKTurnLifecycle(adapterSession, session, turnID, claudeSDKTurnFinishInterrupted, "interrupted")
+		events = append(events, newTurnActivityEvent(session, EventTurnCanceled, turnID, SessionStatusCanceled, "", "", map[string]any{
 			"adapter": claudeSDKSidecarAdapterName,
-		})}
+		}))
 		events = append(events, a.goalEventsOnTurnSettled(adapterSession, session, turnID, false)...)
 		return events, true, nil
 	case "turn_failed":
-		events := []activityshared.Event{newTurnActivityEvent(session, EventTurnFailed, turnID, SessionStatusFailed, "", "", map[string]any{
+		events := a.finishClaudeSDKTurnLifecycle(adapterSession, session, turnID, claudeSDKTurnFinishFailed, "turn_failed")
+		events = append(events, newTurnActivityEvent(session, EventTurnFailed, turnID, SessionStatusFailed, "", "", map[string]any{
 			"adapter": claudeSDKSidecarAdapterName,
 			"error":   payloadString(event.Payload, "error"),
-		})}
+		}))
 		events = append(events, a.goalEventsOnTurnSettled(adapterSession, session, turnID, false)...)
 		return events, true, nil
 	default:
@@ -279,17 +295,16 @@ func (a *ClaudeCodeSDKAdapter) dispatchClaudeSDKEvent(agentSessionID string, ada
 		return
 	}
 	if terminal {
-		// No daemon-registered Exec()/ExecAsync() waiter is tracking this
-		// turnID's outcome: either its terminal event was already delivered
-		// once (the waiter already completed and was unregistered) or this
-		// turn never became the tracked active turn in the first place (for
-		// example an internal/queued Claude SDK turn — see turnQueue /
-		// settleQueuedTurn in the sidecar — that got settled without ever
-		// being submitted through Exec). Publishing it here would surface a
-		// stray, possibly contradictory outcome notification for the session:
-		// a phantom completed/failed toast landing alongside the real turn's
-		// own outcome toast for the same agent session. Drop it instead.
-		return
+		// No Exec()/ExecAsync() waiter is tracking this turnID. Drop only
+		// terminals for turns we never started on the session sink (queued
+		// orphans from sidecar turnQueue / settleQueuedTurn). Synthetic
+		// background continuations publish turn_started without a waiter;
+		// their completed/failed/canceled must close that same lifecycle.
+		if !a.consumeOpenSessionTurn(adapterSession, turnID) {
+			return
+		}
+	} else {
+		a.rememberOpenSessionTurns(adapterSession, next)
 	}
 	if err != nil {
 		next = append(next, newSessionActivityEvent(session, EventSessionFailed, SessionStatusFailed, map[string]any{
@@ -297,6 +312,59 @@ func (a *ClaudeCodeSDKAdapter) dispatchClaudeSDKEvent(agentSessionID string, ada
 		}))
 	}
 	a.emitClaudeSDKSessionEvents(agentSessionID, next)
+}
+
+// rememberOpenSessionTurns records turn IDs whose start was published through
+// the session event sink so a later waiter-less terminal can close them.
+func (a *ClaudeCodeSDKAdapter) rememberOpenSessionTurns(
+	adapterSession *claudeSDKAdapterSession,
+	events []activityshared.Event,
+) {
+	if a == nil || adapterSession == nil || len(events) == 0 {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, event := range events {
+		if event.Type != activityshared.EventTurnStarted {
+			continue
+		}
+		turnID := strings.TrimSpace(event.Payload.TurnID)
+		if turnID == "" {
+			continue
+		}
+		if adapterSession.openSessionTurns == nil {
+			adapterSession.openSessionTurns = make(map[string]struct{})
+		}
+		// Sessions are long-lived; keep the guard bounded rather than growing
+		// one entry per synthetic continuation forever.
+		if len(adapterSession.openSessionTurns) > 64 {
+			adapterSession.openSessionTurns = make(map[string]struct{})
+		}
+		adapterSession.openSessionTurns[turnID] = struct{}{}
+	}
+}
+
+// consumeOpenSessionTurn reports whether turnID was started on the session
+// sink and removes it so the matching terminal can be emitted once.
+func (a *ClaudeCodeSDKAdapter) consumeOpenSessionTurn(
+	adapterSession *claudeSDKAdapterSession,
+	turnID string,
+) bool {
+	if a == nil || adapterSession == nil {
+		return false
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if _, ok := adapterSession.openSessionTurns[turnID]; !ok {
+		return false
+	}
+	delete(adapterSession.openSessionTurns, turnID)
+	return true
 }
 
 func (a *ClaudeCodeSDKAdapter) registerClaudeSDKTurn(adapterSession *claudeSDKAdapterSession, turnID string, emit EventSink) *claudeSDKTurnWaiter {
@@ -365,6 +433,7 @@ func (a *ClaudeCodeSDKAdapter) failClaudeSDKReader(agentSessionID string, adapte
 	if a == nil || adapterSession == nil {
 		return
 	}
+	a.markSessionInvalid(adapterSession)
 	a.mu.Lock()
 	turns := make([]*claudeSDKTurnWaiter, 0, len(adapterSession.turns))
 	for turnID, waiter := range adapterSession.turns {
@@ -384,7 +453,7 @@ func (a *ClaudeCodeSDKAdapter) failClaudeSDKReader(agentSessionID string, adapte
 		}
 	}
 	for _, response := range responses {
-		response <- claudeSDKSidecarEvent{Type: "error", Payload: map[string]any{"error": err.Error()}}
+		response <- claudeSDKSidecarEvent{Type: "error", Payload: map[string]any{"error": err.Error(), "transport": true}}
 	}
 	// Any interactive/permission request still awaiting a human decision when
 	// the sidecar connection is lost must be resolved explicitly. Without
@@ -398,7 +467,13 @@ func (a *ClaudeCodeSDKAdapter) failClaudeSDKReader(agentSessionID string, adapte
 		session.AgentSessionID = agentSessionID
 	}
 	pendingFailureEvents := a.claudeSDKPendingRequestFailureEvents(adapterSession, session, "", err)
-	a.removeSession(agentSessionID)
+	pendingFailureEvents = append(pendingFailureEvents, a.finishAllClaudeSDKTurnLifecycles(
+		adapterSession,
+		session,
+		claudeSDKTurnFinishFailed,
+		err.Error(),
+	)...)
+	a.removeSession(agentSessionID, adapterSession)
 	a.emitClaudeSDKSessionEvents(agentSessionID, pendingFailureEvents)
 }
 

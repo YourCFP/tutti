@@ -10,9 +10,10 @@ import (
 type Repository = agentstore.Repository
 
 type ClearSessionsResult = agentstore.ClearSessionsResult
-type CountSessionSectionInput = agentstore.CountSessionSectionInput
-type DeleteSessionSectionInput = agentstore.DeleteSessionSectionInput
-type DeleteSessionSectionResult = agentstore.DeleteSessionSectionResult
+type ListSessionSectionDeletionCandidatesInput = agentstore.ListSessionSectionDeletionCandidatesInput
+type SessionSectionDeletionCandidates = agentstore.SessionSectionDeletionCandidates
+type DeleteSessionsBatchInput = agentstore.DeleteSessionsBatchInput
+type DeleteSessionsBatchResult = agentstore.DeleteSessionsBatchResult
 
 type MessageOrder = agentstore.MessageOrder
 
@@ -31,7 +32,6 @@ type GeneratedFile = agentstore.GeneratedFile
 type GeneratedFileList = agentstore.GeneratedFileList
 
 type ListSessionSectionInput = agentstore.ListSessionSectionInput
-type SessionSectionCount = agentstore.SessionSectionCount
 
 type SessionSectionPage = agentstore.SessionSectionPage
 
@@ -77,6 +77,7 @@ type TurnTransition = agentstore.TurnTransition
 type Interaction = agentstore.Interaction
 
 type InteractionUpsert = agentstore.InteractionUpsert
+type InteractionTransitionResult = agentstore.InteractionTransitionResult
 
 type ListSessionInteractionsInput = agentstore.ListSessionInteractionsInput
 
@@ -122,6 +123,10 @@ const (
 	InteractionStatusPending    = agentstore.InteractionStatusPending
 	InteractionStatusAnswered   = agentstore.InteractionStatusAnswered
 	InteractionStatusSuperseded = agentstore.InteractionStatusSuperseded
+
+	InteractionTransitionApplied        = agentstore.InteractionTransitionApplied
+	InteractionTransitionAlreadyApplied = agentstore.InteractionTransitionAlreadyApplied
+	InteractionTransitionConflict       = agentstore.InteractionTransitionConflict
 
 	RuntimeOperationKindInteractiveResponse    = agentstore.RuntimeOperationKindInteractiveResponse
 	RuntimeOperationKindCancelTurn             = agentstore.RuntimeOperationKindCancelTurn

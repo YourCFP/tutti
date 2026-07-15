@@ -221,7 +221,7 @@ func TestStoreReportAndListSessionLifecycle(t *testing.T) {
 		Provider:          "codex",
 		ProviderSessionID: "provider-1",
 		Cwd:               "/workspace",
-		Title:             "hello",
+		Title:             "@renderer.js",
 		Status:            "running",
 		OccurredAtUnixMS:  100,
 	})
@@ -233,6 +233,9 @@ func TestStoreReportAndListSessionLifecycle(t *testing.T) {
 	}
 	if state.Session.UserID != "user-1" {
 		t.Fatalf("state session user id = %q", state.Session.UserID)
+	}
+	if state.Session.Title != "@renderer.js" {
+		t.Fatalf("state session title = %q, want canonical title", state.Session.Title)
 	}
 	if _, accepted, err := store.RecordTurnTransition(ctx, TurnTransition{
 		WorkspaceID: "ws-1", AgentSessionID: "session-1", TurnID: "turn-1",
@@ -300,8 +303,8 @@ func TestStoreReportAndListSessionLifecycle(t *testing.T) {
 		t.Fatalf("UpdateSessionPinned() = %#v ok=%v error=%v", pinned, ok, err)
 	}
 
-	renamed, ok, err := store.UpdateSessionTitle(ctx, "ws-1", "session-1", "  Renamed session  ")
-	if err != nil || !ok || renamed.Title != "Renamed session" || renamed.UpdatedAtUnixMS < pinned.UpdatedAtUnixMS {
+	renamed, ok, err := store.UpdateSessionTitle(ctx, "ws-1", "session-1", " final ")
+	if err != nil || !ok || renamed.Title != "final" || renamed.UpdatedAtUnixMS < pinned.UpdatedAtUnixMS {
 		t.Fatalf("UpdateSessionTitle() = %#v ok=%v error=%v", renamed, ok, err)
 	}
 
@@ -310,7 +313,7 @@ func TestStoreReportAndListSessionLifecycle(t *testing.T) {
 		t.Fatalf("UpdateSessionTitle(blank) = %#v ok=%v error=%v, want no update", blankRenamed, ok, err)
 	}
 	sessionAfterBlankTitle, ok, err := store.GetSession(ctx, "ws-1", "session-1")
-	if err != nil || !ok || sessionAfterBlankTitle.Title != "Renamed session" {
+	if err != nil || !ok || sessionAfterBlankTitle.Title != "final" {
 		t.Fatalf("GetSession() after blank title = %#v ok=%v error=%v", sessionAfterBlankTitle, ok, err)
 	}
 
@@ -328,6 +331,57 @@ func TestStoreReportAndListSessionLifecycle(t *testing.T) {
 	}
 	if result.RemovedSessions != 1 || result.RemovedMessages != 1 {
 		t.Fatalf("ClearSessions() = %#v, want tombstoned rows hard-deleted", result)
+	}
+}
+
+func TestStoreMessageVersionsAreSnapshotCursorsAndMayHaveGaps(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t, testOptions(&staticProjectPaths{}))
+	ctx := context.Background()
+	if _, err := store.ReportSessionState(ctx, SessionStateReport{
+		WorkspaceID: "ws-1", AgentSessionID: "session-1", Origin: "runtime",
+		Provider: "codex", ProviderSessionID: "provider-1", Status: "running", OccurredAtUnixMS: 100,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, report := range []SessionMessageReport{
+		{WorkspaceID: "ws-1", AgentSessionID: "session-1", Messages: []MessageUpdate{{
+			MessageID: "message-a", TurnID: "turn-1", Role: "user", Kind: "text", Status: "completed", Payload: map[string]any{"text": "a"},
+		}}},
+		{WorkspaceID: "ws-1", AgentSessionID: "session-1", Messages: []MessageUpdate{{
+			MessageID: "message-b", Role: "assistant", Kind: "text", Status: "running", Payload: map[string]any{"text": "b"},
+		}}},
+		{WorkspaceID: "ws-1", AgentSessionID: "session-1", Messages: []MessageUpdate{{
+			MessageID: "message-b", Status: "completed", ContentDelta: " done",
+		}}},
+	} {
+		if result, err := store.ReportSessionMessages(ctx, report); err != nil || result.AcceptedCount != 1 {
+			t.Fatalf("ReportSessionMessages() result=%#v error=%v", result, err)
+		}
+	}
+
+	page, ok, err := store.ListSessionMessages(ctx, ListSessionMessagesInput{WorkspaceID: "ws-1", AgentSessionID: "session-1", Limit: 10})
+	if err != nil || !ok || page.LatestVersion != 3 || len(page.Messages) != 2 {
+		t.Fatalf("ListSessionMessages() page=%#v ok=%v error=%v", page, ok, err)
+	}
+	if page.Messages[0].MessageID != "message-a" || page.Messages[0].Version != 1 || page.Messages[1].MessageID != "message-b" || page.Messages[1].Version != 3 {
+		t.Fatalf("current message snapshot versions=%#v, want message-a@1 and message-b@3", page.Messages)
+	}
+	incremental, ok, err := store.ListSessionMessages(ctx, ListSessionMessagesInput{WorkspaceID: "ws-1", AgentSessionID: "session-1", AfterVersion: 1, Limit: 10})
+	if err != nil || !ok || len(incremental.Messages) != 1 || incremental.Messages[0].MessageID != "message-b" || incremental.LatestVersion != 3 {
+		t.Fatalf("incremental page=%#v ok=%v error=%v", incremental, ok, err)
+	}
+
+	rejected, err := store.ReportSessionMessages(ctx, SessionMessageReport{WorkspaceID: "ws-1", AgentSessionID: "session-1", Messages: []MessageUpdate{{
+		MessageID: "message-a", TurnID: "turn-2", Status: "completed",
+	}}})
+	if err != nil || rejected.AcceptedCount != 0 {
+		t.Fatalf("rejected update result=%#v error=%v", rejected, err)
+	}
+	session, ok, err := store.GetSession(ctx, "ws-1", "session-1")
+	if err != nil || !ok || session.MessageVersion != 3 {
+		t.Fatalf("session after rejected update=%#v ok=%v error=%v", session, ok, err)
 	}
 }
 
@@ -531,9 +585,9 @@ func TestStoreListSessionSectionFiltersHiddenSessionsBeforePagination(t *testing
 	}
 	if _, err := store.db.ExecContext(ctx, `
 UPDATE workspace_agent_sessions
-SET updated_at_unix_ms = 1000
+SET created_at_unix_ms = 1000, updated_at_unix_ms = 1000
 WHERE workspace_id = ?`, "ws-rail-visible"); err != nil {
-		t.Fatalf("normalize updated_at_unix_ms error = %v", err)
+		t.Fatalf("normalize session timestamps error = %v", err)
 	}
 
 	page, ok, err := store.ListSessionSection(ctx, ListSessionSectionInput{
@@ -550,13 +604,16 @@ WHERE workspace_id = ?`, "ws-rail-visible"); err != nil {
 	if !page.HasMore || !strings.HasSuffix(page.NextCursor, "|bbb-visible-newer") {
 		t.Fatalf("first page state = hasMore %v cursor %q, want visible cursor with more", page.HasMore, page.NextCursor)
 	}
+	if page.TotalCount != 2 {
+		t.Fatalf("first page total count = %d, want 2 visible sessions", page.TotalCount)
+	}
 
 	next, ok, err := store.ListSessionSection(ctx, ListSessionSectionInput{
-		WorkspaceID:       "ws-rail-visible",
-		SectionKey:        RailSectionKeyForProject("/workspace/app"),
-		CursorUpdatedAtMS: page.Sessions[0].UpdatedAtUnixMS,
-		CursorSessionID:   page.Sessions[0].ID,
-		Limit:             1,
+		WorkspaceID:          "ws-rail-visible",
+		SectionKey:           RailSectionKeyForProject("/workspace/app"),
+		CursorSortTimeUnixMS: page.Sessions[0].CreatedAtUnixMS,
+		CursorSessionID:      page.Sessions[0].ID,
+		Limit:                1,
 	})
 	if err != nil || !ok {
 		t.Fatalf("ListSessionSection(next) ok=%v error=%v", ok, err)
@@ -566,6 +623,98 @@ WHERE workspace_id = ?`, "ws-rail-visible"); err != nil {
 	}
 	if next.HasMore || next.NextCursor != "" {
 		t.Fatalf("next page state = hasMore %v cursor %q, want exhausted", next.HasMore, next.NextCursor)
+	}
+	if next.TotalCount != 2 {
+		t.Fatalf("next page total count = %d, want stable total 2", next.TotalCount)
+	}
+}
+
+func TestStoreListSessionSectionOrdersAndPagesByLatestTurnStart(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t, testOptions(&staticProjectPaths{paths: []string{"/workspace/app"}}))
+	ctx := context.Background()
+	for _, report := range []ActivityStateReport{
+		{
+			Session: SessionStateReport{
+				WorkspaceID:      "ws-turn-order",
+				AgentSessionID:   "older-start-newer-update",
+				Origin:           "runtime",
+				Provider:         "codex",
+				Cwd:              "/workspace/app",
+				Status:           "working",
+				OccurredAtUnixMS: 9_000,
+			},
+			Turn: &TurnTransition{
+				WorkspaceID:      "ws-turn-order",
+				AgentSessionID:   "older-start-newer-update",
+				TurnID:           "turn-older",
+				Phase:            TurnPhaseRunning,
+				StartedAtUnixMS:  2_000,
+				OccurredAtUnixMS: 9_000,
+			},
+		},
+		{
+			Session: SessionStateReport{
+				WorkspaceID:      "ws-turn-order",
+				AgentSessionID:   "newer-start-older-update",
+				Origin:           "runtime",
+				Provider:         "codex",
+				Cwd:              "/workspace/app",
+				Status:           "working",
+				OccurredAtUnixMS: 4_000,
+			},
+			Turn: &TurnTransition{
+				WorkspaceID:      "ws-turn-order",
+				AgentSessionID:   "newer-start-older-update",
+				TurnID:           "turn-newer",
+				Phase:            TurnPhaseRunning,
+				StartedAtUnixMS:  3_000,
+				OccurredAtUnixMS: 4_000,
+			},
+		},
+	} {
+		if _, err := store.ReportActivityState(ctx, report); err != nil {
+			t.Fatalf("ReportActivityState(%s) error = %v", report.Session.AgentSessionID, err)
+		}
+	}
+
+	page, ok, err := store.ListSessionSection(ctx, ListSessionSectionInput{
+		WorkspaceID: "ws-turn-order",
+		SectionKey:  RailSectionKeyForProject("/workspace/app"),
+		Limit:       1,
+	})
+	if err != nil || !ok {
+		t.Fatalf("ListSessionSection(first) ok=%v error=%v", ok, err)
+	}
+	if len(page.Sessions) != 1 || page.Sessions[0].ID != "newer-start-older-update" {
+		t.Fatalf("first page sessions = %#v, want latest turn start", page.Sessions)
+	}
+	if !page.HasMore || page.NextCursor != "3000|newer-start-older-update" {
+		t.Fatalf("first page hasMore=%v cursor=%q", page.HasMore, page.NextCursor)
+	}
+	if page.TotalCount != 2 {
+		t.Fatalf("first page total count = %d, want 2", page.TotalCount)
+	}
+
+	next, ok, err := store.ListSessionSection(ctx, ListSessionSectionInput{
+		WorkspaceID:          "ws-turn-order",
+		SectionKey:           RailSectionKeyForProject("/workspace/app"),
+		CursorSortTimeUnixMS: 3_000,
+		CursorSessionID:      "newer-start-older-update",
+		Limit:                1,
+	})
+	if err != nil || !ok {
+		t.Fatalf("ListSessionSection(next) ok=%v error=%v", ok, err)
+	}
+	if len(next.Sessions) != 1 || next.Sessions[0].ID != "older-start-newer-update" {
+		t.Fatalf("next page sessions = %#v, want older turn start", next.Sessions)
+	}
+	if next.HasMore || next.NextCursor != "" {
+		t.Fatalf("next page hasMore=%v cursor=%q, want exhausted", next.HasMore, next.NextCursor)
+	}
+	if next.TotalCount != 2 {
+		t.Fatalf("next page total count = %d, want stable total 2", next.TotalCount)
 	}
 }
 
@@ -616,7 +765,20 @@ WHERE workspace_id = ? AND agent_session_id = ?`, pinnedAt, "ws-pinned-page", se
 			t.Fatalf("set pinned_at_unix_ms(%s) error = %v", sessionID, err)
 		}
 	}
-
+	conversations, ok, err := store.ListSessionSection(ctx, ListSessionSectionInput{
+		WorkspaceID: "ws-pinned-page",
+		SectionKey:  RailSectionKeyConversations,
+		Limit:       10,
+	})
+	if err != nil || !ok {
+		t.Fatalf("ListSessionSection(conversations) ok=%v error=%v", ok, err)
+	}
+	if len(conversations.Sessions) != 1 || conversations.Sessions[0].ID != "unpinned" {
+		t.Fatalf("ordinary conversations = %#v, want only unpinned", conversations.Sessions)
+	}
+	if conversations.TotalCount != 1 {
+		t.Fatalf("ordinary conversations total count = %d, want 1", conversations.TotalCount)
+	}
 	page, ok, err := store.ListSessionSection(ctx, ListSessionSectionInput{
 		WorkspaceID: "ws-pinned-page",
 		SectionKey:  PinnedSessionPageKey,
@@ -631,13 +793,16 @@ WHERE workspace_id = ? AND agent_session_id = ?`, pinnedAt, "ws-pinned-page", se
 	if !page.HasMore || page.NextCursor != "2000|newer-pinned" {
 		t.Fatalf("pinned first page state = hasMore %v cursor %q", page.HasMore, page.NextCursor)
 	}
+	if page.TotalCount != 2 {
+		t.Fatalf("pinned first page total count = %d, want 2", page.TotalCount)
+	}
 
 	next, ok, err := store.ListSessionSection(ctx, ListSessionSectionInput{
-		WorkspaceID:       "ws-pinned-page",
-		SectionKey:        PinnedSessionPageKey,
-		CursorUpdatedAtMS: page.Sessions[0].PinnedAtUnixMS,
-		CursorSessionID:   page.Sessions[0].ID,
-		Limit:             2,
+		WorkspaceID:          "ws-pinned-page",
+		SectionKey:           PinnedSessionPageKey,
+		CursorSortTimeUnixMS: page.Sessions[0].PinnedAtUnixMS,
+		CursorSessionID:      page.Sessions[0].ID,
+		Limit:                2,
 	})
 	if err != nil || !ok {
 		t.Fatalf("ListSessionSection(pinned next) ok=%v error=%v", ok, err)
@@ -647,6 +812,9 @@ WHERE workspace_id = ? AND agent_session_id = ?`, pinnedAt, "ws-pinned-page", se
 	}
 	if next.HasMore || next.NextCursor != "" {
 		t.Fatalf("pinned next page state = hasMore %v cursor %q, want exhausted", next.HasMore, next.NextCursor)
+	}
+	if next.TotalCount != 2 {
+		t.Fatalf("pinned next page total count = %d, want stable total 2", next.TotalCount)
 	}
 }
 

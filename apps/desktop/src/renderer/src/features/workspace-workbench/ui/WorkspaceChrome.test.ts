@@ -8,10 +8,24 @@ const chromeSource = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), "WorkspaceChrome.tsx"),
   "utf8"
 );
+const chromeActionsSource = readFileSync(
+  resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "WorkspaceChromeActions.tsx"
+  ),
+  "utf8"
+);
 const messageCenterSource = readFileSync(
   resolve(
     dirname(fileURLToPath(import.meta.url)),
     "WorkspaceAgentMessageCenterAction.tsx"
+  ),
+  "utf8"
+);
+const decisionNotificationsSource = readFileSync(
+  resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "useWorkspaceAgentDecisionNotifications.tsx"
   ),
   "utf8"
 );
@@ -47,6 +61,13 @@ test("workspace chrome deck submit dispatches plan decisions through the canonic
   assert.doesNotMatch(messageCenterSource, /PLAN_IMPLEMENTATION_PROMPT/);
 });
 
+test("workspace message center forwards canonical session identity into AgentGUI launches", () => {
+  assert.match(
+    messageCenterSource,
+    /createWorkspaceAgentGuiSessionLaunchRequest\(\{[\s\S]*?agentSessionId: input\.agentSessionId,[\s\S]*?agentTargetId: input\.agentTargetId,[\s\S]*?provider: input\.provider/
+  );
+});
+
 test("workspace chrome does not call updateSessionSettings or sendInput from the deck submit handler", () => {
   // Ensure the old branching logic in onSubmitPrompt is removed
   // (toast notification path at line 484 uses submitInteractive — that is expected to stay)
@@ -77,18 +98,21 @@ test("workspace chrome gates the agent decision toast on window focus, message c
   // conversation is already visible.
   assert.match(
     messageCenterSource,
-    /shouldShowWorkspaceAgentDecisionToast\(\{\s*agentGuiSessionOpen: isWorkspaceAgentGuiSessionOpen\(\s*workspace\.id,\s*item\.agentSessionId\s*\),\s*messageCenterOpen: open,\s*windowForeground: windowForegroundVisibility\.isForeground\(\)\s*\}\)/
-  );
-  // The OS notification path (background-only presentation) must remain
-  // unconditional here — it is the mechanism that already correctly gates on
-  // focus for the OS face, and the message-center model/list must keep
-  // reflecting pending items regardless of toast visibility.
-  assert.match(
-    messageCenterSource,
-    /notifications\.notify\(osMessage\);\s*if \(\s*!shouldShowWorkspaceAgentDecisionToast/
+    /const isAgentGuiSessionOpenForWorkspace = useCallback\([\s\S]*?isWorkspaceAgentGuiSessionOpen\(workspace\.id, agentSessionId\)[\s\S]*?useWorkspaceAgentDecisionNotifications\(\{[\s\S]*?isAgentGuiSessionOpen: isAgentGuiSessionOpenForWorkspace,[\s\S]*?sendBackgroundNotification: true/
   );
   assert.match(
-    messageCenterSource,
+    decisionNotificationsSource,
+    /shouldShowWorkspaceAgentDecisionToast\(\{[\s\S]*?agentGuiSessionOpen:[\s\S]*?isAgentGuiSessionOpen\?\.\(item\.agentSessionId\) \?\? false,[\s\S]*?messageCenterOpen,[\s\S]*?windowForeground: windowForegroundVisibility\.isForeground\(\)/
+  );
+  // The OS workspace opts into the background-only face before applying the
+  // foreground toast visibility gate. Standalone reuses the same controller
+  // with this OS face disabled, so opening both renderers cannot duplicate it.
+  assert.match(
+    decisionNotificationsSource,
+    /if \(sendBackgroundNotification\) \{[\s\S]*?notifications\.notify\(osMessage\);[\s\S]*?shouldShowWorkspaceAgentDecisionToast/
+  );
+  assert.match(
+    decisionNotificationsSource,
     /createDocumentNotificationVisibilityState\(\{\s*hasFocus: \(\) => document\.hasFocus\(\),\s*visibilityState: \(\) => document\.visibilityState\s*\}\)/
   );
 });
@@ -114,5 +138,16 @@ test("workspace chrome derives message-center decisions and pet mood from the ca
   assert.doesNotMatch(
     messageCenterSource,
     /resolveWorkspaceAgentStatusPetMood\(snapshot/
+  );
+});
+
+test("workspace chrome settings opens General while Agent deep links keep their section", () => {
+  assert.match(
+    chromeActionsSource,
+    /settingsPanelRequest\.section as WorkspaceSettingsSectionID/
+  );
+  assert.match(
+    chromeActionsSource,
+    /settingsService\.openPanel\(\s*\{ id: workspace\.id \},\s*\{ section: "general" \}\s*\)/
   );
 });

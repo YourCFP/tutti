@@ -201,10 +201,17 @@ func (a *CodexAppServerAdapter) execBlocking(
 	emit EventSink,
 	emitCommands CommandSnapshotSink,
 ) ([]activityshared.Event, error) {
-	appSession := a.getSession(session.AgentSessionID)
-	if appSession == nil || appSession.client == nil {
+	execState, ok := a.snapshotExecState(session.AgentSessionID)
+	if !ok {
 		return nil, ErrSessionDisconnected
 	}
+	appSession := execState.liveSession
+	effectiveSettings := codexAppServerEffectiveSettings(
+		execState.models,
+		codexAppServerExecSessionWithConfig(session, execState.config),
+		nil,
+	)
+	session.Settings = &effectiveSettings
 	session.ProviderSessionID = appSession.threadID
 	explicitDisplayPrompt, visibleText := explicitAndVisiblePromptText(content, displayPrompt)
 	mentionRoutingApplied, mentionRoutingSkills := tuttiMentionRoutingSkills(visibleText)
@@ -309,7 +316,7 @@ func (a *CodexAppServerAdapter) execBlocking(
 	a.markTurnSettleEmits(appTurn)
 
 	trace := newCodexAppServerTurnTrace(session, turnID, execMetadataFromContext(ctx))
-	turnParams := appServerTurnStartParams(session, appSession.threadID, providerContent, visibleText, appSession.planModeMask, appSession.defaultModeMask, appSession.defaultModel)
+	turnParams := appServerTurnStartParams(session, appSession.threadID, providerContent, visibleText, appSession.planModeMask, appSession.defaultModeMask, execState.defaultModel)
 	trace.Log("turn.start.params", codexAppServerTraceTurnStartParams(session, turnParams, providerContent))
 	turnStartedAt := time.Now()
 	result, err := appSession.client.TurnStart(ctx, turnParams,
@@ -417,6 +424,9 @@ func (a *CodexAppServerAdapter) pendingRequestFailureEvents(
 	a.mu.Unlock()
 	var events []activityshared.Event
 	for _, pending := range pendings {
+		if !pending.finish(pendingInteractiveRequestStateSuperseded) {
+			continue
+		}
 		events = append(events, normalizedPermissionResolvedEvents(session, turnID, pending, pendingInteractiveResponse{}, cause)...)
 	}
 	return events

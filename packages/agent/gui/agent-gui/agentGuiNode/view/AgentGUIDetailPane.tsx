@@ -29,6 +29,9 @@ import type {
   AgentHomeSuggestionAction,
   AgentGUINodeViewModel
 } from "../model/agentGuiNodeTypes";
+import { updateAgentComposerDraft } from "../model/agentComposerDraft";
+import { resolveAgentComposerDraftScopeKey } from "../model/agentComposerDraftScope";
+import { projectAgentGUIManagedHomeTargets } from "../model/agentGuiProviderRailOrder";
 import type {
   AgentGUINodeViewProps,
   AgentGUIProviderUnavailableStateRenderer,
@@ -36,7 +39,9 @@ import type {
 } from "../AgentGUINodeView";
 import {
   buildAgentConversationHandoffPrompt,
-  handoffProjectPathForConversation
+  commandAppSource,
+  handoffProjectPathForConversation,
+  workspaceAppIconKey
 } from "./agentGUIDetailModelHelpers";
 import { AgentGUIBottomDockPane } from "./AgentGUIBottomDockPane";
 import {
@@ -54,6 +59,8 @@ import {
 import styles from "../AgentGUINode.styles";
 import { useAgentGUIDetailScroll } from "./useAgentGUIDetailScroll";
 import { useAgentGUIDetailModel } from "./useAgentGUIDetailModel";
+import { useAgentGUIProviderRailPreferences } from "./useAgentGUIProviderRailPreferences";
+import type { AgentGUIComposerEngagement } from "../engagement/agentGUIEngagement.types";
 
 const AGENT_GUI_TIMELINE_SCROLL_AREA_CONTENT_STYLE: CSSProperties = {
   width: "100%",
@@ -62,11 +69,11 @@ const AGENT_GUI_TIMELINE_SCROLL_AREA_CONTENT_STYLE: CSSProperties = {
   gridTemplateColumns: "minmax(0, 1fr)",
   gap: "24px"
 };
-const EMPTY_WORKSPACE_APP_ICONS: readonly AgentMessageMarkdownWorkspaceAppIcon[] =
+export const EMPTY_WORKSPACE_APP_ICONS: readonly AgentMessageMarkdownWorkspaceAppIcon[] =
   [];
-
 export interface AgentGUIDetailPaneProps {
   viewModel: AgentGUINodeViewModel;
+  composerEngagement?: AgentGUIComposerEngagement;
   actions: AgentGUINodeViewProps["actions"];
   labels: AgentGUIViewLabels;
   workspaceUserProjectI18n: WorkspaceUserProjectI18nRuntime;
@@ -79,6 +86,8 @@ export interface AgentGUIDetailPaneProps {
   isAgentProviderReady: boolean;
   slashStatusLimits: readonly AgentComposerSlashStatusLimit[];
   slashStatusLimitsLoading: boolean;
+  slashStatusLimitsUnavailable: boolean;
+  onSlashStatusOpen?: AgentComposerProps["onSlashStatusOpen"];
   onLinkAction?: (action: WorkspaceLinkAction) => void;
   onHandoffConversation?: AgentGUINodeViewProps["onHandoffConversation"];
   capabilityMenuState?: AgentComposerProps["capabilityMenuState"];
@@ -144,24 +153,9 @@ export function mergeWorkspaceAppIconsFromCommands(input: {
   return next ?? input.workspaceAppIcons;
 }
 
-function commandAppSource(command: unknown): Record<string, unknown> | null {
-  if (!command || typeof command !== "object" || !("source" in command)) {
-    return null;
-  }
-  const source = (command as { source?: unknown }).source;
-  if (!source || typeof source !== "object") {
-    return null;
-  }
-  const sourceRecord = source as Record<string, unknown>;
-  return sourceRecord.kind === "app" ? sourceRecord : null;
-}
-
-function workspaceAppIconKey(appId: string, workspaceId: string): string {
-  return `${workspaceId}\u0000${appId}`;
-}
-
 export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   viewModel,
+  composerEngagement,
   actions,
   labels,
   workspaceUserProjectI18n,
@@ -174,6 +168,8 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   isAgentProviderReady,
   slashStatusLimits,
   slashStatusLimitsLoading,
+  slashStatusLimitsUnavailable,
+  onSlashStatusOpen,
   onLinkAction,
   onHandoffConversation,
   capabilityMenuState,
@@ -252,6 +248,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     labels,
     slashStatusLimits,
     slashStatusLimitsLoading,
+    slashStatusLimitsUnavailable,
     viewModel
   });
   const handleInterruptCurrentTurn = useCallback(() => {
@@ -283,10 +280,11 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   );
   const handleSelectHomeSuggestion = useCallback(
     (prompt: string) => {
-      // Don't request focus here: replacing the draft already makes the composer
-      // focus the filled prompt (focusAtStart). A second focus (focusAtEnd) would
-      // race it and make the cursor/scroll jump — a visible flicker on fill.
-      updateDraftContent({ ...viewModel.composer.draftContent, prompt });
+      // Don't request focus here: replacing the draft already focuses the
+      // filled prompt at the end. A second focus request would race it.
+      updateDraftContent(
+        updateAgentComposerDraft(viewModel.composer.draftContent, { prompt })
+      );
     },
     [updateDraftContent, viewModel.composer.draftContent]
   );
@@ -374,16 +372,27 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     [submitInteractivePrompt]
   );
   const canSwitchComposerProvider = true;
-  const composerProviderTargets = viewModel.rail.agentTargets;
+  const { preferences: providerRailPreferences } =
+    useAgentGUIProviderRailPreferences();
+  const homeTargetProjection = projectAgentGUIManagedHomeTargets({
+    agentTargets: viewModel.rail.agentTargets,
+    preferences: providerRailPreferences,
+    selectedAgentTarget: viewModel.rail.selectedAgentTarget
+  });
+  const homeComposerProviderTargets = homeTargetProjection.agentTargets;
+  const selectedHomeComposerTarget = homeTargetProjection.selectedAgentTarget;
+  const composerProviderTargets =
+    viewModel.rail.activeConversationId === null
+      ? homeComposerProviderTargets
+      : viewModel.rail.agentTargets;
   const composerHandoffProviderTargets = viewModel.composer.handoffAgentTargets;
   const composerProvider =
     viewModel.rail.activeConversationId === null
-      ? (viewModel.rail.selectedAgentTarget?.provider ??
-        viewModel.shell.data.provider)
+      ? (selectedHomeComposerTarget?.provider ?? viewModel.shell.data.provider)
       : viewModel.shell.data.provider;
   const composerSelectedProviderTarget =
     viewModel.rail.activeConversationId === null
-      ? viewModel.rail.selectedAgentTarget
+      ? selectedHomeComposerTarget
       : (viewModel.rail.agentTargets.find((target) => {
           if (target.provider !== viewModel.shell.data.provider) {
             return false;
@@ -402,8 +411,13 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       currentUserId: viewModel.shell.currentUserId,
       provider: composerProvider,
       slashStatus,
+      onSlashStatusOpen,
       usage: viewModel.detail.usage,
       draftContent: viewModel.composer.draftContent,
+      engagement: composerEngagement,
+      draftScopeKey: resolveAgentComposerDraftScopeKey({
+        agentSessionId: viewModel.rail.activeConversationId
+      }),
       availableCommands: viewModel.composer.availableCommands,
       hasCompactableContext: viewModel.detail.hasSentUserMessage,
       compactSupported: viewModel.composer.compactSupported,
@@ -423,6 +437,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       disabledReason: composerDisabledReason,
       submitDisabled,
       composerSettings: viewModel.composer.composerSettings,
+      queueStatus: viewModel.composer.queueStatus,
       queuedPrompts: viewModel.composer.queuedPrompts,
       drainingQueuedPromptId: viewModel.composer.drainingQueuedPromptId,
       workspaceAppIcons,
@@ -498,6 +513,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       composerDisabled,
       composerDisabledReason,
       composerFocusRequestSequence,
+      composerEngagement,
       composerHandoffProviderTargets,
       composerLabels,
       composerProviderTargets,
@@ -514,6 +530,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       labels.providerSwitchLabel,
       labels,
       onHandoffConversation,
+      onSlashStatusOpen,
       previewMode,
       workspaceReferencePickerOpen,
       composerActivePrompt,
@@ -541,11 +558,9 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       viewModel.rail.activeConversationId,
       viewModel.composer.availableCommands,
       viewModel.composer.availableSkills,
-      viewModel.rail.activeConversationId,
       viewModel.composer.compactSupported,
       viewModel.composer.composerSettings,
       viewModel.shell.currentUserId,
-      viewModel.rail.activeConversationId,
       viewModel.rail.activeConversation,
       composerProvider,
       viewModel.composer.draftContent,
@@ -555,6 +570,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       viewModel.composer.isInterrupting,
       viewModel.interaction.isRespondingApproval,
       viewModel.composer.promptImagesSupported,
+      viewModel.composer.queueStatus,
       viewModel.composer.queuedPrompts,
       viewModel.detail.usage,
       viewModel.shell.workspaceId,
@@ -572,11 +588,12 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     [bottomDockComposerProps]
   );
   const emptyHeroProvider =
-    viewModel.rail.selectedAgentTarget?.provider ??
-    viewModel.shell.data.provider;
-  const disabledProviderTarget = selectedAgentTargetComingSoon
-    ? (viewModel.rail.selectedAgentTarget ?? null)
-    : null;
+    composerSelectedProviderTarget?.provider ?? viewModel.shell.data.provider;
+  const disabledProviderTarget =
+    composerSelectedProviderTarget?.disabled === true ||
+    selectedAgentTargetComingSoon
+      ? composerSelectedProviderTarget
+      : null;
   const shouldRenderProviderUnavailableState =
     !hasActiveConversation &&
     disabledProviderTarget !== null &&
@@ -590,6 +607,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     sessionChrome.recovery?.message ?? "",
     backgroundAgentStatusText ?? "",
     viewModel.composer.queuedPrompts.map((prompt) => prompt.id).join(","),
+    viewModel.composer.queueStatus,
     viewModel.composer.drainingQueuedPromptId ?? "",
     viewModel.interaction.isRespondingApproval ? "1" : "0"
   ].join("|");
@@ -702,7 +720,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
                 viewModel.rail.conversationFilter.kind === "all"
               }
               agentTargets={composerProviderTargets}
-              selectedAgentTarget={viewModel.rail.selectedAgentTarget}
+              selectedAgentTarget={composerSelectedProviderTarget}
               onProviderSelect={
                 canSwitchComposerProvider &&
                 viewModel.rail.activeConversationId === null

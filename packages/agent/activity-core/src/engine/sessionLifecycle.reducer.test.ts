@@ -62,6 +62,27 @@ test("snapshot restores a settled latest turn without an active turn", () => {
   );
 });
 
+test("bounded snapshots preserve page-loaded session entities omitted from the response", () => {
+  const pageLoaded = {
+    ...session(null, 2),
+    agentSessionId: "page-loaded"
+  };
+  let state = reduce(createInitialSessionLifecycleState(), {
+    type: "session/upserted",
+    session: pageLoaded
+  }).state;
+  state = reduce(state, {
+    type: "session/snapshotReceived",
+    sessions: [session(null, 3)]
+  }).state;
+
+  assert.equal(
+    state.sessionsById["page-loaded"]?.agentSessionId,
+    "page-loaded"
+  );
+  assert.equal(state.sessionsById["session-1"]?.updatedAtUnixMs, 3);
+});
+
 test("send command result atomically upserts its scoped session and turn", () => {
   const turn = activeTurn(4);
   const result = reduce(createInitialSessionLifecycleState(), {
@@ -421,6 +442,39 @@ test("authoritative snapshots remove pending interactions that are no longer pre
       canonicalInteractionKey("session-1", "turn-1", "request-1")
     ],
     undefined
+  );
+});
+
+test("authoritative snapshots remove an old-turn pending interaction when the request id is reused", () => {
+  const turn1 = activeTurn(2);
+  const withTurn1Pending = session(turn1, 2);
+  withTurn1Pending.pendingInteractions = [interaction("pending", 2)];
+  let state = reduce(createInitialSessionLifecycleState(), {
+    type: "session/snapshotReceived",
+    sessions: [withTurn1Pending]
+  }).state;
+
+  const turn2 = { ...activeTurn(3), turnId: "turn-2" };
+  const withTurn2Pending = session(turn2, 3);
+  withTurn2Pending.pendingInteractions = [
+    { ...interaction("pending", 3), turnId: "turn-2" }
+  ];
+  state = reduce(state, {
+    type: "session/snapshotReceived",
+    sessions: [withTurn2Pending]
+  }).state;
+
+  assert.equal(
+    state.interactionsById[
+      canonicalInteractionKey("session-1", "turn-1", "request-1")
+    ],
+    undefined
+  );
+  assert.equal(
+    state.interactionsById[
+      canonicalInteractionKey("session-1", "turn-2", "request-1")
+    ]?.status,
+    "pending"
   );
 });
 
@@ -903,7 +957,7 @@ function reduce(
   intent: Parameters<typeof sessionLifecycleReducer>[1]
 ) {
   return sessionLifecycleReducer(state, intent, {
-    queuePromotionAccepted: false,
+    queueSendNowRequiresCancel: false,
     sendResultValidation:
       intent.type === "engine/commandResult" &&
       intent.commandType === "queue/sendPrompt" &&
@@ -916,7 +970,6 @@ function reduce(
             errorCode: null,
             errorMessage: null,
             expiresAtUnixMs: 1,
-            guidance: false,
             requestedAtUnixMs: 1,
             status: "requested",
             turnId: null,
@@ -931,6 +984,11 @@ function session(
   updatedAtUnixMs: number
 ): AgentActivitySession {
   return normalizeAgentActivitySession({
+    ...{
+      activeTurnId: null,
+      latestTurnInteractions: [],
+      pendingInteractions: []
+    },
     workspaceId: "workspace-1",
     agentSessionId: "session-1",
     provider: "codex",
@@ -938,6 +996,7 @@ function session(
     title: "Session",
     activeTurnId: turn?.turnId ?? null,
     activeTurn: turn,
+    latestTurnInteractions: [],
     pendingInteractions: [],
     updatedAtUnixMs
   });

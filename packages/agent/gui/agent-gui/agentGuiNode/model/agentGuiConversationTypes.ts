@@ -47,6 +47,7 @@ export interface AgentGUIConversationSummary {
   updatedAtUnixMs: number;
   hasUnreadCompletion?: boolean;
   unreadCompletionKey?: string | null;
+  projectionSource?: "pending_activation";
   isImported?: boolean;
   activeTurn?: AgentActivitySession["activeTurn"];
 }
@@ -98,7 +99,6 @@ export interface AgentGUITimelineRow {
   eventType: string;
   status: string | null;
   callType?: string;
-  approval?: AgentGUIApprovalRequest | null;
   occurredAtUnixMs: number;
 }
 

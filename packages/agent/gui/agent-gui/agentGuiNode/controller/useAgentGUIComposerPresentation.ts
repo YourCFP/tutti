@@ -171,8 +171,10 @@ export function useAgentGUIComposerPresentation(
   const draftModel = usesPlaceholderDraftModel
     ? (liveConfigModel ?? persistedDraftModel)
     : persistedDraftModel;
-  const draftReasoningEffort = normalizeOptionalText(
-    draftSettings.reasoningEffort
+  const draftReasoningEffort = (
+    input.composerSupport.reasoning
+      ? normalizeOptionalText(draftSettings.reasoningEffort)
+      : null
   ) as AgentSessionReasoningEffort | null;
   const draftSpeed = normalizeOptionalText(
     draftSettings.speed
@@ -181,9 +183,10 @@ export function useAgentGUIComposerPresentation(
     () =>
       reasoningSelectionFromComposerOptions(
         input.providerComposerOptions,
-        draftReasoningEffort
+        draftReasoningEffort,
+        draftModel
       ),
-    [draftReasoningEffort, input.providerComposerOptions]
+    [draftModel, draftReasoningEffort, input.providerComposerOptions]
   );
   const activeSessionModelSelection = useMemo(
     () =>
@@ -273,7 +276,8 @@ export function useAgentGUIComposerPresentation(
         supportsPermissionMode &&
         selectedPermissionModeValue === null,
       selectedModelValue: draftModel,
-      selectedReasoningEffortValue: draftReasoningEffort,
+      selectedReasoningEffortValue:
+        activeSessionReasoningSelection?.currentValue ?? draftReasoningEffort,
       selectedSpeedValue: draftSpeed,
       selectedPermissionModeValue,
       permissionConfig,

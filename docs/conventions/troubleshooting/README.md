@@ -15,7 +15,8 @@ recur and the repository now has implementation or debugging evidence for it.
 Use the focused runtime index or open one area directly:
 
 - [Agent Providers And Setup](./agent-provider-setup.md): Provider discovery, installation, authentication, models, configuration, and runtime reachability.
-- [Agent Sessions And Lifecycle](./agent-session-lifecycle.md): Turn state, loading, cancel, restore, rail projection, event updates, imports, and performance.
+  Includes extension command/Skill palette hydration failures.
+- [Agent Sessions And Lifecycle](./agent-session-lifecycle.md): Turn state, activation, loading, cancel, restore, rail projection, realtime completion provenance, event updates, imports, and performance.
 - [Agent Approvals And Sub-Agents](./agent-approvals-subagents.md): Approval gates, plan exits, parent/child event attribution, background agents, and Message Center.
 
 ## [Desktop And Release](./desktop-release.md)
@@ -38,6 +39,7 @@ React rendering, Workbench state, external stores, input composition, and UI per
 
 - [Renderer body requests fail with `ERR_H2_OR_QUIC_REQUIRED`](./workbench-renderer.md#renderer-body-requests-fail-with-err_h2_or_quic_required)
 - [Renderer tile memory warnings from hidden autoplay animation](./workbench-renderer.md#renderer-tile-memory-warnings-from-hidden-autoplay-animation)
+- [Standalone Agent dev window stays black during cold startup](./workbench-renderer.md#standalone-agent-dev-window-stays-black-during-cold-startup)
 - [IME composition breaks fuzzy search or controlled search inputs](./workbench-renderer.md#ime-composition-breaks-fuzzy-search-or-controlled-search-inputs)
 - [External-store snapshots churn because derived reads lose reference stability](./workbench-renderer.md#external-store-snapshots-churn-because-derived-reads-lose-reference-stability)
 - [Workbench host rebuilds when dock business status changes](./workbench-renderer.md#workbench-host-rebuilds-when-dock-business-status-changes)
@@ -46,6 +48,9 @@ React rendering, Workbench state, external stores, input composition, and UI per
 - [Effect cleanup leaves mounted refs false in React development](./workbench-renderer.md#effect-cleanup-leaves-mounted-refs-false-in-react-development)
 - [Workbench node body warns about updating WorkbenchNodeLayer during render](./workbench-renderer.md#workbench-node-body-warns-about-updating-workbenchnodelayer-during-render)
 - [Renderer component repeatedly re-renders without visible changes](./workbench-renderer.md#renderer-component-repeatedly-re-renders-without-visible-changes)
+- [Inline custom-header menu is clipped to the Workbench title bar](./workbench-renderer.md#inline-custom-header-menu-is-clipped-to-the-workbench-title-bar)
+- [Dialog action reacts to Enter but ignores pointer clicks](./workbench-renderer.md#dialog-action-reacts-to-enter-but-ignores-pointer-clicks)
+- [Daemon validation error appears as untranslated developer text](./workbench-renderer.md#daemon-validation-error-appears-as-untranslated-developer-text)
 
 ## [Workspace Apps And Files](./workspace-apps-files.md)
 
@@ -74,4 +79,6 @@ CLI behavior, CI, package assets, skills, Browser Node, and terminal input.
 - [IME composition leaks native input into xterm terminals](./toolchain-browser-terminal.md#ime-composition-leaks-native-input-into-xterm-terminals)
 - [Post-composition suppression window swallows real terminal input](./toolchain-browser-terminal.md#post-composition-suppression-window-swallows-real-terminal-input)
 - [Published package runtime asset 404 because the consumer bundler never saw the file](./toolchain-browser-terminal.md#published-package-runtime-asset-404-because-the-consumer-bundler-never-saw-the-file)
+- [New release CDN namespace returns an S3 403](./toolchain-browser-terminal.md#new-release-cdn-namespace-returns-an-s3-403)
 - [Browser Node focus pings miss iframe-hosted editors](./toolchain-browser-terminal.md#browser-node-focus-pings-miss-iframe-hosted-editors)
+- [Temporary Git fixture turns a linked worktree bare](./toolchain-browser-terminal.md#temporary-git-fixture-turns-a-linked-worktree-bare)

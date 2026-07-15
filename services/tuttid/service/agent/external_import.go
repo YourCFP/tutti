@@ -180,9 +180,13 @@ func providersFromExternalImportSelections(selections []ExternalImportProjectSel
 // conversation in Tutti reuses the same model configuration the user's local
 // CLI had, instead of silently falling back to workspace defaults.
 func externalImportedSessionSettings(session externalImportedSession) map[string]any {
+	reasoningEffort := strings.TrimSpace(session.ReasoningEffort)
+	if !composerProviderUsesModelReasoningCatalog(session.Provider) {
+		reasoningEffort = normalizeReasoningEffortForProvider(session.Provider, reasoningEffort)
+	}
 	settings := ComposerSettings{
 		Model:           strings.TrimSpace(session.Model),
-		ReasoningEffort: normalizeReasoningEffortForProvider(session.Provider, session.ReasoningEffort),
+		ReasoningEffort: reasoningEffort,
 	}
 	if composerSettingsIsEmpty(settings) {
 		return nil

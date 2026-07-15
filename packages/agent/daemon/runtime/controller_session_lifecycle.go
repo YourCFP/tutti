@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
+	"github.com/tutti-os/tutti/packages/agent/daemon/titletext"
 )
 
 func (c *Controller) Start(ctx context.Context, input StartInput) (StartResult, error) {
@@ -20,7 +21,10 @@ func (c *Controller) Start(ctx context.Context, input StartInput) (StartResult, 
 	if provider == "" {
 		return StartResult{}, fmt.Errorf("provider is required")
 	}
-	adapter := c.adapter(provider)
+	adapter, err := c.resolveAdapter(ctx, AdapterResolveInput{Provider: provider, AgentTargetID: input.AgentTargetID, CWD: input.CWD, ProviderTargetRef: clonePayload(input.ProviderTargetRef)})
+	if err != nil {
+		return StartResult{}, err
+	}
 	if adapter == nil {
 		return StartResult{}, fmt.Errorf("unsupported agent session provider %q", provider)
 	}
@@ -31,9 +35,10 @@ func (c *Controller) Start(ctx context.Context, input StartInput) (StartResult, 
 		provider,
 		firstNonEmpty(input.PermissionModeID, defaultPermissionModeIDForProvider(provider)),
 	)
+	title := titletext.Normalize(input.Title)
 	permissionModeID := settings.PermissionModeID
 	if agentSessionID == "" {
-		if existing, ok := c.findStartSession(roomID, strings.TrimSpace(input.AgentTargetID), provider, input.CWD, input.Title, settings, input.ProviderTargetRef); ok {
+		if existing, ok := c.findStartSession(roomID, strings.TrimSpace(input.AgentTargetID), provider, input.CWD, title, settings, input.ProviderTargetRef); ok {
 			return StartResult{Session: existing}, nil
 		}
 		agentSessionID = newID()
@@ -50,7 +55,7 @@ func (c *Controller) Start(ctx context.Context, input StartInput) (StartResult, 
 		CWD:               strings.TrimSpace(input.CWD),
 		Env:               append([]string(nil), input.Env...),
 		Status:            SessionStatusReady,
-		Title:             firstNonEmpty(strings.TrimSpace(input.Title), provider),
+		Title:             firstNonEmpty(title, provider),
 		Visible:           sessionVisible(input.Visible),
 		RuntimeContext:    clonePayload(input.RuntimeContext),
 		ProviderTargetRef: clonePayload(input.ProviderTargetRef),
@@ -120,7 +125,10 @@ func (c *Controller) Resume(ctx context.Context, input ResumeInput) (Session, er
 	if existing, ok := c.get(roomID, agentSessionID); ok {
 		return existing, nil
 	}
-	adapter := c.adapter(provider)
+	adapter, err := c.resolveAdapter(ctx, AdapterResolveInput{Provider: provider, AgentTargetID: input.AgentTargetID, CWD: input.CWD, ProviderTargetRef: clonePayload(input.ProviderTargetRef)})
+	if err != nil {
+		return Session{}, err
+	}
 	if adapter == nil {
 		return Session{}, fmt.Errorf("unsupported agent session provider %q", provider)
 	}
@@ -145,6 +153,7 @@ func (c *Controller) Resume(ctx context.Context, input ResumeInput) (Session, er
 		Title:             firstNonEmpty(strings.TrimSpace(input.Title), provider),
 		Visible:           sessionVisible(input.Visible),
 		RuntimeContext:    clonePayload(input.RuntimeContext),
+		ProviderTargetRef: clonePayload(input.ProviderTargetRef),
 		PermissionModeID:  normalizePermissionModeIDWithFallback(provider, input.PermissionModeID, defaultPermissionModeIDForProvider(provider)),
 		Settings:          normalizeOptionalSessionSettings(input.Settings, provider, firstNonEmpty(input.PermissionModeID, defaultPermissionModeIDForProvider(provider))),
 		CreatedAtUnixMS:   createdAtUnixMS,
@@ -226,14 +235,20 @@ func (c *Controller) Close(ctx context.Context, input CloseInput) (CloseResult, 
 }
 
 func (c *Controller) HasActiveTurn(roomID, agentSessionID string) bool {
+	_, ok := c.activeTurnID(roomID, agentSessionID)
+	return ok
+}
+
+func (c *Controller) activeTurnID(roomID, agentSessionID string) (string, bool) {
 	if c == nil {
-		return false
+		return "", false
 	}
 	key := sessionKey(strings.TrimSpace(roomID), strings.TrimSpace(agentSessionID))
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	_, ok := c.turns[key]
-	return ok
+	turn, ok := c.turns[key]
+	turnID := strings.TrimSpace(turn.turnID)
+	return turnID, ok && turnID != ""
 }
 
 func (c *Controller) SetVisible(ctx context.Context, roomID, agentSessionID string, visible bool) (Session, error) {

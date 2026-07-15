@@ -7,6 +7,7 @@ import type {
   IWorkspaceAgentActivityService
 } from "@renderer/features/workspace-agent";
 import type { WorkspaceWorkbenchDesktopI18nRuntime } from "@shared/i18n";
+import { workspaceAgentGuiUnifiedDockEntryId } from "../workspaceAgentGuiLaunch.ts";
 import { createWorkspaceAgentProviderDockStateSource as createWorkspaceAgentProviderDockStateSourceBase } from "./workspaceAgentProviderDockStateSource.ts";
 import { workspaceAgentGuiDockEntryId } from "./workspaceWorkbenchComposition.ts";
 
@@ -23,7 +24,9 @@ function createWorkspaceAgentProviderDockStateSource(
       getSnapshot: () => ({
         agents,
         agentTargets: [],
-        capturedAtUnixMs: 1
+        capturedAtUnixMs: 1,
+        error: null,
+        status: "ready"
       }),
       subscribe: () => () => {}
     }
@@ -76,6 +79,19 @@ test("agent provider dock state source resolves dynamic login state", () => {
   );
 });
 
+test("agent provider dock state source leaves the unified dock identity unchanged", () => {
+  const service = createAgentProviderStatusService({ statuses: [] });
+  const source = createWorkspaceAgentProviderDockStateSource({
+    agentProviderStatusService: service,
+    i18n: createI18n()
+  });
+
+  assert.equal(
+    source.getEntryState(workspaceAgentGuiUnifiedDockEntryId()),
+    null
+  );
+});
+
 test("agent provider dock state source emits subscription updates", () => {
   const service = createAgentProviderStatusService({ statuses: [] });
   const source = createWorkspaceAgentProviderDockStateSource({
@@ -112,7 +128,9 @@ test("agent provider dock state source reacts to live agent directory updates", 
       getSnapshot: () => ({
         agents,
         agentTargets: [],
-        capturedAtUnixMs: 1
+        capturedAtUnixMs: 1,
+        error: null,
+        status: "ready"
       }),
       subscribe: (listener) => {
         listeners.add(listener);

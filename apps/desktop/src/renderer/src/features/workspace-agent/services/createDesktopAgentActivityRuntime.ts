@@ -291,10 +291,10 @@ export function createDesktopAgentActivityRuntime(
       workspaceAgentActivityService.listSessionSections(input),
     listSessionSectionPage: (input) =>
       workspaceAgentActivityService.listSessionSectionPage(input),
-    countSessionSection: (input) =>
-      workspaceAgentActivityService.countSessionSection(input),
-    deleteSessionSection: (input) =>
-      workspaceAgentActivityService.deleteSessionSection(input),
+    listSessionSectionDeletionCandidates: (input) =>
+      workspaceAgentActivityService.listSessionSectionDeletionCandidates(input),
+    deleteSessionsBatch: (input) =>
+      workspaceAgentActivityService.deleteSessionsBatch(input),
     listPinnedSessionsPage: (input) =>
       workspaceAgentActivityService.listPinnedSessionsPage(input),
     async load(workspaceId, signal) {
@@ -378,6 +378,25 @@ export function createDesktopAgentActivityRuntime(
     },
     ...(archiveAgentPromptFile
       ? {
+          async stagePastedText(
+            input: Parameters<
+              NonNullable<AgentActivityRuntime["stagePastedText"]>
+            >[0]
+          ) {
+            const archived = await archiveAgentPromptFile({
+              workspaceID: input.workspaceId,
+              dataBase64: uint8ArrayToBase64(
+                new TextEncoder().encode(input.text)
+              ),
+              displayName: input.name,
+              mimeType: "text/plain"
+            });
+            return {
+              name: archived.name,
+              path: archived.path,
+              sizeBytes: archived.sizeBytes
+            };
+          },
           async uploadPromptContent(
             input: Parameters<
               NonNullable<AgentActivityRuntime["uploadPromptContent"]>

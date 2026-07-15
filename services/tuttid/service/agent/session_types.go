@@ -37,6 +37,7 @@ type Service struct {
 	RuntimePreparer                runtimeprep.Preparer
 	ComputerUseAvailable           func() bool
 	CapabilityLister               ComposerCapabilityLister
+	ExtensionComposerProfiles      ExtensionComposerProfileResolver
 	ProviderAvailabilityCacheTTL   time.Duration
 	CapabilityCatalogCacheTTL      time.Duration
 	LiveModelCacheTTL              time.Duration
@@ -75,7 +76,8 @@ type RuntimeController interface {
 	SetVisible(context.Context, RuntimeSetVisibleInput) (ProviderRuntimeSession, error)
 	Sessions(workspaceID string) []ProviderRuntimeSession
 	Start(context.Context, RuntimeStartInput) (ProviderRuntimeSession, error)
-	SubmitInteractive(context.Context, RuntimeSubmitInteractiveInput) error
+	SubmitInteractive(context.Context, RuntimeSubmitInteractiveInput) (RuntimeSubmitInteractiveResult, error)
+	InteractiveDisposition(workspaceID string, agentSessionID string, turnID string, requestID string) RuntimeInteractiveDisposition
 	Subscribe(workspaceID string, agentSessionID string) (<-chan RuntimeStreamEvent, func(), bool)
 	UpdateSettings(context.Context, RuntimeUpdateSettingsInput) error
 	ValidatePromptContent(context.Context, RuntimeExecInput) error
@@ -91,6 +93,25 @@ type AgentTargetStore interface {
 
 type ComposerCapabilityLister interface {
 	ListComposerCapabilityOptions(context.Context, string, string, []ComposerSkillOption) ([]ComposerCapabilityOption, []string)
+}
+
+type ExtensionComposerProfileResolver interface {
+	ResolveExtensionComposerProfile(context.Context, string) (ExtensionComposerProfile, error)
+}
+
+type ExtensionComposerProfile struct {
+	Skills *ExtensionComposerSkillProfile
+}
+
+type ExtensionComposerSkillProfile struct {
+	Invocation    string
+	TriggerPrefix string
+	Roots         []ExtensionComposerSkillRoot
+}
+
+type ExtensionComposerSkillRoot struct {
+	Scope string
+	Path  string
 }
 
 type Session struct {
@@ -120,8 +141,10 @@ type Session struct {
 }
 
 type ListSessionsInput struct {
-	SearchQuery string
-	Limit       int
+	AgentTargetID string
+	Cursor        string
+	SearchQuery   string
+	Limit         int
 }
 
 type SessionListPage struct {
@@ -142,27 +165,25 @@ type ListSessionSectionPageInput struct {
 	AgentTargetID string
 }
 
-type CountSessionSectionInput struct {
+type ListSessionSectionDeletionCandidatesInput struct {
 	SectionKey    string
 	AgentTargetID string
+	ExcludePinned bool
 }
 
-type SessionSectionCount struct {
+type SessionSectionDeletionCandidates struct {
 	WorkspaceID   string
 	SectionKey    string
 	AgentTargetID string
-	Count         int
+	ExcludePinned bool
+	SessionIDs    []string
 }
 
-type DeleteSessionSectionInput struct {
-	SectionKey    string
-	AgentTargetID string
+type DeleteSessionsBatchInput struct {
+	SessionIDs []string
 }
 
-type DeleteSessionSectionResult struct {
-	WorkspaceID       string
-	SectionKey        string
-	AgentTargetID     string
+type DeleteSessionsBatchResult struct {
 	RemovedMessages   int
 	RemovedSessions   int
 	RemovedSessionIDs []string
@@ -183,6 +204,7 @@ type SessionSectionsPage struct {
 type SessionPage struct {
 	Sessions   []Session
 	HasMore    bool
+	TotalCount int
 	NextCursor string
 }
 
@@ -192,6 +214,7 @@ type SessionSection struct {
 	UserProject *userprojectbiz.Project
 	Sessions    []Session
 	HasMore     bool
+	TotalCount  int
 	NextCursor  string
 }
 
@@ -237,18 +260,19 @@ type SessionMessage struct {
 type SessionReader interface {
 	GetSession(workspaceID string, agentSessionID string) (PersistedSession, bool)
 	ListSessions(workspaceID string) ([]PersistedSession, bool)
+	SessionDeleted(ctx context.Context, workspaceID string, agentSessionID string) (bool, error)
 }
 
 type SessionSectionReader interface {
 	ListSessionSection(context.Context, agentactivitybiz.ListSessionSectionInput) (agentactivitybiz.SessionSectionPage, bool)
 }
 
-type SessionSectionCounter interface {
-	CountSessionSection(context.Context, agentactivitybiz.CountSessionSectionInput) (agentactivitybiz.SessionSectionCount, bool)
+type SessionSectionDeletionCandidateReader interface {
+	ListSessionSectionDeletionCandidates(context.Context, agentactivitybiz.ListSessionSectionDeletionCandidatesInput) (agentactivitybiz.SessionSectionDeletionCandidates, bool)
 }
 
-type SessionSectionDeleter interface {
-	DeleteSessionSection(context.Context, agentactivitybiz.DeleteSessionSectionInput) (agentactivitybiz.DeleteSessionSectionResult, bool)
+type SessionBatchDeleter interface {
+	DeleteSessionsBatch(context.Context, agentactivitybiz.DeleteSessionsBatchInput) (agentactivitybiz.DeleteSessionsBatchResult, error)
 }
 
 type UserProjectReader interface {
@@ -295,24 +319,12 @@ type ProviderRuntimeSession struct {
 	Status             string
 	TurnLifecycle      *TurnLifecycle
 	SubmitAvailability *SubmitAvailability
-	PendingInteractive *RuntimeInteractivePrompt
 	Visible            bool
 	Title              string
 	LastError          string
 	PinnedAtUnixMS     int64
 	CreatedAtUnixMS    int64
 	UpdatedAtUnixMS    int64
-}
-
-type RuntimeInteractivePrompt struct {
-	Kind      string
-	RequestID string
-	ToolName  string
-	Status    string
-	Input     map[string]any
-	Output    map[string]any
-	Error     map[string]any
-	Metadata  map[string]any
 }
 
 type RuntimeStartInput struct {
@@ -352,6 +364,7 @@ type RuntimeResumeInput struct {
 	UpdatedAtUnixMS        int64
 	Visible                *bool
 	RuntimeContext         map[string]any
+	ProviderTargetRef      map[string]any
 	Metadata               agentactivitybiz.SessionMetadata
 	InternalRuntimeContext map[string]any
 	// RecreateIfMissing lets the runtime start a fresh provider session in place
@@ -430,11 +443,27 @@ type RuntimeCloseInput struct {
 type RuntimeSubmitInteractiveInput struct {
 	WorkspaceID    string
 	AgentSessionID string
+	TurnID         string
 	RequestID      string
 	Action         string
 	OptionID       string
 	Payload        map[string]any
 }
+
+type RuntimeSubmitInteractiveResult struct {
+	Disposition RuntimeInteractiveDisposition
+}
+
+type RuntimeInteractiveDisposition string
+
+const (
+	RuntimeInteractiveDispositionPending     RuntimeInteractiveDisposition = "pending"
+	RuntimeInteractiveDispositionResolving   RuntimeInteractiveDisposition = "resolving"
+	RuntimeInteractiveDispositionAnswered    RuntimeInteractiveDisposition = "answered"
+	RuntimeInteractiveDispositionSuperseded  RuntimeInteractiveDisposition = "superseded"
+	RuntimeInteractiveDispositionInterrupted RuntimeInteractiveDisposition = "interrupted"
+	RuntimeInteractiveDispositionUnknown     RuntimeInteractiveDisposition = "unknown"
+)
 
 type RuntimeUpdateSettingsInput struct {
 	WorkspaceID    string

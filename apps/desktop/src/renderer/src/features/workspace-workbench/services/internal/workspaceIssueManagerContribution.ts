@@ -49,6 +49,7 @@ import { createWorkspaceIssueManagerRichTextTriggerProviderRequestFromIdentity }
 import { resolveWorkspaceAgentGuiLabel } from "./workspaceAgentProviderCatalog.ts";
 import { renderIssueManagerLatestRunMessageCenterCard } from "../../ui/IssueManagerLatestRunMessageCenterCard.tsx";
 import { workspaceTaskDockSectionId } from "./workspaceDockSections.ts";
+import { registerWorkspaceIssueManagerSurfaceRuntime } from "../workspaceIssueManagerSurfaceRuntime.ts";
 
 export function createWorkspaceIssueManagerContribution(input: {
   agentProviderStatusService: AgentProviderStatusService;
@@ -128,6 +129,11 @@ export function createWorkspaceIssueManagerContribution(input: {
           return;
         }
         await runDesktopAgentGUILinkAction(action, {
+          getAgentSession: ({ agentSessionId, workspaceId }) =>
+            input.workspaceAgentActivityService.getSession(
+              workspaceId,
+              agentSessionId
+            ),
           homeDirectory: input.platformApi.homeDirectory,
           launchAgentGui: requestWorkspaceAgentGuiLaunch,
           launchWorkspaceIssueManager: requestWorkspaceIssueManagerLaunch,
@@ -203,6 +209,11 @@ export function createWorkspaceIssueManagerContribution(input: {
           locale: input.locale,
           onLinkAction: (action) => {
             void runDesktopAgentGUILinkAction(action, {
+              getAgentSession: ({ agentSessionId, workspaceId }) =>
+                input.workspaceAgentActivityService.getSession(
+                  workspaceId,
+                  agentSessionId
+                ),
               homeDirectory: input.platformApi.homeDirectory,
               launchAgentGui: requestWorkspaceAgentGuiLaunch,
               launchWorkspaceIssueManager: requestWorkspaceIssueManagerLaunch,
@@ -236,6 +247,8 @@ export function createWorkspaceIssueManagerContribution(input: {
     },
     typeId: defaultIssueManagerWorkbenchTypeId
   });
+
+  registerWorkspaceIssueManagerSurfaceRuntime(contribution, { feature });
 
   return contribution;
 }

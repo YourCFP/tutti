@@ -65,6 +65,7 @@ export type { DesktopAgentGUIConversationRailToggleDetail } from "./desktopAgent
 import { useDesktopAgentGUIContextMentions } from "./useDesktopAgentGUIContextMentions.ts";
 import { useDesktopAgentGUIReadiness } from "./useDesktopAgentGUIReadiness.ts";
 import { preloadDesktopAgentGuiMentionBrowse } from "../services/preloadDesktopAgentGuiMentionBrowse.ts";
+import { DESKTOP_AGENT_GUI_CURRENT_USER_ID } from "../services/desktopAgentGuiIdentity.ts";
 
 function DesktopAgentGUIWorkbenchBodyImpl({
   agentActivityRuntime,
@@ -73,15 +74,16 @@ function DesktopAgentGUIWorkbenchBodyImpl({
   agentProviderStatusService,
   context,
   computerUseApi,
+  conversationRailAutoCollapseWidthPx = null,
   dockPreviewCache,
   onLinkAction,
   onCapabilitySettingsRequest,
   onOpenAgentConversationWindow,
   onStateChange,
+  prefillPromptBootstrapRequest = null,
   previewMode = false,
   providerStatusBootstrapSnapshot = null,
-  agents,
-  agentsLoading = false,
+  agentDirectory,
   allAgentsPresentation = null,
   renderAgentsEmpty,
   comingSoonAgentProviders,
@@ -89,6 +91,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
   contextMentionProviders,
   runtimeApi,
   trackAgentProviderChatReady,
+  onEngagementEvent,
   trackWorkspaceFileReferences,
   workspaceFileReferenceAdapter,
   resolveDroppedFileReferences,
@@ -100,6 +103,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
   resolveWorkspaceReferenceInitialTarget,
   workspaceId
 }: DesktopAgentGUIWorkbenchBodyProps): JSX.Element {
+  const agents = agentDirectory.agents;
   const { i18n, locale } = useTranslation();
   const { service: desktopPreferencesService, state: desktopPreferencesState } =
     useDesktopPreferencesService();
@@ -233,7 +237,9 @@ function DesktopAgentGUIWorkbenchBodyImpl({
     AgentGUIProps["runtimeRequests"]["openSession"]
   > | null>(null);
   const [prefillPromptRequest, setPrefillPromptRequest] =
-    useState<DesktopAgentGUIPrefillPromptRequest | null>(null);
+    useState<DesktopAgentGUIPrefillPromptRequest | null>(
+      () => prefillPromptBootstrapRequest
+    );
   const [newConversationRequestSequence, setNewConversationRequestSequence] =
     useState(0);
   const handledOpenSessionActivationSequenceRef = useRef<number | null>(null);
@@ -685,8 +691,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
   return (
     <>
       <AgentGUI
-        agents={agents}
-        agentsLoading={agentsLoading}
+        agentDirectory={agentDirectory}
         allAgentsPresentation={allAgentsPresentation}
         renderAgentsEmpty={renderAgentsEmpty}
         agentActivityRuntime={agentActivityRuntime}
@@ -696,7 +701,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
         identity={{
           nodeId: context.node.id,
           workspaceId,
-          currentUserId: "local",
+          currentUserId: DESKTOP_AGENT_GUI_CURRENT_USER_ID,
           title: context.node.title
         }}
         workspace={{
@@ -732,8 +737,12 @@ function DesktopAgentGUIWorkbenchBodyImpl({
           desktopSize,
           isMaximized: context.displayMode === "fullscreen",
           isActive: context.isFocused,
+          isVisible:
+            context.presentationMode !== "mission-control" &&
+            context.node.isMinimized !== true,
           embedded: true,
-          previewMode
+          previewMode,
+          conversationRailAutoCollapseWidthPx
         }}
         state={nodeState}
         runtimeRequests={{
@@ -788,6 +797,7 @@ function DesktopAgentGUIWorkbenchBodyImpl({
           onShowMessage: handleDesktopAgentGUIShowMessage,
           onUpdateNode: handleUpdateNode,
           onRememberComposerDefaults: handleRememberComposerDefaults,
+          onEngagementEvent: previewMode ? undefined : onEngagementEvent,
           onOpenConversationWindow:
             previewMode || !onOpenAgentConversationWindow
               ? undefined

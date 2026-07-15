@@ -258,6 +258,7 @@ const (
 	CapabilityRateLimits                     = "rateLimits"
 	CapabilityPlanMode                       = "planMode"
 	CapabilityInterrupt                      = "interrupt"
+	CapabilityActiveTurnGuidance             = "activeTurnGuidance"
 	CapabilityBrowserUse                     = "browserUse"
 	CapabilityComputerUse                    = "computerUse"
 	CapabilityGoalPause                      = "goalPause"
@@ -301,8 +302,9 @@ const (
 type ReasoningEffortOptionsKind string
 
 const (
-	ReasoningEffortOptionsStatic       ReasoningEffortOptionsKind = "static"
-	ReasoningEffortOptionsModelCatalog ReasoningEffortOptionsKind = "model_catalog"
+	ReasoningEffortOptionsStatic             ReasoningEffortOptionsKind = "static"
+	ReasoningEffortOptionsModelCatalog       ReasoningEffortOptionsKind = "model_catalog"
+	ReasoningEffortOptionsStrictModelCatalog ReasoningEffortOptionsKind = "strict_model_catalog"
 )
 
 type ConfiguredModelOverrideKind string
@@ -475,17 +477,6 @@ type DesktopIntegrationDescriptor struct {
 	DefaultProviderPriority    int
 }
 
-type CLIStartAliasDescriptor struct {
-	AppID       string
-	CommandName string
-	Description string
-	Summary     string
-}
-
-type CLIIntegrationDescriptor struct {
-	StartAlias CLIStartAliasDescriptor
-}
-
 // ProviderDescriptor is the single registration contract for a migrated
 // provider. Each layer consumes its own section and must not re-declare the
 // provider-specific values locally.
@@ -498,6 +489,5 @@ type ProviderDescriptor struct {
 	Events          EventsDescriptor
 	Sidecar         SidecarDescriptor
 	Desktop         DesktopIntegrationDescriptor
-	CLI             CLIIntegrationDescriptor
 	ExternalImport  ExternalImportDescriptor
 }

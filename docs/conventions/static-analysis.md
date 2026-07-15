@@ -37,6 +37,17 @@ Validation runners that spawn nested pnpm commands should read the root
 let runner-spawned lanes resolve a bare `pnpm` from `PATH`, because local
 package-manager shims can differ from the repository pin.
 
+Tests and checks that create temporary Git repositories must also isolate
+repository-local Git environment variables before invoking Git. In particular,
+remove inherited `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, index/object
+overrides, and command-scoped `GIT_CONFIG_*` entries using case-insensitive
+name matching for Windows compatibility; set
+`GIT_CEILING_DIRECTORIES` to the fixture root; fail immediately when fixture Git
+commands fail; and verify the initialized Git directory before staging,
+committing, fetching, or checking out. A temporary cwd alone is not isolation
+because `GIT_DIR` takes precedence and can redirect `git init` and later
+commands into a caller's linked-worktree metadata.
+
 ## TypeScript Baseline
 
 TypeScript linting uses Oxlint.
@@ -69,8 +80,9 @@ daemon provider registry. `pnpm check:agent-gui-provider-catalog-generated`
 fails when the checked-in TypeScript catalog drifts from the descriptor source
 of truth, when a generated locale key is absent from any AgentGUI locale, or
 when a generated icon key has no complete asset set. The same check also keeps
-the descriptor set equal to the OpenAPI provider, target, and provider-keyed
-preference schemas. It runs as part of
+the descriptor set equal to closed OpenAPI provider-keyed preference schemas
+while verifying that `AgentTargetProvider` and `WorkspaceAgentProvider` remain
+open, bounded identifier contracts that accept extension providers. It runs as part of
 `pnpm check:full`. Change provider identity, locale keys, icons, and target metadata in the registry, then run
 `pnpm generate:agent-gui-provider-catalog`; do not hand-edit the generated
 catalog.
@@ -144,6 +156,19 @@ also rejects the deleted `workspaceAgentActivityTypes` aggregate, handwritten
 session/snapshot/presence mirrors, module-global runtime resolver access, and
 deprecated session lifecycle reads. The desktop reconcile diagnostics module
 has a narrow serialization-only exception for legacy lifecycle evidence.
+Direct React external-store subscription enforcement follows the actual
+`useSyncExternalStore(...)` argument dependency: an argument that directly or
+indirectly resolves to `getSessionEngine(...)` is rejected, while another store
+subscription in a file that separately reads the engine is allowed. Keep both
+the passing unrelated-store fixture and failing direct-engine fixture when this
+analysis changes; file-level token coexistence is not a valid substitute for
+the call relationship.
+
+`pnpm check:changed` schedules this activity-runtime boundary lane whenever a
+change touches `packages/agent/gui`, `packages/agent/activity-core`, Desktop's
+`workspace-agent` or `workspace-workbench` features, or the checker/fixture
+implementation itself. This keeps the same boundary in the normal changed-file
+loop instead of discovering violations only in `check:full`.
 
 ## Agent GUI Degradation Ratchet
 
@@ -170,7 +195,9 @@ is protected by a degradation ratchet:
   documents are illustrative only.
 - `identityExemptFiles` in the baseline lists identity-display files (provider
   icons, labels, title projections) whose provider branches are tracked in a
-  separate bucket. The list may only shrink.
+  separate bucket. The list may only shrink, and the checker rejects entries
+  whose files no longer exist so removed seams cannot leave permanent stale
+  exemptions.
 - `pnpm check:agent-gui-degradation:staged` runs in `pre-commit` and blocks
   new degradation patterns on staged added lines: uncommented timers (a
   `// timing: <reason>` comment is required outside engine/reducer/selector

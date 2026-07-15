@@ -92,6 +92,14 @@ Use the owner documents linked below for detailed behavior. This file exists to 
 
 ## Agent Runtime Diagnostics
 
+Agent Extension source feature gates use
+`TUTTI_AGENT_EXTENSION_<KEY>_ENABLED`. The configured Gemini source therefore
+uses `TUTTI_AGENT_EXTENSION_GEMINI_ENABLED`, and the configured CodeBuddy
+source uses `TUTTI_AGENT_EXTENSION_CODEBUDDY_ENABLED`. Boolean values accepted by Go's
+`strconv.ParseBool` override the generated default; invalid values leave the
+generated default unchanged. A disabled source never downloads or registers
+its Agent Target.
+
 | Variable                               | Owner document                                                                        | Purpose                                                                                          |
 | -------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `TUTTI_AGENT_CONTEXT_CONFIG`           | [Local State Storage](./local-state-storage.md)                                       | Overrides the migrated agent context config path for tests and diagnostics.                      |
@@ -131,8 +139,13 @@ be passed through OpenCode config; Tutti injects `OPENCODE_CONFIG_CONTENT` with
 custom-provider environment allowlist for OpenCode includes `OPENCODE_CONFIG`,
 `OPENCODE_CONFIG_DIR`, `OPENCODE_CONFIG_CONTENT`, and `OPENCODE_PERMISSION`
 so operator-supplied OpenCode config stays explicit and provider-owned.
-OpenCode composer model options come from `opencode models` and are cached by
-the daemon model catalog. The provider auth/config watcher invalidates that
+OpenCode composer model options and model-specific reasoning variants come from
+`opencode models --verbose` and are cached by the daemon model catalog. An
+empty `variants` object is authoritative: AgentGUI must not expose or submit an
+ACP `effort` value for that model. Do not restore a provider-wide static effort
+list, because OpenCode models use different variant vocabularies (for example
+`max` rather than `xhigh`) and some reasoning-capable models expose no
+selectable variant at all. The provider auth/config watcher invalidates that
 cache when OpenCode's auth marker (`~/.local/share/opencode/auth.json`) or
 configured OpenCode config files change, so local model-list updates refresh
 through the same `agent.model.catalog.invalidated` event path used by Codex and

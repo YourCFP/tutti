@@ -4,6 +4,65 @@
 
 Provider discovery, installation, authentication, models, configuration, and runtime reachability.
 
+### Codex `/status` shows a 5h limit for a weekly-only account window
+
+- Symptom:
+  Opening `/status` before starting a Codex conversation labels the only quota
+  as `5h limit`, while the upstream usage response reports a seven-day window.
+  An active conversation may show a different label.
+- Quick checks:
+  Inspect `agent.usage_probe.result` in desktop logs, then inspect the Codex
+  `/wham/usage` response shape. If `primary_window.limit_window_seconds` is
+  `604800` and `secondary_window` is absent, the primary slot is carrying the
+  weekly window. Compare this with daemon app-server telemetry, where the same
+  duration is `windowDurationMins: 10080`.
+- Root cause:
+  Empty-session `/status` loads account quotas through the desktop provider
+  probe, while active sessions receive canonical runtime usage from the daemon.
+  Both paths once inferred quota type from `primary`/`secondary` position, but
+  Codex may put the weekly-only quota in `primary`.
+- Fix:
+  Classify known Codex windows by duration in both mappers: five hours is
+  `session`, seven days is `weekly`. Use the positional type only when duration
+  is missing or unknown. Keep additional named rate limits typed as `model`.
+- Validation:
+  Cover a desktop probe response whose primary and secondary durations are
+  opposite their conventional positions, plus daemon mapper cases for a
+  weekly-only primary window. Verify both empty and active `/status` views.
+- References:
+  [agentProviderUsageProbe.ts](../../../apps/desktop/src/main/agentProviderUsageProbe.ts)
+  [codex_appserver_event_state.go](../../../packages/agent/daemon/runtime/codex_appserver_event_state.go)
+
+### Provider setup notice flashes after switching to an already-connected agent
+
+- Symptom:
+  Opening Tutti and switching to Cursor (or another managed provider) shows the
+  toast-like "connect provider before sending" notice even though auto-connect
+  already succeeded and messages can be sent. The notice stays until a later
+  status refresh finally marks the provider ready.
+- Quick checks:
+  Compare the desktop provider-status snapshot for the active provider with the
+  AgentGUI setup notice. If `ensureLoaded` reused a cached `auth_required` /
+  `not_installed` row while a session prompt still works, the notice is projecting
+  stale not-ready readiness. Confirm whether switching the provider triggered a
+  scoped `refresh` or only a cache-hit `ensureLoaded`.
+- Root cause:
+  Startup may capture a not-ready provider status during the background catalog
+  scan. Selecting that provider later reuses the cache, so AgentGUI immediately
+  treats the provider as not installed/connected. The notice only clears when a
+  slower follow-up refresh upgrades availability to `ready`.
+- Fix:
+  When the active Agent GUI provider has a cached not-ready status, refresh that
+  provider once and keep readiness unknown while the recheck is pending. Do not
+  project the setup notice from a stale not-ready row during that window.
+- Validation:
+  Add coverage for the not-ready recheck key/suppress helper, then run the
+  focused desktop test for that helper and `pnpm --filter @tutti-os/desktop typecheck`.
+- References:
+  [useDesktopAgentGUIReadiness.ts](../../../apps/desktop/src/renderer/src/features/workspace-agent/ui/useDesktopAgentGUIReadiness.ts)
+  [desktopAgentProviderNotReadyRecheck.ts](../../../apps/desktop/src/renderer/src/features/workspace-agent/ui/desktopAgentProviderNotReadyRecheck.ts)
+  [agent-gui-node.md](../../architecture/agent-gui-node.md)
+
 ### Agent provider picker shows only Claude Code and Codex
 
 - Symptom:
@@ -840,6 +899,37 @@ invalid_grant`. Daemon logs may also show an extra `claude-code` process start
   `.credentials.json`). For API-key/proxy users it stays `"none"` even
   after the fix; a connected session is the success signal, not that field.
 
+### Cursor free plan shows a red error on the next send after upgrade copy
+
+- Symptom:
+  A Cursor free / exhausted account first returns plain assistant text
+  `Upgrade your plan to continue`. Sending again shows a scary red turn-failed
+  card (often with an “Open setup” escape hatch) instead of the same calm
+  plan-gate copy.
+- Root cause:
+  `cursor-agent` soft-surfaces the first plan gate as an assistant chunk +
+  `end_turn`. Later attempts may fail `session/prompt` with the same fixed
+  copy (`upgrade` / `payment` actions). Tutti previously treated that ACP call
+  failure as a generic `turn.failed` / `provider_error` danger card, and the
+  visible-error classifier did not recognize the Cursor phrases as a quota /
+  plan limit.
+- Invariants:
+  When ACP `session/prompt` fails with Cursor plan/payment gate copy, soft-settle
+  the turn: emit a warning system notice with that copy and complete the turn
+  (`planLimit=true`) so the composer stays usable without a danger card. Keep
+  residual visible-error classification of those phrases in the
+  `quota_or_rate_limit` bucket, and render that bucket with warning tone rather
+  than danger. Do not route plan gates into the env-wizard “Open setup” path.
+- Validation:
+  Run `go test ./packages/agent/daemon/runtime -run 'PlanLimit|VisibleFailureCodeRecognizesCursorPlanLimit'`
+  and the AgentGUI visible-error / `classifyFailedAgentMessage` specs that cover
+  `Upgrade your plan to continue`.
+- References:
+  [acp_plan_limit.go](../../../packages/agent/daemon/runtime/acp_plan_limit.go)
+  [standard_acp_turn.go](../../../packages/agent/daemon/runtime/standard_acp_turn.go)
+  [visible_error.go](../../../packages/agent/daemon/runtime/visible_error.go)
+  [AgentMessageBlock.tsx](../../../packages/agent/gui/shared/agentConversation/components/AgentMessageBlock.tsx)
+
 ### Tutti Agent retries a 402 and shows generic provider setup
 
 - Symptom:
@@ -866,6 +956,35 @@ invalid_grant`. Daemon logs may also show an extra `claude-code` process start
   Cover the commerce RPC error mapping, token-usage envelope, gateway promo
   header, daemon visible-error classification, and rendered plans-page action as
   separate boundary tests.
+
+### OpenCode effort changes fail with `effort not found`
+
+- Symptom:
+  An OpenCode session starts successfully, but changing reasoning effort fails
+  through `session/set_config_option` with `Invalid params: effort not found`.
+  Big-Pickle is a common example.
+- Quick checks:
+  Run `opencode models <provider> --verbose` and inspect the selected model's
+  `variants` object. Compare those keys with the model-specific reasoning
+  profile returned by the composer-options endpoint. Also inspect the live ACP
+  `configOptions[id="effort"]`; a UI option that is absent from both sources
+  must never be submitted.
+- Root cause:
+  OpenCode's top-level `capabilities.reasoning` says the model can reason, but
+  it does not mean the model exposes selectable reasoning variants. Models use
+  different variant sets, and some models return an empty `variants` object.
+  A provider-wide static `low` / `medium` / `high` / `xhigh` list therefore
+  creates controls that the current model cannot honor.
+- Fix:
+  Parse `opencode models --verbose`, preserve an explicitly empty variants
+  profile, clear remembered effort values that are unsupported by the selected
+  model, and refresh composer options after model changes. Before sending a
+  live effort update, require the current ACP descriptor to advertise the exact
+  value.
+- Validation:
+  Cover a model with empty variants, a model with ordered
+  `low` / `medium` / `high` / `max` variants, remembered-setting sanitization,
+  and runtime rejection before any ACP call for an unadvertised value.
 
 ### Agent slash palette only shows Browser
 
@@ -934,3 +1053,208 @@ invalid_grant`. Daemon logs may also show an extra `claude-code` process start
   [agent-gui-node.md](../architecture/agent-gui-node.md)
   [acp_tool_normalizer.go](../../packages/agent/daemon/runtime/acp_tool_normalizer.go)
   [workspaceLinkActions.ts](../../packages/agent/gui/actions/workspaceLinkActions.ts)
+
+### Enabled Agent Extension is missing from AgentGUI
+
+- Symptom:
+  The extension feature gate is enabled and its release is reachable, but no
+  extension target appears. The daemon log may only mention a missing local
+  `active.json` fallback.
+- Quick checks:
+  Confirm the daemon process inherited the feature-gate environment variable,
+  inspect `<state>/agent/extensions/<agentKey>`, and query `agent_targets` for
+  `extension:<agentKey>`. Verify the public ZIP's signature, digest, size, entry
+  modes, and package structure using the same daemon installation path.
+- Root cause:
+  A failed remote reconciliation can be obscured when the subsequent offline
+  fallback error replaces the original error. ZIP directory entries commonly
+  use mode `0755`; treating their search bits as executable file content rejects
+  an otherwise valid data-only package before it can be registered. Runtime
+  discovery can fail similarly when the daemon's strict JSON decoder does not
+  model a signed profile field such as the standard `probe` declaration.
+- Fix:
+  Preserve both the remote reconciliation error and the offline fallback error.
+  Reject symlinks for every entry, accept safe directory entries before checking
+  executable bits, and reject executable bits only on non-directory files. Keep
+  the daemon discovery DTO aligned with the release profile contract, including
+  optional probe metadata, even while a later migration phase owns executing
+  the ACP readiness probe.
+- Validation:
+  Cover a release ZIP with explicit `0755` directory entries and non-executable
+  data files, retain a separate executable-file rejection test, and confirm a
+  failed remote request remains visible when no offline installation exists.
+  Then install the published artifact in an isolated state directory and verify
+  both `active.json` and `extension:<agentKey>`.
+- References:
+  [manager.go](../../../services/tuttid/service/agentextension/manager.go)
+  [manager_test.go](../../../services/tuttid/service/agentextension/manager_test.go)
+
+### Extension composer controls stay on Loading and environment setup says unsupported
+
+- Symptom:
+  An extension Target is `ready` and its home composer is visible, but model or
+  permission controls never leave `Loading`. Opening Environment Check says the
+  agent has no managed environment setup.
+- Quick checks:
+  Call the target-scoped composer-options endpoint with both the extension
+  provider and `agentTargetId`. A `400 malformed_request` while
+  `/v1/agent-targets` reports the Target as ready points to provider identity
+  normalization, not runtime discovery. Also confirm the config menu is not
+  offering the desktop-managed environment wizard for an extension Target. If
+  the endpoint returns `200` but has no models, inspect whether the ACP agent
+  reports standard `models` state rather than legacy `configOptions`, and
+  confirm its hidden no-project session has a daemon-managed discovery CWD.
+- Root cause:
+  After the Agent Target had authoritatively resolved an open provider identity
+  such as `acp:gemini`, composer-options normalized it again through the closed
+  built-in provider catalog. The identity became empty and the request failed,
+  while the renderer kept its loading projection. Separately, the config menu
+  exposed the built-in managed-environment action for every provider even
+  though extension readiness belongs to the Agent Target lifecycle. A second
+  failure path used an empty CWD for no-project discovery and only understood
+  `configOptions`, while Gemini reports its catalog through ACP `models`.
+- Fix:
+  Preserve open provider identities only after successful Agent Target launch
+  resolution. Keep direct provider-only requests on the closed built-in path.
+  Show the desktop environment wizard only for providers owned by the built-in
+  provider catalog; extension installation and readiness remain Target-owned.
+  Give hidden extension probes a daemon-owned CWD and normalize standard ACP
+  `models` into the same shared composer model descriptor.
+- Validation:
+  Cover target-scoped composer options for an extension provider, verify the
+  real endpoint returns `200`, and confirm the extension config menu omits the
+  desktop environment action while retaining general Agent settings. Verify
+  the response contains the runtime-advertised model IDs without a
+  provider-specific catalog in Tutti.
+- References:
+  [composer_options.go](../../../services/tuttid/service/agent/composer_options.go)
+  [AgentGUINodeView.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/AgentGUINodeView.tsx)
+
+### Extension messages appear sent but show no running or failure state
+
+- Symptom:
+  A new extension conversation displays the user message, but the composer
+  immediately looks idle and no provider response or error card appears.
+- Quick checks:
+  Trace one Agent Session from `runtime.submitted` through the standard ACP
+  `session/prompt` call. If the adapter logs a provider error and
+  `runtime.events_emitted` reports empty event types, inspect provider identity
+  normalization before debugging renderer polling or streaming.
+- Root cause:
+  The Agent Target and runtime accepted the extension-owned provider ID, but
+  the shared activity event context still resolved providers through the
+  closed built-in catalog. Turn-started, user-message, and turn-failed events
+  for identities such as `acp:gemini` became empty events, so neither running
+  state nor the real provider error reached durable conversation state.
+- Fix:
+  Centralize the canonical open-provider format in the provider registry and
+  reuse it for both authorized service requests and activity event identities.
+  Keep launch authorization separate: accepting an identity as event metadata
+  does not authorize a runtime without a fixed Agent Target reference.
+- Validation:
+  Cover open extension identities in provider-registry and activity-event
+  tests, then project `turn.started` and `turn.failed` for an extension session
+  and assert both retain the extension provider ID.
+- References:
+  [registry.go](../../../packages/agent/daemon/providerregistry/registry.go)
+  [activity_types.go](../../../packages/agent/daemon/activity/events/activity_types.go)
+  [activity_projection.go](../../../packages/agent/daemon/runtime/activity_projection.go)
+
+### Extension sessions show an open provider ID or disappear from mentions
+
+- Symptom:
+  An extension works in AgentGUI, but message-center cards or `@session` rows
+  show a raw identity such as `acp:gemini` with the generic multi-Agent icon.
+  The same extension may be absent from the `@agent` Agents tab.
+- Quick checks:
+  Read the extension Agent Target from `/v1/agent-targets` or the local target
+  store and confirm it has the expected name and signed icon URL. Then compare
+  the affected session's `agentTargetId`. If both are correct, inspect whether
+  the renderer projection still calls the built-in provider catalog or
+  provider icon resolver instead of the Agent Directory.
+- Root cause:
+  Runtime `provider` and product `agentTargetId` are different identities.
+  Built-in providers happened to render correctly when older consumers used
+  `provider` for both, but an open extension provider has no built-in catalog
+  entry and therefore degrades to raw text/generic artwork or is filtered out.
+- Fix:
+  Resolve session and message-center presentation by exact `agentTargetId`
+  against the shared Agent Directory. Build `@agent` candidates directly from
+  ready, enabled Agent Targets; use the built-in provider catalog only for
+  optional built-in visibility gates, never as extension authorization or
+  display metadata.
+- Validation:
+  Cover an enabled `extension:*` Target with an `acp:*` provider and assert the
+  Agents tab, Agent Session rows, and message-center cards all use the Target
+  name and icon. Also retain coverage for historical provider-only sessions.
+- References:
+  [desktopRichTextAtAgentContributors.ts](../../../apps/desktop/src/renderer/src/features/rich-text-at/services/internal/desktopRichTextAtAgentContributors.ts)
+  [workspaceAgentMessageCenterModel.ts](../../../packages/agent/gui/agent-message-center/workspaceAgentMessageCenterModel.ts)
+  [agent-gui-node.md](../../architecture/agent-gui-node.md)
+
+### Extension failure card appears while processing never stops
+
+- Symptom:
+  A standard ACP extension displays the provider error card, but the transcript
+  still shows the processing indicator and the conversation remains busy.
+- Quick checks:
+  Compare the terminal `turn.failed` runtime log with the streamed session
+  projection. If the runtime reports `failed / settled` while the renderer
+  still has the same `activeTurnId` in `running`, inspect the lifecycle data on
+  the terminal activity event rather than changing the processing-row UI.
+- Root cause:
+  The standard ACP adapter emitted explicit turn events without authoritative
+  lifecycle snapshots. Built-in providers could still settle through their
+  registered event projection policy, but an extension provider was not in
+  that closed catalog. Its error message persisted while the prior running
+  turn reference remained active.
+- Fix:
+  Stamp every standard ACP turn transition with a sequenced adapter-origin
+  lifecycle snapshot. The reporter then copies the provider-independent
+  snapshot, so a terminal failure atomically records the error outcome, marks
+  the turn settled, clears `activeTurnId`, and re-enables submission.
+- Validation:
+  Cover a standard ACP start/failure pair and assert adapter-origin snapshots
+  progress from `running` with an active turn ID to `settled / failed` with no
+  active turn ID. Run the runtime and service regression suites.
+- References:
+  [standard_acp_turn.go](../../../packages/agent/daemon/runtime/standard_acp_turn.go)
+  [turn_lifecycle_stamp.go](../../../packages/agent/daemon/runtime/turn_lifecycle_stamp.go)
+  [reporter_state.go](../../../packages/agent/daemon/runtime/reporter_state.go)
+
+### Extension slash palette is empty even though ACP advertised commands
+
+- Symptom:
+  Typing `/` in an extension conversation opens no command or Skill list, while
+  the ACP process otherwise starts successfully.
+- Quick checks:
+  Inspect the persisted session `internal_runtime_context_json`. If `commands`
+  contains provider command names, the ACP command update was received and the
+  remaining fault is command hydration. Separately inspect the installed
+  `profiles/composer.json`; Skills remain empty unless it declares validated
+  roots and the matching capabilities profile advertises Skill support.
+- Root cause:
+  Runtime command updates were available only through a transient renderer
+  event. A renderer that subscribed after the startup update, or reloaded an
+  existing session, had no command catalog even though the daemon retained it.
+  The slash palette also discarded every provider command when no built-in
+  slash-command policy existed. That condition is normal for an open extension
+  provider, so a valid ACP command catalog could still render as empty after
+  hydration succeeded.
+  Open extension providers also have no built-in composer profile, so the
+  built-in provider Skill discovery table correctly returned no roots.
+- Fix:
+  Persist the detailed ACP command catalog in session runtime context and let
+  composer options restore it when no live engine snapshot is present. Treat
+  provider-advertised commands as runtime capabilities even without a built-in
+  policy, and keep their selection provider-native. Declare extension Skill
+  roots, invocation, and trigger prefix in the signed composer profile; resolve
+  only safe relative workspace/user paths.
+- Validation:
+  Cover startup command projection, legacy command-name recovery, composer
+  option parsing, declared extension Skill roots, and unsafe path rejection.
+- References:
+  [standard_acp_settings.go](../../../packages/agent/daemon/runtime/standard_acp_settings.go)
+  [composer_commands.go](../../../services/tuttid/service/agent/composer_commands.go)
+  [profiles.go](../../../services/tuttid/service/agentextension/profiles.go)
+  [agentSlashCommandProviderPolicy.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/model/agentSlashCommandProviderPolicy.ts)

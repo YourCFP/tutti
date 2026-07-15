@@ -96,13 +96,17 @@ func (s *Store) ReportActivityState(
 			return ActivityStateReportResult{}, errors.New("workspace agent activity turn transition was rejected")
 		}
 	}
-	if accepted && input.Interaction != nil {
-		result.Interaction, result.InteractionAccepted, err = s.upsertInteractionTx(ctx, tx, *input.Interaction, now)
+	// Interaction transitions have their own monotonic identity/state machine.
+	// Always validate and apply them even when the enclosing session report is
+	// an exact replay; otherwise an immutable-identity conflict could hide
+	// behind a stale session timestamp.
+	if input.Interaction != nil {
+		result.Interaction, result.InteractionResult, err = s.upsertInteractionTx(ctx, tx, *input.Interaction, now)
 		if err != nil {
 			return ActivityStateReportResult{}, err
 		}
-		if !result.InteractionAccepted {
-			return ActivityStateReportResult{}, errors.New("workspace agent activity interaction transition was rejected")
+		if result.InteractionResult == InteractionTransitionConflict {
+			return ActivityStateReportResult{}, errors.New("workspace agent activity interaction transition conflicts with immutable identity")
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -193,11 +197,7 @@ func (s *Store) ReportSessionMessages(
 		if message.MessageID == "" {
 			continue
 		}
-		version, err := incrementAgentSessionMessageVersion(ctx, tx, workspaceID, agentSessionID)
-		if err != nil {
-			return MessageReportResult{}, err
-		}
-		acceptedMessage, accepted, err := s.upsertAgentMessageTx(ctx, tx, workspaceID, agentSessionID, version, message, now)
+		acceptedMessage, accepted, err := s.upsertAgentMessageTx(ctx, tx, workspaceID, agentSessionID, message, now)
 		if err != nil {
 			return MessageReportResult{}, err
 		}
@@ -205,7 +205,7 @@ func (s *Store) ReportSessionMessages(
 			continue
 		}
 		result.AcceptedCount++
-		result.LatestVersion = version
+		result.LatestVersion = acceptedMessage.Version
 		result.Messages = append(result.Messages, acceptedMessage)
 	}
 

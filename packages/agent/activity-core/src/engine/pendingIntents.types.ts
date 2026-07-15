@@ -16,6 +16,7 @@ export interface PendingActivationIntentRecord {
   agentTargetId: string | null;
   clientSubmitId: string | null;
   content: readonly AgentPromptContentBlock[];
+  displayPrompt?: string;
   cwd: string;
   errorCode: string | null;
   errorMessage: string | null;
@@ -48,7 +49,6 @@ export interface PendingSubmitIntentRecord {
   errorCode: string | null;
   errorMessage: string | null;
   expiresAtUnixMs: number;
-  guidance: boolean;
   submitDiagnostics?: Readonly<AgentActivitySubmitDiagnostics>;
   requestedAtUnixMs: number;
   status: PendingSubmitStatus;
@@ -71,6 +71,7 @@ interface SessionActivationRequestedIntentBase {
   cwd?: string;
   expiresAtUnixMs: number;
   initialDisplayPrompt?: string;
+  runtimeContent?: readonly AgentPromptContentBlock[];
   submitDiagnostics?: Readonly<AgentActivitySubmitDiagnostics>;
   requestedAtUnixMs: number;
   requestId: string;
@@ -176,10 +177,9 @@ export interface SubmitRequestedIntent {
   content: readonly AgentPromptContentBlock[];
   displayPrompt?: string;
   expiresAtUnixMs: number;
-  guidance?: boolean;
   submitDiagnostics?: Readonly<AgentActivitySubmitDiagnostics>;
   requestedAtUnixMs: number;
-  routing?: "auto" | "immediate";
+  routing?: "auto" | "immediate" | "send_now";
   runtimeContent?: readonly AgentPromptContentBlock[];
   workspaceId: string;
 }

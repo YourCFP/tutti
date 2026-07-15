@@ -40,6 +40,28 @@ test("agent composer options keep SDK fast speed configurable after reload", () 
   assert.equal("runtimeContext" in options, false);
 });
 
+test("agent composer options preserve an advertised empty model reasoning profile", () => {
+  const options = agentActivityComposerOptionsFromTuttidResult("opencode", {
+    modelConfig: {
+      configurable: true,
+      currentValue: "opencode/big-pickle",
+      options: [{ label: "Big Pickle", value: "opencode/big-pickle" }]
+    },
+    reasoningConfig: { configurable: false, options: [] },
+    effectiveSettings: { model: "opencode/big-pickle" },
+    runtimeContext: {
+      modelReasoningOptionsByModel: {
+        "opencode/big-pickle": { defaultValue: null, options: [] }
+      }
+    }
+  });
+
+  assert.deepEqual(options.reasoningOptionsByModel, {
+    "opencode/big-pickle": { defaultValue: null, options: [] }
+  });
+  assert.equal(options.reasoningConfigurable, false);
+});
+
 test("agent composer options project the typed slash command policy", () => {
   const options = agentActivityComposerOptionsFromTuttidResult("codex", {
     slashCommandPolicy: {
@@ -71,9 +93,36 @@ test("agent composer options project the typed slash command policy", () => {
   });
 });
 
+test("agent composer options restore commands advertised by a running ACP session", () => {
+  const options = agentActivityComposerOptionsFromTuttidResult("acp:gemini", {
+    runtimeContext: {
+      availableCommands: [
+        {
+          name: "memory",
+          description: "Manage memory",
+          inputHint: "show | refresh"
+        },
+        { name: "help" },
+        { name: "memory" },
+        { description: "invalid" }
+      ]
+    }
+  });
+
+  assert.deepEqual(options.commands, [
+    {
+      name: "memory",
+      description: "Manage memory",
+      inputHint: "show | refresh"
+    },
+    { name: "help" }
+  ]);
+});
+
 test("agent composer options project typed pre-session capabilities separately from the tool catalog", () => {
   const options = agentActivityComposerOptionsFromTuttidResult("cursor", {
     capabilities: {
+      activeTurnGuidance: false,
       browserUse: true,
       compact: false,
       computerUse: false,

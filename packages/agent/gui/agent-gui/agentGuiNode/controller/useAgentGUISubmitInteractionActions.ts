@@ -1,7 +1,7 @@
 import {
   selectEngineCancelState,
   selectEngineHasVisibleQueuedSubmit,
-  selectLatestPendingSubmitForSession,
+  selectPendingSubmitsForSession,
   type AgentActivityGoalControlAction,
   type AgentActivityInteraction,
   type AgentActivityTurn,
@@ -18,9 +18,14 @@ import {
   agentPromptContentHasImage,
   emptyAgentComposerDraft,
   normalizeAgentPromptContentBlocks,
+  snapshotAgentComposerDraft,
   textPromptContent
 } from "../model/agentComposerDraft";
-import type { AgentComposerDraft } from "../model/agentGuiNodeTypes";
+import type {
+  AgentComposerDraft,
+  SubmittedDraftSnapshot
+} from "../model/agentGuiNodeTypes";
+import { resolveAgentComposerDraftScopeKey } from "../model/agentComposerDraftScope";
 import type { AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
 import {
   PLAN_IMPLEMENTATION_ACTION_FEEDBACK,
@@ -28,10 +33,13 @@ import {
   PLAN_IMPLEMENTATION_ACTION_SKIP
 } from "../../../shared/agentConversation/planImplementationPresentation";
 import {
+  clearSubmittedDraftIfUnchanged,
+  deleteUnacceptedSubmittedDraftSnapshot,
   GOAL_CLEAR_PROMPT,
-  shouldClearSubmittedDraft,
   toRuntimeSendContent
 } from "./agentGuiController.draftMessageHelpers";
+import { clearSubmittedAgentGUIHomeDraft } from "./agentGuiController.homeDraftHelpers";
+import { AgentGUIHomeDraftSettlementController } from "./AgentGUIHomeDraftSettlementController";
 import {
   AGENT_RESUME_SESSION_NOT_LOCAL_ERROR,
   buildProviderSessionNotFoundActivationError,
@@ -48,33 +56,34 @@ import {
   reportAgentSubmitTraceDiagnostic,
   scheduleAgentSubmitTracePaint
 } from "./agentGuiController.reporting";
-import { nodeDefaultDraftKey } from "./agentGuiController.composerHelpers";
-import type { AgentGUIComposerTargetData } from "./agentGuiController.composerPresentation";
 import {
   resolveConversationSummaryById,
   type ConversationIntent
 } from "./useAgentConversationSelection";
 import type { useAgentGUIActivation } from "./useAgentGUIActivation";
+import type { AgentGUINewConversationActivationResult } from "./agentGuiNewConversationActivation.types";
 
 interface UseAgentGUISubmitInteractionActionsInput {
   activation: ReturnType<typeof useAgentGUIActivation>;
   activeConversationIdRef: RefObject<string | null>;
   activeEngineActiveTurn: AgentActivityTurn | null;
   activeEnginePendingInteractions: readonly AgentActivityInteraction[];
-  activeLatestPendingSubmit: ReturnType<
-    typeof selectLatestPendingSubmitForSession
-  >;
   agentActivityRuntime: AgentActivityRuntime;
   conversationListQuery: unknown | null;
   conversationsRef: RefObject<AgentGUIConversationSummary[]>;
   dataRef: RefObject<AgentGUINodeData>;
-  draftBySessionIdRef: RefObject<Record<string, AgentComposerDraft>>;
+  draftByScopeKeyRef: RefObject<Record<string, AgentComposerDraft>>;
   executePromptRef: RefObject<
     (
       agentSessionId: string,
       content: AgentPromptContentBlock[],
       displayPrompt?: string,
-      options?: { guidance?: boolean; immediate?: boolean }
+      options?: {
+        immediate?: boolean;
+        sendNow?: boolean;
+        sourceScopeKey?: string;
+        trackDraft?: boolean;
+      }
     ) => void
   >;
   isComposerHomeRef: RefObject<boolean>;
@@ -89,18 +98,18 @@ interface UseAgentGUISubmitInteractionActionsInput {
   }>;
   previewMode: boolean;
   promptImagesSupported: boolean;
-  selectedComposerTargetDataRef: RefObject<AgentGUIComposerTargetData>;
   sessionEngine: AgentSessionEngine;
   setActiveConversationId: Dispatch<SetStateAction<string | null>>;
   setDetailError: Dispatch<SetStateAction<string | null>>;
-  setDraftBySessionId: Dispatch<
+  setDraftByScopeKey: Dispatch<
     SetStateAction<Record<string, AgentComposerDraft>>
   >;
   setIntent: Dispatch<SetStateAction<ConversationIntent>>;
+  submittedDraftSnapshotsRef: RefObject<Record<string, SubmittedDraftSnapshot>>;
   startConversation(
     content: AgentPromptContentBlock[],
     displayPrompt?: string
-  ): void;
+  ): AgentGUINewConversationActivationResult | null;
   submitPromptRef: RefObject<
     (content: AgentPromptContentBlock[], displayPrompt?: string) => void
   >;
@@ -116,12 +125,11 @@ export function useAgentGUISubmitInteractionActions(
     activeConversationIdRef,
     activeEngineActiveTurn,
     activeEnginePendingInteractions,
-    activeLatestPendingSubmit,
     agentActivityRuntime,
     conversationListQuery,
     conversationsRef,
     dataRef,
-    draftBySessionIdRef,
+    draftByScopeKeyRef,
     executePromptRef,
     isComposerHomeRef,
     isCurrentConversation,
@@ -131,12 +139,12 @@ export function useAgentGUISubmitInteractionActions(
     planActionsRef,
     previewMode,
     promptImagesSupported,
-    selectedComposerTargetDataRef,
     sessionEngine,
     setActiveConversationId,
     setDetailError,
-    setDraftBySessionId,
+    setDraftByScopeKey,
     setIntent,
+    submittedDraftSnapshotsRef,
     startConversation,
     submitPromptRef,
     transientConversation,
@@ -168,7 +176,12 @@ export function useAgentGUISubmitInteractionActions(
       agentSessionId: string,
       content: AgentPromptContentBlock[],
       displayPrompt?: string,
-      options?: { guidance?: boolean; immediate?: boolean }
+      options?: {
+        immediate?: boolean;
+        sendNow?: boolean;
+        sourceScopeKey?: string;
+        trackDraft?: boolean;
+      }
     ) => {
       const normalizedContent = normalizeAgentPromptContentBlocks(content);
       if (!agentSessionId || normalizedContent.length === 0) {
@@ -189,6 +202,19 @@ export function useAgentGUISubmitInteractionActions(
         queued: false,
         startedAtUnixMs: submittedAtUnixMs
       });
+      if (options?.trackDraft === true) {
+        const sourceScopeKey =
+          options.sourceScopeKey ??
+          resolveAgentComposerDraftScopeKey({ agentSessionId });
+        const submittedDraft =
+          draftByScopeKeyRef.current[sourceScopeKey] ??
+          emptyAgentComposerDraft();
+        submittedDraftSnapshotsRef.current[submitTrace.clientSubmitId] = {
+          sourceScopeKey,
+          content: snapshotAgentComposerDraft(submittedDraft),
+          targetAgentSessionId: agentSessionId
+        };
+      }
       const targetConversation = resolveConversationSummaryById(
         conversationsRef.current,
         agentSessionId,
@@ -214,10 +240,13 @@ export function useAgentGUISubmitInteractionActions(
         content: normalizedContent,
         expiresAtUnixMs: submittedAtUnixMs + 120_000,
         ...(displayPrompt && displayPrompt.trim() ? { displayPrompt } : {}),
-        ...(options?.guidance === true ? { guidance: true } : {}),
         submitDiagnostics: agentSubmitTraceDiagnostics(submitTrace),
         requestedAtUnixMs: submittedAtUnixMs,
-        ...(options?.immediate === true ? { routing: "immediate" } : {}),
+        ...(options?.immediate === true
+          ? { routing: "immediate" as const }
+          : options?.sendNow === true
+            ? { routing: "send_now" as const }
+            : {}),
         runtimeContent: toRuntimeSendContent(normalizedContent),
         type: "submit/requested",
         workspaceId
@@ -229,17 +258,36 @@ export function useAgentGUISubmitInteractionActions(
           submitTrace.clientSubmitId
         )
       );
+      const accepted = selectPendingSubmitsForSession(
+        sessionEngine.getSnapshot(),
+        agentSessionId
+      ).some((record) => record.clientSubmitId === submitTrace.clientSubmitId);
       submitTrace.queued = queued;
-      if (queued) {
-        setDraftBySessionId((current) => ({
-          ...current,
-          [agentSessionId]: emptyAgentComposerDraft()
-        }));
-        setDetailError(null);
+      setDetailError(null);
+      // Clear the composer optimistically the instant the engine takes the
+      // prompt — whether it was queued behind a busy turn or accepted straight
+      // into an idle session. The snapshot is retained so
+      // AgentGUIHomeDraftSettlementController can restore it if the send is
+      // later rejected. A submit the engine never accepted is left untouched so
+      // its text is not lost (deleteUnacceptedSubmittedDraftSnapshot cleans up).
+      const submittedSnapshot =
+        submittedDraftSnapshotsRef.current[submitTrace.clientSubmitId];
+      if ((accepted || queued) && submittedSnapshot) {
+        setDraftByScopeKey((current) => {
+          const next = clearSubmittedDraftIfUnchanged({
+            drafts: current,
+            snapshot: submittedSnapshot
+          });
+          draftByScopeKeyRef.current = next;
+          return next;
+        });
       }
-      if (!queued) {
-        setDetailError(null);
-      }
+      deleteUnacceptedSubmittedDraftSnapshot({
+        snapshots: submittedDraftSnapshotsRef.current,
+        clientSubmitId: submitTrace.clientSubmitId,
+        accepted,
+        queued
+      });
       reportAgentSubmitTraceDiagnostic({
         event: "send_input.requested",
         runtime: agentActivityRuntime,
@@ -252,7 +300,7 @@ export function useAgentGUISubmitInteractionActions(
         workspaceId
       });
     },
-    [agentActivityRuntime, sessionEngine, workspaceId]
+    [agentActivityRuntime, sessionEngine, setDraftByScopeKey, workspaceId]
   );
 
   useEffect(() => {
@@ -260,37 +308,35 @@ export function useAgentGUISubmitInteractionActions(
   }, [executePrompt]);
 
   useEffect(() => {
-    if (
-      !activeLatestPendingSubmit ||
-      (activeLatestPendingSubmit.status !== "accepted" &&
-        activeLatestPendingSubmit.status !== "confirmed")
-    ) {
-      return;
-    }
-    const { agentSessionId, content } = activeLatestPendingSubmit;
-    setDraftBySessionId((current) => {
-      const currentDraft = current[agentSessionId];
-      if (
-        !shouldClearSubmittedDraft({
-          currentDraft,
-          submittedContent: content
-        })
-      ) {
-        return current;
-      }
-      return {
-        ...current,
-        [agentSessionId]: emptyAgentComposerDraft()
-      };
+    const controller = new AgentGUIHomeDraftSettlementController({
+      applyDraftUpdate: (update) => {
+        setDraftByScopeKey((current) => {
+          const next = update(current);
+          draftByScopeKeyRef.current = next;
+          return next;
+        });
+      },
+      engine: sessionEngine,
+      snapshots: submittedDraftSnapshotsRef.current
     });
-  }, [activeLatestPendingSubmit]);
+    return controller.attach();
+  }, [
+    draftByScopeKeyRef,
+    sessionEngine,
+    setDraftByScopeKey,
+    submittedDraftSnapshotsRef
+  ]);
 
   const submitExistingPrompt = useCallback(
     (
       agentSessionId: string,
       normalizedContent: AgentPromptContentBlock[],
       displayPromptText?: string,
-      options?: { bypassLocalQueue?: boolean; guidance?: boolean }
+      options?: {
+        sendNow?: boolean;
+        sourceScopeKey?: string;
+        trackDraft?: boolean;
+      }
     ) => {
       if (isSessionMarkedNonResumable(agentSessionId)) {
         setDetailError(
@@ -314,8 +360,9 @@ export function useAgentGUISubmitInteractionActions(
         return;
       }
       executePrompt(agentSessionId, normalizedContent, displayPromptText, {
-        guidance: options?.guidance === true,
-        immediate: options?.bypassLocalQueue === true
+        sendNow: options?.sendNow === true,
+        sourceScopeKey: options?.sourceScopeKey,
+        trackDraft: options?.trackDraft === true
       });
     },
     [activation, executePrompt, isSessionMarkedNonResumable, workspaceId]
@@ -429,18 +476,44 @@ export function useAgentGUISubmitInteractionActions(
             submitExistingPrompt(
               recoveredAgentSessionId,
               normalizedContent,
-              displayPromptText
+              displayPromptText,
+              {
+                sourceScopeKey: resolveAgentComposerDraftScopeKey({}),
+                trackDraft: true
+              }
             );
             return;
           }
         }
-        startConversation(normalizedContent, displayPromptText);
+        const homeDraftKey = resolveAgentComposerDraftScopeKey({});
+        const submittedHomeDraft = snapshotAgentComposerDraft(
+          draftByScopeKeyRef.current[homeDraftKey] ?? emptyAgentComposerDraft()
+        );
+        const activationResult = startConversation(
+          normalizedContent,
+          displayPromptText
+        );
+        if (activationResult) {
+          draftByScopeKeyRef.current = clearSubmittedAgentGUIHomeDraft({
+            draftKey: homeDraftKey,
+            drafts: draftByScopeKeyRef.current,
+            submittedDraft: submittedHomeDraft
+          });
+          setDraftByScopeKey((current) =>
+            clearSubmittedAgentGUIHomeDraft({
+              draftKey: homeDraftKey,
+              drafts: current,
+              submittedDraft: submittedHomeDraft
+            })
+          );
+        }
         return;
       }
       submitExistingPrompt(
         agentSessionId,
         normalizedContent,
-        displayPromptText
+        displayPromptText,
+        { trackDraft: true }
       );
     },
     [
@@ -483,7 +556,7 @@ export function useAgentGUISubmitInteractionActions(
         agentSessionId,
         normalizedContent,
         displayPromptText,
-        { bypassLocalQueue: true, guidance: true }
+        { sendNow: true }
       );
     },
     [
@@ -601,21 +674,25 @@ export function useAgentGUISubmitInteractionActions(
     [sessionEngine]
   );
 
-  const updateDraftContent = useCallback((draftContent: AgentComposerDraft) => {
-    const agentSessionId = activeConversationIdRef.current;
-    const targetData = selectedComposerTargetDataRef.current;
-    const draftKey =
-      agentSessionId ??
-      nodeDefaultDraftKey(targetData.provider, targetData.agentTargetId);
-    draftBySessionIdRef.current = {
-      ...draftBySessionIdRef.current,
-      [draftKey]: draftContent
-    };
-    setDraftBySessionId((current) => ({
-      ...current,
-      [draftKey]: draftContent
-    }));
-  }, []);
+  const updateDraftContent = useCallback(
+    (draftContent: AgentComposerDraft, sourceScopeKey?: string) => {
+      const agentSessionId = activeConversationIdRef.current;
+      const draftKey =
+        sourceScopeKey ??
+        resolveAgentComposerDraftScopeKey({
+          agentSessionId
+        });
+      draftByScopeKeyRef.current = {
+        ...draftByScopeKeyRef.current,
+        [draftKey]: draftContent
+      };
+      setDraftByScopeKey((current) => ({
+        ...current,
+        [draftKey]: draftContent
+      }));
+    },
+    []
+  );
 
   return {
     goalControl,

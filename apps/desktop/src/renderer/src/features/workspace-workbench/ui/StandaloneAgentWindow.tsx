@@ -9,44 +9,32 @@ import {
   useSyncExternalStore,
   type ReactNode
 } from "react";
-import { AGENT_GUI_DETAIL_MIN_WIDTH_PX } from "@tutti-os/agent-gui";
+import {
+  AGENT_GUI_DETAIL_MIN_WIDTH_PX,
+  AGENT_GUI_EXPANDED_TARGET_WIDTH_PX,
+  AGENT_GUI_STANDALONE_AUTO_COLLAPSE_WIDTH_PX,
+  shouldAutoCollapseAgentGUIConversationRail
+} from "@tutti-os/agent-gui";
 import { AgentGuiWorkbenchHeader } from "@tutti-os/agent-gui/workbench";
-import { useWorkspaceSettingsPanelRequest } from "@tutti-os/agent-gui/workspace-settings-panel";
-import { normalizeAgentGUIAgents } from "@tutti-os/agent-gui/agents";
-import type { AgentGUIAgent } from "@tutti-os/agent-gui";
-import type {
-  WorkspaceAgentProvider,
-  WorkspaceSummary
-} from "@tutti-os/client-tuttid-ts";
+import type { WorkspaceSummary } from "@tutti-os/client-tuttid-ts";
 import {
   AGENT_GUI_WORKBENCH_CONVERSATION_RAIL_TOGGLE_EVENT,
   AGENT_GUI_WORKBENCH_NEW_CONVERSATION_EVENT,
-  AGENT_GUI_WORKBENCH_OPEN_EXTERNAL_IMPORT_EVENT,
   agentGuiWorkbenchProviderRailWidthPx,
   type AgentGuiWorkbenchConversationRailToggleDetail,
   type AgentGuiWorkbenchNewConversationDetail
 } from "@tutti-os/agent-gui/workbench/contribution";
-import { resolveAgentGuiSessionProviderIconUrl } from "@tutti-os/agent-gui/agentGuiSessionProviderIconUrls";
 import type {
   WorkbenchContribution,
-  WorkbenchDockPreviewCache,
-  WorkbenchFrame,
   WorkbenchHostHandle,
-  WorkbenchHostNodeBodyContext,
-  WorkbenchSize
+  WorkbenchHostNodeBodyContext
 } from "@tutti-os/workbench-surface";
 import type { I18nRuntime } from "@tutti-os/ui-i18n-runtime";
-import { AgentEnvPanel } from "@renderer/features/workspace-agent/ui/AgentEnvPanel.tsx";
 import { createDesktopAgentGUIWorkbenchHostInput } from "@renderer/features/workspace-agent/services/createDesktopAgentGUIWorkbenchHostInput.ts";
-import { ensureAllDesktopManagedAgentProviderStatuses } from "@renderer/features/workspace-agent/services/desktopManagedAgentProviders.ts";
 import { IAgentsService } from "@renderer/features/workspace-agent/services/agentsService.interface.ts";
-import type {
-  AgentProviderStatusSnapshot,
-  IAgentProviderStatusService as AgentProviderStatusService
-} from "@renderer/features/workspace-agent/services/agentProviderStatusService.interface.ts";
+import type { IAgentProviderStatusService as AgentProviderStatusService } from "@renderer/features/workspace-agent/services/agentProviderStatusService.interface.ts";
 import type { IWorkspaceAgentActivityService as WorkspaceAgentActivityService } from "@renderer/features/workspace-agent/services/workspaceAgentActivityService.interface.ts";
-import { resolveDesktopAgentGUIProviderForAgentTarget } from "@renderer/features/workspace-agent/ui/desktopAgentGUIWorkbenchStateHelpers.ts";
-import type { DesktopAgentGUIWorkbenchBodyProps } from "@renderer/features/workspace-agent/ui/desktopAgentGUIWorkbenchModel.ts";
+import type { DesktopAgentGUIPrefillPromptRequest } from "@renderer/features/workspace-agent/services/desktopAgentGUIPrefillPromptActivation.ts";
 import { isDesktopAgentGUIProvider } from "@renderer/features/workspace-agent/desktopAgentGUINodeState.ts";
 import {
   desktopAgentGUIOpenSessionActivationType,
@@ -57,42 +45,56 @@ import {
 import type { IWorkspaceAppCenterService } from "@renderer/features/workspace-app-center";
 import { useService } from "@tutti-os/infra/di";
 import { IWorkspaceFileManagerService } from "@renderer/features/workspace-file-manager";
-import type { DesktopApi, DesktopHostWindowApi } from "@preload/types";
+import type {
+  DesktopApi,
+  DesktopHostWindowApi,
+  DesktopWorkspaceAppExternalHostApi
+} from "@preload/types";
 import type { TuttidClient } from "@tutti-os/client-tuttid-ts";
+import type { TuttiExternalFileOpenInput } from "@tutti-os/workspace-external-core/contracts";
 import type { IReporterService } from "@renderer/features/analytics";
 import type { IDesktopRichTextAtService } from "@renderer/features/rich-text-at";
 import type { IWorkspaceUserProjectService } from "@renderer/features/workspace-user-project";
+import { DesktopAgentGUIWorkbenchBody } from "@renderer/features/workspace-agent/ui/DesktopAgentGUIWorkbenchBody.tsx";
 import { useTranslation } from "@renderer/i18n";
 import { AppUpdateStatus } from "@renderer/features/app-update";
-import { ExternalAgentSessionImportPrompt } from "./ExternalAgentSessionImportPrompt";
-import { ExternalAgentSessionImportWizard } from "./ExternalAgentSessionImportWizard";
-import { WorkspaceAccountMenu } from "./WorkspaceAccountMenu";
-import { WorkspaceSettingsPanel } from "./WorkspaceSettingsPanel";
 import { StandaloneAgentToolSidebar } from "./StandaloneAgentToolSidebar";
 import type { StandaloneAgentFileOpenRequest } from "./StandaloneAgentToolSidebar";
+import { WorkspaceAppExternalBridge } from "./WorkspaceAppExternalBridge";
+import {
+  createStandaloneAgentDockPreviewCache,
+  createStandaloneAgentHost,
+  readStandaloneAgentWindowFrame,
+  readStandaloneAgentWindowMaximizedState
+} from "./standaloneAgentWindowHost.ts";
 import { useWorkspaceSettingsService } from "./useWorkspaceSettingsService";
-import { useWorkspaceWorkbenchHostService } from "./useWorkspaceWorkbenchHostService";
-import type { WorkspaceSettingsSectionID } from "../services/workspaceSettingsService.interface";
-
 import type { WorkspaceWorkbenchCapabilitySettingsTarget } from "../services/workspaceWorkbenchHostService.interface";
-import type {
-  WorkspaceWallpaperDisplayMode,
-  WorkspaceWallpaperId
-} from "../services/workspaceWallpaper";
+import { resolveDesktopWindowIntent } from "@shared/contracts/windowIntent.ts";
+import { useStandaloneAgentLaunchRouting } from "./useStandaloneAgentLaunchRouting.ts";
+import { resolveStandaloneAgentHeaderIdentity } from "./standaloneAgentHeaderIdentity.ts";
+
+const LazyWorkspaceAccountMenu = lazy(() =>
+  import("./WorkspaceAccountMenu").then(({ WorkspaceAccountMenu }) => ({
+    default: WorkspaceAccountMenu
+  }))
+);
+const LazyStandaloneAgentWindowPanelHosts = lazy(() =>
+  import("./StandaloneAgentWindowPanelHosts.tsx").then(
+    ({ StandaloneAgentWindowPanelHosts }) => ({
+      default: StandaloneAgentWindowPanelHosts
+    })
+  )
+);
 
 const standaloneAgentNodeId = "standalone-agent-window-node";
 const standaloneAgentInstanceKey = "standalone-agent-window";
 const standaloneAgentDefaultConversationRailWidthPx = 280;
-const desktopAgentGUIWorkbenchBodyModulePromise =
-  import("@renderer/features/workspace-agent/ui/DesktopAgentGUIWorkbenchBody.tsx");
-const LazyDesktopAgentGUIWorkbenchBody = lazy(() =>
-  desktopAgentGUIWorkbenchBodyModulePromise.then((module) => ({
-    default: module.DesktopAgentGUIWorkbenchBody
-  }))
-);
-
 function renderStandaloneAgentSidebarFooter(): ReactNode {
-  return <WorkspaceAccountMenu showLeadingDivider={false} />;
+  return (
+    <Suspense fallback={null}>
+      <LazyWorkspaceAccountMenu />
+    </Suspense>
+  );
 }
 
 function StandaloneAgentWindowContentReady({
@@ -124,6 +126,7 @@ export interface StandaloneAgentWindowProps {
   tuttidClient: TuttidClient;
   workspaceAgentActivityService: WorkspaceAgentActivityService;
   workspaceAppCenterService: IWorkspaceAppCenterService;
+  workspaceAppExternalApi?: DesktopWorkspaceAppExternalHostApi;
   toolWorkbench: {
     appI18n: I18nRuntime<string>;
     contributions: readonly WorkbenchContribution[] | undefined;
@@ -143,6 +146,7 @@ export function StandaloneAgentWindow({
   tuttidClient,
   workspaceAgentActivityService,
   workspaceAppCenterService,
+  workspaceAppExternalApi,
   toolWorkbench,
   workspace,
   workspaceUserProjectService
@@ -152,21 +156,81 @@ export function StandaloneAgentWindow({
   const workspaceFileManagerService = useService(IWorkspaceFileManagerService);
   const { service: workspaceSettingsService } = useWorkspaceSettingsService();
   const workspaceId = workspace.id;
+  const [panelHostsReady, setPanelHostsReady] = useState(false);
+  useEffect(() => {
+    const animationFrame = window.requestAnimationFrame(() => {
+      setPanelHostsReady(true);
+    });
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, []);
+  const workspaceAppPollingDisposerRef = useRef<(() => void) | null>(null);
+  const ensureWorkspaceAppPolling = useCallback(() => {
+    if (workspaceAppPollingDisposerRef.current) {
+      return;
+    }
+    workspaceAppPollingDisposerRef.current =
+      workspaceAppCenterService.startWorkspacePolling(workspaceId);
+  }, [workspaceAppCenterService, workspaceId]);
   useEffect(
-    () => workspaceAppCenterService.startWorkspacePolling(workspaceId),
+    () => () => {
+      workspaceAppPollingDisposerRef.current?.();
+      workspaceAppPollingDisposerRef.current = null;
+    },
     [workspaceAppCenterService, workspaceId]
   );
-  const params = useMemo(() => new URLSearchParams(window.location.search), []);
-  const launchProvider = normalizeDesktopAgentGUIProvider(
-    params.get("provider")
+  const windowIntent = useMemo(
+    () => resolveDesktopWindowIntent(window.location.search),
+    []
   );
-  const launchAgentSessionId = params.get("agentSessionId")?.trim() || null;
-  const launchAgentTargetId = params.get("agentTargetId")?.trim() || null;
-  const bootstrapAgents = useMemo(() => readBootstrapAgents(params), [params]);
-  const providerStatusBootstrapSnapshot = useMemo(
-    () => readProviderStatusBootstrapSnapshot(params),
-    [params]
-  );
+  const launchProvider =
+    windowIntent.kind === "agent" && windowIntent.provider
+      ? normalizeDesktopAgentGUIProvider(windowIntent.provider)
+      : "codex";
+  const launchDraftPrompt =
+    windowIntent.kind === "agent" ? (windowIntent.draftPrompt ?? null) : null;
+  const launchAutoSubmit =
+    windowIntent.kind === "agent" && windowIntent.autoSubmit === true;
+  const launchUserProjectPath =
+    windowIntent.kind === "agent"
+      ? (windowIntent.userProjectPath ?? null)
+      : null;
+  const launchAgentSessionId =
+    windowIntent.kind === "agent"
+      ? (windowIntent.agentSessionID ?? null)
+      : null;
+  const launchAgentTargetId =
+    windowIntent.kind === "agent" ? (windowIntent.agentTargetID ?? null) : null;
+  const prefillPromptBootstrapRequest =
+    useMemo<DesktopAgentGUIPrefillPromptRequest | null>(
+      () =>
+        launchDraftPrompt
+          ? {
+              agentTargetId: launchAgentTargetId,
+              autoSubmit: launchAutoSubmit,
+              draftPrompt: launchDraftPrompt,
+              provider: launchProvider,
+              sequence: 1,
+              ...(launchUserProjectPath
+                ? { userProjectPath: launchUserProjectPath }
+                : {})
+            }
+          : null,
+      [
+        launchAgentTargetId,
+        launchAutoSubmit,
+        launchDraftPrompt,
+        launchProvider,
+        launchUserProjectPath
+      ]
+    );
+  const bootstrapAgentDirectory =
+    windowIntent.kind === "agent"
+      ? (windowIntent.agentDirectorySnapshot ?? null)
+      : null;
+  const providerStatusBootstrapSnapshot =
+    windowIntent.kind === "agent"
+      ? (windowIntent.providerStatusSnapshot ?? null)
+      : null;
   // Seed the live service from the opening window's snapshot synchronously,
   // during the first render, before any child effect gets a chance to kick
   // off its own fresh status request. Without this, `agentProviderStatusService`
@@ -183,13 +247,31 @@ export function StandaloneAgentWindow({
       agentProviderStatusService.hydrate(providerStatusBootstrapSnapshot);
     }
   }
-  const [frame, setFrame] = useState(() => readWindowFrameRect());
-  const [isWindowMaximized, setIsWindowMaximized] = useState(
-    readWindowMaximizedState
+  const hasHydratedAgentDirectoryRef = useRef(false);
+  if (!hasHydratedAgentDirectoryRef.current) {
+    hasHydratedAgentDirectoryRef.current = true;
+    if (bootstrapAgentDirectory) {
+      agentsService.hydrate(bootstrapAgentDirectory);
+    }
+  }
+  const subscribeAgentDirectory = useCallback(
+    (listener: () => void) => agentsService.subscribe(listener),
+    [agentsService]
   );
-  const [agents, setAgents] = useState<
-    Awaited<ReturnType<typeof agentsService.load>>["agents"] | null
-  >(() => bootstrapAgents);
+  const getAgentDirectorySnapshot = useCallback(
+    () => agentsService.getSnapshot(),
+    [agentsService]
+  );
+  const agentDirectorySnapshot = useSyncExternalStore(
+    subscribeAgentDirectory,
+    getAgentDirectorySnapshot,
+    getAgentDirectorySnapshot
+  );
+  const agents = agentDirectorySnapshot.agents;
+  const [frame, setFrame] = useState(readStandaloneAgentWindowFrame);
+  const [isWindowMaximized, setIsWindowMaximized] = useState(
+    readStandaloneAgentWindowMaximizedState
+  );
   const [nodeState, setNodeState] = useState<DesktopAgentGUIWorkbenchState>(
     () => ({
       agentTargetId: launchAgentTargetId,
@@ -221,9 +303,8 @@ export function StandaloneAgentWindow({
   const [fileOpenRequest, setFileOpenRequest] =
     useState<StandaloneAgentFileOpenRequest | null>(null);
   const fileOpenRequestSequenceRef = useRef(0);
-  const activationSequenceRef = useRef(1);
-  const openFileInSidebar = useCallback((path: string): boolean => {
-    const normalizedPath = path.trim();
+  const openFileInSidebar = useCallback((file: string): boolean => {
+    const normalizedPath = file.trim();
     if (!normalizedPath) {
       return false;
     }
@@ -233,10 +314,21 @@ export function StandaloneAgentWindow({
     });
     return true;
   }, []);
+  const openWorkspaceAppExternalFile = useCallback(
+    async (input: TuttiExternalFileOpenInput) => {
+      if (!openFileInSidebar(input.path)) {
+        throw new Error("Workspace files could not be opened.");
+      }
+    },
+    [openFileInSidebar]
+  );
   useEffect(() => {
     workspaceFileManagerService.setCanvasFilePreviewLauncher(
       workspaceId,
-      (target) => openFileInSidebar(target.path)
+      async (target) => {
+        await desktopApi.host.files.openFile(workspaceId, target.path);
+        return true;
+      }
     );
     workspaceFileManagerService.setPreviewUnsupportedFallbackNotificationEnabled(
       workspaceId,
@@ -248,13 +340,14 @@ export function StandaloneAgentWindow({
         null
       );
     };
-  }, [openFileInSidebar, workspaceFileManagerService, workspaceId]);
+  }, [desktopApi.host.files, workspaceFileManagerService, workspaceId]);
   useEffect(() => {
     workspaceAppCenterService.setWorkspaceAppLauncher(
       async ({ appId, workspaceId: targetWorkspaceId }) => {
         if (targetWorkspaceId !== workspaceId) {
           return false;
         }
+        ensureWorkspaceAppPolling();
         workspaceAppCenterService.setViewState({
           state: { openAppId: appId },
           workspaceId
@@ -282,7 +375,7 @@ export function StandaloneAgentWindow({
       workspaceAppCenterService.setWorkspaceAppViewCloser(null);
       workspaceAppCenterService.setWorkspaceAppViewOpenChecker(null);
     };
-  }, [workspaceAppCenterService, workspaceId]);
+  }, [ensureWorkspaceAppPolling, workspaceAppCenterService, workspaceId]);
   const subscribeAppCenter = useCallback(
     (listener: () => void) => workspaceAppCenterService.subscribe(listener),
     [workspaceAppCenterService]
@@ -326,8 +419,13 @@ export function StandaloneAgentWindow({
       workspaceUserProjectService
     ]
   );
+  const trackStandaloneAgentGUIEngagement = useMemo(
+    () =>
+      agentGuiHostInput.createAgentGUIEngagementEventSink("standalone_agent"),
+    [agentGuiHostInput]
+  );
   const dockPreviewCache = useMemo(
-    () => createDockPreviewCache(desktopApi.dockPreviewCache),
+    () => createStandaloneAgentDockPreviewCache(desktopApi.dockPreviewCache),
     [desktopApi.dockPreviewCache]
   );
   const instanceId = useMemo(
@@ -335,33 +433,32 @@ export function StandaloneAgentWindow({
     [launchProvider, workspaceId]
   );
   const activeAgentTargetId = nodeState.agentTargetId?.trim() || null;
-  const headerProvider = resolveDesktopAgentGUIProviderForAgentTarget(
-    activeAgentTargetId,
-    agents ?? undefined,
-    readStandaloneNodeProvider(nodeState, launchProvider)
-  );
-  const headerAgentTarget =
-    activeAgentTargetId && agents
-      ? (agents.find(
-          (target) => target.agentTargetId === activeAgentTargetId
-        ) ?? null)
-      : null;
-  const headerConversationIconFallbackUrl =
-    resolveAgentGuiSessionProviderIconUrl(headerProvider);
-  const headerConversationIconUrl =
-    headerAgentTarget?.iconUrl ?? headerConversationIconFallbackUrl;
-  const headerConversationTitle =
-    activitySnapshot.sessions
-      .find(
-        (session) =>
-          session.agentSessionId === nodeState.lastActiveAgentSessionId
-      )
-      ?.title?.trim() || null;
+  const {
+    agentTitle: headerAgentTitle,
+    conversationIconFallbackUrl: headerConversationIconFallbackUrl,
+    conversationIconUrl: headerConversationIconUrl,
+    conversationTitle: headerConversationTitle,
+    provider: headerProvider
+  } = resolveStandaloneAgentHeaderIdentity({
+    agentTargetId: activeAgentTargetId,
+    agents,
+    fallbackProvider: readStandaloneNodeProvider(nodeState, launchProvider),
+    lastActiveAgentSessionId: nodeState.lastActiveAgentSessionId,
+    sessions: activitySnapshot.sessions
+  });
   const headerConversationRailWidthPx =
     typeof nodeState.conversationRailWidthPx === "number" &&
     Number.isFinite(nodeState.conversationRailWidthPx)
       ? nodeState.conversationRailWidthPx
       : standaloneAgentDefaultConversationRailWidthPx;
+  const isConversationRailAutoCollapsed =
+    shouldAutoCollapseAgentGUIConversationRail(
+      frame.width,
+      AGENT_GUI_STANDALONE_AUTO_COLLAPSE_WIDTH_PX
+    );
+  const isConversationRailCollapsed =
+    nodeState.conversationRailCollapsed === true ||
+    isConversationRailAutoCollapsed;
   const host = useMemo(
     () =>
       createStandaloneAgentHost({
@@ -387,7 +484,8 @@ export function StandaloneAgentWindow({
       host,
       instanceId,
       instanceKey: standaloneAgentInstanceKey,
-      isFocused: document.hasFocus(),
+      // Standalone has one node; document focus is tracked live by engagement.
+      isFocused: true,
       node: {
         data: {
           activation,
@@ -417,7 +515,7 @@ export function StandaloneAgentWindow({
 
   useEffect(() => {
     const handleResize = () => {
-      setFrame(readWindowFrameRect());
+      setFrame(readStandaloneAgentWindowFrame());
     };
     window.addEventListener("resize", handleResize);
     return () => {
@@ -439,37 +537,15 @@ export function StandaloneAgentWindow({
   }, []);
 
   useEffect(() => {
-    let disposed = false;
-    const loadAgents = () => {
-      void agentsService
-        .load()
-        .then((snapshot) => {
-          if (!disposed) {
-            setAgents(snapshot.agents);
-          }
-        })
-        .catch(() => undefined);
-    };
-    loadAgents();
-    window.addEventListener("focus", loadAgents);
-    return () => {
-      disposed = true;
-      window.removeEventListener("focus", loadAgents);
-    };
+    void agentsService.refresh().catch(() => undefined);
   }, [agentsService]);
-  useEffect(() => {
-    // The main workspace window loads every managed provider's status via its
-    // dock rail (which subscribes on mount and probes all providers). This
-    // standalone window has no dock, so nothing else ever asks for the full
-    // set — without this, only the single provider the window was launched
-    // for gets checked, and every other provider (e.g. switching the "全部"
-    // filter to one that was never probed) stays stuck on "checking".
-    void ensureAllDesktopManagedAgentProviderStatuses(
-      agentProviderStatusService
-    );
-  }, [agentProviderStatusService]);
   const handleConversationRailToggle = useCallback(
     (collapsed: boolean) => {
+      if (!collapsed && frame.width < 640) {
+        void hostWindowApi.resizeContentWidth({
+          width: AGENT_GUI_EXPANDED_TARGET_WIDTH_PX
+        });
+      }
       setNodeState((current) => ({
         ...current,
         conversationRailCollapsed: collapsed
@@ -486,7 +562,7 @@ export function StandaloneAgentWindow({
         )
       );
     },
-    [instanceId]
+    [frame.width, hostWindowApi, instanceId]
   );
   const handleCreateConversation = useCallback(() => {
     window.dispatchEvent(
@@ -498,40 +574,26 @@ export function StandaloneAgentWindow({
       )
     );
   }, [instanceId]);
-  const handleOpenMessageCenterChat = useCallback(
-    (input: { agentSessionId: string; provider: string }) => {
-      setNodeState((current) => ({
-        ...current,
-        lastActiveAgentSessionId: input.agentSessionId,
-        provider: normalizeDesktopAgentGUIProvider(input.provider)
-      }));
-      setActivation({
-        payload: { agentSessionId: input.agentSessionId },
-        sequence: ++activationSequenceRef.current,
-        type: desktopAgentGUIOpenSessionActivationType
-      });
-    },
-    []
-  );
+  const {
+    handleLinkAction,
+    handleOpenMessageCenterChat,
+    issueManagerOpenRequest
+  } = useStandaloneAgentLaunchRouting({
+    agentDirectorySnapshot,
+    agentProviderStatusService,
+    headerProvider,
+    homeDirectory: desktopApi.platform.homeDirectory,
+    hostWindowApi,
+    openFileInSidebar,
+    setActivation,
+    setNodeState,
+    workspaceAgentActivityService,
+    workspaceAppCenterService,
+    workspaceId
+  });
   const resizeStandaloneAgentWindowContentWidth = useCallback(
     (width: number) => hostWindowApi.resizeContentWidth({ width }),
     [hostWindowApi]
-  );
-  const handleLinkAction = useCallback(
-    (
-      action: Parameters<
-        NonNullable<DesktopAgentGUIWorkbenchBodyProps["onLinkAction"]>
-      >[0]
-    ) => {
-      if (
-        action.type !== "open-local-asset-preview" &&
-        action.type !== "open-workspace-file"
-      ) {
-        return;
-      }
-      openFileInSidebar(action.path);
-    },
-    [openFileInSidebar]
   );
   const handleCapabilitySettingsRequest = useCallback(
     (target: WorkspaceWorkbenchCapabilitySettingsTarget) => {
@@ -547,18 +609,19 @@ export function StandaloneAgentWindow({
   );
   const handleDuplicateStandaloneWindow = useCallback(() => {
     void hostWindowApi.openAgentWindow({
+      agentDirectorySnapshot,
       agentSessionId: nodeState.lastActiveAgentSessionId,
       agentTargetId: activeAgentTargetId,
       providerStatusSnapshot: agentProviderStatusService.getSnapshot(),
-      agents: agents ?? undefined,
       minimizeSourceWindow: false,
+      offsetFromSourceWindow: true,
       provider: headerProvider,
       workspaceId
     });
   }, [
     activeAgentTargetId,
+    agentDirectorySnapshot,
     agentProviderStatusService,
-    agents,
     headerProvider,
     hostWindowApi,
     nodeState.lastActiveAgentSessionId,
@@ -589,14 +652,16 @@ export function StandaloneAgentWindow({
         browserApi={desktopApi.browser}
         contributions={toolWorkbench.contributions}
         fileOpenRequest={fileOpenRequest}
+        issueManagerOpenRequest={issueManagerOpenRequest}
         mainContentMinWidthPx={
-          nodeState.conversationRailCollapsed
+          isConversationRailCollapsed
             ? AGENT_GUI_DETAIL_MIN_WIDTH_PX
             : headerConversationRailWidthPx +
               agentGuiWorkbenchProviderRailWidthPx
         }
         renderHeader={(toolActions) => (
           <AgentGuiWorkbenchHeader
+            agentTitle={headerAgentTitle}
             copy={{
               collapseConversationRail: i18n.t(
                 "workspace.agentGui.collapseConversationRail"
@@ -608,9 +673,7 @@ export function StandaloneAgentWindow({
                 "workspace.agentGui.fallbackAgentLabel"
               ),
               newConversation: i18n.t("workspace.agentGui.newConversation"),
-              openDetachedWindow: i18n.t(
-                "workspace.agentGui.openDetachedWindow"
-              )
+              openDetachedWindow: i18n.t("workspace.agentGui.openNewWindow")
             }}
             conversationRailWidthPx={headerConversationRailWidthPx}
             conversationIconUrl={headerConversationIconUrl}
@@ -622,17 +685,14 @@ export function StandaloneAgentWindow({
             displayMode={isWindowMaximized ? "fullscreen" : "floating"}
             data-agent-gui-standalone-window-header="true"
             data-workbench-drag-handle="true"
-            isConversationRailAutoCollapsed={false}
-            isConversationRailCollapsed={
-              nodeState.conversationRailCollapsed === true
-            }
+            isConversationRailAutoCollapsed={isConversationRailAutoCollapsed}
+            isConversationRailCollapsed={isConversationRailCollapsed}
             nodeId={standaloneAgentNodeId}
             providerRailWidthPx={agentGuiWorkbenchProviderRailWidthPx}
             primaryAccessory={<AppUpdateStatus presentation="standalone" />}
             secondaryAccessory={isContentLoading ? null : toolActions}
             showConversationRailToggle={!isContentLoading}
-            showAppTitle
-            title={i18n.t("workspace.agentGui.fallbackAgentLabel")}
+            showAppTitle={false}
             windowActions={{
               close: () => {
                 void toolWorkbench.requestWindowClose();
@@ -650,243 +710,90 @@ export function StandaloneAgentWindow({
           />
         )}
         onOpenMessageCenterChat={handleOpenMessageCenterChat}
+        onAppsOpen={ensureWorkspaceAppPolling}
         onToolHostReady={toolWorkbench.onHostReady}
         resizeWindowContentWidth={resizeStandaloneAgentWindowContentWidth}
         workspaceId={workspaceId}
       >
-        <Suspense fallback={<div className="h-full min-h-0 bg-background" />}>
-          <StandaloneAgentWindowContentReady onReady={handleContentReady}>
-            <LazyDesktopAgentGUIWorkbenchBody
-              agentActivityRuntime={agentGuiHostInput.agentActivityRuntime}
-              agentHostApi={agentGuiHostInput.agentHostApi}
-              appCenterService={workspaceAppCenterService}
-              agentProviderStatusService={agentProviderStatusService}
-              context={context}
-              computerUseApi={desktopApi.computerUse}
-              dockPreviewCache={dockPreviewCache}
-              onLinkAction={handleLinkAction}
-              onCapabilitySettingsRequest={handleCapabilitySettingsRequest}
-              onOpenAgentConversationWindow={({ agentSessionId, provider }) => {
-                // Hand off whatever is cached right now — see the matching note
-                // in workspaceAgentGuiContribution.ts's onOpenDetachedWindow for
-                // why we don't block this click on a full provider probe.
-                void hostWindowApi.openAgentWindow({
-                  agentSessionId,
-                  providerStatusSnapshot:
-                    agentProviderStatusService.getSnapshot(),
-                  agents: agents ?? undefined,
-                  provider,
-                  workspaceId
-                });
-              }}
-              onStateChange={setNodeState}
-              providerStatusBootstrapSnapshot={providerStatusBootstrapSnapshot}
-              agents={agents ?? []}
-              agentsLoading={agents === null}
-              contextMentionProviders={
-                agentGuiHostInput.contextMentionProviders
-              }
-              runtimeApi={desktopApi.runtime}
-              trackAgentProviderChatReady={
-                agentGuiHostInput.trackAgentProviderChatReady
-              }
-              trackWorkspaceFileReferences={
-                agentGuiHostInput.trackWorkspaceFileReferences
-              }
-              workspaceFileReferenceAdapter={
-                agentGuiHostInput.workspaceFileReferenceAdapter
-              }
-              resolveDroppedFileReferences={
-                agentGuiHostInput.resolveDroppedFileReferences
-              }
-              onRequestGitBranches={agentGuiHostInput.onRequestGitBranches}
-              referenceSourceAggregator={
-                agentGuiHostInput.referenceSourceAggregator
-              }
-              renderSidebarFooter={renderStandaloneAgentSidebarFooter}
-              resolveWorkspaceReferenceEntryIconUrl={
-                agentGuiHostInput.resolveWorkspaceReferenceEntryIconUrl
-              }
-              resolveMentionReferenceTarget={
-                agentGuiHostInput.resolveMentionReferenceTarget
-              }
-              resolveWorkspaceReferenceInitialTarget={
-                agentGuiHostInput.resolveWorkspaceReferenceInitialTarget
-              }
-              workspaceId={workspaceId}
-            />
-          </StandaloneAgentWindowContentReady>
-        </Suspense>
+        <StandaloneAgentWindowContentReady onReady={handleContentReady}>
+          <DesktopAgentGUIWorkbenchBody
+            agentActivityRuntime={agentGuiHostInput.agentActivityRuntime}
+            agentHostApi={agentGuiHostInput.agentHostApi}
+            appCenterService={workspaceAppCenterService}
+            agentProviderStatusService={agentProviderStatusService}
+            context={context}
+            computerUseApi={desktopApi.computerUse}
+            conversationRailAutoCollapseWidthPx={
+              AGENT_GUI_STANDALONE_AUTO_COLLAPSE_WIDTH_PX
+            }
+            dockPreviewCache={dockPreviewCache}
+            onLinkAction={handleLinkAction}
+            onCapabilitySettingsRequest={handleCapabilitySettingsRequest}
+            onOpenAgentConversationWindow={({ agentSessionId, provider }) => {
+              // Duplicate the complete live snapshot so the new window can
+              // hydrate before its first local refresh.
+              void hostWindowApi.openAgentWindow({
+                agentSessionId,
+                providerStatusSnapshot:
+                  agentProviderStatusService.getSnapshot(),
+                agentDirectorySnapshot,
+                provider,
+                workspaceId
+              });
+            }}
+            onStateChange={setNodeState}
+            prefillPromptBootstrapRequest={prefillPromptBootstrapRequest}
+            providerStatusBootstrapSnapshot={providerStatusBootstrapSnapshot}
+            agentDirectory={agentDirectorySnapshot}
+            contextMentionProviders={agentGuiHostInput.contextMentionProviders}
+            runtimeApi={desktopApi.runtime}
+            trackAgentProviderChatReady={
+              agentGuiHostInput.trackAgentProviderChatReady
+            }
+            onEngagementEvent={trackStandaloneAgentGUIEngagement}
+            trackWorkspaceFileReferences={
+              agentGuiHostInput.trackWorkspaceFileReferences
+            }
+            workspaceFileReferenceAdapter={
+              agentGuiHostInput.workspaceFileReferenceAdapter
+            }
+            resolveDroppedFileReferences={
+              agentGuiHostInput.resolveDroppedFileReferences
+            }
+            onRequestGitBranches={agentGuiHostInput.onRequestGitBranches}
+            referenceSourceAggregator={
+              agentGuiHostInput.referenceSourceAggregator
+            }
+            renderSidebarFooter={renderStandaloneAgentSidebarFooter}
+            resolveWorkspaceReferenceEntryIconUrl={
+              agentGuiHostInput.resolveWorkspaceReferenceEntryIconUrl
+            }
+            resolveMentionReferenceTarget={
+              agentGuiHostInput.resolveMentionReferenceTarget
+            }
+            resolveWorkspaceReferenceInitialTarget={
+              agentGuiHostInput.resolveWorkspaceReferenceInitialTarget
+            }
+            workspaceId={workspaceId}
+          />
+        </StandaloneAgentWindowContentReady>
       </StandaloneAgentToolSidebar>
-      <StandaloneAgentWindowPanelHosts
-        agentProviderStatusService={agentProviderStatusService}
-        host={host}
-        workspace={workspace}
+      {panelHostsReady ? (
+        <Suspense fallback={null}>
+          <LazyStandaloneAgentWindowPanelHosts
+            agentProviderStatusService={agentProviderStatusService}
+            host={host}
+            workspace={workspace}
+          />
+        </Suspense>
+      ) : null}
+      <WorkspaceAppExternalBridge
+        api={workspaceAppExternalApi}
+        openFile={openWorkspaceAppExternalFile}
+        workspaceId={workspaceId}
       />
     </main>
   );
-}
-
-function StandaloneAgentWindowPanelHosts({
-  agentProviderStatusService,
-  host,
-  workspace
-}: {
-  agentProviderStatusService: AgentProviderStatusService;
-  host: WorkbenchHostHandle;
-  workspace: WorkspaceSummary;
-}): ReactNode {
-  const { service: workspaceSettingsService } = useWorkspaceSettingsService();
-  const workbenchHostService = useWorkspaceWorkbenchHostService();
-  const settingsPanelRequest = useWorkspaceSettingsPanelRequest();
-  const lastHandledSettingsRequestRef = useRef(
-    settingsPanelRequest.requestSequence
-  );
-  const [externalImportWizardProviders, setExternalImportWizardProviders] =
-    useState<WorkspaceAgentProvider[] | undefined>(undefined);
-  const [externalImportWizardOpen, setExternalImportWizardOpen] =
-    useState(false);
-  const wallpaperRevision = useSyncExternalStore(
-    (listener) => workbenchHostService.subscribeWallpaperChanges(listener),
-    () => workbenchHostService.getWallpaperRevision(),
-    () => workbenchHostService.getWallpaperRevision()
-  );
-  const selectedWallpaperID = useMemo(
-    () => workbenchHostService.readWallpaperId(workspace.id),
-    [wallpaperRevision, workbenchHostService, workspace.id]
-  );
-  const selectedWallpaperDisplayMode = useMemo(
-    () => workbenchHostService.readWallpaperDisplayMode(workspace.id),
-    [wallpaperRevision, workbenchHostService, workspace.id]
-  );
-  const openExternalAgentImport = useCallback(
-    (providers?: WorkspaceAgentProvider[]) => {
-      setExternalImportWizardProviders(providers);
-      setExternalImportWizardOpen(true);
-    },
-    []
-  );
-  useEffect(() => {
-    const openImportWizard = (): void => {
-      openExternalAgentImport();
-    };
-    window.addEventListener(
-      AGENT_GUI_WORKBENCH_OPEN_EXTERNAL_IMPORT_EVENT,
-      openImportWizard
-    );
-    return () => {
-      window.removeEventListener(
-        AGENT_GUI_WORKBENCH_OPEN_EXTERNAL_IMPORT_EVENT,
-        openImportWizard
-      );
-    };
-  }, [openExternalAgentImport]);
-  const selectWallpaper = useCallback(
-    (wallpaperId: WorkspaceWallpaperId) => {
-      workbenchHostService.writeWallpaperId(workspace.id, wallpaperId);
-    },
-    [workbenchHostService, workspace.id]
-  );
-  const selectWallpaperDisplayMode = useCallback(
-    (displayMode: WorkspaceWallpaperDisplayMode) => {
-      workbenchHostService.writeWallpaperDisplayMode(workspace.id, displayMode);
-    },
-    [workbenchHostService, workspace.id]
-  );
-
-  useEffect(() => {
-    if (
-      settingsPanelRequest.requestSequence ===
-      lastHandledSettingsRequestRef.current
-    ) {
-      return;
-    }
-    lastHandledSettingsRequestRef.current =
-      settingsPanelRequest.requestSequence;
-    workspaceSettingsService.openPanel(
-      { id: workspace.id },
-      settingsPanelRequest.section
-        ? {
-            section: settingsPanelRequest.section as WorkspaceSettingsSectionID
-          }
-        : undefined
-    );
-  }, [settingsPanelRequest, workspace.id, workspaceSettingsService]);
-
-  return (
-    <>
-      <WorkspaceSettingsPanel
-        onOpenExternalAgentImport={() => openExternalAgentImport()}
-        onSelectWallpaper={selectWallpaper}
-        onSelectWallpaperDisplayMode={selectWallpaperDisplayMode}
-        selectedWallpaperDisplayMode={selectedWallpaperDisplayMode}
-        selectedWallpaperID={selectedWallpaperID}
-        workspace={workspace}
-      />
-      <ExternalAgentSessionImportPrompt
-        workspaceId={workspace.id}
-        onOpenImport={openExternalAgentImport}
-      />
-      <ExternalAgentSessionImportWizard
-        initialProviders={externalImportWizardProviders}
-        open={externalImportWizardOpen}
-        workspace={workspace}
-        onOpenChange={setExternalImportWizardOpen}
-      />
-      <AgentEnvPanel
-        agentProviderStatusService={agentProviderStatusService}
-        workspaceId={workspace.id}
-        workbenchHost={host}
-      />
-    </>
-  );
-}
-
-function readBootstrapAgents(
-  params: URLSearchParams
-): readonly AgentGUIAgent[] | null {
-  const encodedAgents = params.get("agents");
-  if (!encodedAgents) {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(encodedAgents);
-    if (!Array.isArray(parsed)) {
-      return null;
-    }
-    return normalizeAgentGUIAgents(parsed as readonly AgentGUIAgent[]);
-  } catch {
-    return null;
-  }
-}
-
-function readProviderStatusBootstrapSnapshot(
-  params: URLSearchParams
-): AgentProviderStatusSnapshot | null {
-  const encodedSnapshot = params.get("agentProviderStatusSnapshot");
-  if (!encodedSnapshot) {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(
-      encodedSnapshot
-    ) as Partial<AgentProviderStatusSnapshot>;
-    if (!parsed.capturedAt || typeof parsed.capturedAt !== "string") {
-      return null;
-    }
-    return {
-      capturedAt: parsed.capturedAt,
-      defaultProvider: parsed.defaultProvider ?? null,
-      error: parsed.error ?? null,
-      isLoading: parsed.isLoading === true,
-      pendingActions: Array.isArray(parsed.pendingActions)
-        ? parsed.pendingActions
-        : [],
-      statuses: Array.isArray(parsed.statuses) ? parsed.statuses : []
-    };
-  } catch {
-    return null;
-  }
 }
 
 function readStandaloneNodeProvider(
@@ -895,92 +802,4 @@ function readStandaloneNodeProvider(
 ): DesktopAgentGUIProvider {
   const provider = (state as { provider?: unknown }).provider;
   return isDesktopAgentGUIProvider(provider) ? provider : fallbackProvider;
-}
-
-function readWindowSize(): WorkbenchSize {
-  return {
-    height: Math.max(1, window.innerHeight),
-    width: Math.max(1, window.innerWidth)
-  };
-}
-
-function readWindowFrameRect(): WorkbenchFrame {
-  return {
-    ...readWindowSize(),
-    x: 0,
-    y: 0
-  };
-}
-
-function readWindowMaximizedState(): boolean {
-  return (
-    typeof document !== "undefined" &&
-    document.documentElement.dataset.tuttiWindowMaximized === "true"
-  );
-}
-
-function createDockPreviewCache(
-  api: DesktopApi["dockPreviewCache"]
-): WorkbenchDockPreviewCache {
-  const pendingWriteKeys = new Set<string>();
-  return {
-    read(key) {
-      return api.read({ key }).catch(() => null);
-    },
-    write({ key, previewImageUrl }) {
-      const writeKey = JSON.stringify(key);
-      if (pendingWriteKeys.has(writeKey)) {
-        return;
-      }
-      pendingWriteKeys.add(writeKey);
-      void api
-        .write({ dataUrl: previewImageUrl, key })
-        .catch(() => {})
-        .finally(() => {
-          pendingWriteKeys.delete(writeKey);
-        });
-    }
-  };
-}
-
-function createStandaloneAgentHost(input: {
-  clearActivation(nodeId: string, sequence: number): void;
-}): WorkbenchHostHandle {
-  const snapshot = {
-    activeDragNodeId: null,
-    activeResizeNodeId: null,
-    activeSnapTarget: null,
-    lockedLayout: null,
-    layoutConstraints: {
-      minHeight: 0,
-      minWidth: 0,
-      safeArea: { bottom: 0, left: 0, right: 0, top: 0 },
-      surfacePadding: 0
-    },
-    nodes: [],
-    nodeStack: [],
-    surfaceSize: readWindowSize()
-  };
-  return {
-    activateNode: () => undefined,
-    clearNodeActivation: input.clearActivation,
-    closeNode: () => undefined,
-    collectWindowCloseEffects: async () => [],
-    dispose: () => undefined,
-    exitFullscreenNode: () => undefined,
-    focusNode: () => undefined,
-    getSnapshot: () => ({
-      ...snapshot,
-      surfaceSize: readWindowSize()
-    }),
-    launchNode: async () => null,
-    load: async () => undefined,
-    minimizeNode: () => undefined,
-    reconcileProjectedNodes: () => undefined,
-    requestNodeClose: () => undefined,
-    setNodeRuntimeState: () => undefined,
-    setNodeSizeConstraints: () => undefined,
-    setNodeTitle: () => undefined,
-    setSnapshotNodeState: () => undefined
-  };
 }

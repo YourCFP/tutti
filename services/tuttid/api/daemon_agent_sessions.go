@@ -17,10 +17,11 @@ import (
 type AgentSessionService interface {
 	List(context.Context, string) ([]agentservice.Session, error)
 	ListFiltered(context.Context, string, agentservice.ListSessionsInput) ([]agentservice.Session, error)
+	ListPage(context.Context, string, agentservice.ListSessionsInput) (agentservice.SessionListPage, error)
 	ListSessionSections(context.Context, string, agentservice.ListSessionSectionsInput) (agentservice.SessionSectionsPage, error)
 	ListSessionSectionPage(context.Context, string, agentservice.ListSessionSectionPageInput) (agentservice.SessionSection, error)
-	CountSessionSection(context.Context, string, agentservice.CountSessionSectionInput) (agentservice.SessionSectionCount, error)
-	DeleteSessionSection(context.Context, string, agentservice.DeleteSessionSectionInput) (agentservice.DeleteSessionSectionResult, error)
+	ListSessionSectionDeletionCandidates(context.Context, string, agentservice.ListSessionSectionDeletionCandidatesInput) (agentservice.SessionSectionDeletionCandidates, error)
+	DeleteSessionsBatch(context.Context, string, agentservice.DeleteSessionsBatchInput) (agentservice.DeleteSessionsBatchResult, error)
 	ListPinnedSessionPage(context.Context, string, agentservice.ListPinnedSessionPageInput) (agentservice.SessionPage, error)
 	GetComposerOptions(context.Context, agentservice.ComposerOptionsInput) (agentservice.ComposerOptions, error)
 	ListGeneratedFiles(context.Context, string, agentservice.ListGeneratedFilesInput) (agentservice.GeneratedFileList, error)
@@ -369,8 +370,9 @@ func generatedAgentSessions(sessions []agentservice.Session) []tuttigenerated.Wo
 
 func generatedAgentSessionPage(page agentservice.SessionPage) tuttigenerated.WorkspaceAgentSessionPage {
 	response := tuttigenerated.WorkspaceAgentSessionPage{
-		HasMore:  page.HasMore,
-		Sessions: generatedAgentSessions(page.Sessions),
+		HasMore:    page.HasMore,
+		Sessions:   generatedAgentSessions(page.Sessions),
+		TotalCount: page.TotalCount,
 	}
 	if strings.TrimSpace(page.NextCursor) != "" {
 		response.NextCursor = &page.NextCursor
@@ -397,6 +399,7 @@ func generatedAgentSessionSection(section agentservice.SessionSection) tuttigene
 		Kind:        tuttigenerated.WorkspaceAgentSessionSectionKind(section.Kind),
 		SectionKey:  section.SectionKey,
 		Sessions:    generatedAgentSessions(section.Sessions),
+		TotalCount:  section.TotalCount,
 		UserProject: userProject,
 	}
 	if strings.TrimSpace(section.NextCursor) != "" {

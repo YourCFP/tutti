@@ -3,10 +3,13 @@ import {
   engineRuntimeReducer
 } from "./engineRuntime.reducer.ts";
 import {
-  canPromoteQueuedPrompt,
   createInitialPromptQueueState,
   promptQueueReducer
 } from "./promptQueue.reducer.ts";
+import {
+  resolvePromptSendNowStrategy,
+  resolveQueuedPromptSendNowStrategy
+} from "./promptQueue.sendNow.ts";
 import { canCancelQueuedSubmit } from "./promptQueue.lookup.ts";
 import {
   createInitialPendingIntentsState,
@@ -42,6 +45,14 @@ import {
   createInitialSessionCommandsState,
   sessionCommandsReducer
 } from "./sessionCommands.reducer.ts";
+import {
+  createInitialSessionMessagesState,
+  sessionMessagesReducer
+} from "./sessionMessages.reducer.ts";
+import {
+  composerOptionsReducer,
+  createInitialComposerOptionsState
+} from "./composerOptions.reducer.ts";
 import { canonicalTurnKey } from "./sessionEntityKeys.ts";
 
 // Root reducer: static composition of domain reducers, zero business logic.
@@ -57,7 +68,9 @@ export function createInitialAgentSessionEngineState(): AgentSessionEngineState 
     promptQueue: createInitialPromptQueueState(),
     sessionReconcile: createInitialSessionReconcileState(),
     sessionCommands: createInitialSessionCommandsState(),
-    sessionLifecycle: createInitialSessionLifecycleState()
+    sessionLifecycle: createInitialSessionLifecycleState(),
+    sessionMessages: createInitialSessionMessagesState(),
+    composerOptions: createInitialComposerOptionsState()
   };
 }
 
@@ -187,6 +200,15 @@ export function rootEngineReducer(
   const submitSession = submitSessionId
     ? state.sessionLifecycle.sessionsById[submitSessionId]
     : undefined;
+  const submitSendNowStrategy =
+    submitIntent?.type === "submit/requested" &&
+    submitIntent.routing === "send_now"
+      ? resolvePromptSendNowStrategy(
+          state.promptQueue,
+          submitSessionId,
+          submitSession?.capabilities
+        )
+      : null;
   const queueRecord = submitIntent
     ? state.promptQueue.recordsBySessionId[submitSessionId]
     : undefined;
@@ -197,6 +219,9 @@ export function rootEngineReducer(
     submitWorkspaceId &&
     submitSession?.workspaceId === submitWorkspaceId &&
     submitIntent.content.length > 0 &&
+    (submitIntent.type !== "submit/requested" ||
+      submitIntent.routing !== "send_now" ||
+      submitSendNowStrategy !== null) &&
     !state.sessionLifecycle.deletedSessionIds[submitSessionId] &&
     !state.pendingIntents.submitsByClientSubmitId[submitId] &&
     !queueRecord?.prompts.some(
@@ -210,11 +235,24 @@ export function rootEngineReducer(
     planTurnValid &&
     submitRequestAccepted
   );
+  const sendNowStrategy =
+    intent.type === "submit/requested" && intent.routing === "send_now"
+      ? submitSendNowStrategy
+      : intent.type === "queue/sendNowRequested"
+        ? resolveQueuedPromptSendNowStrategy(
+            state.promptQueue,
+            intent.agentSessionId,
+            intent.promptId,
+            state.sessionLifecycle.sessionsById[intent.agentSessionId.trim()]
+              ?.capabilities
+          )
+        : null;
   const promptQueue = promptQueueReducer(state.promptQueue, intent, {
+    cancelResultValidation,
     deletedSessionIds: state.sessionLifecycle.deletedSessionIds,
     planFeedbackAccepted: feedbackAccepted,
     submitRequestAccepted,
-    cancelResultValidation
+    sendNowStrategy
   });
   const planDecisions = planDecisionReducer(state.planDecisions, intent, {
     feedbackAccepted,
@@ -231,13 +269,11 @@ export function rootEngineReducer(
     state.sessionLifecycle,
     intent,
     {
-      queuePromotionAccepted:
-        intent.type === "queue/promoted" &&
-        canPromoteQueuedPrompt(
-          state.promptQueue,
-          intent.agentSessionId,
-          intent.promptId
-        ),
+      queueSendNowRequiresCancel: sendNowStrategy === "cancel_then_send",
+      sendNowSubmitRequiresCancel:
+        intent.type === "submit/requested" &&
+        submitRequestAccepted &&
+        sendNowStrategy === "cancel_then_send",
       sendResultValidation,
       interactionResultValidation,
       settingsResultValidation,
@@ -247,10 +283,7 @@ export function rootEngineReducer(
   const attentionReadState = attentionReadStateReducer(
     state.attentionReadState,
     intent,
-    {
-      sessionsById: sessionLifecycle.state.sessionsById,
-      turnsById: sessionLifecycle.state.turnsById
-    }
+    { sessionsById: sessionLifecycle.state.sessionsById }
   );
   const pendingIntents = pendingIntentsReducer(state.pendingIntents, intent, {
     deletedSessionIds: state.sessionLifecycle.deletedSessionIds,
@@ -272,6 +305,15 @@ export function rootEngineReducer(
     intent,
     { deletedSessionIds: state.sessionLifecycle.deletedSessionIds }
   );
+  const sessionMessages = sessionMessagesReducer(
+    state.sessionMessages,
+    intent,
+    {
+      previousSessionsById: state.sessionLifecycle.sessionsById,
+      sessionsById: sessionLifecycle.state.sessionsById
+    }
+  );
+  const composerOptions = composerOptionsReducer(state.composerOptions, intent);
   const unchanged =
     attentionReadState.state === state.attentionReadState &&
     engineRuntime.state === state.engineRuntime &&
@@ -280,7 +322,9 @@ export function rootEngineReducer(
     promptQueue.state === state.promptQueue &&
     sessionReconcile.state === state.sessionReconcile &&
     sessionCommands.state === state.sessionCommands &&
-    sessionLifecycle.state === state.sessionLifecycle;
+    sessionLifecycle.state === state.sessionLifecycle &&
+    sessionMessages.state === state.sessionMessages &&
+    composerOptions.state === state.composerOptions;
   const nextState = unchanged
     ? state
     : {
@@ -291,7 +335,9 @@ export function rootEngineReducer(
         promptQueue: promptQueue.state,
         sessionReconcile: sessionReconcile.state,
         sessionCommands: sessionCommands.state,
-        sessionLifecycle: sessionLifecycle.state
+        sessionLifecycle: sessionLifecycle.state,
+        sessionMessages: sessionMessages.state,
+        composerOptions: composerOptions.state
       };
   return {
     commands: [
@@ -302,7 +348,8 @@ export function rootEngineReducer(
       ...promptQueue.commands,
       ...sessionReconcile.commands,
       ...sessionCommands.commands,
-      ...sessionLifecycle.commands
+      ...sessionLifecycle.commands,
+      ...composerOptions.commands
     ],
     state: nextState
   };

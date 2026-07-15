@@ -5,20 +5,41 @@ import {
   type AgentActivitySession
 } from "@tutti-os/agent-activity-core";
 import {
-  formatAgentGuiSessionPlainTitle,
+  resolveAgentGuiWorkbenchHeaderTitle,
   resolveAgentGuiWorkbenchSessionTitle
 } from "./sessionTitle";
 
+describe("agent GUI workbench header titles", () => {
+  it("uses the selected agent name before a conversation title exists", () => {
+    expect(
+      resolveAgentGuiWorkbenchHeaderTitle({
+        agentName: "Cursor",
+        conversationTitle: null,
+        provider: "cursor"
+      })
+    ).toBe("Cursor");
+  });
+
+  it("keeps the selected agent name after a conversation title exists", () => {
+    expect(
+      resolveAgentGuiWorkbenchHeaderTitle({
+        agentName: "Cursor",
+        conversationTitle: "Fix the header",
+        provider: "cursor"
+      })
+    ).toBe("Cursor");
+  });
+});
+
 describe("agent GUI workbench session titles", () => {
-  it("formats raw mention markdown from snapshot titles", () => {
+  it("uses canonical snapshot titles", () => {
     const title = resolveAgentGuiWorkbenchSessionTitle({
       agentSessionId: "session-1",
       fallbackTitle: "Stale session title",
       provider: "codex",
       ...sessionState({
         agentSessionId: "session-1",
-        title:
-          "[@automation 发布](mention://user/automation?workspaceId=workspace-1) 帮我跟进"
+        title: "@automation 发布 帮我跟进"
       })
     });
 
@@ -29,15 +50,14 @@ describe("agent GUI workbench session titles", () => {
     });
   });
 
-  it("formats workspace issue mention titles like the conversation rail", () => {
+  it("uses canonical workspace issue titles like the conversation rail", () => {
     const title = resolveAgentGuiWorkbenchSessionTitle({
       agentSessionId: "session-1",
       fallbackTitle: null,
       provider: "codex",
       ...sessionState({
         agentSessionId: "session-1",
-        title:
-          "[@调研 spool 仓库 这个任务](mention://workspace-issue/issue-1?workspaceId=workspace-1)"
+        title: "@调研 spool 仓库 这个任务"
       })
     });
 
@@ -106,11 +126,10 @@ describe("agent GUI workbench session titles", () => {
     });
   });
 
-  it("uses the persisted title only as a formatted hydration fallback", () => {
+  it("uses the persisted canonical title only as a hydration fallback", () => {
     const title = resolveAgentGuiWorkbenchSessionTitle({
       agentSessionId: "session-1",
-      fallbackTitle:
-        "[@automation 发布](mention://user/automation?workspaceId=workspace-1) 帮我跟进",
+      fallbackTitle: "@automation 发布 帮我跟进",
       provider: "codex"
     });
 
@@ -138,14 +157,6 @@ describe("agent GUI workbench session titles", () => {
       title: null
     });
   });
-
-  it("formats plain titles for message center and toast surfaces", () => {
-    expect(
-      formatAgentGuiSessionPlainTitle(
-        "[@automation 发布](mention://user/automation?workspaceId=workspace-1) 帮我跟进"
-      )
-    ).toBe("@automation 发布 帮我跟进");
-  });
 });
 
 function sessionState(input: {
@@ -156,6 +167,11 @@ function sessionState(input: {
   return {
     messages: input.messages ?? [],
     session: normalizeAgentActivitySession({
+      ...{
+        activeTurnId: null,
+        latestTurnInteractions: [],
+        pendingInteractions: []
+      },
       workspaceId: "workspace-1",
       agentSessionId: input.agentSessionId,
       provider: "codex",

@@ -46,6 +46,8 @@ export interface WorkspaceAgentMessageCenterItem {
   id: string;
   agentSessionId: string;
   agentTargetId?: string | null;
+  agentName?: string | null;
+  agentAvatarUrl?: string | null;
   provider: string;
   userId: string | null;
   title: string;
@@ -70,11 +72,18 @@ export interface WorkspaceAgentMessageCenterTurnOutcome {
 }
 
 export interface BuildWorkspaceAgentMessageCenterOptions {
+  agentPresentations?: readonly WorkspaceAgentMessageCenterAgentPresentation[];
   avoidGroupingEdits?: boolean;
   identityBySessionId?: Record<string, WorkspaceAgentMessageCenterIdentity>;
   itemCutoffUnixMs?: number | null;
   promptFallbackLabels?: WorkspaceAgentMessageCenterPromptFallbackLabels;
   workspaceRoot?: string | null;
+}
+
+export interface WorkspaceAgentMessageCenterAgentPresentation {
+  agentTargetId: string;
+  iconUrl?: string | null;
+  name: string;
 }
 
 export interface WorkspaceAgentMessageCenterIdentity {
@@ -93,6 +102,7 @@ export interface WorkspaceAgentMessageCenterPromptFallbackLabels {
 
 export interface BuildWorkspaceAgentMessageCenterItemInput {
   session: WorkspaceAgentMessageCenterSession;
+  latestTurn?: WorkspaceAgentConsumerSession["latestTurn"] | null;
   messages: readonly AgentActivityMessage[];
   status: WorkspaceAgentActivityStatus;
   needsAttention: AgentActivityNeedsAttentionItem | null;
@@ -107,6 +117,7 @@ type WorkspaceAgentMessageCenterSession =
 
 export function buildWorkspaceAgentMessageCenterItem({
   session,
+  latestTurn,
   messages,
   status,
   needsAttention,
@@ -131,10 +142,16 @@ export function buildWorkspaceAgentMessageCenterItem({
     pendingPrompt,
     status
   });
+  const agentPresentation = resolveMessageCenterAgentPresentation(
+    session.agentTargetId,
+    options.agentPresentations
+  );
   return {
     id: `message-center-${session.agentSessionId}`,
     agentSessionId: session.agentSessionId,
     agentTargetId: session.agentTargetId?.trim() || null,
+    agentName: agentPresentation?.name ?? null,
+    agentAvatarUrl: agentPresentation?.iconUrl ?? null,
     provider: session.provider,
     userId: session.userId?.trim() || null,
     title,
@@ -153,9 +170,33 @@ export function buildWorkspaceAgentMessageCenterItem({
     needsAttentionKind: needsAttention?.kind ?? null,
     needsAttentionSummary: needsAttention?.summary ?? null,
     latestTurnOutcome,
-    sortTimeUnixMs: resolveWorkspaceAgentSessionSortTimeUnixMs(session, {
-      messages
+    sortTimeUnixMs: resolveWorkspaceAgentSessionSortTimeUnixMs({
+      ...session,
+      latestTurn
     })
+  };
+}
+
+function resolveMessageCenterAgentPresentation(
+  agentTargetId: string | null | undefined,
+  presentations:
+    | readonly WorkspaceAgentMessageCenterAgentPresentation[]
+    | undefined
+): { iconUrl: string | null; name: string } | null {
+  const targetId = agentTargetId?.trim() ?? "";
+  if (!targetId) {
+    return null;
+  }
+  const presentation = presentations?.find(
+    (candidate) => candidate.agentTargetId.trim() === targetId
+  );
+  const name = presentation?.name.trim() ?? "";
+  if (!presentation || !name) {
+    return null;
+  }
+  return {
+    iconUrl: presentation.iconUrl?.trim() || null,
+    name
   };
 }
 
@@ -195,13 +236,13 @@ function resolveSessionTitle(
   latestUserMessageSummary: string,
   firstUserMessageSummary: string
 ): string {
-  const latest = latestUserMessageSummary.trim();
-  if (latest) {
-    return latest;
-  }
   const title = session.title.trim();
   if (title) {
     return title;
+  }
+  const latest = latestUserMessageSummary.trim();
+  if (latest) {
+    return latest;
   }
   return firstUserMessageSummary || session.provider || session.agentSessionId;
 }

@@ -120,9 +120,16 @@ export interface AgentActivityComposerSettingOption {
   supportsImageInput?: boolean;
 }
 
+export interface AgentActivityComposerCommandOption {
+  name: string;
+  description?: string;
+  inputHint?: string;
+}
+
 export interface AgentActivityComposerSkillOption {
   name: string;
   trigger: string;
+  invocation?: "promptItem" | "textTrigger";
   sourceKind:
     | "project"
     | "personal"
@@ -231,6 +238,8 @@ export interface AgentActivityComposerOptions {
   draftAgentSessionId?: string | null;
   modelOptionsLoading?: boolean;
   skills: AgentActivityComposerSkillOption[];
+  /** Commands advertised by the live provider session and reusable after event replay gaps. */
+  commands?: readonly AgentActivityComposerCommandOption[];
   capabilityCatalog?: AgentActivityComposerCapabilityOption[];
   behavior: AgentActivityComposerBehavior;
   slashCommandPolicy?: AgentActivitySlashCommandPolicy | null;
@@ -240,10 +249,10 @@ export interface AgentActivityComposerOptions {
 export interface AgentActivityLoadComposerOptionsInput {
   /**
    * Agent target id — the daemon-facing identity of the composer target.
-   * activity-core treats it as an opaque targetKey (see the controller's
-   * loadComposerOptions); this field name reflects that to the daemon it is an
-   * agent target id. Optional at the adapter boundary to mirror the daemon's
-   * optional request field; the controller always supplies a non-empty value.
+   * activity-core treats it as an opaque targetKey. This field name reflects
+   * that to the daemon it is an agent target id. Optional at the adapter
+   * boundary to mirror the daemon's optional request field; the engine command
+   * port always supplies a non-empty value.
    */
   agentTargetId?: string | null;
   workspaceId: string;
@@ -275,6 +284,10 @@ export interface AgentActivitySnapshot {
     AgentActivityComposerOptionsLoadStatus
   >;
 }
+
+export type AgentActivitySnapshotListener = (
+  snapshot: AgentActivitySnapshot
+) => void;
 
 export type AgentActivityUpdatedEvent =
   | AgentActivitySessionReconcileRequiredEvent
@@ -605,6 +618,7 @@ export interface AgentActivitySessionCapabilities {
   rateLimits: boolean;
   planMode: boolean;
   interrupt: boolean;
+  activeTurnGuidance: boolean;
   browserUse: boolean;
   computerUse: boolean;
   goalPause: boolean;

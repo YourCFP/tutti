@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
-	"github.com/tutti-os/tutti/packages/agent/daemon/internal/titletext"
+	"github.com/tutti-os/tutti/packages/agent/daemon/titletext"
 )
 
 func acpModeValue(update map[string]any) string {
@@ -123,6 +123,28 @@ func agentSessionCommandNames(commands []AgentSessionCommand) []string {
 		}
 	}
 	return names
+}
+
+func agentSessionCommandsRuntimeContext(commands []AgentSessionCommand) []map[string]any {
+	if len(commands) == 0 {
+		return []map[string]any{}
+	}
+	result := make([]map[string]any, 0, len(commands))
+	for _, command := range commands {
+		name := strings.TrimSpace(command.Name)
+		if name == "" {
+			continue
+		}
+		value := map[string]any{"name": name}
+		if description := strings.TrimSpace(command.Description); description != "" {
+			value["description"] = description
+		}
+		if inputHint := strings.TrimSpace(command.InputHint); inputHint != "" {
+			value["inputHint"] = inputHint
+		}
+		result = append(result, value)
+	}
+	return result
 }
 
 func acpConfigValues(update map[string]any) map[string]any {
@@ -557,7 +579,7 @@ func newSessionTitleActivityEvent(session Session, title string) activityshared.
 	if !ok {
 		return activityshared.Event{}
 	}
-	ctx.Title = titletext.Normalize(title)
+	ctx.Title = strings.TrimSpace(title)
 	return activityshared.NewSessionTitleUpdated(ctx)
 }
 

@@ -8,7 +8,7 @@ import (
 func TestComposerProviderCapabilitiesDefaults(t *testing.T) {
 	t.Parallel()
 	claude := composerProviderCapabilities("claude-code", true)
-	for _, want := range []string{"imageInput", "skills", "compact", "tokenUsage", "rateLimits", "planMode", "interrupt"} {
+	for _, want := range []string{"imageInput", "skills", "compact", "tokenUsage", "rateLimits", "planMode", "interrupt", "activeTurnGuidance"} {
 		if !slices.Contains(claude, want) {
 			t.Fatalf("claude defaults = %v, missing %q", claude, want)
 		}
@@ -19,6 +19,9 @@ func TestComposerProviderCapabilitiesDefaults(t *testing.T) {
 	}
 	if !slices.Contains(codex, "compact") || !slices.Contains(codex, "skills") {
 		t.Fatalf("codex defaults = %v", codex)
+	}
+	if !slices.Contains(codex, "activeTurnGuidance") {
+		t.Fatalf("codex defaults = %v, missing native active-turn guidance", codex)
 	}
 	tuttiAgent := composerProviderCapabilities("tutti-agent", true)
 	if !slices.Contains(tuttiAgent, "planMode") || !slices.Contains(tuttiAgent, "compact") || !slices.Contains(tuttiAgent, "skills") {
@@ -39,6 +42,9 @@ func TestComposerProviderCapabilitiesDefaults(t *testing.T) {
 	}
 	if got := composerProviderCapabilities("opencode", true); !slices.Contains(got, "planMode") {
 		t.Fatalf("opencode defaults = %v, missing planMode", got)
+	}
+	if got := composerProviderCapabilities("opencode", true); slices.Contains(got, "activeTurnGuidance") {
+		t.Fatalf("opencode defaults = %v, must use cancel-then-send", got)
 	}
 	if got := composerProviderCapabilities("cursor", true); !slices.Contains(got, "imageInput") || !slices.Contains(got, "interrupt") || !slices.Contains(got, "planMode") {
 		t.Fatalf("cursor defaults = %v, missing imageInput, interrupt, or planMode", got)
@@ -130,7 +136,7 @@ func TestNormalizeComposerSettingsClampsByProviderSupport(t *testing.T) {
 		Model:           "openai/gpt-5.3-codex-spark",
 		ReasoningEffort: "none",
 	})
-	if opencode.Model != "openai/gpt-5.3-codex-spark" || opencode.ReasoningEffort != "high" {
+	if opencode.Model != "openai/gpt-5.3-codex-spark" || opencode.ReasoningEffort != "none" {
 		t.Fatalf("opencode settings normalized unexpectedly: %+v", opencode)
 	}
 	claude := normalizeComposerSettingsForProvider("claude-code", ComposerSettings{
@@ -236,6 +242,29 @@ func TestComposerModelReasoningOptionsRuntimeContextPreservesCatalogOptions(t *t
 	}
 }
 
+func TestNormalizeObservedComposerSettingsUsesProviderReasoningPolicy(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		provider string
+		selected string
+		want     string
+	}{
+		{provider: "codex", selected: "none", want: "none"},
+		{provider: "tutti-agent", selected: "minimal", want: "minimal"},
+		{provider: "opencode", selected: "none", want: "none"},
+	} {
+		t.Run(tc.provider, func(t *testing.T) {
+			got := normalizeComposerSettingsPointerForProvider(
+				tc.provider,
+				&ComposerSettings{ReasoningEffort: tc.selected},
+			)
+			if got == nil || got.ReasoningEffort != tc.want {
+				t.Fatalf("normalized settings = %#v, want reasoning %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestResolveAdvertisedReasoningEffortPreservesAuthoritativeMinimalDefault(t *testing.T) {
 	advertised := []AgentModelReasoningEffortOption{{Value: "minimal"}}
 	if got := resolveAdvertisedReasoningEffort("codex", "", "minimal", advertised); got != "minimal" {
@@ -244,5 +273,17 @@ func TestResolveAdvertisedReasoningEffortPreservesAuthoritativeMinimalDefault(t 
 	options := composerAdvertisedReasoningOptionValues("codex", "minimal", "en", advertised)
 	if len(options) != 1 || options[0].Value != "minimal" {
 		t.Fatalf("composer advertised options = %#v, want only minimal", options)
+	}
+}
+
+func TestComposerAdvertisedReasoningOptionValuesLocalizesNone(t *testing.T) {
+	advertised := []AgentModelReasoningEffortOption{{Value: "none"}}
+	english := composerAdvertisedReasoningOptionValues("opencode", "none", "en", advertised)
+	if len(english) != 1 || english[0].Label != "Off" || english[0].Description == "" {
+		t.Fatalf("English none option = %#v", english)
+	}
+	chinese := composerAdvertisedReasoningOptionValues("opencode", "none", "zh-CN", advertised)
+	if len(chinese) != 1 || chinese[0].Label != "关闭" || chinese[0].Description == "" {
+		t.Fatalf("Chinese none option = %#v", chinese)
 	}
 }

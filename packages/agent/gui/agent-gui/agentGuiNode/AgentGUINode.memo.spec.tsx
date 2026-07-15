@@ -13,6 +13,7 @@ import {
 } from "./model/AgentGUINodeViewModel.fixture";
 import { AgentGUINode } from "./AgentGUINode";
 import { createLocalAgentGUIAgentTarget } from "../../agentTargets";
+import { buildAgentComposerDraft } from "./model/agentComposerDraft";
 
 const { agentGuiNodeViewSpy } = vi.hoisted(() => ({
   agentGuiNodeViewSpy: vi.fn()
@@ -234,7 +235,9 @@ function createState(
 function createViewModel(
   overrides: AgentGUINodeViewModelFixtureOverrides = {}
 ): AgentGUINodeViewModel {
-  const draftContent: AgentComposerDraft = { prompt: "", images: [] };
+  const draftContent: AgentComposerDraft = buildAgentComposerDraft({
+    prompt: ""
+  });
   return groupAgentGUINodeViewModelFixture({
     workspaceId: "room-1",
     data: createState(),
@@ -258,12 +261,14 @@ function createViewModel(
     },
     pendingInteractivePrompt: null,
     queuedPrompts: [],
+    queueStatus: "active",
     canSubmit: true,
     canQueueWhileBusy: false,
     isSubmitting: false,
     isInterrupting: false,
     promptImagesSupported: true,
     backgroundAgentCount: 0,
+    availability: "ready",
     listError: null,
     isCreatingConversation: false,
     isLoadingConversations: false,

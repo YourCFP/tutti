@@ -46,6 +46,7 @@ func (s *Service) ensureRuntimeSessionResult(
 	// Imported local CLI transcripts can resume in place or recreate a provider
 	// session. Provider data exports explicitly opt out because their web UUID is
 	// not a provider runtime session id.
+	persisted = s.clampPersistedSessionReasoningEffortForResume(ctx, persisted)
 	imported := strings.TrimSpace(persisted.Origin) == WorkspaceAgentSessionOriginImported
 	if imported && !externalImportResumeSupported(persisted.InternalRuntimeContext) {
 		return ensuredRuntimeSession{}, ErrSessionNotFound
@@ -64,6 +65,17 @@ func (s *Service) ensureRuntimeSessionResult(
 	session, err := func() (ProviderRuntimeSession, error) {
 		defer releaseStartup()
 		runtimeContext := persistedSessionRuntimeContext(persisted)
+		var providerTargetRef map[string]any
+		if strings.TrimSpace(persisted.AgentTargetID) != "" {
+			launch, launchErr := s.resolveCreateSessionLaunch(ctx, CreateSessionInput{
+				AgentTargetID: persisted.AgentTargetID,
+				Provider:      persisted.Provider,
+			})
+			if launchErr != nil {
+				return ProviderRuntimeSession{}, launchErr
+			}
+			providerTargetRef = launch.ProviderTargetRef
+		}
 		return s.controller().Resume(ctx, RuntimeResumeInput{
 			WorkspaceID:       strings.TrimSpace(persisted.WorkspaceID),
 			AgentSessionID:    strings.TrimSpace(persisted.ID),
@@ -78,6 +90,7 @@ func (s *Service) ensureRuntimeSessionResult(
 			UpdatedAtUnixMS:   persisted.UpdatedAtUnixMS,
 			Visible:           boolPointer(persisted.Metadata.Visible),
 			RuntimeContext:    runtimeContext,
+			ProviderTargetRef: providerTargetRef,
 			RecreateIfMissing: imported,
 		})
 	}()

@@ -37,8 +37,10 @@ import {
   agentComposerDraftDisplayPrompt,
   agentComposerDraftHasContent,
   agentComposerDraftToPromptContent,
+  buildAgentComposerDraft,
   emptyAgentComposerDraft,
-  textPromptContent
+  textPromptContent,
+  updateAgentComposerDraft
 } from "../model/agentComposerDraft";
 import { resolvePermissionModeControlsDisabled } from "../model/composerModeSelection";
 import { GOAL_MODE_SLASH_COMMAND } from "./AgentComposerChrome";
@@ -63,6 +65,7 @@ type Props = Pick<
   | "onSubmit"
   | "onSubmitGuidance"
   | "onCapabilitySettingsRequest"
+  | "onSlashStatusOpen"
   | "onPromptImagesUnsupported"
   | "onRequestGitBranches"
 >;
@@ -71,6 +74,7 @@ interface UseComposerSlashActionsInput extends Props {
   draftContent: AgentComposerDraft;
   selectedProjectPath: string;
   slashStatusAgentSessionId: string | null;
+  isSlashStatusPanelOpen: boolean;
   slashCommandPolicy: AgentComposerProps["composerSettings"]["slashCommandPolicy"];
   skillQueryMatch: TriggerMatch;
   promptBeforeSelection: string;
@@ -117,11 +121,13 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
     onSubmit,
     onSubmitGuidance,
     onCapabilitySettingsRequest,
+    onSlashStatusOpen,
     onPromptImagesUnsupported,
     onRequestGitBranches,
     draftContent,
     selectedProjectPath,
     slashStatusAgentSessionId,
+    isSlashStatusPanelOpen,
     slashCommandPolicy,
     skillQueryMatch,
     promptBeforeSelection,
@@ -222,6 +228,9 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
       if (effect.kind === "showStatus") {
         clearSlashCommandDraft();
         setIsReviewPickerOpen(false);
+        if (!isSlashStatusPanelOpen) {
+          onSlashStatusOpen?.();
+        }
         setIsSlashStatusPanelOpen((current) => !current);
         return;
       }
@@ -237,10 +246,11 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         setIsSlashStatusPanelOpen(false);
         setIsReviewPickerOpen(false);
         setIsPaletteOpen(false);
-        onDraftContentChange({
-          ...draftContent,
-          prompt: GOAL_MODE_SLASH_COMMAND
-        });
+        onDraftContentChange(
+          updateAgentComposerDraft(draftContent, {
+            prompt: GOAL_MODE_SLASH_COMMAND
+          })
+        );
         return;
       }
       if (effect.kind === "togglePlanMode") {
@@ -254,7 +264,9 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         const nextDraft = effect.draft;
         draftPromptRef.current = nextDraft;
         setPaletteDraftPrompt(nextDraft);
-        onDraftContentChange({ ...draftContent, prompt: nextDraft });
+        onDraftContentChange(
+          updateAgentComposerDraft(draftContent, { prompt: nextDraft })
+        );
         setIsPaletteOpen(false);
         if (!settingsControlsDisabled) {
           onSettingsChange({ browserUse: true });
@@ -265,7 +277,9 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         const nextDraft = effect.draft;
         draftPromptRef.current = nextDraft;
         setPaletteDraftPrompt(nextDraft);
-        onDraftContentChange({ ...draftContent, prompt: nextDraft });
+        onDraftContentChange(
+          updateAgentComposerDraft(draftContent, { prompt: nextDraft })
+        );
         setIsPaletteOpen(false);
         if (!settingsControlsDisabled) {
           onSettingsChange({ computerUse: true });
@@ -288,7 +302,9 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
       const nextDraft = effect.draft;
       draftPromptRef.current = nextDraft;
       setPaletteDraftPrompt(nextDraft);
-      onDraftContentChange({ ...draftContent, prompt: nextDraft });
+      onDraftContentChange(
+        updateAgentComposerDraft(draftContent, { prompt: nextDraft })
+      );
       setIsPaletteOpen(false);
     },
     [
@@ -298,7 +314,9 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
       composerSettings.selectedSpeedValue,
       composerSettings.supportsSpeed,
       draftContent,
+      isSlashStatusPanelOpen,
       onDraftContentChange,
+      onSlashStatusOpen,
       onSettingsChange,
       onSubmit,
       settingsControlsDisabled
@@ -362,7 +380,9 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         });
       draftPromptRef.current = nextDraft;
       setPaletteDraftPrompt(nextDraft);
-      onDraftContentChange({ ...draftContent, prompt: nextDraft });
+      onDraftContentChange(
+        updateAgentComposerDraft(draftContent, { prompt: nextDraft })
+      );
       setIsPaletteOpen(false);
     },
     [draftContent, onDraftContentChange, promptBeforeSelection, skillQueryMatch]
@@ -405,13 +425,12 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         return;
       }
       const nextPrompt = draftPromptRef.current;
-      const nextDraftContent = {
-        ...draftContent,
+      const nextDraftContent = buildAgentComposerDraft({
         prompt: nextPrompt,
         images: currentDraftImages,
         files: currentDraftFiles,
         largeTexts: currentDraftLargeTexts
-      };
+      });
       if (!agentComposerDraftHasContent(nextDraftContent)) {
         return;
       }
@@ -464,10 +483,10 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
           onSubmit(submitContent);
         }
       }
-      // Submission acknowledgment is asynchronous. The controller owns draft
-      // clearing after the engine accepts or confirms this exact content, so a
-      // rejected send cannot erase the user's prompt and a later edit cannot
-      // be overwritten by an in-flight submission.
+      // The controller owns draft clearing: an in-session send clears the
+      // composer optimistically at hand-off, and a rejected send restores this
+      // exact content, so a later edit is never overwritten by an in-flight
+      // submission.
     }
   );
 

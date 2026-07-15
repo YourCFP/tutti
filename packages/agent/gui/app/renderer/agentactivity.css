@@ -4212,10 +4212,6 @@ aside.workspace-agents-status-panel
   -webkit-mask-size: 16px 16px;
 }
 
-.tsh-agent-object-token--entity .tsh-agent-object-token__summary {
-  color: inherit;
-}
-
 .agent-gui-node__composer-textarea .agent-rich-text-mention-node {
   display: inline-flex;
   align-items: center;
@@ -6546,7 +6542,7 @@ button.agent-gui-node__conversation-section-toggle:hover
 .agent-gui-message-locator__track-segment {
   position: absolute;
   top: var(--agent-message-locator-segment-position);
-  left: 50%;
+  left: calc(var(--agent-message-locator-hit-size) / 2);
   width: 1px;
   height: 8px;
   transform: translate(-50%, -50%);
@@ -7421,8 +7417,21 @@ button.agent-gui-node__conversation-section-toggle:hover
   margin-inline: 4px;
 }
 
+.agent-gui-node__composer[data-layout="dock"] {
+  /* Opaque backdrop for the footer strip: the timeline can slide beneath the
+     dock, and a transparent footer would show message rows behind the
+     toolbar controls. */
+  background: var(--agent-gui-session-flow-background);
+}
+
 .agent-gui-node__composer[data-layout="dock"]
   .agent-gui-node__composer-input-shell {
+  /* Reserve only the collapsed input height (56px, keep in sync with
+     DOCK_COMPOSER_INPUT_MIN_HEIGHT) in the layout flow. A growing draft
+     (long paste, attachments) expands the text box upward over the
+     conversation instead of enlarging the dock and pushing the message
+     stream up. */
+  grid-template-rows: 56px auto;
   gap: 6px;
   padding: 0;
   border: 0;
@@ -7439,6 +7448,7 @@ button.agent-gui-node__conversation-section-toggle:hover
   min-height: 56px;
   max-height: var(--agent-gui-composer-input-max-height, 110px);
   align-items: end;
+  align-self: end;
   overflow: hidden;
   padding: 0 12px;
   border: 1px solid var(--line-2);
@@ -7900,7 +7910,7 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
 
 .agent-gui-node__composer-queued-prompt-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
   gap: 4px;
   min-height: 20px;
@@ -7979,10 +7989,17 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
 }
 
 .agent-gui-node__composer-queued-prompt-label {
+  min-width: 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--agent-gui-accent-strong);
   line-height: 20px;
+}
+
+.agent-gui-node__composer-queued-prompt-panel[data-queue-status="paused_by_user"]
+  .agent-gui-node__composer-queued-prompt-label {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .agent-gui-node__composer-queued-prompt-count {
@@ -8075,9 +8092,6 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
 .agent-gui-node__composer-queued-prompt-markdown
   [data-agent-file-mention="true"]
   .tsh-agent-object-token__kind,
-.agent-gui-node__composer-queued-prompt-markdown
-  [data-agent-file-mention="true"]
-  .tsh-agent-object-token__summary,
 .agent-gui-node__composer-queued-prompt-markdown
   [data-agent-file-mention="true"]
   [data-agent-mention-app-icon="true"] {
@@ -8568,7 +8582,10 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
 }
 
 .agent-gui-node__composer[data-layout="dock"] .agent-gui-node__composer-footer {
-  padding: 0 2px;
+  position: relative;
+  margin: 0 -12px -12px;
+  padding: 0 14px 12px;
+  background: var(--agent-gui-session-flow-background);
 }
 
 .agent-gui-node__composer-footer-left,
@@ -8759,6 +8776,12 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   line-height: 1.2;
 }
 
+.agent-gui-node__composer-menu-item[data-disabled] {
+  cursor: not-allowed;
+  color: var(--text-disabled);
+  opacity: 0.5;
+}
+
 .agent-gui-node__composer-menu-content[data-agent-composer-settings-layout="model-primary"]
   .agent-gui-node__composer-menu-item,
 .agent-gui-node__composer-menu-content[data-agent-composer-settings-layout="model-submenu"]
@@ -8884,7 +8907,16 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
 }
 
 .agent-gui-node__provider-rail-sidebar-footer {
+  padding-bottom: 0;
+}
+
+.agent-gui-node__provider-rail-sidebar-footer:last-child {
   padding-bottom: 12px;
+}
+
+.agent-gui-node__provider-rail-sidebar-footer
+  + .agent-gui-node__provider-rail-config-footer {
+  margin-top: 8px;
 }
 
 .agent-gui-node__provider-rail-config-button {
@@ -9122,6 +9154,114 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   );
   background-size: 200% 100%;
   animation: agent-gui-provider-target-loading 1.2s ease-in-out infinite;
+}
+
+.agent-gui-provider-manager-tile[data-dragging="true"] {
+  opacity: 0.45;
+}
+
+.agent-gui-provider-manager-drop-zone {
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.agent-gui-provider-manager-drop-zone[data-drop-active="true"] {
+  background: color-mix(
+    in srgb,
+    var(--brand-primary, var(--tutti-purple)) 7%,
+    transparent
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(
+      in srgb,
+      var(--brand-primary, var(--tutti-purple)) 42%,
+      transparent
+    );
+}
+
+.agent-gui-provider-manager-drop-zone[data-drop-blocked="true"] {
+  background: color-mix(in srgb, var(--state-danger) 6%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--state-danger) 28%, transparent);
+}
+
+.agent-gui-provider-manager-tile
+  > :not(.agent-gui-provider-manager-drop-indicator) {
+  transition: translate 140ms ease;
+}
+
+.agent-gui-provider-manager-tile[data-drag-over="before"]
+  > :not(.agent-gui-provider-manager-drop-indicator) {
+  translate: 8px 0;
+}
+
+.agent-gui-provider-manager-tile[data-drag-over="after"]
+  > :not(.agent-gui-provider-manager-drop-indicator) {
+  translate: -8px 0;
+}
+
+.agent-gui-provider-manager-drop-indicator {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--brand-primary, var(--tutti-purple));
+  pointer-events: none;
+}
+
+.agent-gui-provider-manager-drop-indicator[data-position="before"] {
+  left: -9px;
+}
+
+.agent-gui-provider-manager-drop-indicator[data-position="after"] {
+  right: -9px;
+}
+
+.agent-gui-provider-manager-tile[data-long-press="true"] {
+  animation: agent-gui-provider-manager-long-press 550ms linear;
+}
+
+.agent-gui-provider-manager-tile[data-editing="true"] {
+  transform-origin: 50% 42%;
+  animation: agent-gui-provider-manager-wiggle 180ms ease-in-out infinite
+    alternate;
+}
+
+.agent-gui-provider-manager-tile[data-editing="true"]:nth-child(2n) {
+  animation-delay: -90ms;
+  animation-direction: alternate-reverse;
+}
+
+.agent-gui-provider-manager-tile[data-editing="true"][data-drag-active="true"] {
+  animation: none;
+}
+
+@keyframes agent-gui-provider-manager-wiggle {
+  0% {
+    transform: rotate(-1.2deg) translateY(0);
+  }
+
+  100% {
+    transform: rotate(1.2deg) translateY(-0.5px);
+  }
+}
+
+@keyframes agent-gui-provider-manager-long-press {
+  from {
+    scale: 1;
+  }
+
+  to {
+    scale: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-gui-provider-manager-tile[data-editing="true"] {
+    animation: none;
+  }
 }
 
 @keyframes agent-gui-provider-target-loading {
