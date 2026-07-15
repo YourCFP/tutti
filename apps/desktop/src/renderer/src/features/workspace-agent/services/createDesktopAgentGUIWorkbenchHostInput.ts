@@ -198,18 +198,20 @@ export function createDesktopAgentGUIWorkbenchHostInput({
   const resolveDroppedFileReferences: NonNullable<
     AgentGUIProps["workspace"]["resolveDroppedFileReferences"]
   > = (files) => {
-    const droppedPaths = platformApi.resolveDroppedPaths([...files]);
+    const droppedEntries = platformApi.resolveDroppedEntries([...files]);
     return files.flatMap((file, index): WorkspaceFileReference[] => {
-      const hostPath = droppedPaths[index]?.trim() ?? "";
-      if (!hostPath) {
+      const droppedEntry = droppedEntries[index];
+      const path = droppedEntry?.path.trim() ?? "";
+      if (!path) {
         return [];
       }
-      const displayName = file.name.trim() || hostPath.split(/[\\/]/).at(-1);
+      const kind = droppedEntry?.kind === "folder" ? "folder" : "file";
+      const displayName = file.name.trim() || path.split(/[\\/]/).at(-1);
       return [
         {
-          path: hostPath,
-          hostPath,
-          kind: "file",
+          path,
+          ...(kind === "file" ? { hostPath: path } : {}),
+          kind,
           ...(displayName ? { displayName } : {}),
           sourceId: "host-local-file"
         }
