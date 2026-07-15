@@ -82,11 +82,12 @@ func TestControllerCodexStreamNeverIdlesMidTurn(t *testing.T) {
 	}
 	defer unsubscribe()
 
-	if _, err := controller.Exec(context.Background(), ExecInput{
+	execResult, err := controller.Exec(context.Background(), ExecInput{
 		RoomID:         "room-1",
 		AgentSessionID: agentSessionID,
 		Content:        textPrompt("long task"),
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("Exec: %v", err)
 	}
 	waitForCondition(t, func() bool {
@@ -107,6 +108,13 @@ func TestControllerCodexStreamNeverIdlesMidTurn(t *testing.T) {
 		return ok && len(session.RuntimeContext) > 0
 	})
 	transport.conn.completePendingTurn()
+	waitForCondition(t, func() bool {
+		return adapter.sessionActiveTurnID(agentSessionID) == ""
+	})
+	controller.ReconcileRootTurnSettlement(RootTurnSettlement{
+		RoomID: "room-1", AgentSessionID: agentSessionID,
+		TurnID: execResult.TurnID, Outcome: "completed",
+	})
 	waitForCondition(t, func() bool {
 		session, ok := controller.get("room-1", agentSessionID)
 		return ok && session.Status != SessionStatusWorking

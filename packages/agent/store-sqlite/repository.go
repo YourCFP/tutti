@@ -15,6 +15,7 @@ type Repository interface {
 	DeleteSession(context.Context, string, string) (bool, error)
 	DeleteSessionsBatch(context.Context, DeleteSessionsBatchInput) (DeleteSessionsBatchResult, error)
 	GetSession(context.Context, string, string) (Session, bool, error)
+	ListChildSessions(context.Context, string, string) ([]Session, error)
 	SessionDeleted(context.Context, string, string) (bool, error)
 	GetLatestTurn(context.Context, string, string) (Turn, bool, error)
 	GetTurn(context.Context, string, string, string) (Turn, bool, error)
@@ -139,6 +140,12 @@ type SessionSectionPage struct {
 type Session struct {
 	ID                     string
 	WorkspaceID            string
+	Kind                   string
+	RootAgentSessionID     string
+	RootTurnID             string
+	ParentAgentSessionID   string
+	ParentTurnID           string
+	ParentToolCallID       string
 	Origin                 string
 	UserID                 string
 	AgentTargetID          string
@@ -164,19 +171,27 @@ type Session struct {
 	UpdatedAtUnixMS int64
 }
 
+const (
+	SessionKindRoot  = "root"
+	SessionKindChild = "child"
+)
+
 // ActivityStateReport persists the session projection and its optional v2
 // turn/interaction entities as one atomic unit. Child entities must identify
 // the same workspace and session as Session.
 type ActivityStateReport struct {
-	Session     SessionStateReport
-	Turn        *TurnTransition
-	Interaction *InteractionUpsert
+	Session          SessionStateReport
+	Turn             *TurnTransition
+	RootProviderTurn *RootProviderTurnTransition
+	Interaction      *InteractionUpsert
 }
 
 type ActivityStateReportResult struct {
 	State             StateReportResult
 	Turn              Turn
 	TurnAccepted      bool
+	RootTurn          Turn
+	RootTurnAccepted  bool
 	Interaction       Interaction
 	InteractionResult InteractionTransitionResult
 }
@@ -201,24 +216,51 @@ const (
 	TurnOutcomeInterrupted = "interrupted"
 )
 
-// Turn is the protocol v2 turn entity: one user-submission-driven execution
-// with its own phase, outcome, error, and file changes.
+// Turn is the protocol v2 turn entity: one turn inside either a root or child
+// session, with its own phase, outcome, error, and file changes.
 type Turn struct {
+	WorkspaceID                            string
+	AgentSessionID                         string
+	TurnID                                 string
+	Phase                                  string
+	Outcome                                string
+	ErrorMessage                           string
+	ErrorCode                              string
+	FileChanges                            map[string]any
+	CompletedCommandKind                   string
+	CompletedCommandStatus                 string
+	Backfilled                             bool
+	StartedAtUnixMS                        int64
+	SettledAtUnixMS                        int64
+	CreatedAtUnixMS                        int64
+	UpdatedAtUnixMS                        int64
+	RootProviderTurnID                     string
+	RootProviderTurnPhase                  string
+	RootProviderTurnOutcome                string
+	RootProviderTurnErrorMessage           string
+	RootProviderTurnErrorCode              string
+	RootProviderTurnCompletedCommandKind   string
+	RootProviderTurnCompletedCommandStatus string
+	RootProviderTurnUpdatedAtUnixMS        int64
+}
+
+const (
+	RootProviderTurnPhaseRunning   = "running"
+	RootProviderTurnPhaseCompleted = "completed"
+)
+
+type RootProviderTurnTransition struct {
 	WorkspaceID            string
-	AgentSessionID         string
-	TurnID                 string
+	RootAgentSessionID     string
+	RootTurnID             string
+	ProviderTurnID         string
 	Phase                  string
 	Outcome                string
 	ErrorMessage           string
 	ErrorCode              string
-	FileChanges            map[string]any
 	CompletedCommandKind   string
 	CompletedCommandStatus string
-	Backfilled             bool
-	StartedAtUnixMS        int64
-	SettledAtUnixMS        int64
-	CreatedAtUnixMS        int64
-	UpdatedAtUnixMS        int64
+	OccurredAtUnixMS       int64
 }
 
 // TurnTransition records one turn phase transition. Transitions are written
@@ -309,24 +351,30 @@ type StaleTurnSettlement struct {
 }
 
 type SessionStateReport struct {
-	WorkspaceID       string
-	AgentSessionID    string
-	Origin            string
-	UserID            string
-	AgentTargetID     string
-	Provider          string
-	ProviderSessionID string
-	Model             string
-	Settings          map[string]any
-	RuntimeContext    map[string]any
-	Cwd               string
-	Title             string
-	Status            string
-	CurrentPhase      string
-	LastError         string
-	OccurredAtUnixMS  int64
-	StartedAtUnixMS   int64
-	EndedAtUnixMS     int64
+	WorkspaceID          string
+	AgentSessionID       string
+	Kind                 string
+	RootAgentSessionID   string
+	RootTurnID           string
+	ParentAgentSessionID string
+	ParentTurnID         string
+	ParentToolCallID     string
+	Origin               string
+	UserID               string
+	AgentTargetID        string
+	Provider             string
+	ProviderSessionID    string
+	Model                string
+	Settings             map[string]any
+	RuntimeContext       map[string]any
+	Cwd                  string
+	Title                string
+	Status               string
+	CurrentPhase         string
+	LastError            string
+	OccurredAtUnixMS     int64
+	StartedAtUnixMS      int64
+	EndedAtUnixMS        int64
 }
 
 type StateReportResult struct {

@@ -318,7 +318,9 @@ Turn state, loading, cancel, restore, file-change undo, rail projection, event u
   turn ID and suppress only that turn's assistant/thinking acknowledgement at
   the runtime-adapter boundary before persistence. Do not filter by localized
   acknowledgement text and do not move the message into the interrupted turn.
-  Preserve goal/session updates and terminal cleanup.
+  Preserve goal/session updates and terminal cleanup, but do not register the
+  internal command as a root provider turn or feed its terminal into canonical
+  root settlement.
   Keep Stop and processing derived from the canonical active turn, and report a
   successful clear with a localized transient toast. Render that toast in an
   AgentGUI detail-scoped viewport and use UI System themed surface, foreground,

@@ -8,7 +8,6 @@ import { createPortal } from "react-dom";
 import {
   Popover,
   PopoverAnchor,
-  Spinner,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -119,7 +118,6 @@ export function AgentComposerView(input: Props): React.JSX.Element {
     previewMode = false,
     layoutMode = "dock",
     providerSelectLabel = "",
-    backgroundAgentStatusText = null,
     labels,
     workspaceUserProjectI18n,
     isSubmittingPrompt,
@@ -307,15 +305,6 @@ export function AgentComposerView(input: Props): React.JSX.Element {
         )}
         data-edge-glow={showEdgeGlow ? "true" : undefined}
       >
-        {backgroundAgentStatusText ? (
-          <AgentChromeNotice
-            tone="muted"
-            role="status"
-            testId="agent-gui-composer-background-agent-status"
-            title={backgroundAgentStatusText}
-            icon={<Spinner className="h-3.5 w-3.5" />}
-          />
-        ) : null}
         {input.isSelectedProjectMissing ? (
           <AgentChromeNotice
             tone="danger"

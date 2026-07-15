@@ -66,7 +66,7 @@ Turn state, loading, cancel, restore, rail projection, event updates, imports, a
 
 ## [Agent Approvals And Sub-Agents](./agent-approvals-subagents.md)
 
-Approval gates, plan exits, parent/child event attribution, background agents, and Message Center.
+Approval gates, plan exits, root/parent/child event attribution, child sessions, and Message Center.
 
 - [External PR review approvals do not refresh gate status](./agent-approvals-subagents.md#external-pr-review-approvals-do-not-refresh-gate-status)
 - [Cursor approval card shows only title and options, no command/path detail](./agent-approvals-subagents.md#cursor-approval-card-shows-only-title-and-options-no-commandpath-detail)
@@ -74,5 +74,7 @@ Approval gates, plan exits, parent/child event attribution, background agents, a
 - [Claude SDK ExitPlanMode fails as interrupted after plan is ready](./agent-approvals-subagents.md#claude-sdk-exitplanmode-fails-as-interrupted-after-plan-is-ready)
 - [Codex app-server subagent output appears as the parent reply](./agent-approvals-subagents.md#codex-app-server-subagent-output-appears-as-the-parent-reply)
 - [Claude SDK subagent events overwrite or complete the parent turn](./agent-approvals-subagents.md#claude-sdk-subagent-events-overwrite-or-complete-the-parent-turn)
+- [Claude child card shows a generic Agent title and no task detail](./agent-approvals-subagents.md#claude-child-card-shows-a-generic-agent-title-and-no-task-detail)
 - [Claude SDK subagent approval stuck in Message Center](./agent-approvals-subagents.md#claude-sdk-subagent-approval-stuck-in-message-center)
-- [Claude SDK parent waits forever for background agents that already finished](./agent-approvals-subagents.md#claude-sdk-parent-waits-forever-for-background-agents-that-already-finished)
+- [Root remains active after all child turns settle](./agent-approvals-subagents.md#root-remains-active-after-all-child-turns-settle)
+- [Provider terminal report replays a settled root as running](./agent-approvals-subagents.md#provider-terminal-report-replays-a-settled-root-as-running)

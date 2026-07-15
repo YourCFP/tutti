@@ -150,6 +150,7 @@ func TestClaudeCodeSDKAdapterIgnoresCanceledTurnOrphanBeforeCompactResult(t *tes
 	if err != nil || !terminal {
 		t.Fatalf("turn_canceled terminal=%v err=%v, want terminal cancel", terminal, err)
 	}
+	adapter.beginClaudeSDKRootTurn(adapterSession, "turn-compact", "turn-compact")
 	orphan, terminal, err := adapter.sidecarTurnEvents(adapterSession, session, "turn-compact", claudeSDKSidecarEvent{
 		Type:    "turn_completed",
 		Payload: map[string]any{"turnId": "turn-canceled"},
@@ -161,8 +162,9 @@ func TestClaudeCodeSDKAdapterIgnoresCanceledTurnOrphanBeforeCompactResult(t *tes
 		Type:    "turn_completed",
 		Payload: map[string]any{"turnId": "turn-compact"},
 	})
-	if err != nil || !terminal || len(compact) != 1 || compact[0].Type != activityshared.EventTurnCompleted {
-		t.Fatalf("compact result events=%#v terminal=%v err=%v, want compact turn completion", compact, terminal, err)
+	if err != nil || !terminal || len(compact) != 1 || compact[0].Type != activityshared.EventRootProviderTurnCompleted ||
+		compact[0].Payload.TurnID != "turn-compact" || compact[0].Payload.ProviderTurnID != "turn-compact" {
+		t.Fatalf("compact result events=%#v terminal=%v err=%v, want root provider completion", compact, terminal, err)
 	}
 }
 
@@ -216,6 +218,7 @@ func TestClaudeCodeSDKAdapterSuppressesGoalClearControlTranscript(t *testing.T) 
 	session := standardTestSession(ProviderClaudeCode)
 
 	for _, event := range []claudeSDKSidecarEvent{
+		{Type: "turn_started", Payload: map[string]any{"turnId": "turn-clear"}},
 		{Type: "assistant_delta", Payload: map[string]any{"turnId": "turn-clear", "snapshot": "Goal cleared: ship it"}},
 		{Type: "assistant_completed", Payload: map[string]any{"turnId": "turn-clear", "content": "Goal cleared: ship it"}},
 		{Type: "thinking_delta", Payload: map[string]any{"turnId": "turn-clear", "snapshot": "Clearing goal"}},
@@ -244,12 +247,15 @@ func TestClaudeCodeSDKAdapterSuppressesGoalClearControlTranscript(t *testing.T) 
 			turnID += "-" + terminalType
 		}
 		adapterSession.goalClearControlTurns[turnID] = struct{}{}
-		_, terminal, terminalErr := adapter.sidecarTurnEvents(adapterSession, session, "", claudeSDKSidecarEvent{
+		terminalEvents, terminal, terminalErr := adapter.sidecarTurnEvents(adapterSession, session, "", claudeSDKSidecarEvent{
 			Type:    terminalType,
 			Payload: map[string]any{"turnId": turnID, "error": "failed"},
 		})
 		if terminalErr != nil || !terminal {
 			t.Fatalf("%s terminal=%v err=%v, want terminal", terminalType, terminal, terminalErr)
+		}
+		if len(terminalEvents) != 0 {
+			t.Fatalf("%s events=%#v, want internal control terminal suppressed", terminalType, terminalEvents)
 		}
 		if adapter.isGoalClearControlTurn(adapterSession, turnID) {
 			t.Fatalf("%s clear control turn remained registered", terminalType)

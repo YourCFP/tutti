@@ -40,8 +40,6 @@ type SessionMetadata = agentstore.SessionMetadata
 type SessionUsage = agentstore.SessionUsage
 type SessionUsageContextWindow = agentstore.SessionUsageContextWindow
 type SessionUsageQuota = agentstore.SessionUsageQuota
-type SessionBackgroundAgents = agentstore.SessionBackgroundAgents
-type SessionBackgroundAgentItem = agentstore.SessionBackgroundAgentItem
 type SessionGoal = agentstore.SessionGoal
 
 func JoinSessionRuntimeContext(metadata SessionMetadata, internal map[string]any) map[string]any {
@@ -73,6 +71,7 @@ type MessagePage = agentstore.MessagePage
 type Turn = agentstore.Turn
 
 type TurnTransition = agentstore.TurnTransition
+type RootProviderTurnTransition = agentstore.RootProviderTurnTransition
 
 type Interaction = agentstore.Interaction
 
@@ -91,6 +90,7 @@ type ReleaseOrFailRuntimeOperationInput = agentstore.ReleaseOrFailRuntimeOperati
 type CheckpointRuntimeOperationInput = agentstore.CheckpointRuntimeOperationInput
 type CompleteInteractiveRuntimeOperationInput = agentstore.CompleteInteractiveRuntimeOperationInput
 type CompleteCancelRuntimeOperationInput = agentstore.CompleteCancelRuntimeOperationInput
+type CancelRuntimeOperationTargetOutcome = agentstore.CancelRuntimeOperationTargetOutcome
 type CompletePlanDecisionRuntimeOperationInput = agentstore.CompletePlanDecisionRuntimeOperationInput
 type RuntimeOperationEvent = agentstore.RuntimeOperationEvent
 type RuntimeOperationCompletion = agentstore.RuntimeOperationCompletion
@@ -115,6 +115,9 @@ const (
 	TurnOutcomeFailed      = agentstore.TurnOutcomeFailed
 	TurnOutcomeCanceled    = agentstore.TurnOutcomeCanceled
 	TurnOutcomeInterrupted = agentstore.TurnOutcomeInterrupted
+
+	SessionKindRoot  = agentstore.SessionKindRoot
+	SessionKindChild = agentstore.SessionKindChild
 
 	InteractionKindApproval = agentstore.InteractionKindApproval
 	InteractionKindQuestion = agentstore.InteractionKindQuestion

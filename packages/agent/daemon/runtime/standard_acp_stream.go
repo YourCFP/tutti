@@ -303,9 +303,6 @@ func (a *standardACPAdapter) storeSession(agentSessionID string, session *standa
 	if session != nil && session.pendingApprovals == nil {
 		session.pendingApprovals = make(map[string]*pendingACPApproval)
 	}
-	if session != nil && session.backgroundAgents == nil {
-		session.backgroundAgents = make(map[string]standardACPBackgroundAgent)
-	}
 	a.sessions[agentSessionID] = session
 	a.mu.Unlock()
 }

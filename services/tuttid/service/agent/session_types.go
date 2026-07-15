@@ -77,7 +77,7 @@ type RuntimeController interface {
 	Sessions(workspaceID string) []ProviderRuntimeSession
 	Start(context.Context, RuntimeStartInput) (ProviderRuntimeSession, error)
 	SubmitInteractive(context.Context, RuntimeSubmitInteractiveInput) (RuntimeSubmitInteractiveResult, error)
-	InteractiveDisposition(workspaceID string, agentSessionID string, turnID string, requestID string) RuntimeInteractiveDisposition
+	InteractiveDisposition(workspaceID string, rootAgentSessionID string, agentSessionID string, turnID string, requestID string) RuntimeInteractiveDisposition
 	Subscribe(workspaceID string, agentSessionID string) (<-chan RuntimeStreamEvent, func(), bool)
 	UpdateSettings(context.Context, RuntimeUpdateSettingsInput) error
 	ValidatePromptContent(context.Context, RuntimeExecInput) error
@@ -115,22 +115,28 @@ type ExtensionComposerSkillRoot struct {
 }
 
 type Session struct {
-	ID                string
-	UserID            string
-	AgentTargetID     string
-	Provider          string
-	ProviderSessionID string
-	Cwd               string
-	Visible           bool
-	Resumable         bool
-	Settings          *ComposerSettings
-	PermissionConfig  PermissionConfig
-	Title             *string
-	PinnedAtUnixMS    int64
-	CreatedAt         time.Time
-	UpdatedAt         *time.Time
-	EndedAt           *time.Time
-	Metadata          agentactivitybiz.SessionMetadata
+	ID                   string
+	Kind                 string
+	RootAgentSessionID   string
+	RootTurnID           string
+	ParentAgentSessionID string
+	ParentTurnID         string
+	ParentToolCallID     string
+	UserID               string
+	AgentTargetID        string
+	Provider             string
+	ProviderSessionID    string
+	Cwd                  string
+	Visible              bool
+	Resumable            bool
+	Settings             *ComposerSettings
+	PermissionConfig     PermissionConfig
+	Title                *string
+	PinnedAtUnixMS       int64
+	CreatedAt            time.Time
+	UpdatedAt            *time.Time
+	EndedAt              *time.Time
+	Metadata             agentactivitybiz.SessionMetadata
 	// Protocol v2 turn state (agent-gui refactor plan): the session keeps an
 	// activeTurnId reference; phase/outcome/error live on the turn entity.
 	ActiveTurnID           string
@@ -221,6 +227,12 @@ type SessionSection struct {
 type PersistedSession struct {
 	ID                     string
 	WorkspaceID            string
+	Kind                   string
+	RootAgentSessionID     string
+	RootTurnID             string
+	ParentAgentSessionID   string
+	ParentTurnID           string
+	ParentToolCallID       string
 	Origin                 string
 	UserID                 string
 	AgentTargetID          string
@@ -261,6 +273,15 @@ type SessionReader interface {
 	GetSession(workspaceID string, agentSessionID string) (PersistedSession, bool)
 	ListSessions(workspaceID string) ([]PersistedSession, bool)
 	SessionDeleted(ctx context.Context, workspaceID string, agentSessionID string) (bool, error)
+}
+
+type ChildSessionReader interface {
+	ListChildSessions(context.Context, string, string) ([]PersistedSession, error)
+}
+
+type SessionDetail struct {
+	Session       Session
+	ChildSessions []Session
 }
 
 type SessionSectionReader interface {
@@ -415,16 +436,22 @@ type TurnLifecycle struct {
 }
 
 type RuntimeCancelInput struct {
-	WorkspaceID    string
+	WorkspaceID        string
+	RootAgentSessionID string
+	Targets            []RuntimeCancelTarget
+	Reason             string
+}
+
+type RuntimeCancelTarget struct {
 	AgentSessionID string
 	TurnID         string
-	Reason         string
 }
 
 type RuntimeCancelResult struct {
-	AgentSessionID string
-	Canceled       bool
-	TargetAbsent   bool
+	AgentSessionID   string
+	Canceled         bool
+	TargetAbsent     bool
+	ConfirmedTargets []RuntimeCancelTarget
 }
 
 type RuntimeGoalControlInput struct {
@@ -445,13 +472,14 @@ type RuntimeCloseInput struct {
 }
 
 type RuntimeSubmitInteractiveInput struct {
-	WorkspaceID    string
-	AgentSessionID string
-	TurnID         string
-	RequestID      string
-	Action         string
-	OptionID       string
-	Payload        map[string]any
+	WorkspaceID        string
+	RootAgentSessionID string
+	AgentSessionID     string
+	TurnID             string
+	RequestID          string
+	Action             string
+	OptionID           string
+	Payload            map[string]any
 }
 
 type RuntimeSubmitInteractiveResult struct {

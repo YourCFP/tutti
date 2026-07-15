@@ -268,9 +268,8 @@ func appServerItemToolCallUpdate(item map[string]any, completed bool) (map[strin
 			"task":      asStringRaw(item["prompt"]),
 			"agentName": tool,
 		}
-		// The GUI seeds placeholder lanes from the spawn card's declared
-		// children before any child rows arrive; lane attachment itself rides
-		// the ownerCallId recorded on each child row (ADR 0007).
+		// Preserve provider receiver ids as tool output detail. Canonical child
+		// attachment uses the child session's parentToolCallId relation.
 		if receivers := appServerReceiverThreadIDs(item["receiverThreadIds"]); len(receivers) > 0 {
 			ids := make([]any, 0, len(receivers))
 			for _, id := range receivers {
@@ -368,14 +367,10 @@ func appServerOutputText(value any) string {
 }
 
 type appServerNotificationRoute struct {
-	ownerThreadID string
-	// ownerCallID is the spawn collabAgentToolCall item id that created the
-	// owning child thread (registry parentItemID). Stamped on every routed
-	// child event so the GUI attaches lanes by recorded edge, not inference
-	// (ADR 0007).
-	ownerCallID string
-	turnID      string
-	normalizer  *acpTurnNormalizer
-	events      []activityshared.Event
-	drop        bool
+	session    Session
+	child      *codexAppServerThreadContext
+	turnID     string
+	normalizer *acpTurnNormalizer
+	events     []activityshared.Event
+	drop       bool
 }

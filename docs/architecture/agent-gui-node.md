@@ -1071,36 +1071,20 @@ prompt", and explicit `null` means "clear the current prompt". Do not model it
 as a persisted workspace session field or as a pointer-only JSON field that
 cannot emit `null`.
 
-Claude background agents are session-level runtime state for both ACP and SDK
-adapters. Raw Claude `task_started`, `task_progress`, `task_notification`,
-`task_updated`, and SDK sidecar `task_*` events should update
-`runtimeContext.backgroundAgents` and emit activity timeline events, without
-forcing the parent session into a working lifecycle state. Composer wait copy
-such as "Waiting for 1 background agent to finish" must be derived from that
-structured runtime context. Do not infer background agent waits from terminal
-streaming state or from transcript text; persistent session readers can receive
-task progress after the active prompt call has returned.
+Provider-native work is represented by subordinate `WorkspaceAgentSession`
+entities, not by a summary inside root runtime context. The earliest Claude SDK
+`Task` tool-use event creates a child session and submitted child turn. Later
+`task_id` and `agent_id` values are provider aliases bound to that same child;
+they must never select another child by display order or by "only running"
+heuristics. Child messages, tools, and interactions retain the exact child
+session and child turn as their canonical owner.
 
-For Claude SDK background agents, treat the Agent tool call id
-(`parentToolUseId`) as the canonical background-agent key. SDK `task_id` and
-`agent_id` values are aliases that may arrive later or from hooks without a
-parent id, and `task_id` frequently carries the agent id, so aliases must be
-resolved against both maps. Do not bind any unscoped task event (`TaskCreated`,
-`TaskCompleted`, `task_started`, `task_progress`, `task_notification`) to "the
-only running" delegated task when its alias fails to resolve and another
-registered task already has a known alias; concurrent launches can otherwise
-attach one child task id to a different Agent tool call, fold two background
-agents into one runtime entry, and leave the composer wait count stale or
-cleared early. The daemon `backgroundAgents` map follows the same canonical
-rule: an update carrying an explicit parent tool call id may merge through
-weaker aliases only into an entry with an empty or identical recorded parent.
-Delegated tasks settle only on the child `result` message, the
-`task_notification` system message, or the `TaskCompleted` hook. Child
-assistant messages tagged with `parent_tool_use_id` stream while the child is
-still running and must not complete the task, and a trailing `task_progress`
-after settlement must not flip the task back to running; only a new
-`task_started` may restart it. Violating either rule makes the running
-background-agent count oscillate without new launches.
+AgentGUI receives every nested child session from the root session detail read
+and loads messages through each child's normal message endpoint. The workspace
+engine remains the single frontend entity store. Pure projection attaches a
+child lane to the delegation card whose call id equals the child's immutable
+`parentToolCallId`, then recurses through `parentAgentSessionId` for nested
+children. Lane status comes only from the child's canonical active/latest turn.
 
 Claude SDK manual `/compact` turns must publish a visible compact completion
 activity when the SDK emits only a `compact_boundary` system message. The
@@ -1109,17 +1093,19 @@ the user message or after the result settles; AgentGUI needs the sidecar to
 attach a durable `compact_completed` event to the compact command turn rather
 than only the currently active turn.
 
-When Claude resumes parent work after a background agent completes, that resumed
-work is a new synthetic turn for AgentGUI lifecycle purposes. The sidecar and
-runtime adapter must publish a turn-start lifecycle patch before transcript or
-tool updates for that synthetic turn; otherwise AgentGuiNode will correctly keep
-the composer idle because the authoritative runtime state is still settled.
-The same adapter path must also publish that synthetic turn's
-completed/failed/canceled terminal through the session event sink. Synthetic
-turns are not submitted through `Exec()`/`ExecAsync()`, so they have no turn
-waiter; dropping waiter-less terminals as "untracked orphans" leaves durable
-`activeTurn` stuck in `running` and AgentGUI keeps showing the processing row
-after the assistant content has already finished.
+When Claude resumes root work after a child completes, the SDK continuation is
+another provider turn attached to the same canonical root turn. The adapter
+publishes its provider start and terminal facts, while `services/tuttid` keeps
+the root turn active until that provider turn and every nested child turn are
+terminal. AgentGUI must not turn a synthetic provider id into another
+`WorkspaceAgentTurn`.
+
+Claude Goal status is presentation metadata, not a lifecycle authority. A
+complete Goal may coexist with a waiting canonical root and running child.
+AgentGUI derives its visible completion, composer availability, prompt queue,
+and new-turn eligibility only from the `services/tuttid` root turn; it must not
+unlock or create a turn because Goal became complete or because the Claude SDK
+root call returned.
 
 Do not persist the UI button state. A successful Undo only flips the local
 button to Reapply for the current render. If the page reloads, the source of
@@ -1430,6 +1416,12 @@ activeConversationId changes
 Detail loading is separate from list loading. A conversation can appear in the
 rail before its messages are loaded. The detail panel should show message
 loading from the session view store, not infer it from the send button state.
+The root session detail response also contains a flat collection of every
+nested child session. Desktop reconcile upserts the root and all children into
+the same workspace engine, then loads each session's messages through the
+existing per-session message endpoint. Root-only list selectors keep children
+out of the rail and Message Center counts; the full snapshot still retains
+children for transcript lanes and exact child interactions.
 Older-history prefetch is opportunistic UI behavior. If a page load for a
 specific `(agentSessionId, beforeVersion)` cursor fails, AgentGuiNode should
 record that failed cursor and suppress automatic retries until the detail page
@@ -1839,15 +1831,12 @@ has no reliable `turnId`, the boundary must reject it instead of synthesizing a
 must not retarget optimistic prompts from turnless or untimestamped live
 messages.
 
-Codex app-server sub-agent child-thread rows carry `payload.ownerThreadId` and
-must stay out of the parent transcript. AgentGUI should project those rows only
-through the parent collaboration tool card's sub-agent lanes. Child lifecycle
-state is lane-owned: spawn-card success means only that delegation started
-successfully, not that the child completed. The lane projection should treat
-owner-thread `subAgentLifecycle` markers as terminal state, use
-`agentsStates`/`statuses` from wait or close control-tool output as
-corroborating terminal state, and keep the lane running while child output
-continues without either signal.
+Codex app-server child-thread rows belong to a subordinate child session and
+must stay out of the root transcript. AgentGUI projects that session only under
+the delegation card named by its immutable parent tool-call relation. Spawn-card
+success means only that delegation started successfully; child terminal state
+comes from the child's canonical turn. Wait/close tool output and transcript
+markers are display data, not lifecycle authority.
 
 ### Layer Ownership Summary
 
@@ -2336,6 +2325,11 @@ User-visible rules:
 - Approval/ask-user cards are attention surfaces, not composer drafts.
 - The same prompt may appear inline and in a bottom dock. Both surfaces must
   share request identity and submitting state.
+- For a child prompt, identity is the exact
+  `(agentSessionId, turnId, requestId)` tuple. AgentGUI may aggregate the prompt
+  into the selected root conversation, but submission must target the child
+  tuple; the runtime uses the root session only to locate the shared live
+  provider connection.
 - Answering a prompt should clear or supersede every visible surface for that
   request ID after the runtime update lands.
 - Plan approval decisions can translate into settings updates and/or

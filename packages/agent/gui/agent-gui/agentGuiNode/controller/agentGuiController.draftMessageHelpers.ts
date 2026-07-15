@@ -38,7 +38,6 @@ import {
 } from "./agentGuiController.composerPresentation";
 import {
   normalizeOptionalText,
-  recordValue,
   stringPayloadValue
 } from "./agentGuiController.promptHelpers";
 export {
@@ -167,38 +166,6 @@ export function numberValue(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
-}
-
-export function activeBackgroundAgentCount(
-  runtimeContext: Record<string, unknown> | null | undefined
-): number {
-  const backgroundAgents = recordValue(runtimeContext?.backgroundAgents);
-  if (!backgroundAgents) {
-    return 0;
-  }
-  const items = Array.isArray(backgroundAgents.items)
-    ? backgroundAgents.items
-    : [];
-  if (items.length === 0) {
-    const count = numberValue(backgroundAgents.count);
-    return count === null ? 0 : Math.max(0, Math.floor(count));
-  }
-  return items.filter((item) => {
-    const record = recordValue(item);
-    if (!record) {
-      return false;
-    }
-    const status = String(record.status ?? "")
-      .trim()
-      .toLowerCase();
-    return ![
-      "completed",
-      "failed",
-      "cancelled",
-      "canceled",
-      "stopped"
-    ].includes(status);
-  }).length;
 }
 
 export function conversationBusyStatus(

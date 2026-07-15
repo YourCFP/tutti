@@ -64,13 +64,16 @@ WITH section_sessions AS (
          ) AS conversation_sort_time_unix_ms
   FROM workspace_agent_sessions
   WHERE workspace_id = ?
+    AND session_kind = 'root'
     AND rail_section_key = ?
     AND pinned_at_unix_ms = 0
     AND (? = '' OR agent_target_id = ?)
     AND deleted_at_unix_ms = 0
     AND json_extract(session_metadata_json, '$.visible') IS NOT 0
 )
-SELECT workspace_id, agent_session_id, origin, agent_target_id, provider, provider_session_id, model,
+SELECT workspace_id, agent_session_id, session_kind, root_agent_session_id, root_turn_id,
+       parent_agent_session_id, parent_turn_id, parent_tool_call_id,
+       origin, agent_target_id, provider, provider_session_id, model,
        user_id, settings_json, session_metadata_json, internal_runtime_context_json, cwd,
 	       title, message_version, last_event_at_unix_ms,
        started_at_unix_ms, ended_at_unix_ms, pinned_at_unix_ms,
@@ -151,6 +154,7 @@ func (s *Store) ListSessionSectionDeletionCandidates(
 SELECT agent_session_id
 FROM workspace_agent_sessions
 WHERE workspace_id = ?
+  AND session_kind = 'root'
   AND rail_section_key = ?
   AND (? = '' OR agent_target_id = ?)
   AND (? = 0 OR pinned_at_unix_ms = 0)
@@ -195,13 +199,16 @@ func (s *Store) listPinnedSessionPage(
 	totalCount int,
 ) (SessionSectionPage, bool, error) {
 	query := `
-SELECT workspace_id, agent_session_id, origin, agent_target_id, provider, provider_session_id, model,
+SELECT workspace_id, agent_session_id, session_kind, root_agent_session_id, root_turn_id,
+       parent_agent_session_id, parent_turn_id, parent_tool_call_id,
+       origin, agent_target_id, provider, provider_session_id, model,
        user_id, settings_json, session_metadata_json, internal_runtime_context_json, cwd,
 	       title, message_version, last_event_at_unix_ms,
        started_at_unix_ms, ended_at_unix_ms, pinned_at_unix_ms,
        created_at_unix_ms, updated_at_unix_ms, active_turn_id
 FROM workspace_agent_sessions
 WHERE workspace_id = ?
+  AND session_kind = 'root'
   AND pinned_at_unix_ms > 0
   AND (? = '' OR agent_target_id = ?)
   AND deleted_at_unix_ms = 0
@@ -276,6 +283,7 @@ func (s *Store) countVisibleSessionSectionRows(
 SELECT COUNT(1)
 FROM workspace_agent_sessions
 WHERE workspace_id = ?
+  AND session_kind = 'root'
   AND ` + sectionPredicate + `
   AND (? = '' OR agent_target_id = ?)
   AND deleted_at_unix_ms = 0

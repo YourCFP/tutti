@@ -5302,52 +5302,6 @@ func TestServiceGetDoesNotReconcileActionableInteractionFromStaleTranscript(t *t
 	}
 }
 
-func TestServiceGetDoesNotReconcileLiveRuntimeBackgroundAgent(t *testing.T) {
-	runtime := newFakeRuntime()
-	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{
-		ID:          "session-1",
-		WorkspaceID: "ws-1",
-		Provider:    "claude-code",
-		Status:      "created",
-		RuntimeContext: map[string]any{
-			"backgroundAgents": map[string]any{
-				"count": 1,
-				"items": []any{map[string]any{
-					"parentToolUseId": "call-agent-1",
-					"status":          "running",
-				}},
-			},
-		},
-	}
-	service := newIsolatedAgentService(runtime)
-	service.SessionReader = fakeSessionReader{
-		sessions: map[string]PersistedSession{
-			"ws-1:session-1": {
-				ID:          "session-1",
-				WorkspaceID: "ws-1",
-				Provider:    "claude-code",
-			},
-		},
-	}
-	service.MessageReader = fakeMessageReader{
-		page: SessionMessagesPage{
-			Messages: []SessionMessage{{
-				TurnID: "synthetic-turn-1",
-				Kind:   "tool_call",
-				Status: "streaming",
-				Payload: map[string]any{
-					"input": map[string]any{"toolName": "Read"},
-				},
-			}},
-		},
-	}
-
-	_, err := service.Get(context.Background(), "ws-1", "session-1")
-	if err != nil {
-		t.Fatalf("Get returned error: %v", err)
-	}
-}
-
 func TestServiceResumesPersistedSessionWithPreparedRuntime(t *testing.T) {
 	runtime := newFakeRuntime()
 	var prepareInput runtimeprep.PrepareInput
@@ -5696,6 +5650,7 @@ func (f *fakeProviderAvailabilityChecker) ListProviderAvailability(_ context.Con
 type fakeSessionReader struct {
 	sessions   map[string]PersistedSession
 	tombstoned map[string]bool
+	children   map[string][]PersistedSession
 }
 
 type fakeSectionReader struct {
@@ -5777,13 +5732,21 @@ func newFakeRuntime() *fakeRuntime {
 
 func (f *fakeRuntime) Cancel(_ context.Context, input RuntimeCancelInput) (RuntimeCancelResult, error) {
 	f.cancelCalls = append(f.cancelCalls, input)
+	targetAgentSessionID := input.RootAgentSessionID
+	if len(input.Targets) > 0 {
+		targetAgentSessionID = input.Targets[len(input.Targets)-1].AgentSessionID
+	}
 	if f.cancelResultSet {
 		if f.cancelResult.AgentSessionID == "" {
-			f.cancelResult.AgentSessionID = input.AgentSessionID
+			f.cancelResult.AgentSessionID = targetAgentSessionID
 		}
 		return f.cancelResult, nil
 	}
-	return RuntimeCancelResult{AgentSessionID: input.AgentSessionID, Canceled: true}, nil
+	return RuntimeCancelResult{
+		AgentSessionID:   targetAgentSessionID,
+		Canceled:         true,
+		ConfirmedTargets: append([]RuntimeCancelTarget(nil), input.Targets...),
+	}, nil
 }
 
 func (*fakeRuntime) GoalControl(_ context.Context, input RuntimeGoalControlInput) (RuntimeGoalControlResult, error) {
@@ -5849,7 +5812,7 @@ func (f *fakeRuntime) SubmitInteractive(_ context.Context, input RuntimeSubmitIn
 	return RuntimeSubmitInteractiveResult{Disposition: disposition}, nil
 }
 
-func (f *fakeRuntime) InteractiveDisposition(string, string, string, string) RuntimeInteractiveDisposition {
+func (f *fakeRuntime) InteractiveDisposition(string, string, string, string, string) RuntimeInteractiveDisposition {
 	if f.interactiveDisposition == "" {
 		return RuntimeInteractiveDispositionUnknown
 	}
@@ -5965,6 +5928,10 @@ func (f fakeSessionReader) ListSessions(workspaceID string) ([]PersistedSession,
 		}
 	}
 	return result, len(result) > 0
+}
+
+func (f fakeSessionReader) ListChildSessions(_ context.Context, workspaceID string, rootAgentSessionID string) ([]PersistedSession, error) {
+	return append([]PersistedSession(nil), f.children[workspaceID+":"+rootAgentSessionID]...), nil
 }
 
 func (f *fakeSessionReader) UpdateSessionTitle(_ context.Context, workspaceID string, agentSessionID string, title string) (PersistedSession, bool, error) {
@@ -6086,6 +6053,7 @@ type activityProjectionRepoStub struct {
 	messagePageOK  bool
 	messagePageErr error
 	turnResult     agentactivitybiz.Turn
+	turnResults    map[string]agentactivitybiz.Turn
 	turnFound      bool
 	turnErr        error
 }
@@ -6100,6 +6068,10 @@ func (*activityProjectionRepoStub) DeleteSession(context.Context, string, string
 
 func (*activityProjectionRepoStub) GetSession(context.Context, string, string) (agentactivitybiz.Session, bool, error) {
 	return agentactivitybiz.Session{}, false, nil
+}
+
+func (*activityProjectionRepoStub) ListChildSessions(context.Context, string, string) ([]agentactivitybiz.Session, error) {
+	return nil, nil
 }
 
 func (*activityProjectionRepoStub) SessionDeleted(context.Context, string, string) (bool, error) {
@@ -6175,7 +6147,11 @@ func (*activityProjectionRepoStub) UpdateSessionTitle(context.Context, string, s
 	return agentactivitybiz.Session{}, false, nil
 }
 
-func (r *activityProjectionRepoStub) GetTurn(context.Context, string, string, string) (agentactivitybiz.Turn, bool, error) {
+func (r *activityProjectionRepoStub) GetTurn(_ context.Context, _ string, agentSessionID string, turnID string) (agentactivitybiz.Turn, bool, error) {
+	if r.turnResults != nil {
+		turn, ok := r.turnResults[agentSessionID+"\x00"+turnID]
+		return turn, ok, r.turnErr
+	}
 	return r.turnResult, r.turnFound, r.turnErr
 }
 

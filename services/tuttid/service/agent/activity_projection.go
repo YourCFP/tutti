@@ -19,6 +19,7 @@ type ActivityProjection struct {
 	sessionMessageObserver SessionMessageObserver
 	sessionStateObserver   SessionStateObserver
 	agentTargetResolver    AgentTargetResolver
+	rootTurnObserver       RootTurnObserver
 }
 
 func NewActivityProjection(repo agentactivitybiz.Repository) *ActivityProjection {
@@ -41,6 +42,10 @@ type SessionStateObserver interface {
 
 type SessionMessageObserver interface {
 	ObserveAgentSessionMessages(context.Context, agentsessionstore.ReportSessionMessagesInput, agentsessionstore.ReportSessionMessagesReply)
+}
+
+type RootTurnObserver interface {
+	ObserveRootTurnSettled(context.Context, string, string, agentactivitybiz.Turn)
 }
 
 func (p *ActivityProjection) SetPublisher(publisher ActivityUpdatePublisher) {
@@ -69,6 +74,13 @@ func (p *ActivityProjection) SetSessionStateObserver(observer SessionStateObserv
 		return
 	}
 	p.sessionStateObserver = observer
+}
+
+func (p *ActivityProjection) SetRootTurnObserver(observer RootTurnObserver) {
+	if p == nil {
+		return
+	}
+	p.rootTurnObserver = observer
 }
 
 func normalizeReportSessionOrigins(
@@ -124,9 +136,15 @@ func (p *ActivityProjection) ReportSessionState(
 		input.State.RuntimeContext,
 	)
 	stateReport := agentactivitybiz.SessionStateReport{
-		WorkspaceID:    strings.TrimSpace(input.WorkspaceID),
-		AgentSessionID: strings.TrimSpace(input.AgentSessionID),
-		Origin:         strings.TrimSpace(input.SessionOrigin),
+		WorkspaceID:          strings.TrimSpace(input.WorkspaceID),
+		AgentSessionID:       strings.TrimSpace(input.AgentSessionID),
+		Kind:                 strings.TrimSpace(input.State.Kind),
+		RootAgentSessionID:   strings.TrimSpace(input.State.RootAgentSessionID),
+		RootTurnID:           strings.TrimSpace(input.State.RootTurnID),
+		ParentAgentSessionID: strings.TrimSpace(input.State.ParentAgentSessionID),
+		ParentTurnID:         strings.TrimSpace(input.State.ParentTurnID),
+		ParentToolCallID:     strings.TrimSpace(input.State.ParentToolCallID),
+		Origin:               strings.TrimSpace(input.SessionOrigin),
 		// Tutti local workspaces intentionally leave Source.UserID empty. Cloud
 		// collaboration hosts may provide real account user ids on this wire.
 		UserID:            strings.TrimSpace(input.Source.UserID),
@@ -148,6 +166,9 @@ func (p *ActivityProjection) ReportSessionState(
 	activityReport := agentactivitybiz.ActivityStateReport{Session: stateReport}
 	if transition, ok := turnTransitionFromStateInput(input); ok {
 		activityReport.Turn = &transition
+	}
+	if transition, ok := rootProviderTurnTransitionFromStateInput(input); ok {
+		activityReport.RootProviderTurn = &transition
 	}
 	interaction, err := interactionTransitionFromStateInput(input)
 	if err != nil {
@@ -370,6 +391,25 @@ func (p *ActivityProjection) ListSessions(workspaceID string) ([]PersistedSessio
 		out = append(out, p.projectPersistedSession(ctx, persistedSessionFromActivity(session)))
 	}
 	return out, true
+}
+
+func (p *ActivityProjection) ListChildSessions(
+	ctx context.Context,
+	workspaceID string,
+	agentSessionID string,
+) ([]PersistedSession, error) {
+	if p == nil || p.repo == nil {
+		return []PersistedSession{}, nil
+	}
+	sessions, err := p.repo.ListChildSessions(ctx, workspaceID, agentSessionID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PersistedSession, 0, len(sessions))
+	for _, session := range sessions {
+		out = append(out, p.projectPersistedSession(ctx, persistedSessionFromActivity(session)))
+	}
+	return out, nil
 }
 
 func (p *ActivityProjection) ListSessionSection(

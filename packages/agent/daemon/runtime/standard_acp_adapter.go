@@ -84,7 +84,6 @@ type standardACPSession struct {
 	sessionClose      bool
 	acpLiveState
 	pendingApprovals map[string]*pendingACPApproval
-	backgroundAgents map[string]standardACPBackgroundAgent
 	recentTurnID     string
 	recentTurnExpiry time.Time
 	// lifecycleSeq orders provider-agnostic authoritative turn snapshots
@@ -114,18 +113,6 @@ type standardACPSessionLock struct {
 }
 
 type pendingACPApproval = pendingInteractiveRequest
-
-type standardACPBackgroundAgent struct {
-	TaskID            string
-	Description       string
-	Status            string
-	Summary           string
-	LastToolName      string
-	TaskType          string
-	StartedAtUnixMS   int64
-	UpdatedAtUnixMS   int64
-	CompletedAtUnixMS int64
-}
 
 const standardACPRecentTurnTTL = 10 * time.Minute
 
