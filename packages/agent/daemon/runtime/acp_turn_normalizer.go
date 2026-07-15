@@ -551,6 +551,8 @@ func acpApprovalDetailPresent(input map[string]any) bool {
 		asString(input["search_query"]),
 		asString(input["searchQuery"]),
 		asString(input["pattern"]),
+		asString(input["glob_pattern"]),
+		asString(input["globPattern"]),
 	) != ""
 }
 
@@ -622,18 +624,38 @@ func normalizeMergedACPToolPayload(payload map[string]any) {
 		return
 	}
 	input := payloadMap(payload, "input")
+	output := payloadMap(payload, "output")
 	kind := firstNonEmpty(
 		asString(payload["kind"]),
 		asString(input["kind"]),
 		asString(payloadMap(payload, "acp")["kind"]),
 	)
+	callID := asString(payload["callId"])
+	priorToolName := strings.TrimSpace(asString(payload["toolName"]))
 	name := firstNonEmpty(
 		asString(input["title"]),
-		asString(payload["name"]),
-		asString(payload["toolName"]),
-		asString(payload["callId"]),
+		asString(payload["title"]),
 	)
-	if toolName := acpToolName(asString(payload["callId"]), name, kind, input); toolName != "" {
+	if candidate := strings.TrimSpace(asString(payload["name"])); candidate != "" && !isOpaqueCallIdentifierString(candidate, callID) {
+		if name == "" {
+			name = candidate
+		}
+	}
+	if name == "" && priorToolName != "" && !isOpaqueCallIdentifierString(priorToolName, callID) {
+		name = priorToolName
+	}
+	toolName := acpToolNameWithOutput(callID, name, kind, input, output)
+	if toolName == "" {
+		toolName = priorToolName
+	}
+	// Prefer a stable prior identity when re-derivation collapses to a generic
+	// Tool/Bash label but we already knew a more specific Cursor tool name.
+	if priorToolName != "" && priorToolName != "Tool" && priorToolName != "Bash" &&
+		(toolName == "" || toolName == "Tool" || toolName == "Bash") &&
+		acpToolNameLooksSpecific(priorToolName) {
+		toolName = priorToolName
+	}
+	if toolName != "" {
 		payload["toolName"] = toolName
 		payload["name"] = toolName
 	}
@@ -645,6 +667,15 @@ func normalizeMergedACPToolPayload(payload map[string]any) {
 	}
 	if fileChanges := fileChangesFromACPToolPayload(payload); fileChanges != nil {
 		payload["fileChanges"] = fileChanges
+	}
+}
+
+func acpToolNameLooksSpecific(toolName string) bool {
+	switch strings.TrimSpace(toolName) {
+	case "Glob", "Grep", "Read", "Write", "Edit", "WebSearch", "WebFetch", "TodoWrite", "Agent", "Think":
+		return true
+	default:
+		return false
 	}
 }
 

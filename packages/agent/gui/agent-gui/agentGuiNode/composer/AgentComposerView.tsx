@@ -103,6 +103,7 @@ export function AgentComposerView(input: Props): React.JSX.Element {
     draftContent,
     availableSkills = EMPTY_PROVIDER_SKILLS,
     composerSettings,
+    workspaceId,
     queueStatus = "active",
     queuedPrompts,
     drainingQueuedPromptId,
@@ -131,6 +132,7 @@ export function AgentComposerView(input: Props): React.JSX.Element {
     hasCompactableContext = true
   } = input.props;
   const draftImages = agentComposerDraftImages(draftContent);
+  const slashStatusAgentSessionId = slashStatus?.agentSessionId ?? null;
   const { availableCapabilities, slashPaletteEntries, slashQuery } =
     input.paletteCatalog;
   const { mentionPaletteFrame, mentionPaletteHeightPx, mentionPaletteStyle } =
@@ -278,7 +280,9 @@ export function AgentComposerView(input: Props): React.JSX.Element {
             onSendQueuedPromptNext={onSendQueuedPromptNext}
             onRemoveQueuedPrompt={onRemoveQueuedPrompt}
             onEditQueuedPrompt={onEditQueuedPrompt}
+            agentSessionId={slashStatusAgentSessionId}
             onLinkClick={handleLinkClick}
+            workspaceId={workspaceId}
             workspaceAppIcons={workspaceAppIcons}
           />
         </div>
