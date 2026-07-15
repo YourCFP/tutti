@@ -600,6 +600,7 @@ export function StandaloneAgentWindow({
       agentTargetId: activeAgentTargetId,
       providerStatusSnapshot: agentProviderStatusService.getSnapshot(),
       minimizeSourceWindow: false,
+      offsetFromSourceWindow: true,
       provider: headerProvider,
       workspaceId
     });
@@ -658,9 +659,7 @@ export function StandaloneAgentWindow({
                 "workspace.agentGui.fallbackAgentLabel"
               ),
               newConversation: i18n.t("workspace.agentGui.newConversation"),
-              openDetachedWindow: i18n.t(
-                "workspace.agentGui.openDetachedWindow"
-              )
+              openDetachedWindow: i18n.t("workspace.agentGui.openNewWindow")
             }}
             conversationRailWidthPx={headerConversationRailWidthPx}
             conversationIconUrl={headerConversationIconUrl}
