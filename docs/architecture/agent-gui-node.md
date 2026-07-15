@@ -948,10 +948,18 @@ call type. For `AskUserQuestion`, renderer payloads may keep
 `answersByQuestionId` keyed by stable UI question ids, but the Claude SDK
 permission callback must return `updatedInput.answers` keyed by the full
 question text because current Claude SDK result rendering looks up answers by
-question text. Legacy Claude ACP `AskUserQuestion` failures may be hidden only
-when the recorded failure says the tool is unavailable; waiting or completed
-Claude SDK `AskUserQuestion` calls must remain in the Agent GUI detail
-projection so the composer prompt can render.
+question text. Completed transcript rows must also normalize the provider
+response envelope: persisted answers may live under
+`output.payload.answersByQuestionId` / `output.payload.answers` rather than on
+`output` directly. The AskUserQuestion detail projection must read that
+envelope before deciding that no answer exists, so a completed tool row cannot
+remain visually stuck on its waiting state. Its specialized detail renderer
+must show both the structured selected answer and a persisted provider
+`output.text` result when present; specializing the question presentation must
+not discard the tool result. Legacy Claude ACP `AskUserQuestion` failures may
+be hidden only when the recorded failure says the tool is unavailable; waiting
+or completed Claude SDK `AskUserQuestion` calls must remain in the Agent GUI
+detail projection so the composer prompt can render.
 
 Runtime interactive prompts also travel through session state. Provider
 adapters expose them as `SessionStateSnapshot.pendingInteractive`; runtime
