@@ -20,6 +20,7 @@ import {
   emptyAgentComposerDraft,
   materializePastedTextInstructions
 } from "../model/agentComposerDraft";
+import { materializeAgentCustomMentionPromptText } from "../agentRichText/agentMentionMarkdown";
 import { type AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
 import type {
   AgentComposerDraft,
@@ -429,7 +430,14 @@ export function toRuntimeSendContent(
     header: () => translate("agentHost.agentGui.pastedTextFilesHeader"),
     line: (preview, path) =>
       translate("agentHost.agentGui.pastedTextFileLine", { preview, path })
-  });
+  }).map((block) =>
+    block.type === "text"
+      ? {
+          ...block,
+          text: materializeAgentCustomMentionPromptText(block.text ?? "").trim()
+        }
+      : block
+  );
 }
 
 export function shouldClearSubmittedDraft(input: {

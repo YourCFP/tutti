@@ -15,10 +15,7 @@ import {
   AGENT_GUI_STANDALONE_AUTO_COLLAPSE_WIDTH_PX,
   shouldAutoCollapseAgentGUIConversationRail
 } from "@tutti-os/agent-gui";
-import type {
-  AgentComposerDraftFile,
-  AgentGUIComposerAppendRequest
-} from "@tutti-os/agent-gui";
+import type { AgentGUIComposerAppendRequest } from "@tutti-os/agent-gui";
 import type { WorkspaceSummary } from "@tutti-os/client-tuttid-ts";
 import {
   AGENT_GUI_WORKBENCH_CONVERSATION_RAIL_TOGGLE_EVENT,
@@ -313,16 +310,13 @@ export function StandaloneAgentWindow({
   const [composerAppendRequest, setComposerAppendRequest] =
     useState<AgentGUIComposerAppendRequest | null>(null);
   const composerAppendSequenceRef = useRef(0);
-  const appendBrowserElementFile = useCallback(
-    (file: AgentComposerDraftFile): void => {
-      setComposerAppendRequest({
-        files: [file],
-        sequence:
-          Date.now() * 1_000 + (++composerAppendSequenceRef.current % 1_000)
-      });
-    },
-    []
-  );
+  const appendBrowserElementMention = useCallback((mention: string): void => {
+    setComposerAppendRequest({
+      prompt: mention,
+      sequence:
+        Date.now() * 1_000 + (++composerAppendSequenceRef.current % 1_000)
+    });
+  }, []);
   const fileOpenRequestSequenceRef = useRef(0);
   const openFileInSidebar = useCallback(
     async (file: string, validateExists = false): Promise<boolean> => {
@@ -656,7 +650,6 @@ export function StandaloneAgentWindow({
         browserApi={desktopApi.browser}
         contributions={toolWorkbench.contributions}
         fileOpenRequest={fileOpenRequest}
-        hostFilesApi={desktopApi.host.files}
         issueManagerOpenRequest={issueManagerOpenRequest}
         mainContentMinWidthPx={
           isConversationRailCollapsed
@@ -716,7 +709,7 @@ export function StandaloneAgentWindow({
         )}
         onOpenMessageCenterChat={handleOpenMessageCenterChat}
         onAppsOpen={ensureWorkspaceAppPolling}
-        onAppendBrowserElementFile={appendBrowserElementFile}
+        onAppendBrowserElementMention={appendBrowserElementMention}
         onBrowserElementError={Toast.Error}
         onToolHostReady={toolWorkbench.onHostReady}
         resizeWindowContentWidth={resizeStandaloneAgentWindowContentWidth}

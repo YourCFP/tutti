@@ -1943,9 +1943,31 @@ User-visible rules:
   backfill them from the earliest visible user message, or clear message-less
   placeholders without changing session timestamps. This classifier is
   migration-only; live submit must not guess whether a target name is a title.
-- CLI, AgentGUI, message-center, notification, and desktop surfaces consume
-  `session.title` directly. They must not reconstruct titles from transcript
-  messages, parse Markdown again, or add mention prefixes.
+- CLI, message-center, notification, Dock, and desktop identity surfaces consume
+  `session.title` directly. The active workbench detail header has one
+  presentation-only exception for a first prompt containing task, session, app,
+  file, or Agent references: it may render that canonical prompt as readonly
+  mention chips plus adjacent prompt text only while its normalized,
+  length-capped title still equals `session.title`. The AgentGUI conversation
+  rail continues to render the provider icon and canonical plain title, and may
+  insert exactly one monochrome marker for the leading supported reference kind.
+  When that marker is present, it replaces the structural meaning of the
+  canonical title's first `@`, so the rail-only title presentation omits that
+  one prefix without mutating the stored title.
+  Browser-element and other custom mentions do not produce this marker. The
+  rail derives the marker from a stable selector containing only each session's
+  first user prompt, or from a pending new-session activation. Assistant
+  streaming must preserve the selector result identity without copying or
+  sorting complete histories. Separately, browser-element mentions never appear
+  in the conversation rail title: while the canonical title still matches the
+  first prompt, the rail removes every browser-element mention and keeps only
+  the remaining user text. The detail/workbench header instead renders the
+  registered browser-element card beside that text, without exposing its raw
+  `@img`/DOM-tag title label. The header titlebar itself remains present, and the
+  stored `session.title` is unchanged. Explicit renames and title clears stop the
+  projection. Other title consumers must not reconstruct titles from transcript
+  messages, parse Markdown again, or add mention prefixes. The detail rich-title
+  projection remains one clipped line and must not wrap into a taller titlebar.
 - Live runtime snapshot data is the source for workbench and dock titles. Do
   not persist or restore `lastActiveConversationTitle` from workbench node
   state.
@@ -2820,6 +2842,47 @@ composer document
 
 Never fix send bugs only in the composer UI. Also inspect the pending overlay,
 runtime command input, and timeline merge path.
+
+Host-generated context must enter the composer through a domain-specific,
+host-owned custom mention rather than impersonating a generic picker file. For
+example, the standalone Browser inserts a `browser-element` mention whose
+visible label is the compact DOM tag (`<a>`, `<div>`, and so on), while its href
+scope carries a bounded, sanitized Cursor-compatible text record with the
+three fields `DOM Path`, `Position`, and `HTML Element`. It must not retain the
+former whole-snapshot JSON envelope or create a draft `file` block.
+Repeated selections append
+multiple `browser-element` mentions inline, separated by ordinary spaces, to
+the same text-only draft. Their editable custom-mention wrappers must size to
+the compact chip instead of forcing the generic 24px mention height. The append
+path must also retain one ordinary trailing space after the last mention, just
+like interactive mention insertion, so the caret lands in a text node and uses
+the same height as ordinary composer text. Prompt normalization removes that
+trailing whitespace before send. Any prompt containing a serialized structured
+mention must also cross the runtime boundary as `displayPrompt`: execution
+content materializes each registered browser mention into its plain three-field
+text immediately before runtime dispatch, while optimistic and durable
+user-message projection keeps the original mention markup and renders the same
+chips shown by the composer. The daemon, activity runtime, and provider
+protocols therefore receive ordinary text blocks and require no browser-specific
+contract. One sent message can reference several nodes without introducing
+visible attachment blocks. Host presentation must also tolerate historical
+`browser-element` references that carry only `path`, `tag`, and `workspaceId`:
+the tag label and icon remain renderable even when inline execution `context`
+is unavailable. Only runtime materialization depends on `context`; a missing
+execution field must not make persisted composer or timeline markup fall back
+to literal Markdown.
+The custom mention's canonical Markdown label is distinct from its host chip
+presentation: a DOM tag may serialize as `[@a](mention://browser-element/...)`
+while the registered chip renders `<a>`. Parsing and re-serializing the
+composer must preserve the canonical label instead of replacing it with the
+presentation string. Sent timeline rows render the same registered chip and
+retain the adjacent concrete prompt. For an automatically derived conversation
+title, the AgentGUI conversation rail removes browser-element mentions and
+displays only the remaining user text, while the detail/workbench header keeps
+the registered browser-element card beside that text. The stored canonical
+title is unchanged. Task, session, app, file, and Agent references may also
+produce title cards or rail markers. Renamed or cleared titles stay canonical
+plain text instead of restoring the historical prompt.
 
 ### Composer Mention References
 

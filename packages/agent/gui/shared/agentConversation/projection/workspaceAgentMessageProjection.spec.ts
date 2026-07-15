@@ -8,6 +8,81 @@ import type { WorkspaceAgentActivityCard } from "../../workspaceAgentActivityLis
 import { projectWorkspaceAgentMessagesToConversationVM } from "./workspaceAgentMessageProjection";
 
 describe("projectWorkspaceAgentMessagesToConversationVM", () => {
+  it("prefers canonical browser element prompt content over a lossy provider echo", () => {
+    const prompt =
+      "[@a](mention://browser-element/browser-element%3A1?path=%2Ftmp%2Fa.txt&tag=a&workspaceId=workspace-1) " +
+      "[@div](mention://browser-element/browser-element%3A2?path=%2Ftmp%2Fdiv.txt&tag=div&workspaceId=workspace-1) " +
+      "这里说的什么";
+    const conversation = projectWorkspaceAgentMessagesToConversationVM({
+      activity: activity(),
+      session: session(),
+      workspaceRoot: "/workspace/demo",
+      messages: [
+        message({
+          messageId: "user-browser-elements",
+          version: 1,
+          role: "user",
+          kind: "text",
+          payload: {
+            text: "@<a> @<div> 这里说的什么",
+            content: [{ type: "text", text: prompt }]
+          }
+        })
+      ]
+    });
+
+    const userRow = conversation.rows.find(
+      (row) => row.kind === "message" && row.speaker === "user"
+    );
+    expect(userRow?.kind === "message" ? userRow.messages[0]?.body : null).toBe(
+      prompt
+    );
+  });
+
+  it("renders the browser element display prompt instead of staged snapshot files", () => {
+    const displayPrompt =
+      "[@a](mention://browser-element/browser-element%3A1?path=%2Ftmp%2Fa.txt&tag=a&workspaceId=workspace-1) " +
+      "[@div](mention://browser-element/browser-element%3A2?path=%2Ftmp%2Fdiv.txt&tag=div&workspaceId=workspace-1) 22222222";
+    const conversation = projectWorkspaceAgentMessagesToConversationVM({
+      activity: activity(),
+      session: session(),
+      workspaceRoot: "/workspace/demo",
+      messages: [
+        message({
+          messageId: "user-browser-element-files",
+          version: 1,
+          role: "user",
+          kind: "text",
+          payload: {
+            displayPrompt,
+            text: "pasted-text-1.txt",
+            content: [
+              {
+                type: "file",
+                kind: "pasted-text",
+                name: "pasted-text-1.txt",
+                path: "/tmp/a.txt"
+              },
+              {
+                type: "file",
+                kind: "pasted-text",
+                name: "pasted-text-2.txt",
+                path: "/tmp/div.txt"
+              }
+            ]
+          }
+        })
+      ]
+    });
+
+    const userRow = conversation.rows.find(
+      (row) => row.kind === "message" && row.speaker === "user"
+    );
+    expect(userRow?.kind === "message" ? userRow.messages[0]?.body : null).toBe(
+      displayPrompt
+    );
+  });
+
   it("sorts message rows by stable message version instead of source-local ids", () => {
     const conversation = projectWorkspaceAgentMessagesToConversationVM({
       activity: activity(),
