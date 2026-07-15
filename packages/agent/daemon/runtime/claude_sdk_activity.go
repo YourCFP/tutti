@@ -590,19 +590,28 @@ func (a *ClaudeCodeSDKAdapter) compactMessageEvent(
 	streamState string,
 	noticeStatus string,
 	detail string,
-) activityshared.Event {
+) (activityshared.Event, bool) {
 	a.mu.Lock()
 	compact := adapterSession.compactMessages[turnID]
 	if compact.messageID == "" {
 		compact.messageID = "claude-sdk:compact:" + turnID
 	}
-	compact.active = noticeStatus == "running"
+	if compact.terminalStatus != "" {
+		a.mu.Unlock()
+		return activityshared.Event{}, false
+	}
+	if noticeStatus == "running" {
+		compact.active = true
+	} else {
+		compact.active = false
+		compact.terminalStatus = noticeStatus
+	}
 	if adapterSession.compactMessages == nil {
 		adapterSession.compactMessages = make(map[string]claudeSDKCompactMessage)
 	}
 	adapterSession.compactMessages[turnID] = compact
 	a.mu.Unlock()
-	return claudeSDKCompactMessageEvent(session, turnID, compact.messageID, streamState, noticeStatus, detail)
+	return claudeSDKCompactMessageEvent(session, turnID, compact.messageID, streamState, noticeStatus, detail), true
 }
 
 func claudeSDKCompactMessageEvent(

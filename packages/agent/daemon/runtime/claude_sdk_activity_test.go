@@ -284,6 +284,48 @@ func TestClaudeCodeSDKAdapterDoesNotResettleTerminalCompactWithTurn(t *testing.T
 	}
 }
 
+func TestClaudeCodeSDKAdapterIgnoresCompactTerminalAfterSynthesizedCancel(t *testing.T) {
+	adapter := NewClaudeCodeSDKAdapter(nil)
+	adapterSession := &claudeSDKAdapterSession{liveState: newClaudeSDKLiveState()}
+	session := standardTestSession(ProviderClaudeCode)
+
+	started, _, err := adapter.sidecarTurnEvents(adapterSession, session, "turn-compact", claudeSDKSidecarEvent{
+		Type:    "compact_started",
+		Payload: map[string]any{"turnId": "turn-compact"},
+	})
+	if err != nil || len(started) != 1 {
+		t.Fatalf("compact_started events=%#v err=%v", started, err)
+	}
+	settled, terminal, err := adapter.sidecarTurnEvents(adapterSession, session, "turn-compact", claudeSDKSidecarEvent{
+		Type:    "turn_canceled",
+		Payload: map[string]any{"turnId": "turn-compact"},
+	})
+	if err != nil || !terminal {
+		t.Fatalf("turn_canceled events=%#v terminal=%v err=%v", settled, terminal, err)
+	}
+	var canceledCompact *activityshared.Event
+	for index := range settled {
+		if settled[index].Payload.Metadata["noticeCommandStatus"] == "canceled" {
+			canceledCompact = &settled[index]
+			break
+		}
+	}
+	if canceledCompact == nil || canceledCompact.EventID != started[0].EventID {
+		t.Fatalf("turn_canceled events=%#v, want stable canceled compact notice", settled)
+	}
+
+	lateEvents := []claudeSDKSidecarEvent{
+		{Type: "compact_completed", Payload: map[string]any{"turnId": "turn-compact"}},
+		{Type: "compact_failed", Payload: map[string]any{"turnId": "turn-compact", "reason": "late failure"}},
+	}
+	for _, event := range lateEvents {
+		late, lateTerminal, lateErr := adapter.sidecarTurnEvents(adapterSession, session, "turn-compact", event)
+		if lateErr != nil || lateTerminal || len(late) != 0 {
+			t.Fatalf("late %s events=%#v terminal=%v err=%v, want ignored terminal", event.Type, late, lateTerminal, lateErr)
+		}
+	}
+}
+
 func TestClaudeCodeSDKAdapterMapsThinkingEvents(t *testing.T) {
 	adapter := NewClaudeCodeSDKAdapter(nil)
 	adapterSession := &claudeSDKAdapterSession{}

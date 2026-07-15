@@ -171,11 +171,21 @@ func (a *ClaudeCodeSDKAdapter) finishClaudeSDKTurnLifecycle(
 	if turnID == "" {
 		return nil
 	}
+	streamState := messageStreamStateFailed
+	noticeStatus := "failed"
+	switch kind {
+	case claudeSDKTurnFinishCompleted:
+		streamState = messageStreamStateCompleted
+		noticeStatus = "completed"
+	case claudeSDKTurnFinishInterrupted:
+		noticeStatus = "canceled"
+	}
 	a.mu.Lock()
 	normalizer := adapterSession.takeClaudeSDKTurnNormalizerLocked(turnID)
 	compact, hasActiveCompact := adapterSession.compactMessages[turnID]
-	if hasActiveCompact && compact.active {
+	if hasActiveCompact && compact.active && compact.terminalStatus == "" {
 		compact.active = false
+		compact.terminalStatus = noticeStatus
 		adapterSession.compactMessages[turnID] = compact
 	} else {
 		hasActiveCompact = false
@@ -183,15 +193,6 @@ func (a *ClaudeCodeSDKAdapter) finishClaudeSDKTurnLifecycle(
 	a.mu.Unlock()
 	events := make([]activityshared.Event, 0, 2)
 	if hasActiveCompact {
-		streamState := messageStreamStateFailed
-		noticeStatus := "failed"
-		switch kind {
-		case claudeSDKTurnFinishCompleted:
-			streamState = messageStreamStateCompleted
-			noticeStatus = "completed"
-		case claudeSDKTurnFinishInterrupted:
-			noticeStatus = "canceled"
-		}
 		events = append(events, claudeSDKCompactMessageEvent(
 			session,
 			turnID,
@@ -231,7 +232,7 @@ func (a *ClaudeCodeSDKAdapter) finishAllClaudeSDKTurnLifecycles(
 		turnIDSet[turnID] = struct{}{}
 	}
 	for turnID, compact := range adapterSession.compactMessages {
-		if compact.active {
+		if compact.active && compact.terminalStatus == "" {
 			turnIDSet[turnID] = struct{}{}
 		}
 	}

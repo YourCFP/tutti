@@ -836,7 +836,10 @@ Provider command lifecycle banners, including context compaction, are canonical
 `agent_system_notice` messages rather than ordinary assistant text. One stable
 message ID carries the lifecycle from `running` to `completed`, `failed`, or
 `canceled`, with `noticeCommand` and `noticeCommandStatus` as the presentation
-contract. The canonical message `semantics` field is authoritative; duplicated
+contract. Terminal selection for that stable lifecycle is first-write-wins: an
+adapter records an explicit or synthesized terminal state atomically and ignores
+late provider terminal updates rather than rewriting an already published
+outcome. The canonical message `semantics` field is authoritative; duplicated
 payload fields are a compatibility fallback for historical timeline data. Agent
 GUI maps the context-compaction lifecycle through one pure presentation resolver:
 active compaction becomes `specific-progress`, while terminal compaction notices

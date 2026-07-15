@@ -83,6 +83,10 @@ type claudeSDKAdapterSession struct {
 type claudeSDKCompactMessage struct {
 	messageID string
 	active    bool
+	// terminalStatus makes the first explicit or synthesized terminal update
+	// authoritative. A late sidecar result must not overwrite a canceled turn.
+	// Guarded by the adapter mutex.
+	terminalStatus string
 }
 
 type claudeSDKBackgroundAgent struct {

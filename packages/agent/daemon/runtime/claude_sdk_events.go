@@ -65,15 +65,27 @@ func (a *ClaudeCodeSDKAdapter) sidecarTurnEvents(adapterSession *claudeSDKAdapte
 	case "approval_resolved", "user_input_resolved":
 		return a.claudeSDKInteractiveResolved(adapterSession, session, turnID, event.Payload), false, nil
 	case "compact_started":
-		return []activityshared.Event{a.compactMessageEvent(adapterSession, session, turnID, messageStreamStateStreaming, "running", "")}, false, nil
+		compact, ok := a.compactMessageEvent(adapterSession, session, turnID, messageStreamStateStreaming, "running", "")
+		if !ok {
+			return nil, false, nil
+		}
+		return []activityshared.Event{compact}, false, nil
 	case "compact_completed":
-		return []activityshared.Event{a.compactMessageEvent(adapterSession, session, turnID, messageStreamStateCompleted, "completed", "")}, false, nil
+		compact, ok := a.compactMessageEvent(adapterSession, session, turnID, messageStreamStateCompleted, "completed", "")
+		if !ok {
+			return nil, false, nil
+		}
+		return []activityshared.Event{compact}, false, nil
 	case "compact_failed":
 		detail := payloadString(event.Payload, "reason")
 		if detail == "" {
 			detail = strings.TrimSpace(strings.TrimPrefix(payloadString(event.Payload, "content"), "Compacting failed:"))
 		}
-		return []activityshared.Event{a.compactMessageEvent(adapterSession, session, turnID, messageStreamStateFailed, "failed", detail)}, false, nil
+		compact, ok := a.compactMessageEvent(adapterSession, session, turnID, messageStreamStateFailed, "failed", detail)
+		if !ok {
+			return nil, false, nil
+		}
+		return []activityshared.Event{compact}, false, nil
 	case "assistant_delta":
 		messageID := firstNonEmptyString(payloadString(event.Payload, "messageId"), adapterSession.assistantMessageID(turnID))
 		content := firstNonEmpty(payloadString(event.Payload, "snapshot"), payloadString(event.Payload, "content"))
