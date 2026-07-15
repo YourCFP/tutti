@@ -17,31 +17,31 @@ const agentTabs = [
 ];
 
 const atTabs = [
-  { labelKey: "t_at1", image: "/assets/at-chat.png", altKey: "t_atd1" },
-  { labelKey: "t_at2", image: "/assets/at-file.png", altKey: "t_atd2" },
-  { labelKey: "t_at3", image: "/assets/at-task.png", altKey: "t_atd3" },
-  { labelKey: "t_at4", image: "/assets/at-app.png", altKey: "t_atd4" }
+  { labelKey: "t_at1", image: "/assets/at-chat.webp", altKey: "t_atd1" },
+  { labelKey: "t_at2", image: "/assets/at-file.webp", altKey: "t_atd2" },
+  { labelKey: "t_at3", image: "/assets/at-task.webp", altKey: "t_atd3" },
+  { labelKey: "t_at4", image: "/assets/at-app.webp", altKey: "t_atd4" }
 ];
 
 const appTabs = [
   {
     labelKey: "t_apt1",
-    image: "/assets/apps-overview.png",
+    image: "/assets/apps-overview.webp",
     altKey: "t_apd1"
   },
   {
     labelKey: "t_apt2",
-    image: "/assets/apps-example.png",
+    image: "/assets/apps-example.webp",
     altKey: "t_apd2"
   },
   {
     labelKey: "t_apt3",
-    image: "/assets/apps-example-prototype.png",
+    image: "/assets/apps-example-prototype.webp",
     altKey: "t_apd3"
   },
   {
     labelKey: "t_apt4",
-    image: "/assets/apps-example-docs.png",
+    image: "/assets/apps-example-docs.webp",
     altKey: "t_apd4"
   }
 ];
@@ -49,22 +49,22 @@ const appTabs = [
 const taskControlTabs = [
   {
     labelKey: "t_tc_tab1",
-    image: "/assets/goal-breakdown.png",
+    image: "/assets/goal-breakdown.webp",
     altKey: "t_tc_img1"
   },
   {
     labelKey: "t_tc_tab2",
-    image: "/assets/control-overview.png",
+    image: "/assets/control-overview.webp",
     altKey: "t_tc_img2"
   }
 ];
 
 const sectionIcons = {
   setup: "/assets/icon-electric-plug.webp",
-  collaboration: "/assets/icon-at.png",
+  collaboration: "/assets/icon-at.webp",
   apps: "/assets/icon-toolbox.webp",
   taskControl: "/assets/icon-clipboard.webp",
-  windowLayout: "/assets/icon-window-layout.png"
+  windowLayout: "/assets/icon-window-layout.webp"
 };
 
 function HtmlText({ as: Tag = "p", className, i18nKey }) {
@@ -646,7 +646,7 @@ export default function App() {
           <ShotImage
             altKey="t_agent_gui_unconnected_alt"
             onOpen={openLightbox}
-            src="/assets/agent-gui-unconnected.png"
+            src="/assets/agent-gui-unconnected.webp"
           />
           <div className="btns">
             <ActionButton
