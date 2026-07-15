@@ -10,6 +10,7 @@ import {
   clampStandaloneAgentToolPanelWidth,
   resolveStandaloneAgentToolPanelMaxWidth,
   resolveStandaloneAgentToolPanelExpansionReset,
+  resolveStandaloneAgentToolPanelExpansionTransfer,
   resolveStandaloneAgentToolSidebarLayoutWidth,
   resolveStandaloneAgentToolSidebarWidth,
   standaloneAgentToolPanelDefaultWidthById,
@@ -96,7 +97,9 @@ export function useStandaloneAgentToolSidebarLayout({
     : 0;
 
   const resetPanelExpansion = useCallback(
-    (nextPanel: StandaloneAgentToolPanelId | null) => {
+    (
+      nextPanel: StandaloneAgentToolPanelId | null
+    ): "reset" | "transferred" | null => {
       const reset = resolveStandaloneAgentToolPanelExpansionReset({
         expandedPanel: expandedPanelRef.current,
         nextPanel,
@@ -106,7 +109,32 @@ export function useStandaloneAgentToolSidebarLayout({
             : panelWidthBeforeExpandRef.current[expandedPanelRef.current]
       });
       if (!reset) {
-        return;
+        return null;
+      }
+
+      if (nextPanel !== null) {
+        const transfer = resolveStandaloneAgentToolPanelExpansionTransfer({
+          expandedPanel: expandedPanelRef.current,
+          nextPanel,
+          nextPanelWidth: panelWidths[nextPanel],
+          widthBeforeExpansion:
+            panelWidthBeforeExpandRef.current[expandedPanelRef.current!]
+        });
+        if (!transfer) {
+          return null;
+        }
+
+        expandedPanelRef.current = transfer.expandedPanel;
+        setExpandedPanel(transfer.expandedPanel);
+        setPanelWidths((current) => ({
+          ...current,
+          [transfer.previousPanel]: transfer.previousPanelWidth,
+          [transfer.expandedPanel]: Number.MAX_SAFE_INTEGER
+        }));
+        panelWidthBeforeExpandRef.current[transfer.expandedPanel] =
+          transfer.nextPanelWidthBeforeExpansion;
+        delete panelWidthBeforeExpandRef.current[transfer.previousPanel];
+        return "transferred";
       }
 
       expandedPanelRef.current = null;
@@ -116,14 +144,21 @@ export function useStandaloneAgentToolSidebarLayout({
         [reset.panel]: reset.width
       }));
       delete panelWidthBeforeExpandRef.current[reset.panel];
+      return "reset";
     },
-    []
+    [panelWidths]
   );
 
   const resizeForPanel = useCallback(
     async (nextPanel: StandaloneAgentToolPanelId | null): Promise<boolean> => {
-      resetPanelExpansion(nextPanel);
       const requestId = ++resizeRequestRef.current;
+      const expansionTransition = resetPanelExpansion(nextPanel);
+      if (
+        expansionTransition === "transferred" ||
+        (nextPanel !== null && expandedPanelRef.current === nextPanel)
+      ) {
+        return true;
+      }
       if (nextPanel !== null && baselineViewportWidthRef.current === null) {
         baselineViewportWidthRef.current = window.innerWidth;
       }

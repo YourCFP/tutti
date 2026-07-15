@@ -1876,6 +1876,14 @@ describe("agent GUI workbench contribution copy", () => {
     );
   });
 
+  it("anchors the standalone tool header to the same edge as the body panel", () => {
+    const css = readFileSync(resolve("app/renderer/agentactivity.css"), "utf8");
+
+    expect(css).toMatch(
+      /\.agent-gui-workbench-header\[data-agent-gui-standalone-window-header="true"\]\s*\.agent-gui-workbench-header__secondary-accessory:has\(\s*\[data-standalone-agent-tool-sidebar-header="true"\]\s*\)\s*\{[^}]*position:\s*absolute;[^}]*top:\s*0;[^}]*right:\s*0;[^}]*margin-left:\s*0;/s
+    );
+  });
+
   it("keeps the image preview modal above standalone Agent window chrome", () => {
     const css = readFileSync(resolve("app/renderer/agentactivity.css"), "utf8");
 

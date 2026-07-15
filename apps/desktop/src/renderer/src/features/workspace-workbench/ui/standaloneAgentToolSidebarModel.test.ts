@@ -7,6 +7,7 @@ import {
   isStandaloneAgentToolGroupActive,
   reduceStandaloneAgentToolSidebarState,
   resolveStandaloneAgentToolPanelExpansionReset,
+  resolveStandaloneAgentToolPanelExpansionTransfer,
   resolveStandaloneAgentToolSidebarLayoutWidth,
   resolveStandaloneAgentToolSidebarWidth,
   resolveStandaloneAgentToolPanelMaxWidth,
@@ -359,5 +360,31 @@ test("standalone agent tool panel restores its width when an expanded panel clos
       viewportWidth: 1920
     }),
     720
+  );
+});
+
+test("standalone agent tool panel transfers expansion when switching tabs", () => {
+  assert.deepEqual(
+    resolveStandaloneAgentToolPanelExpansionTransfer({
+      expandedPanel: "files",
+      nextPanel: "terminal",
+      nextPanelWidth: 720,
+      widthBeforeExpansion: 680
+    }),
+    {
+      expandedPanel: "terminal",
+      nextPanelWidthBeforeExpansion: 720,
+      previousPanel: "files",
+      previousPanelWidth: 680
+    }
+  );
+  assert.equal(
+    resolveStandaloneAgentToolPanelExpansionTransfer({
+      expandedPanel: "files",
+      nextPanel: null,
+      nextPanelWidth: 720,
+      widthBeforeExpansion: 680
+    }),
+    null
   );
 });

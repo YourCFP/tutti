@@ -4785,6 +4785,20 @@ aside.workspace-agents-status-panel
   padding-right: 0;
 }
 
+/* Keep the standalone tool header on the same right edge as its body panel.
+   The body panel is right-anchored independently of the Agent header's rail
+   grid; leaving this accessory in the grid makes its left edge drift when the
+   panel expands to the available width. */
+.agent-gui-workbench-header[data-agent-gui-standalone-window-header="true"]
+  .agent-gui-workbench-header__secondary-accessory:has(
+    [data-standalone-agent-tool-sidebar-header="true"]
+  ) {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin-left: 0;
+}
+
 /*
  * In the collapsed empty state there is no session title to anchor the control
  * cluster, so the detached-window button's margin-left:auto would strand the

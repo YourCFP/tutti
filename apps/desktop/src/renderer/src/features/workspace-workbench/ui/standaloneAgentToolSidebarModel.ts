@@ -74,6 +74,33 @@ export function resolveStandaloneAgentToolPanelExpansionReset(input: {
   };
 }
 
+export function resolveStandaloneAgentToolPanelExpansionTransfer(input: {
+  expandedPanel: StandaloneAgentToolPanelId | null;
+  nextPanel: StandaloneAgentToolPanelId | null;
+  nextPanelWidth: number;
+  widthBeforeExpansion?: number;
+}): {
+  expandedPanel: StandaloneAgentToolPanelId;
+  nextPanelWidthBeforeExpansion: number;
+  previousPanel: StandaloneAgentToolPanelId;
+  previousPanelWidth: number;
+} | null {
+  const reset = resolveStandaloneAgentToolPanelExpansionReset(input);
+  if (!reset || input.nextPanel === null) {
+    return null;
+  }
+
+  return {
+    expandedPanel: input.nextPanel,
+    nextPanelWidthBeforeExpansion:
+      Number.isFinite(input.nextPanelWidth) && input.nextPanelWidth > 0
+        ? input.nextPanelWidth
+        : standaloneAgentToolPanelDefaultWidthById[input.nextPanel],
+    previousPanel: reset.panel,
+    previousPanelWidth: reset.width
+  };
+}
+
 export interface StandaloneAgentToolSidebarState {
   activePanel: StandaloneAgentToolPanelId | null;
   activeTabId: string | null;
