@@ -41,12 +41,14 @@ export function createStandaloneAgentWorkspaceAppSurfacePresenter(input: {
       );
     },
     presentPrepared(request) {
-      if (request.workspaceId !== input.workspaceId) {
+      if (
+        request.workspaceId !== input.workspaceId ||
+        activeAttemptId !== request.attempt.attemptId ||
+        input.getViewState(input.workspaceId).openAppId !== request.appId
+      ) {
         return false;
       }
-      if (activeAttemptId === request.attempt.attemptId) {
-        activeAttemptId = null;
-      }
+      activeAttemptId = null;
       return true;
     },
     rollbackOpen(attempt) {

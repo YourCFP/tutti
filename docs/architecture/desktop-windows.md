@@ -186,7 +186,10 @@ preparation fails. The presenter registration is renderer-window scoped and
 is bound to the actual Workbench host and workspace lifecycle, not App Center
 snapshot or revision updates. Replacing or disposing a presenter cancels and
 rolls back its pending attempts before releasing it; disposable identity checks
-also ensure an old Shell cleanup cannot remove a newer presenter.
+also ensure an old Shell cleanup cannot remove a newer presenter. In the
+Agent-only shell, only the latest attempt whose App is still selected may report
+successful presentation; stale completions cannot claim success for a newer or
+cleared inline selection.
 
 The Agent-only contribution keeps the catalog and one app-specific Browser Node
 for every opened app mounted for the renderer lifetime. The back action clears
