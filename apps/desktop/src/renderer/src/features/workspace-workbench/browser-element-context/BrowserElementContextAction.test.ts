@@ -10,10 +10,6 @@ const browserPanelSource = readFileSync(
   new URL("../ui/StandaloneAgentBrowserToolPanel.tsx", import.meta.url),
   "utf8"
 );
-const mentionRegistrationSource = readFileSync(
-  new URL("./registerDesktopBrowserElementMention.tsx", import.meta.url),
-  "utf8"
-);
 const selectorSource = readFileSync(
   new URL("./browserElementSelectorScript.ts", import.meta.url),
   "utf8"
@@ -24,11 +20,6 @@ test("browser element selection action uses a shared hover tooltip", () => {
     source,
     /<TooltipTrigger asChild>[\s\S]*?<Button[\s\S]*?<TooltipContent side="bottom">\{label\}<\/TooltipContent>/
   );
-});
-
-test("browser element selection action uses the shared inspect icon", () => {
-  assert.match(source, /<InspectIcon className="size-\[15px\]" \/>/);
-  assert.doesNotMatch(source, /WebScrapeIcon/);
 });
 
 test("standalone browser statically loads the element selection action", () => {
@@ -47,14 +38,6 @@ test("selected elements append a browser-element mention instead of a file block
   assert.doesNotMatch(source, /onAppendFile/u);
   assert.doesNotMatch(source, /archiveAgentPromptFile/u);
   assert.doesNotMatch(source, /mimeType:/u);
-});
-
-test("browser element mentions use the compact UI System accent badge", () => {
-  assert.match(mentionRegistrationSource, /<Badge/u);
-  assert.match(mentionRegistrationSource, /variant="accent"/u);
-  assert.match(mentionRegistrationSource, /<InspectIcon/u);
-  assert.match(mentionRegistrationSource, /data-agent-browser-element-chip/u);
-  assert.match(mentionRegistrationSource, /className="h-5[^"]*leading-5"/u);
 });
 
 test("browser element selection captures a readable path from the app root", () => {

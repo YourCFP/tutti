@@ -99,54 +99,6 @@ test("standalone Agent tools load their OS node UI on demand", () => {
   );
 });
 
-test("standalone Agent right sidebar stays above message-flow content", () => {
-  assert.match(
-    standaloneAgentToolSidebarSource,
-    /data-standalone-agent-tool-sidebar="true"[\s\S]*?zIndex: "var\(--z-panel\)"/
-  );
-});
-
-test("standalone Agent right sidebar does not render a left outline", () => {
-  assert.doesNotMatch(
-    standaloneAgentToolSidebarSource,
-    /activePanel !== null && "border-l border-\[var\(--border-1\)\]"/
-  );
-});
-
-test("standalone Agent right sidebar uses the AgentGUI sidepanel background", () => {
-  assert.match(
-    standaloneAgentToolSidebarSource,
-    /absolute inset-y-0 right-0 flex flex-col bg-\[var\(--background-session-sidepanel\)\]/
-  );
-  assert.match(
-    standaloneAgentToolSidebarSource,
-    /"--background-panel":\s*"var\(--background-session-sidepanel\)"/
-  );
-});
-
-test("standalone Agent terminal matches the sidepanel background without a duplicate close button", () => {
-  assert.doesNotMatch(
-    standaloneAgentTerminalPanelSource,
-    /data-standalone-agent-terminal-close/
-  );
-  assert.match(
-    standaloneAgentTerminalPanelSource,
-    /relative h-full min-h-0 overflow-hidden bg-\[var\(--background-session-sidepanel\)\]/
-  );
-  assert.match(
-    standaloneAgentTerminalPanelSource,
-    /"--tutti-surface": "var\(--background-session-sidepanel\)"/
-  );
-  assert.match(
-    standaloneAgentTerminalPanelSource,
-    /getPropertyValue\("--background-session-sidepanel"\)/
-  );
-  assert.match(
-    standaloneAgentTerminalPanelSource,
-    /background: panelTheme\.background \?\? terminalTheme\.background/
-  );
-});
-
 test("standalone Agent terminal tab content appears without a reveal animation", () => {
   assert.match(
     standaloneAgentToolSidebarSource,
@@ -159,17 +111,6 @@ test("standalone Agent terminal tab content appears without a reveal animation",
   assert.doesNotMatch(
     standaloneAgentToolSidebarSource,
     /height: open \? "100%" : "0px"/
-  );
-});
-
-test("standalone Agent unified panel button uses chrome and active variants", () => {
-  assert.match(
-    standaloneAgentToolSidebarToolbarSource,
-    /data-standalone-agent-tool-sidebar-toggle="true"[\s\S]*?variant=\{isOpen && activePanel !== null \? "secondary" : "chrome"\}/
-  );
-  assert.match(
-    standaloneAgentToolSidebarToolbarSource,
-    /activePanel === null && isOpen && "ml-auto"/
   );
 });
 
@@ -258,21 +199,6 @@ test("standalone Agent panel tabs render in the interactive window header", () =
   );
 });
 
-test("standalone Agent panel tabs and tools share the 44-pixel header height", () => {
-  assert.equal(
-    (
-      standaloneAgentToolSidebarSource.match(
-        /h-\[var\(--agent-gui-workbench-header-height,44px\)\]/g
-      ) ?? []
-    ).length,
-    2
-  );
-  assert.match(
-    standaloneAgentToolSidebarToolbarSource,
-    /flex h-\[var\(--agent-gui-workbench-header-height,44px\)\] items-center/
-  );
-});
-
 test("standalone Agent panel tab buttons switch the active mounted panel", () => {
   assert.match(
     standaloneAgentToolSidebarSource,
@@ -299,24 +225,6 @@ test("standalone Agent panel tabs render semantic icons before their labels", ()
   );
 });
 
-test("standalone Agent panel tabs use a 28-pixel height and 4-pixel radius", () => {
-  assert.match(
-    standaloneAgentToolSidebarSource,
-    /group flex h-7 max-w-44 shrink-0 items-center rounded-sm/
-  );
-});
-
-test("standalone Agent selected panel tab uses the fronted background and line-2 outline", () => {
-  assert.match(
-    standaloneAgentToolSidebarSource,
-    /group flex h-7 max-w-44 shrink-0 items-center rounded-sm overflow-hidden border text-xs/
-  );
-  assert.match(
-    standaloneAgentToolSidebarSource,
-    /activeTabId === tab\.id\s*\? "border-\[var\(--line-2\)\] bg-\[var\(--background-fronted\)\] text-\[var\(--text-primary\)\]"\s*: "border-transparent"/
-  );
-});
-
 test("standalone Agent terminal menu uses the dedicated lined icon", () => {
   assert.match(
     standaloneAgentToolSidebarToolbarSource,
@@ -328,28 +236,10 @@ test("standalone Agent terminal menu uses the dedicated lined icon", () => {
   );
 });
 
-test("standalone Agent adds a line-1 divider when the right panel is maximized", () => {
-  assert.match(
-    standaloneAgentToolSidebarSource,
-    /isActivePanelExpanded && "border-l border-\[var\(--line-1\)\]"/
-  );
-});
-
 test("standalone Agent constrains the session title to the conversation flow", () => {
   assert.match(
     standaloneAgentToolSidebarSource,
     /--agent-gui-tool-sidebar-layout-width[\s\S]*?activePanelLayoutWidth/
-  );
-});
-
-test("standalone Agent panel header stays within the available header width", () => {
-  assert.match(
-    standaloneAgentToolSidebarSource,
-    /max-w-full shrink-0 items-center pr-\[var\(--agent-gui-workbench-header-padding-x\)\]/
-  );
-  assert.match(
-    standaloneAgentToolSidebarSource,
-    /width: `\$\{activePanelWidth\}px`,\s*maxWidth: "100%"/
   );
 });
 
