@@ -1903,7 +1903,7 @@ func TestStandardACPAdapterExecAddsInternalMentionRoutingPromptForGemini(t *test
 	if texts[0] != prompt {
 		t.Fatalf("user prompt text = %q, want unmodified prompt %q", texts[0], prompt)
 	}
-	if texts[len(texts)-1] != tuttiAgentMentionRoutingReminder {
+	if texts[len(texts)-1] != tuttiMentionRoutingReminder {
 		t.Fatalf("routing prompt = %q, want internal mention routing", texts[len(texts)-1])
 	}
 }
