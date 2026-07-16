@@ -45,6 +45,7 @@ describe("AgentTurnWorkSection", () => {
       );
 
       expect(screen.getByText("Processed for 45s")).toBeTruthy();
+      expect(vi.getTimerCount()).toBe(1);
       renderRow.mockClear();
       act(() => vi.advanceTimersByTime(5_000));
       expect(screen.getByText("Processed for 50s")).toBeTruthy();
@@ -78,16 +79,60 @@ describe("AgentTurnWorkSection", () => {
       vi.useRealTimers();
     }
   });
+
+  it("clears the live timer and freezes timing when the turn settles", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(50_000);
+    const renderRow = (row: AgentTranscriptRowVM, rowIndex: number) => (
+      <div key={`${row.id}:${rowIndex}`}>{row.id}</div>
+    );
+
+    try {
+      const { rerender } = render(
+        <AgentTurnWorkSection
+          group={turnGroup()}
+          sessionId="session-1"
+          turn={canonicalTurn()}
+          isActiveTurn
+          disclosureStore={disclosureStore}
+          renderRow={renderRow}
+        />
+      );
+      expect(vi.getTimerCount()).toBe(1);
+
+      rerender(
+        <AgentTurnWorkSection
+          group={turnGroup()}
+          sessionId="session-1"
+          turn={canonicalTurn({
+            phase: "settled",
+            outcome: "completed",
+            settledAtUnixMs: 12_000
+          })}
+          isActiveTurn={false}
+          disclosureStore={disclosureStore}
+          renderRow={renderRow}
+        />
+      );
+
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
-function canonicalTurn(): AgentActivityTurn {
+function canonicalTurn(
+  overrides: Partial<AgentActivityTurn> = {}
+): AgentActivityTurn {
   return {
     agentSessionId: "session-1",
     origin: "user_prompt",
     phase: "running",
     startedAtUnixMs: 5_000,
     turnId: "turn-1",
-    updatedAtUnixMs: 6_000
+    updatedAtUnixMs: 6_000,
+    ...overrides
   };
 }
 

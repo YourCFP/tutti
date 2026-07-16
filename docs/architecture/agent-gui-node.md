@@ -215,15 +215,19 @@ identity, options, and response commands come only from canonical pending
 Interaction projections.
 
 Turn elapsed-time and work-disclosure presentation reads canonical
-`sessionTurns`; transcript message timestamps are not a lifecycle fallback. A
-live Turn ticks locally from `startedAtUnixMs`, while a settled Turn freezes at
-`settledAtUnixMs`. A successfully completed Turn may start with tool calls,
-thinking, progress, and file summaries collapsed when the projection has a
-distinct final assistant copy target. Failed, canceled, interrupted,
-visible-error, generated-image, or final-text-free Turns fail open so important
-output is never hidden. Manual disclosure state is UI-local, keyed by session
-and Turn, and may survive conversation switches while the Agent panel remains
-mounted; it is not persisted or written back to the engine.
+`sessionTurns`; transcript message timestamps are not a lifecycle fallback.
+Only the Turn identified by the session's canonical `activeTurnId` may tick
+locally from `startedAtUnixMs`, and that second-level state stays inside the
+duration label so transcript rows do not re-render on every tick. A settled
+Turn freezes at `settledAtUnixMs`. A successfully completed Turn may start with
+tool calls, thinking, progress, and file summaries collapsed when the
+projection has a distinct final assistant text target independent of copy
+availability. Split presentation rows keep their canonical row identity and
+use separate render keys. Failed, canceled, interrupted, visible-error,
+generated-image, or final-text-free Turns fail open so important output is
+never hidden. Manual disclosure state is UI-local, keyed by session and Turn,
+and may survive conversation switches while the Agent panel remains mounted;
+it is not persisted or written back to the engine.
 
 Ordinary consecutive tool calls project into one stable transcript disclosure
 starting with the first call. Working, waiting, completed, and failed updates

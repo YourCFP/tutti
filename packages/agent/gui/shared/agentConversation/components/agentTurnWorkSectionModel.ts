@@ -98,7 +98,7 @@ export function buildAgentTurnWorkSectionModel(
   const agentRows: AgentTurnWorkSectionRow[] = group.rows.filter(
     ({ row }) => !isUserMessageRow(row)
   );
-  const finalTarget = findFinalAssistantCopyTarget(agentRows);
+  const finalTarget = findFinalAssistantTextTarget(agentRows);
   if (!finalTarget) {
     return {
       timing,
@@ -169,7 +169,7 @@ export function buildAgentTurnWorkSectionModel(
   };
 }
 
-function findFinalAssistantCopyTarget(
+function findFinalAssistantTextTarget(
   rows: readonly AgentTurnWorkSectionRow[]
 ): { rowIndex: number; messageIndex: number } | null {
   for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex -= 1) {
@@ -183,7 +183,13 @@ function findFinalAssistantCopyTarget(
       messageIndex -= 1
     ) {
       const message = row.messages[messageIndex];
-      if (message?.isTurnFinalText && message.body.trim()) {
+      if (
+        message?.isTurnFinalText &&
+        message.body.trim() &&
+        message.contentKind !== "image-grid" &&
+        !message.visibleError &&
+        !message.systemNotice
+      ) {
         return { rowIndex, messageIndex };
       }
     }

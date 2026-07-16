@@ -1629,11 +1629,20 @@ describe("projectAgentConversationVM", () => {
     expect(
       assistantMessages.map((message) => ({
         id: message.id,
-        copyText: message.copyText ?? null
+        copyText: message.copyText ?? null,
+        isTurnFinalText: message.isTurnFinalText === true
       }))
     ).toEqual([
-      { id: "assistant-1", copyText: "Older answer" },
-      { id: "assistant-2", copyText: "Latest answer" }
+      {
+        id: "assistant-1",
+        copyText: "Older answer",
+        isTurnFinalText: true
+      },
+      {
+        id: "assistant-2",
+        copyText: "Latest answer",
+        isTurnFinalText: true
+      }
     ]);
   });
 
@@ -1704,11 +1713,20 @@ describe("projectAgentConversationVM", () => {
     expect(
       assistantMessages.map((message) => ({
         id: message.id,
-        copyText: message.copyText ?? null
+        copyText: message.copyText ?? null,
+        isTurnFinalText: message.isTurnFinalText === true
       }))
     ).toEqual([
-      { id: "assistant-1", copyText: "Prior answer" },
-      { id: "assistant-2", copyText: null }
+      {
+        id: "assistant-1",
+        copyText: "Prior answer",
+        isTurnFinalText: true
+      },
+      {
+        id: "assistant-2",
+        copyText: null,
+        isTurnFinalText: false
+      }
     ]);
   });
 
