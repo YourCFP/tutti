@@ -3408,9 +3408,9 @@ The aggregate is cached by `workspaceId + sectionKey` for ten seconds without
 event invalidation. The HTTP cursor uses bounded offset pagination over at most
 200 ranked paths. Cache expiry may cause duplicate, missing, or reordered
 entries between pages, and a quiet section can be absent when its Turns fall
-outside the 1000-Turn workspace candidate window. AgentGUI therefore labels
-the group as recent and potentially incomplete; this endpoint is an optimistic
-convenience, not an exhaustive generated-file ledger.
+outside the 1000-Turn workspace candidate window. AgentGUI labels the group as
+recent; this endpoint remains an optimistic convenience rather than an
+exhaustive generated-file ledger.
 
 ### Reference Source Filtering
 

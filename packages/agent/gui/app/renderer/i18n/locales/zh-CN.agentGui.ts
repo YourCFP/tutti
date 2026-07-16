@@ -627,7 +627,7 @@ export const zhCNAgentGui = {
   mentionKindSession: "会话",
   mentionGroupFiles: "文件",
   mentionGroupOpenedFiles: "我打开的文件",
-  mentionGroupAgentGeneratedFiles: "近期 Agent 生成的文件（可能不完整）",
+  mentionGroupAgentGeneratedFiles: "近期 Agent 生成的文件",
   mentionGroupApps: "应用",
   mentionGroupAgents: "智能体",
   mentionGroupMySessions: "我的会话",

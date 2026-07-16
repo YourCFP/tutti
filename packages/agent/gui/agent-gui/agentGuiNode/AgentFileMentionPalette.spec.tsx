@@ -30,7 +30,7 @@ vi.mock("../../i18n/index", async () => {
     "agentHost.agentGui.contextPickerLoadMoreRetry": "加载失败，重试",
     "agentHost.agentGui.mentionGroupOpenedFiles": "我打开的文件",
     "agentHost.agentGui.mentionGroupAgentGeneratedFiles":
-      "近期 Agent 生成的文件（可能不完整）",
+      "近期 Agent 生成的文件",
     "agentHost.agentGui.mentionAgentGeneratedFolderBack": "返回",
     "agentHost.agentGui.mentionNoMatchingFiles": "没有匹配到文件",
     "agentHost.roomIssueNode.issueStatusNotStarted": "待开始",
@@ -874,9 +874,7 @@ describe("AgentFileMentionPalette", () => {
     expect(screen.getByText("quickPhrases.ts")).toBeVisible();
     expect(screen.getByText("展开更多 10 条")).toBeVisible();
     expect(screen.queryByText("我打开的文件")).toBeNull();
-    expect(
-      screen.queryByText("近期 Agent 生成的文件（可能不完整）")
-    ).toBeNull();
+    expect(screen.queryByText("近期 Agent 生成的文件")).toBeNull();
     expect(screen.queryByText("没有匹配到文件")).toBeNull();
     expect(screen.queryByTestId("agent-mention-group-divider")).toBeNull();
   });
