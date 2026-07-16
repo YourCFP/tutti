@@ -25,7 +25,7 @@ export interface AgentTurnWorkSectionSegment {
 }
 
 export interface AgentTurnWorkSectionModel {
-  timing: AgentTurnTiming | null;
+  timing: AgentTurnTiming;
   leadingRows: AgentTurnWorkSectionRow[];
   sections: AgentTurnWorkSectionSegment[];
   collapseEligible: boolean;
@@ -82,25 +82,16 @@ export function buildAgentTurnWorkSectionModel(
   group: AgentTranscriptTurnGroup,
   turn: AgentActivityTurn | null | undefined,
   isActiveTurn = false
-): AgentTurnWorkSectionModel {
+): AgentTurnWorkSectionModel | null {
   const timing = resolveAgentTurnTiming(turn, isActiveTurn);
   if (!timing) {
-    return {
-      timing: null,
-      leadingRows: [],
-      sections: [{ kind: "visible", rows: group.rows }],
-      collapseEligible: false
-    };
+    return null;
   }
 
   const leadingRowCount = countLeadingUserRows(group.rows);
   const leadingRows = group.rows.slice(0, leadingRowCount);
   const finalTarget = findFinalAssistantTextTarget(group.rows);
-  const sections = buildOrderedSections(
-    group.rows,
-    leadingRowCount,
-    finalTarget
-  );
+  const sections = buildOrderedSections(group.rows, leadingRowCount);
   const hasHiddenWork = sections.some(
     (section) => section.kind === "work" && section.rows.length > 0
   );
@@ -132,59 +123,66 @@ function countLeadingUserRows(
 
 function buildOrderedSections(
   rows: readonly AgentTurnWorkSectionRow[],
-  startIndex: number,
-  finalTarget: { rowIndex: number; messageIndex: number } | null
+  startIndex: number
 ): AgentTurnWorkSectionSegment[] {
   const sections: AgentTurnWorkSectionSegment[] = [];
   for (let rowIndex = startIndex; rowIndex < rows.length; rowIndex += 1) {
     const entry = rows[rowIndex]!;
-    if (finalTarget?.rowIndex === rowIndex) {
-      appendFinalAssistantSections(sections, entry, finalTarget.messageIndex);
+    if (entry.row.kind === "message" && entry.row.speaker === "assistant") {
+      appendAssistantMessageSections(sections, entry);
       continue;
     }
     appendSectionRow(
       sections,
-      isUserMessageRow(entry.row) ? "visible" : "work",
+      isExplicitWorkRow(entry.row) ? "work" : "visible",
       entry
     );
   }
   return sections;
 }
 
-function appendFinalAssistantSections(
+function appendAssistantMessageSections(
   sections: AgentTurnWorkSectionSegment[],
-  sourceEntry: AgentTurnWorkSectionRow,
-  finalMessageIndex: number
+  sourceEntry: AgentTurnWorkSectionRow
 ): void {
   const sourceRow = sourceEntry.row as AgentMessageRowVM;
-  const messagesBeforeFinal = sourceRow.messages.slice(0, finalMessageIndex);
-  const messagesAfterFinal = sourceRow.messages.slice(finalMessageIndex + 1);
+  const parts: Array<{
+    kind: AgentTurnWorkSectionSegment["kind"];
+    messages: AgentMessageContentVM[];
+    thinking: AgentMessageRowVM["thinking"];
+  }> = [];
 
-  if (sourceRow.thinking.length > 0 || messagesBeforeFinal.length > 0) {
-    appendSectionRow(sections, "work", {
-      ...sourceEntry,
-      renderKey: `${sourceRow.id}:turn-work-before`,
-      row: cloneAssistantRow(sourceRow, messagesBeforeFinal, sourceRow.thinking)
-    });
+  if (sourceRow.thinking.length > 0) {
+    parts.push({ kind: "work", messages: [], thinking: sourceRow.thinking });
   }
 
-  appendSectionRow(sections, "visible", {
-    ...sourceEntry,
-    renderKey: `${sourceRow.id}:turn-final`,
-    row: cloneAssistantRow(
-      sourceRow,
-      [sourceRow.messages[finalMessageIndex]!],
-      []
-    )
+  for (const message of sourceRow.messages) {
+    const kind = isExplicitWorkMessage(message) ? "work" : "visible";
+    const previous = parts.at(-1);
+    if (previous?.kind === kind && previous.thinking.length === 0) {
+      previous.messages.push(message);
+      continue;
+    }
+    parts.push({ kind, messages: [message], thinking: [] });
+  }
+
+  if (parts.length === 0) {
+    appendSectionRow(sections, "visible", sourceEntry);
+    return;
+  }
+
+  if (parts.length === 1 && sourceRow.thinking.length === 0) {
+    appendSectionRow(sections, parts[0]!.kind, sourceEntry);
+    return;
+  }
+
+  parts.forEach((part, partIndex) => {
+    appendSectionRow(sections, part.kind, {
+      ...sourceEntry,
+      renderKey: `${sourceRow.id}:turn-${part.kind}-${partIndex}`,
+      row: cloneAssistantRow(sourceRow, part.messages, part.thinking)
+    });
   });
-
-  if (messagesAfterFinal.length > 0) {
-    appendSectionRow(sections, "work", {
-      ...sourceEntry,
-      renderKey: `${sourceRow.id}:turn-work-after`,
-      row: cloneAssistantRow(sourceRow, messagesAfterFinal, [])
-    });
-  }
 }
 
 function appendSectionRow(
@@ -235,8 +233,26 @@ function groupContainsBlockingMessage(
     ({ row }) =>
       row.kind === "message" &&
       row.messages.some((message) =>
-        Boolean(message.visibleError || message.systemNotice)
+        Boolean(
+          message.visibleError ||
+          (message.systemNotice && message.presentationKind === "content")
+        )
       )
+  );
+}
+
+function isExplicitWorkRow(row: AgentTurnWorkSectionRow["row"]): boolean {
+  return (
+    row.kind === "tool-group" ||
+    row.kind === "turn-summary" ||
+    row.kind === "processing"
+  );
+}
+
+function isExplicitWorkMessage(message: AgentMessageContentVM): boolean {
+  return (
+    message.presentationKind === "specific-progress" ||
+    message.presentationKind === "turn-boundary"
   );
 }
 

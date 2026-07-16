@@ -1,10 +1,12 @@
 import { act, render, screen } from "@testing-library/react";
 import type { AgentActivityTurn } from "@tutti-os/agent-activity-core";
+import type { JSX } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { AgentTranscriptRowVM } from "../contracts/agentTranscriptRowVM";
 import type { AgentTranscriptTurnGroup } from "./agentTranscriptModel";
-import { AgentTurnWorkSection } from "./AgentTurnWorkSection";
+import { AgentTurnWorkSection as AgentTurnWorkSectionView } from "./AgentTurnWorkSection";
 import type { AgentTurnDisclosureStore } from "./AgentTurnDisclosureContext";
+import { buildAgentTurnWorkSectionModel } from "./agentTurnWorkSectionModel";
 
 vi.mock("../../../i18n/index", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../i18n/index")>();
@@ -50,31 +52,6 @@ describe("AgentTurnWorkSection", () => {
       act(() => vi.advanceTimersByTime(5_000));
       expect(screen.getByText("Processed for 50s")).toBeTruthy();
       expect(renderRow).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("does not start a live timer for a non-active canonical turn", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(50_000);
-
-    try {
-      render(
-        <AgentTurnWorkSection
-          group={turnGroup()}
-          sessionId="session-1"
-          turn={canonicalTurn()}
-          isActiveTurn={false}
-          disclosureStore={disclosureStore}
-          renderRow={(row, rowIndex) => (
-            <div key={`${row.id}:${rowIndex}`}>{row.id}</div>
-          )}
-        />
-      );
-
-      expect(screen.queryByText(/Processed for/)).toBeNull();
-      expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();
     }
@@ -226,7 +203,33 @@ describe("AgentTurnWorkSection", () => {
     ]);
   });
 
-  it("owns one turn-level spacing container including revealed work", () => {
+  it("keeps ordinary assistant replies and follow-up guidance visible by default", () => {
+    render(
+      <AgentTurnWorkSection
+        group={interleavedTurnGroup()}
+        sessionId="session-1"
+        turn={canonicalTurn({
+          phase: "settled",
+          outcome: "completed",
+          settledAtUnixMs: 15_000
+        })}
+        isActiveTurn={false}
+        disclosureStore={disclosureStore}
+        renderRow={(row) => (
+          <div key={row.id} data-test-row-id={row.id}>
+            {row.kind === "message" ? row.messages[0]?.body : row.id}
+          </div>
+        )}
+      />
+    );
+
+    expect(screen.getByText("Earlier answer")).toBeTruthy();
+    expect(screen.getByText("Follow-up")).toBeTruthy();
+    expect(screen.getByText("Final answer")).toBeTruthy();
+    expect(screen.queryByText("tools")).toBeNull();
+  });
+
+  it("keeps dynamic section spacing inside the animated height", () => {
     const expandedStore: AgentTurnDisclosureStore = {
       expandedOverrides: { "session-1:turn-1": true },
       setExpandedOverride: () => {}
@@ -248,12 +251,49 @@ describe("AgentTurnWorkSection", () => {
 
     expect(
       container.querySelector("[data-agent-turn-work-section]")
-    ).toHaveClass("grid", "gap-4");
+    ).toHaveClass("grid");
+    expect(
+      container.querySelector("[data-agent-turn-work-section]")
+    ).not.toHaveClass("gap-4");
     expect(
       container.querySelector(".agent-collapsible-reveal__inner")
-    ).toHaveClass("grid", "gap-4");
+    ).toHaveClass("grid", "gap-4", "pt-4");
   });
 });
+
+function AgentTurnWorkSection({
+  group,
+  sessionId,
+  turn,
+  isActiveTurn,
+  disclosureStore,
+  renderRow
+}: {
+  group: AgentTranscriptTurnGroup;
+  sessionId: string;
+  turn: AgentActivityTurn;
+  isActiveTurn: boolean;
+  disclosureStore: AgentTurnDisclosureStore;
+  renderRow: (
+    row: AgentTranscriptRowVM,
+    rowIndex: number,
+    renderKey?: string
+  ) => JSX.Element;
+}): JSX.Element {
+  const model = buildAgentTurnWorkSectionModel(group, turn, isActiveTurn);
+  if (!model) {
+    throw new Error("Test expected a timing-enabled turn disclosure model");
+  }
+  return (
+    <AgentTurnWorkSectionView
+      model={model}
+      sessionId={sessionId}
+      turnKey={group.turnId ?? group.key}
+      disclosureStore={disclosureStore}
+      renderRow={renderRow}
+    />
+  );
+}
 
 function canonicalTurn(
   overrides: Partial<AgentActivityTurn> = {}

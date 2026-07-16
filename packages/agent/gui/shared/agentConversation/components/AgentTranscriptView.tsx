@@ -1,4 +1,5 @@
 import {
+  Fragment,
   memo,
   useCallback,
   useLayoutEffect,
@@ -7,7 +8,10 @@ import {
   useState,
   type JSX
 } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  measureElement as measureVirtualElement,
+  useVirtualizer
+} from "@tanstack/react-virtual";
 import type { WorkspaceLinkAction } from "../../../contexts/workspace/presentation/renderer/actions/workspaceLinkActions";
 import type { AgentMessageMarkdownWorkspaceAppIcon } from "../../AgentMessageMarkdown";
 import type { AgentGUIProviderSkillOption } from "../../../agent-gui/agentGuiNode/model/agentGuiNodeTypes";
@@ -15,6 +19,8 @@ import type { AgentConversationVM } from "../contracts/agentConversationVM";
 import { AgentTranscriptItemView } from "./AgentTranscriptItemView";
 import { useAgentTurnDisclosureStore } from "./AgentTurnDisclosureContext";
 import { AgentTurnWorkSection } from "./AgentTurnWorkSection";
+import { buildAgentTurnWorkSectionModel } from "./agentTurnWorkSectionModel";
+import { logActiveAgentTurnDisclosureFromElement } from "./agentTurnDisclosureDiagnostics";
 import { assessAgentTranscriptComplexity } from "./agentTranscriptComplexity";
 import {
   AgentMessageLocatorRail,
@@ -34,7 +40,8 @@ import {
 
 const AGENT_TRANSCRIPT_VIRTUALIZATION_OVERSCAN = 6;
 const AGENT_TRANSCRIPT_ESTIMATED_TURN_HEIGHT_PX = 280;
-const AGENT_TRANSCRIPT_TURN_GAP_PX = 24;
+const AGENT_TRANSCRIPT_DISCLOSURE_TURN_GAP_PX = 24;
+const AGENT_TRANSCRIPT_LEGACY_TURN_GAP_PX = 12;
 const AGENT_TRANSCRIPT_FALLBACK_TURN_COUNT = 3;
 interface AgentTranscriptViewProps {
   conversation: AgentConversationVM;
@@ -111,6 +118,8 @@ function transcriptConversationRenderInputEquals(
       previous.workspaceRoot === next.workspaceRoot &&
       previous.sourceDetail.session.agentSessionId ===
         next.sourceDetail.session.agentSessionId &&
+      previous.sourceDetail.session.activeTurnId ===
+        next.sourceDetail.session.activeTurnId &&
       previous.sourceDetail.cwd === next.sourceDetail.cwd &&
       transcriptTurnIdentityEquals(
         previous.sourceDetail.turns,
@@ -213,6 +222,21 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
       turn
     ])
   );
+  const turnWorkSectionModelByKey = new Map(
+    turnGroups.map((group) => {
+      const isActiveTurn =
+        group.turnId !== null &&
+        group.turnId === conversation.sourceDetail.session.activeTurnId;
+      return [
+        group.key,
+        buildAgentTurnWorkSectionModel(
+          group,
+          group.turnId ? (canonicalTurnById.get(group.turnId) ?? null) : null,
+          isActiveTurn
+        )
+      ] as const;
+    })
+  );
   const basePath = conversation.sourceDetail.cwd;
   const workspaceRoot = conversation.workspaceRoot;
   const provider = conversation.activity.agentProvider;
@@ -226,6 +250,21 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
     estimateSize: () => AGENT_TRANSCRIPT_ESTIMATED_TURN_HEIGHT_PX,
     getItemKey: (index) => turnGroups[index]?.key ?? index,
     getScrollElement: () => virtualScrollElement,
+    measureElement: (element, entry, instance) => {
+      const size = measureVirtualElement(element, entry, instance);
+      const itemElement = element as HTMLElement;
+      logActiveAgentTurnDisclosureFromElement(element, "virtual-item-measure", {
+        index: Number(element.getAttribute("data-index")),
+        size,
+        offsetHeight: itemElement.offsetHeight,
+        borderBoxHeight: entry?.borderBoxSize[0]?.blockSize ?? null,
+        contentRectHeight: entry?.contentRect.height ?? null,
+        virtualScrollOffset: instance.scrollOffset,
+        virtualTotalSize: instance.getTotalSize(),
+        virtualIsScrolling: instance.isScrolling
+      });
+      return size;
+    },
     overscan: AGENT_TRANSCRIPT_VIRTUALIZATION_OVERSCAN,
     scrollEndThreshold: 24
   });
@@ -322,33 +361,48 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
     );
   };
 
-  const renderTurnGroup = (group: (typeof turnGroups)[number]): JSX.Element => (
-    <div
-      key={group.key}
-      className="agent-gui-transcript-turn grid min-w-0 gap-4"
-    >
-      {group.rows.some(({ rowIndex }) => dividerRowIndexes.has(rowIndex)) ? (
-        <div
-          className="h-px w-full flex-none bg-[var(--line-2,var(--tutti-line-2))]"
-          data-testid="agent-transcript-turn-divider"
-          aria-hidden="true"
-        />
-      ) : null}
+  const renderLegacyTurnGroup = (
+    group: (typeof turnGroups)[number]
+  ): JSX.Element => (
+    <Fragment key={group.key}>
+      {group.rows.map(({ row, rowIndex }) => {
+        const rowKey = rowKeys[rowIndex] ?? transcriptRowKey(row);
+        return (
+          <Fragment key={rowKey}>
+            {dividerRowIndexes.has(rowIndex) ? (
+              <div
+                className="h-px w-full flex-none bg-[var(--line-2,var(--tutti-line-2))]"
+                data-testid="agent-transcript-turn-divider"
+                aria-hidden="true"
+              />
+            ) : null}
+            {renderRow(row, rowIndex)}
+          </Fragment>
+        );
+      })}
+    </Fragment>
+  );
+
+  const renderTurnGroup = (group: (typeof turnGroups)[number]): JSX.Element => {
+    const model = turnWorkSectionModelByKey.get(group.key) ?? null;
+    if (!model) {
+      return renderLegacyTurnGroup(group);
+    }
+
+    return (
       <AgentTurnWorkSection
-        group={group}
+        key={group.key}
+        model={model}
         sessionId={conversation.sourceDetail.session.agentSessionId}
-        turn={
-          group.turnId ? (canonicalTurnById.get(group.turnId) ?? null) : null
-        }
-        isActiveTurn={
-          group.turnId !== null &&
-          group.turnId === conversation.sourceDetail.session.activeTurnId
-        }
+        turnKey={group.turnId ?? group.key}
+        showDivider={group.rows.some(({ rowIndex }) =>
+          dividerRowIndexes.has(rowIndex)
+        )}
         disclosureStore={turnDisclosureStore}
         renderRow={renderRow}
       />
-    </div>
-  );
+    );
+  };
 
   if (shouldVirtualize) {
     const virtualItems =
@@ -400,7 +454,11 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
                 data-index={virtualTurn.index}
                 data-agent-transcript-virtual-turn={group.key}
                 style={{
-                  paddingBottom: `${AGENT_TRANSCRIPT_TURN_GAP_PX}px`,
+                  paddingBottom: `${
+                    turnWorkSectionModelByKey.get(group.key)
+                      ? AGENT_TRANSCRIPT_DISCLOSURE_TURN_GAP_PX
+                      : AGENT_TRANSCRIPT_LEGACY_TURN_GAP_PX
+                  }px`,
                   transform: `translateY(${virtualTurn.start}px)`
                 }}
               >

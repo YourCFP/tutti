@@ -18,6 +18,7 @@ vi.mock("../../../i18n/index", () => ({
 }));
 
 vi.mock("@tanstack/react-virtual", () => ({
+  measureElement: vi.fn((element: HTMLElement) => element.offsetHeight),
   useVirtualizer: vi.fn(() => ({
     getTotalSize: () => 20000,
     getVirtualItems: () =>
@@ -98,6 +99,16 @@ describe("AgentTranscriptView virtual rendering", () => {
       expect(screen.getByText("turn 10 user row")).toBeTruthy();
       expect(screen.getByText("turn 10 assistant row")).toBeTruthy();
     });
+    const virtualTurn = document.querySelector<HTMLElement>(
+      "[data-agent-transcript-virtual-turn='turn-10']"
+    );
+    expect(virtualTurn?.style.paddingBottom).toBe("12px");
+    expect(
+      virtualTurn?.querySelectorAll(":scope > .agent-gui-transcript-row")
+    ).toHaveLength(2);
+    expect(
+      virtualTurn?.querySelector("[data-agent-turn-work-section]")
+    ).toBeNull();
     expect(screen.queryByText("turn 9 user row")).toBeNull();
     expect(screen.queryByText("turn 11 assistant row")).toBeNull();
   });
@@ -143,6 +154,11 @@ describe("AgentTranscriptView virtual rendering", () => {
     expect(
       document.querySelector("[data-agent-transcript-virtual-turn='turn-10']")
     ).toBeTruthy();
+    expect(
+      document.querySelector<HTMLElement>(
+        "[data-agent-transcript-virtual-turn='turn-10']"
+      )?.style.paddingBottom
+    ).toBe("24px");
   });
 
   it("enables virtualization once the transcript reaches 30 turns", () => {

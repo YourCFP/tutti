@@ -1372,7 +1372,7 @@ describe("projectAgentConversationVM", () => {
     );
   });
 
-  it("does not infer processing turn identity from transcript history", () => {
+  it("preserves the latest transcript turn as processing fallback identity", () => {
     const firstTurn = detailViewModel().turns[0]!;
     const secondTurn = {
       id: "turn-2",
@@ -1404,9 +1404,42 @@ describe("projectAgentConversationVM", () => {
 
     expect(processing).toEqual(
       expect.objectContaining({
-        id: "processing:session",
-        turnId: null
+        id: "processing:turn-2",
+        turnId: "turn-2"
       })
+    );
+  });
+
+  it("lets latest-turn semantic progress suppress legacy processing fallback", () => {
+    const firstTurn = detailViewModel().turns[0]!;
+    const compactNotice = compactNoticeMessage("turn-2", "running");
+    const conversation = projectAgentConversationVM(
+      detailViewModel({
+        turns: [
+          firstTurn,
+          {
+            id: "turn-2",
+            userMessage: {
+              id: "user-2",
+              body: "Follow-up request",
+              turnId: "turn-2"
+            },
+            userMessages: [
+              { id: "user-2", body: "Follow-up request", turnId: "turn-2" }
+            ],
+            agentMessages: [compactNotice],
+            toolCalls: [],
+            toolCallCount: 0,
+            hasFailedToolCall: false,
+            agentItems: [{ kind: "message", message: compactNotice }]
+          }
+        ],
+        showProcessingIndicator: true
+      })
+    );
+
+    expect(conversation.rows.some((row) => row.kind === "processing")).toBe(
+      false
     );
   });
 

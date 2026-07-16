@@ -10,24 +10,25 @@ export function projectAgentProcessingRow(
   if (!detail.showProcessingIndicator) {
     return null;
   }
-  const turnId = detail.session.activeTurnId;
+  const activeTurnId = detail.session.activeTurnId;
   const canonicalTurn = detail.sessionTurns?.find(
-    (turn) => turn.turnId === turnId
+    (turn) => turn.turnId === activeTurnId
   );
   if (
     canonicalTurn &&
     canonicalTurn.phase !== "settled" &&
     Number.isFinite(canonicalTurn.startedAtUnixMs)
   ) {
-    if (turnId && hasTurnTimingHostRow(rows, turnId)) {
+    if (activeTurnId && hasTurnTimingHostRow(rows, activeTurnId)) {
       return null;
     }
-    return processingRow(detail, turnId);
+    return processingRow(detail, activeTurnId);
   }
-  if (turnId && hasSpecificProgressRow(rows, turnId)) {
+  const fallbackTurnId = activeTurnId ?? detail.turns.at(-1)?.id ?? null;
+  if (fallbackTurnId && hasSpecificProgressRow(rows, fallbackTurnId)) {
     return null;
   }
-  return processingRow(detail, turnId);
+  return processingRow(detail, fallbackTurnId);
 }
 
 function processingRow(

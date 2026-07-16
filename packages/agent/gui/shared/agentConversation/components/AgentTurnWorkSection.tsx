@@ -1,75 +1,70 @@
-import { useMemo, type JSX, type ReactNode } from "react";
-import type { AgentActivityTurn } from "@tutti-os/agent-activity-core";
+import type { JSX, ReactNode } from "react";
 import { BareIconButton } from "@tutti-os/ui-system/components";
 import { ChevronDownIcon } from "@tutti-os/ui-system/icons";
 import { useTranslation } from "../../../i18n/index";
 import { CollapsibleReveal } from "./CollapsibleReveal";
-import type { AgentTranscriptTurnGroup } from "./agentTranscriptModel";
 import type { AgentTurnDisclosureStore } from "./AgentTurnDisclosureContext";
+import { beginAgentTurnDisclosureDiagnostic } from "./agentTurnDisclosureDiagnostics";
 import { useElapsedSeconds } from "./useElapsedSeconds";
 import {
-  buildAgentTurnWorkSectionModel,
   formatAgentTurnDuration,
   type AgentTurnDuration,
   type AgentTurnTiming,
+  type AgentTurnWorkSectionModel,
   type AgentTurnWorkSectionRow
 } from "./agentTurnWorkSectionModel";
 
 interface AgentTurnWorkSectionProps {
-  group: AgentTranscriptTurnGroup;
+  model: AgentTurnWorkSectionModel;
   sessionId: string;
-  turn: AgentActivityTurn | null;
-  isActiveTurn: boolean;
+  turnKey: string;
+  showDivider?: boolean;
   disclosureStore: AgentTurnDisclosureStore;
   renderRow: (
-    row: AgentTranscriptTurnGroup["rows"][number]["row"],
+    row: AgentTurnWorkSectionRow["row"],
     rowIndex: number,
     renderKey?: string
   ) => JSX.Element;
 }
 
 export function AgentTurnWorkSection({
-  group,
+  model,
   sessionId,
-  turn,
-  isActiveTurn,
+  turnKey,
+  showDivider = false,
   disclosureStore,
   renderRow
 }: AgentTurnWorkSectionProps): JSX.Element {
   const { t } = useTranslation();
-  const model = useMemo(
-    () => buildAgentTurnWorkSectionModel(group, turn, isActiveTurn),
-    [group, isActiveTurn, turn]
-  );
-  const disclosureKey = `${sessionId}:${group.turnId ?? group.key}`;
+  const disclosureKey = `${sessionId}:${turnKey}`;
   const expanded = model.collapseEligible
     ? (disclosureStore.expandedOverrides[disclosureKey] ?? false)
     : true;
 
-  if (!model.timing) {
-    return (
-      <div
-        className="grid min-w-0 gap-4"
-        data-agent-turn-work-section={group.turnId ?? group.key}
-      >
-        {renderRows(group.rows, renderRow)}
-      </div>
-    );
-  }
-
   const toggleLabel = expanded
     ? t("agentHost.agentGui.collapseTurnWork")
     : t("agentHost.agentGui.expandTurnWork");
+  const disclosureRevealCount = model.sections.filter(
+    (section) => section.kind === "work" && model.collapseEligible
+  ).length;
 
   return (
-    <div
-      className="grid min-w-0 gap-4"
-      data-agent-turn-work-section={group.turnId ?? group.key}
-    >
-      {renderRows(model.leadingRows, renderRow)}
+    <div className="grid min-w-0" data-agent-turn-work-section={turnKey}>
+      {showDivider ? (
+        <div
+          className="mb-4 h-px w-full flex-none bg-[var(--line-2,var(--tutti-line-2))]"
+          data-testid="agent-transcript-turn-divider"
+          aria-hidden="true"
+        />
+      ) : null}
+      {model.leadingRows.length > 0 ? (
+        <div className="mb-4 grid gap-4">
+          {renderRows(model.leadingRows, renderRow)}
+        </div>
+      ) : null}
       <div
         className="flex min-h-6 items-center gap-0.5 text-[12px] text-[var(--text-tertiary)]"
-        data-agent-turn-work-header={group.turnId ?? group.key}
+        data-agent-turn-work-header={turnKey}
       >
         <AgentTurnDurationLabel timing={model.timing} />
         {model.collapseEligible ? (
@@ -78,9 +73,18 @@ export function AgentTurnWorkSection({
             aria-label={toggleLabel}
             aria-expanded={expanded}
             title={toggleLabel}
-            onClick={() =>
-              disclosureStore.setExpandedOverride(disclosureKey, !expanded)
-            }
+            onClick={(event) => {
+              beginAgentTurnDisclosureDiagnostic(
+                event.currentTarget,
+                disclosureKey,
+                {
+                  fromExpanded: expanded,
+                  toExpanded: !expanded
+                },
+                disclosureRevealCount
+              );
+              disclosureStore.setExpandedOverride(disclosureKey, !expanded);
+            }}
           >
             <ChevronDownIcon
               aria-hidden="true"
@@ -94,14 +98,23 @@ export function AgentTurnWorkSection({
       {model.sections.map((section, sectionIndex) => {
         const content = renderRows(section.rows, renderRow);
         if (section.kind !== "work" || !model.collapseEligible) {
-          return content;
+          const firstRow = section.rows[0];
+          return (
+            <div
+              key={`${section.kind}:${firstRow?.renderKey ?? firstRow?.row.id ?? sectionIndex}`}
+              className="grid gap-4 pt-4"
+            >
+              {content}
+            </div>
+          );
         }
         const firstRow = section.rows[0];
         return (
           <CollapsibleReveal
             key={`work:${firstRow?.renderKey ?? firstRow?.row.id ?? sectionIndex}`}
             expanded={expanded}
-            innerClassName="grid gap-4"
+            diagnosticId={disclosureKey}
+            innerClassName="grid gap-4 pt-4"
           >
             {content}
           </CollapsibleReveal>

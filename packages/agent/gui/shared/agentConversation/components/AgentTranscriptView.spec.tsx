@@ -83,6 +83,60 @@ describe("AgentTranscriptView", () => {
     ).toBe(false);
   });
 
+  it("rerenders when canonical active-turn identity enables live timing", () => {
+    const labels = {
+      thinkingLabel: "Thought process",
+      toolCallsLabel: (count: number) => `Tool calls (${count})`,
+      processing: "Planning next moves",
+      turnSummary: "Changed files"
+    };
+    const conversation = projectAgentConversationVM(
+      detailViewModel({ sessionTurns: [canonicalTurn()] })
+    );
+    const activeConversation = {
+      ...conversation,
+      sourceDetail: {
+        ...conversation.sourceDetail,
+        session: {
+          ...conversation.sourceDetail.session,
+          activeTurnId: "turn-1"
+        }
+      }
+    };
+
+    expect(
+      areAgentTranscriptViewPropsEqual(
+        { conversation, labels },
+        { conversation: activeConversation, labels }
+      )
+    ).toBe(false);
+  });
+
+  it("keeps the legacy transcript rows flat when canonical timing is unavailable", () => {
+    const { container } = render(
+      <AgentTranscriptView
+        conversation={projectAgentConversationVM(detailViewModel())}
+        labels={{
+          thinkingLabel: "Thought process",
+          toolCallsLabel: (count) => `Tool calls (${count})`,
+          processing: "Planning next moves",
+          turnSummary: "Changed files"
+        }}
+      />
+    );
+
+    const directRows = container.querySelectorAll(
+      ":scope > .agent-gui-transcript-row"
+    );
+    const allRows = container.querySelectorAll(".agent-gui-transcript-row");
+    expect(directRows).toHaveLength(allRows.length);
+    expect(directRows.length).toBeGreaterThan(1);
+    expect(
+      container.querySelector("[data-agent-turn-work-section]")
+    ).toBeNull();
+    expect(container.querySelector(".agent-gui-transcript-turn")).toBeNull();
+  });
+
   it("ticks canonical live turn duration once per second", () => {
     vi.useFakeTimers();
     vi.setSystemTime(50_000);
@@ -144,7 +198,10 @@ describe("AgentTranscriptView", () => {
         <AgentTranscriptView conversation={conversation} labels={labels} />
       );
 
-      expect(document.querySelector(".agent-gui-transcript-turn")).toBeTruthy();
+      expect(document.querySelector(".agent-gui-transcript-turn")).toBeNull();
+      expect(
+        document.querySelectorAll("[data-agent-turn-work-section]")
+      ).toHaveLength(1);
       expect(screen.getByText("Total 2m 7s")).toBeTruthy();
       expect(
         screen.getAllByText(

@@ -3,7 +3,7 @@ import type { AgentActivityTurn } from "@tutti-os/agent-activity-core";
 import type { AgentTranscriptRowVM } from "../contracts/agentTranscriptRowVM";
 import type { AgentTranscriptTurnGroup } from "./agentTranscriptModel";
 import {
-  buildAgentTurnWorkSectionModel,
+  buildAgentTurnWorkSectionModel as buildOptionalAgentTurnWorkSectionModel,
   formatAgentTurnDuration,
   resolveAgentTurnTiming
 } from "./agentTurnWorkSectionModel";
@@ -69,6 +69,19 @@ describe("agentTurnWorkSectionModel", () => {
     });
   });
 
+  it("does not create a disclosure model without canonical timing", () => {
+    expect(
+      buildOptionalAgentTurnWorkSectionModel(turnGroup([userRow()]), null)
+    ).toBeNull();
+    expect(
+      buildOptionalAgentTurnWorkSectionModel(
+        turnGroup([userRow()]),
+        canonicalTurn({ phase: "running" }),
+        false
+      )
+    ).toBeNull();
+  });
+
   it("keeps the final assistant copy target visible and moves work around it", () => {
     const model = buildAgentTurnWorkSectionModel(
       turnGroup([
@@ -103,14 +116,17 @@ describe("agentTurnWorkSectionModel", () => {
     expect(finalRow?.kind).toBe("message");
     if (finalRow?.kind === "message") {
       expect(finalRow.id).toBe("assistant-row");
-      expect(finalRow.messages.map((item) => item.body)).toEqual(["final"]);
+      expect(finalRow.messages.map((item) => item.body)).toEqual([
+        "draft",
+        "final"
+      ]);
       expect(finalRow.thinking).toEqual([]);
     }
     expect(model.sections[0]?.rows[0]?.renderKey).toBe(
-      "assistant-row:turn-work-before"
+      "assistant-row:turn-work-0"
     );
     expect(model.sections[1]?.rows[0]?.renderKey).toBe(
-      "assistant-row:turn-final"
+      "assistant-row:turn-visible-1"
     );
   });
 
@@ -168,11 +184,62 @@ describe("agentTurnWorkSectionModel", () => {
         rowIds: section.rows.map(({ row }) => row.id)
       }))
     ).toEqual([
-      { kind: "work", rowIds: ["assistant-1"] },
-      { kind: "visible", rowIds: ["user-2"] },
+      { kind: "visible", rowIds: ["assistant-1", "user-2"] },
       { kind: "work", rowIds: ["tools"] },
       { kind: "visible", rowIds: ["assistant-2"] }
     ]);
+  });
+
+  it("collapses only explicitly classified assistant progress", () => {
+    const model = buildAgentTurnWorkSectionModel(
+      turnGroup([
+        userRow(),
+        assistantRow({
+          id: "assistant-progress",
+          messages: [
+            {
+              ...message("Compacting context", null),
+              presentationKind: "specific-progress"
+            },
+            message("Earlier answer", null)
+          ],
+          thinking: [thinking("Inspecting files")]
+        }),
+        assistantRow({
+          id: "assistant-final",
+          messages: [message("Final answer", "Final answer", true)]
+        })
+      ]),
+      canonicalTurn({
+        phase: "settled",
+        outcome: "completed",
+        settledAtUnixMs: 15_000
+      })
+    );
+
+    expect(
+      model.sections.map((section) => ({
+        kind: section.kind,
+        bodies: section.rows.flatMap(({ row }) =>
+          row.kind === "message"
+            ? [
+                ...row.thinking.map((item) => item.body),
+                ...row.messages.map((item) => item.body)
+              ]
+            : []
+        )
+      }))
+    ).toEqual([
+      {
+        kind: "work",
+        bodies: ["Inspecting files", "Compacting context"]
+      },
+      {
+        kind: "visible",
+        bodies: ["Earlier answer", "Final answer"]
+      }
+    ]);
+    expect(model.collapseEligible).toBe(true);
   });
 
   it("fails open when no visible final text is explicitly marked", () => {
@@ -288,6 +355,14 @@ function canonicalTurn(
     updatedAtUnixMs: 6_000,
     ...overrides
   };
+}
+
+function buildAgentTurnWorkSectionModel(
+  ...args: Parameters<typeof buildOptionalAgentTurnWorkSectionModel>
+): NonNullable<ReturnType<typeof buildOptionalAgentTurnWorkSectionModel>> {
+  const model = buildOptionalAgentTurnWorkSectionModel(...args);
+  expect(model).not.toBeNull();
+  return model!;
 }
 
 function turnGroup(rows: AgentTranscriptRowVM[]): AgentTranscriptTurnGroup {
