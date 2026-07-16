@@ -8,7 +8,6 @@ import {
   type RefObject
 } from "react";
 import type { AgentConversationVM } from "../../../shared/agentConversation/contracts/agentConversationVM";
-import { logAgentTurnDisclosureTimeline } from "../../../shared/agentConversation/components/agentTurnDisclosureDiagnostics";
 import type { AgentGUINodeViewModel } from "../model/agentGuiNodeTypes";
 import type { AgentGUINodeViewProps } from "../AgentGUINodeView";
 import {
@@ -320,7 +319,6 @@ export function useAgentGUIDetailScroll(input: Input) {
 
     const captureScrollAnchor = (): void => {
       let scrollTop = timeline.scrollTop;
-      const observedScrollTop = scrollTop;
       const previousAnchor = timelineScrollAnchorRef.current;
       const geometryChanged =
         previousAnchor?.conversationId !== activeConversationId ||
@@ -332,7 +330,6 @@ export function useAgentGUIDetailScroll(input: Input) {
         scrollTop < previousAnchor.scrollTop - 1;
       const explicitUserScrollAway =
         userScrollAwayIntentConversationRef.current === activeConversationId;
-      let correction: "bottom-lock" | null = null;
       if (explicitUserScrollAway || inferredUserScrollAway) {
         bottomLockOwnerRef.current = null;
         userScrollAwayIntentConversationRef.current = null;
@@ -348,7 +345,6 @@ export function useAgentGUIDetailScroll(input: Input) {
         if (maxScrollTop - scrollTop > AGENT_GUI_STICK_TO_BOTTOM_THRESHOLD_PX) {
           setTimelineScrollTopInstantly(timeline, maxScrollTop);
           scrollTop = maxScrollTop;
-          correction = "bottom-lock";
         }
       }
       timelineScrollAnchorRef.current = {
@@ -365,18 +361,6 @@ export function useAgentGUIDetailScroll(input: Input) {
       }
       const effectiveAtBottom =
         atBottom || bottomLockOwnerRef.current === activeConversationId;
-      logAgentTurnDisclosureTimeline(timeline, "timeline-scroll-capture", {
-        observedScrollTop,
-        committedScrollTop: scrollTop,
-        previousAnchor,
-        geometryChanged,
-        inferredUserScrollAway,
-        explicitUserScrollAway,
-        correction,
-        bottomLockOwned: bottomLockOwnerRef.current === activeConversationId,
-        atBottom,
-        effectiveAtBottom
-      });
       setIsTimelineScrolledToTop(
         scrollTop <= AGENT_GUI_TOP_MASK_SCROLL_EPSILON_PX
       );

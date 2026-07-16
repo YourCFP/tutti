@@ -18,7 +18,6 @@ vi.mock("../../../i18n/index", () => ({
 }));
 
 vi.mock("@tanstack/react-virtual", () => ({
-  measureElement: vi.fn((element: HTMLElement) => element.offsetHeight),
   useVirtualizer: vi.fn(() => ({
     getTotalSize: () => 20000,
     getVirtualItems: () =>

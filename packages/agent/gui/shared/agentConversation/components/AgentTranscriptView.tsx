@@ -8,10 +8,7 @@ import {
   useState,
   type JSX
 } from "react";
-import {
-  measureElement as measureVirtualElement,
-  useVirtualizer
-} from "@tanstack/react-virtual";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { WorkspaceLinkAction } from "../../../contexts/workspace/presentation/renderer/actions/workspaceLinkActions";
 import type { AgentMessageMarkdownWorkspaceAppIcon } from "../../AgentMessageMarkdown";
 import type { AgentGUIProviderSkillOption } from "../../../agent-gui/agentGuiNode/model/agentGuiNodeTypes";
@@ -20,7 +17,6 @@ import { AgentTranscriptItemView } from "./AgentTranscriptItemView";
 import { useAgentTurnDisclosureStore } from "./AgentTurnDisclosureContext";
 import { AgentTurnWorkSection } from "./AgentTurnWorkSection";
 import { buildAgentTurnWorkSectionModel } from "./agentTurnWorkSectionModel";
-import { logActiveAgentTurnDisclosureFromElement } from "./agentTurnDisclosureDiagnostics";
 import { assessAgentTranscriptComplexity } from "./agentTranscriptComplexity";
 import {
   AgentMessageLocatorRail,
@@ -250,21 +246,6 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
     estimateSize: () => AGENT_TRANSCRIPT_ESTIMATED_TURN_HEIGHT_PX,
     getItemKey: (index) => turnGroups[index]?.key ?? index,
     getScrollElement: () => virtualScrollElement,
-    measureElement: (element, entry, instance) => {
-      const size = measureVirtualElement(element, entry, instance);
-      const itemElement = element as HTMLElement;
-      logActiveAgentTurnDisclosureFromElement(element, "virtual-item-measure", {
-        index: Number(element.getAttribute("data-index")),
-        size,
-        offsetHeight: itemElement.offsetHeight,
-        borderBoxHeight: entry?.borderBoxSize[0]?.blockSize ?? null,
-        contentRectHeight: entry?.contentRect.height ?? null,
-        virtualScrollOffset: instance.scrollOffset,
-        virtualTotalSize: instance.getTotalSize(),
-        virtualIsScrolling: instance.isScrolling
-      });
-      return size;
-    },
     overscan: AGENT_TRANSCRIPT_VIRTUALIZATION_OVERSCAN,
     scrollEndThreshold: 24
   });

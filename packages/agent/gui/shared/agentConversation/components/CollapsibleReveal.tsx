@@ -9,16 +9,11 @@ import {
   type ReactNode,
   type TransitionEvent
 } from "react";
-import {
-  finishAgentTurnDisclosureDiagnostic,
-  logActiveAgentTurnDisclosureFromElement
-} from "./agentTurnDisclosureDiagnostics";
 
 interface CollapsibleRevealProps {
   expanded: boolean;
   children: ReactNode;
   className?: string;
-  diagnosticId?: string;
   innerClassName?: string;
   preMountOnIdle?: boolean;
 }
@@ -27,7 +22,6 @@ export function CollapsibleReveal({
   expanded,
   children,
   className,
-  diagnosticId,
   innerClassName,
   preMountOnIdle = false
 }: CollapsibleRevealProps): JSX.Element | null {
@@ -98,18 +92,6 @@ export function CollapsibleReveal({
       setRevealHeight("0px");
       const animationFrame = requestAnimationFrame(() => {
         measuredHeightRef.current = root.scrollHeight;
-        if (diagnosticId) {
-          logActiveAgentTurnDisclosureFromElement(
-            root,
-            "reveal-expand-measure",
-            {
-              rootScrollHeight: root.scrollHeight,
-              innerScrollHeight: innerRef.current?.scrollHeight ?? null,
-              renderedHeight: root.getBoundingClientRect().height,
-              targetHeight: measuredHeightRef.current
-            }
-          );
-        }
         setVisible(true);
         setRevealHeight(`${measuredHeightRef.current}px`);
       });
@@ -127,15 +109,6 @@ export function CollapsibleReveal({
     const measuredHeight =
       renderedHeight > 0 ? renderedHeight : (cachedHeight ?? root.scrollHeight);
     measuredHeightRef.current = measuredHeight;
-    if (diagnosticId) {
-      logActiveAgentTurnDisclosureFromElement(root, "reveal-collapse-lock", {
-        renderedHeight,
-        rootScrollHeight: root.scrollHeight,
-        innerScrollHeight: innerRef.current?.scrollHeight ?? null,
-        cachedHeight,
-        targetHeight: measuredHeight
-      });
-    }
     setRevealHeight(`${measuredHeight}px`);
     setVisible(false);
     const animationFrame = requestAnimationFrame(() => {
@@ -169,18 +142,6 @@ export function CollapsibleReveal({
       }
 
       measuredHeightRef.current = nextHeight;
-      if (diagnosticId) {
-        logActiveAgentTurnDisclosureFromElement(root, "reveal-resize", {
-          expanded,
-          visible,
-          explicitHeight: heightRef.current,
-          rootRenderedHeight: root.getBoundingClientRect().height,
-          innerScrollHeight,
-          contentRectHeight: entries[0]?.contentRect.height ?? null,
-          previousHeight,
-          nextHeight
-        });
-      }
       if (heightRef.current === "auto") {
         return;
       }
@@ -217,34 +178,7 @@ export function CollapsibleReveal({
     }
     if (visible) {
       setRevealHeight("auto");
-      if (diagnosticId) {
-        finishAgentTurnDisclosureDiagnostic(
-          event.currentTarget,
-          diagnosticId,
-          "reveal-transition-end",
-          {
-            expanded,
-            visible,
-            finalHeight: event.currentTarget.getBoundingClientRect().height,
-            nextHeight: "auto"
-          }
-        );
-      }
       return;
-    }
-    if (diagnosticId) {
-      finishAgentTurnDisclosureDiagnostic(
-        event.currentTarget,
-        diagnosticId,
-        "reveal-transition-end",
-        {
-          expanded,
-          visible,
-          finalHeight: event.currentTarget.getBoundingClientRect().height,
-          nextHeight: "0px",
-          willUnmount: !expanded && !preMountOnIdle
-        }
-      );
     }
     if (!expanded && !preMountOnIdle) {
       setMounted(false);

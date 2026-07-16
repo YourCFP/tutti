@@ -4,7 +4,6 @@ import { ChevronDownIcon } from "@tutti-os/ui-system/icons";
 import { useTranslation } from "../../../i18n/index";
 import { CollapsibleReveal } from "./CollapsibleReveal";
 import type { AgentTurnDisclosureStore } from "./AgentTurnDisclosureContext";
-import { beginAgentTurnDisclosureDiagnostic } from "./agentTurnDisclosureDiagnostics";
 import { useElapsedSeconds } from "./useElapsedSeconds";
 import {
   formatAgentTurnDuration,
@@ -44,9 +43,6 @@ export function AgentTurnWorkSection({
   const toggleLabel = expanded
     ? t("agentHost.agentGui.collapseTurnWork")
     : t("agentHost.agentGui.expandTurnWork");
-  const disclosureRevealCount = model.sections.filter(
-    (section) => section.kind === "work" && model.collapseEligible
-  ).length;
 
   return (
     <div className="grid min-w-0" data-agent-turn-work-section={turnKey}>
@@ -73,18 +69,9 @@ export function AgentTurnWorkSection({
             aria-label={toggleLabel}
             aria-expanded={expanded}
             title={toggleLabel}
-            onClick={(event) => {
-              beginAgentTurnDisclosureDiagnostic(
-                event.currentTarget,
-                disclosureKey,
-                {
-                  fromExpanded: expanded,
-                  toExpanded: !expanded
-                },
-                disclosureRevealCount
-              );
-              disclosureStore.setExpandedOverride(disclosureKey, !expanded);
-            }}
+            onClick={() =>
+              disclosureStore.setExpandedOverride(disclosureKey, !expanded)
+            }
           >
             <ChevronDownIcon
               aria-hidden="true"
@@ -113,7 +100,6 @@ export function AgentTurnWorkSection({
           <CollapsibleReveal
             key={`work:${firstRow?.renderKey ?? firstRow?.row.id ?? sectionIndex}`}
             expanded={expanded}
-            diagnosticId={disclosureKey}
             innerClassName="grid gap-4 pt-4"
           >
             {content}

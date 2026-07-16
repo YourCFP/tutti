@@ -260,17 +260,6 @@ anchor owner; opt its measured subtree out of browser-native scroll anchoring
 to avoid two independent corrections moving the whole timeline and then
 snapping it back.
 
-When a Turn disclosure still moves the timeline, correlate the always-on
-renderer console entries with prefix `[agent-gui][turn-disclosure-scroll]`.
-Every entry serializes its payload with `JSON.stringify` and carries the same
-session/Turn disclosure identity. The expected sequence starts at `toggle`,
-then records reveal height locks or resizes, virtual-item measurements, and
-timeline scroll captures before `reveal-transition-end`. Compare
-`virtualScrollOffset`, timeline `scrollTop`, `maxScrollTop`, `correction`, and
-`bottomLockOwned` to identify whether virtual end anchoring or detail-pane
-bottom locking wrote the unexpected correction; do not infer the owner from the
-visible direction of the jump alone.
-
 Generic processing fallback is decided only after transcript normalization has
 removed diagnostic-only notices and merged presentation rows. Canonical live
 Turn timing suppresses that fallback only when a surviving row with the exact
