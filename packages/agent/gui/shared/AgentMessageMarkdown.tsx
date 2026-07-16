@@ -660,12 +660,20 @@ function MentionLink({
         </span>
       ) : mention.kind === "workspace-app" ||
         mention.kind === "workspace-reference" ||
-        mention.kind === "agent-target" ? (
+        mention.kind === "agent-target" ||
+        (mention.kind === "session" && mention.iconUrl) ? (
         <span
           className="grid h-4 w-4 shrink-0 place-items-center overflow-hidden rounded-[4px] bg-block"
           aria-hidden="true"
-          data-agent-mention-app-icon="true"
-          data-workspace-app-icon="true"
+          data-agent-mention-app-icon={
+            mention.kind === "session" ? undefined : "true"
+          }
+          data-agent-mention-session-icon={
+            mention.kind === "session" ? "true" : undefined
+          }
+          data-workspace-app-icon={
+            mention.kind === "session" ? undefined : "true"
+          }
         >
           {mention.iconUrl ? (
             <img

@@ -121,6 +121,37 @@ describe("AgentRichTextReadonly", () => {
     expect(mention?.querySelector("img")).toHaveAttribute("src", iconUrl);
   });
 
+  it("hydrates session mention icons from Agent Target presentation metadata", async () => {
+    const iconUrl = "data:image/png;base64,gemini";
+    const href =
+      "mention://agent-session/session-1?agentTargetId=extension%3Agemini&workspaceId=workspace-1";
+    const { container } = render(
+      <AgentRichTextReadonly
+        value={`Review [@Gemini session](${href})`}
+        agentTargets={[
+          {
+            agentTargetId: "extension:gemini",
+            iconUrl,
+            name: "Gemini CLI",
+            provider: "acp:gemini",
+            workspaceId: "workspace-1"
+          }
+        ]}
+      />
+    );
+
+    await waitFor(() =>
+      expect(
+        container.querySelector('[data-agent-mention-kind="session"] img')
+      ).toHaveAttribute("src", iconUrl)
+    );
+    const mention = container.querySelector(
+      '[data-agent-mention-kind="session"]'
+    );
+    expect(mention).toHaveTextContent("Gemini session");
+    expect(mention).toHaveAttribute("data-agent-mention-href", href);
+  });
+
   it("does not override mention wrapper width in readonly messages", async () => {
     const { container } = render(
       <AgentRichTextReadonly

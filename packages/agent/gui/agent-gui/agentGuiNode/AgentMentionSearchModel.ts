@@ -517,7 +517,10 @@ export function providerItemToAgentMentionItem(input: {
         providerId: "agent-session",
         entityId: targetId,
         label,
-        scope: { workspaceId }
+        scope: {
+          workspaceId,
+          ...(scope.agentTargetId ? { agentTargetId: scope.agentTargetId } : {})
+        }
       }),
       workspaceId,
       targetId,

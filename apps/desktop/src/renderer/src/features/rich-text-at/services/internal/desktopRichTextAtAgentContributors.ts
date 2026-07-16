@@ -196,6 +196,7 @@ export function createAgentSessionAtContributor(contributorInput: {
               entityId: item.id,
               label: resolveAgentSessionLabel(item),
               scope: compactStringRecord({
+                agentTargetId: item.agentTargetId,
                 scope: item.scope,
                 userId: item.userId,
                 workspaceId: item.workspaceId

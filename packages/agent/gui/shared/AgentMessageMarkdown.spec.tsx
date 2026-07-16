@@ -1252,6 +1252,33 @@ describe("AgentMessageMarkdown", () => {
     expect(mention).toHaveTextContent("Claude Code");
   });
 
+  it("renders session mentions with their Agent Target icons", () => {
+    const iconUrl = "data:image/svg+xml;base64,gemini";
+    const { container } = render(
+      <AgentMessageMarkdown
+        content="Review [@Gemini session](mention://agent-session/session-1?agentTargetId=extension%3Agemini&workspaceId=room-1)"
+        agentTargets={[
+          {
+            agentTargetId: "extension:gemini",
+            iconUrl,
+            name: "Gemini CLI",
+            provider: "acp:gemini",
+            workspaceId: "room-1"
+          }
+        ]}
+      />
+    );
+
+    const mention = container.querySelector(
+      '[data-agent-mention-kind="session"]'
+    );
+    expect(mention).toHaveAttribute("data-agent-mention-icon-url", iconUrl);
+    expect(
+      mention?.querySelector('[data-agent-mention-session-icon="true"] img')
+    ).toHaveAttribute("src", iconUrl);
+    expect(mention).toHaveTextContent("Gemini session");
+  });
+
   it("renders agent target mentions without provider ids as agent tokens", () => {
     const { container } = render(
       <AgentMessageMarkdown content="让 [@Claude Code](mention://agent-target/local:claude-code?workspaceId=room-1) 做题" />

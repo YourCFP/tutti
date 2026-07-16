@@ -538,6 +538,25 @@ export function parseMentionLink(
         target?.iconUrl?.trim() || managedAgentRoundedIconUrl(agentProviderId)
     };
   }
+  if (kind === "session") {
+    const workspaceId = mention.scope?.workspaceId?.trim() || "";
+    const agentTargetId = mention.scope?.agentTargetId?.trim() || "";
+    const target = resolveAgentTargetPresentation({
+      agentTargetId,
+      agentTargets,
+      workspaceId
+    });
+    const localProvider = agentTargetId.startsWith("local:")
+      ? agentTargetId.slice("local:".length).trim()
+      : "";
+    return {
+      kind,
+      label,
+      iconUrl:
+        target?.iconUrl?.trim() ||
+        (localProvider ? managedAgentRoundedIconUrl(localProvider) : undefined)
+    };
+  }
   if (kind === "workspace-reference") {
     const source = mention.scope?.source?.trim() ?? "";
     const workspaceId = mention.scope?.workspaceId?.trim() || "";

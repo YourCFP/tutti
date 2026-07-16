@@ -921,6 +921,7 @@ test("desktop rich text @ service presents extension sessions with Agent Target 
   if (insertResult.kind !== "mention") {
     return;
   }
+  assert.equal(insertResult.mention.scope?.agentTargetId, "extension:gemini");
   assert.equal(insertResult.mention.presentation?.subtitle, "Gemini CLI");
   assert.equal(
     insertResult.mention.presentation?.participant,
@@ -1682,6 +1683,7 @@ test("desktop rich text @ service emits enriched app + session meta when enrichm
                 turnId: "turn-1",
                 updatedAtUnixMs: 1780272000000
               },
+              agentTargetId: "local:codex",
               createdAtUnixMs: 1780272000000,
               cwd: null,
               id: "session-1",
@@ -1773,6 +1775,7 @@ test("desktop rich text @ service emits enriched app + session meta when enrichm
   });
   const sessionInsert = sessionProvider.toInsertResult(sessionItems[0]);
   assert.equal(sessionInsert.kind, "mention");
+  assert.equal(sessionInsert.mention.scope?.agentTargetId, "local:codex");
   assert.equal(
     sessionInsert.mention.presentation?.iconUrl,
     "https://agents/codex.png"
