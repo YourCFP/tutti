@@ -1363,7 +1363,10 @@ by `GET /v1/workspaces/{workspaceID}/agent-session-sections` and
 `GET /v1/workspaces/{workspaceID}/agent-session-sections/page`. Project
 sections come from current `userProjects` and use the stable
 `project:/canonical/path` `sectionKey`; the Chats section uses
-`conversations`. The daemon pages sessions by `rail_section_key`, so AgentGUI
+`conversations`. This inventory is the durable registered-project list; rail
+loading must not probe project paths or implicitly remove unavailable folders.
+Path availability and explicit removal belong to the user-project domain. The
+daemon pages sessions by `rail_section_key`, so AgentGUI
 must render returned section props and use backend `hasMore`/`nextCursor`
 rather than cwd grouping, root filters, excluded project paths, or local
 Show more heuristics. Page responses upsert their session entities into the
