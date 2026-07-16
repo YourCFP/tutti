@@ -27,9 +27,30 @@ packages/agent/activity-core
 
 packages/agent/gui
   @tutti-os/agent-gui
+
+packages/agent/activity-replication
+  github.com/tutti-os/tutti/packages/agent/activity-replication
 ```
 
 ## Responsibilities
+
+### `packages/agent/activity-replication`
+
+`activity-replication` is the versioned Go wire contract for projecting an
+owner-local canonical activity store into a cloud read model. It owns batch,
+mutation, entity-key, scope, and snapshot JSON shapes; structural validation;
+duplicate and stale acknowledgement semantics; and backend-neutral
+conformance fixtures. Source/projection and sink/acknowledgement harnesses are
+separate: the SQLite canonical store runs the source fixtures in this
+repository, while external builders and MySQL sinks consume the matching side
+of the same wire cases.
+
+It imports the canonical activity vocabulary from
+`packages/agent/store-sqlite/canonical`; it must not redefine turn phase,
+outcome, origin, interaction kind, or interaction status values. It contains
+no SQL, transport, authorization, WebSocket, GUI state, or local command-state
+upserts. Legacy command-state entity names remain decodable only for projection
+tombstone deletes.
 
 ### `@tutti-os/agent-activity-core`
 
