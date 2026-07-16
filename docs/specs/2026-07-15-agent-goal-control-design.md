@@ -85,8 +85,10 @@ Turn provenance is immutable after first classification:
 
 A Goal-created Turn records `sourceGoalOperationId` and
 `sourceGoalRevision`. Steer is input on an existing Turn and is not an origin.
-Delayed continuation work captures the revision and exits when a newer
-set/clear has superseded it.
+Delayed continuation scheduling captures the revision and exits before
+provider handoff when a newer set/clear has superseded it. Once the provider
+has accepted or started a Turn, that Turn keeps its original provenance and
+runs to its natural terminal; superseding Goal state only blocks later work.
 
 ### Exact Goal-generation provenance ledger
 
@@ -150,10 +152,10 @@ sequenceDiagram
   end
 ```
 
-Clear is valid when no Turn exists. It updates the Goal entity and operation;
-it does not allocate a Turn, emit `turn_started`, or cancel unrelated user
-Turns. Claude may quiesce only the known `goal_arm` Turn when that Turn was
-actually observed as started.
+Clear is valid whether or not a Turn exists. It updates the Goal entity and
+operation; it does not allocate a Turn, emit `turn_started`, or cancel any
+already accepted or started Turn. Provider-native clear affects future Goal
+scheduling and continuation only.
 
 ## Provider Adapter
 
@@ -196,9 +198,11 @@ Calibration APIs:
 1. Goal control never preallocates a Turn ID.
 2. A non-empty message Turn ID must reference an existing Turn.
 3. A control operation is durable before provider dispatch.
-4. Revision is monotonic and invalidates stale async continuation work.
+4. Revision is monotonic and invalidates stale continuation scheduling before
+   provider acceptance, never an already accepted or started Turn.
 5. Turn origin is durable and immutable.
-6. Goal clear cannot cancel an unrelated `user_prompt` Turn.
+6. Goal clear cannot cancel any current Turn, including `user_prompt`,
+   `goal_arm`, or `goal_continuation`.
 7. Provider observations cannot erase newer desired state or tombstones.
 8. Provider-specific capabilities and evidence stay behind `GoalAdapter`.
 
@@ -241,10 +245,10 @@ on a restart or a repair worker.
    queue. Each item carries immutable `operationId`, `revision`, `action`, and
    optional provider Turn ID.
 4. Coalesce an undispatched older `set` when a newer `clear` arrives. If the
-   old set has already been handed to the SDK, retain its identity and apply an
-   activation fence when its `turn_started` event arrives: compare with the
-   latest desired revision, precisely interrupt that stale Goal arm, and then
-   apply the latest clear.
+   old set has already been handed to the SDK, retain its identity and allow
+   its Turn to settle naturally. Apply the latest clear as the desired state so
+   no later continuation is scheduled; revision supersession alone must never
+   interrupt the accepted Turn.
 5. Split provider phases. Sidecar `ok` means only `accepted`; it must not mark
    the Goal operation `synced`. Persist evidence for `accepted`,
    `execution_started`/`applied`, and `completed` where the provider exposes
@@ -253,8 +257,9 @@ on a restart or a repair worker.
 6. Replace mutable session-global Goal provenance with an immutable command or
    provider-Turn association. A delayed Turn must keep the operation and
    revision that caused it even after a newer command changes session state.
-7. Add precise Claude cancellation by provider Turn ID or Goal revision.
-   Generic session cancellation must not be used to implement Goal clear.
+7. Do not translate Claude Goal clear into either generic or precise Turn
+   cancellation. Exact quiesce is reserved for missing/ambiguous provenance;
+   explicit user cancellation remains a separate Turn operation.
 
 #### State And Sequence Contract
 
@@ -272,13 +277,13 @@ sequenceDiagram
   D-->>S: accepted
   U->>S: clear(revision 2)
   S->>S: persist operation 2 + tombstone
-  S->>D: supersede(op 1), dispatch(op 2, rev 2, clear)
+  S->>D: supersede future scheduling for op 1, dispatch op 2 clear
   alt set was not handed to provider
     D->>D: remove set from queue
-  else stale set later starts
+  else set already crossed provider handoff
     P-->>D: turn_started(providerTurn, op 1, rev 1)
-    D->>P: interrupt providerTurn precisely
     D->>T: create Turn(goal_arm, op 1, rev 1)
+    Note over P,T: Turn continues to its natural terminal
   end
   P-->>D: clear applied evidence
   D-->>S: applied(op 2, rev 2)
@@ -288,15 +293,18 @@ sequenceDiagram
 #### Acceptance Gate
 
 - A real integration-style test executes `set`, receives only the sidecar
-  scheduling ACK, immediately executes `clear`, and proves that neither
-  command nor the session remains running.
+  scheduling ACK, immediately executes `clear`, and proves the accepted Turn
+  reaches its natural terminal, clear prevents another continuation, and the
+  session does not remain running.
 - The test must not inject a synthetic `turn_canceled` event to make the queue
   advance.
 - Typed `/goal` and the dedicated Goal API create the same durable operation
   records and allocate no Turn before `turn_started`.
 - A delayed revision-1 Turn cannot be labelled with revision 2 or operation 2.
-- Goal clear cancels only the associated Goal arm and leaves an unrelated user
-  Turn running.
+- Goal clear leaves the current Goal or user Turn running and only prevents
+  future Goal continuations.
+- A fully proven superseded Turn is adopted with its original operation and
+  revision; only missing or ambiguous provenance is quiesced.
 - Relevant Go, sidecar, API, generated-client, typecheck, and lint checks pass.
 
 ### Stage 2: Make The State Machine Recoverable

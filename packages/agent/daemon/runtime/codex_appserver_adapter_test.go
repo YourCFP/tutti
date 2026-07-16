@@ -4601,7 +4601,7 @@ func TestCodexGoalProvenanceWorkingSetRemainsBoundedAfterManyGenerations(t *test
 	degraded := adapter.sessions[session.AgentSessionID].provenanceDegraded
 	bindings := len(adapter.sessions[session.AgentSessionID].goalGenerationBindings)
 	adapter.mu.Unlock()
-	if degraded || bindings > 1 {
+	if degraded || bindings > maxGoalGenerationBindings {
 		t.Fatalf("degraded=%v bindings=%d", degraded, bindings)
 	}
 	_ = transport
@@ -4702,7 +4702,7 @@ func TestCodexTurnScopedGoalObservationMissingFingerprintFailsClosed(t *testing.
 	}
 }
 
-func TestCodexGoalProvenanceDurableLedgerSurvivesRestartAndRejectsDelayedGeneration(t *testing.T) {
+func TestCodexGoalProvenanceDurableLedgerSurvivesRestartAndAdoptsDelayedGeneration(t *testing.T) {
 	ledger := &memoryGoalProvenanceLedger{bindings: make(map[string]GoalProvenanceBinding)}
 	firstAdapter, _, session := startedAppServerAdapter(t)
 	firstAdapter.SetGoalProvenanceDurableSink(ledger)
@@ -4725,15 +4725,15 @@ func TestCodexGoalProvenanceDurableLedgerSurvivesRestartAndRejectsDelayedGenerat
 	restarted.queueGoalTurnForProvenance(restartedSession, "turn-delayed-old-after-restart")
 	restarted.observeGoalTurnGeneration(restartedSession, "turn-delayed-old-after-restart", oldGoal)
 	waitForCondition(t, func() bool {
-		transport.conn.mu.Lock()
-		defer transport.conn.mu.Unlock()
-		return len(transport.conn.interruptAttempts) > 0
+		restarted.mu.Lock()
+		defer restarted.mu.Unlock()
+		return restarted.sessions[restartedSession.AgentSessionID].activeTurn != nil
 	})
-	restarted.mu.Lock()
-	active := restarted.sessions[restartedSession.AgentSessionID].activeTurn
-	restarted.mu.Unlock()
-	if active != nil {
-		t.Fatalf("delayed old generation was adopted after restart: %#v", active)
+	transport.conn.mu.Lock()
+	interrupts := append([]string(nil), transport.conn.interruptAttempts...)
+	transport.conn.mu.Unlock()
+	if len(interrupts) != 0 {
+		t.Fatalf("delayed proven generation was interrupted after restart: %#v", interrupts)
 	}
 }
 
@@ -4826,7 +4826,7 @@ func TestCodexGoalProvenanceWorkingSetStaysBoundedAcrossManyContinuations(t *tes
 	appSession := adapter.sessions[session.AgentSessionID]
 	degraded, evidence, bindings := appSession.provenanceDegraded, len(appSession.goalTurnEvidence), len(appSession.goalGenerationBindings)
 	adapter.mu.Unlock()
-	if degraded || evidence != 0 || bindings > 1 {
+	if degraded || evidence != 0 || bindings > maxGoalGenerationBindings {
 		t.Fatalf("degraded=%v evidence=%d bindings=%d", degraded, evidence, bindings)
 	}
 }
@@ -4863,7 +4863,7 @@ func (l *memoryGoalProvenanceLedger) LookupGoalProvenance(_ context.Context, ses
 	return binding, found, nil
 }
 
-func TestCodexLateSupersededGoalTurnIsQuiescedWithoutNewIdentity(t *testing.T) {
+func TestCodexLateSupersededGoalTurnKeepsOriginalIdentityAndContinues(t *testing.T) {
 	adapter, transport, session := startedAppServerAdapter(t)
 	adapter.goalProvenanceGraceWindow = 10 * time.Millisecond
 	var sinkMu sync.Mutex
@@ -4908,25 +4908,23 @@ func TestCodexLateSupersededGoalTurnIsQuiescedWithoutNewIdentity(t *testing.T) {
 	}, nil, nil)
 
 	waitForCondition(t, func() bool {
-		requests := appServerRequestParamsList(t, transport.conn, appServerMethodTurnInterrupt)
-		return len(requests) > 0 && asString(requests[len(requests)-1]["turnId"]) == "provider-old-turn"
-	})
-	waitForCondition(t, func() bool {
 		sinkMu.Lock()
 		defer sinkMu.Unlock()
 		for _, event := range sinkEvents {
 			if event.Type == activityshared.EventTurnStarted && event.Payload.Metadata["sourceGoalOperationId"] == "goal-op-2" {
 				t.Fatalf("late old provider turn inherited op2: %#v", event)
 			}
-			if event.Type == activityshared.EventGoalReconcileRequired && event.Payload.Metadata["phase"] == "finalized" {
-				return event.Payload.Metadata["expectedGoalOperationId"] == "goal-op-2" &&
-					event.Payload.Metadata["expectedGoalRevision"] == int64(3) &&
-					event.Payload.Metadata["expectedGoalRepairEpoch"] == int64(2) &&
-					event.Payload.Metadata["quiesceSucceeded"] == true
+			if event.Type == activityshared.EventTurnStarted &&
+				event.Payload.Metadata["sourceGoalOperationId"] == "goal-op-1" &&
+				event.Payload.Metadata["sourceGoalRevision"] == int64(1) {
+				return true
 			}
 		}
 		return false
 	})
+	if requests := appServerRequestParamsList(t, transport.conn, appServerMethodTurnInterrupt); len(requests) != 0 {
+		t.Fatalf("superseding Goal state interrupted current provider Turn: %#v", requests)
+	}
 }
 
 func TestCodexRestartedActiveGoalTurnDoesNotGuessProvenance(t *testing.T) {

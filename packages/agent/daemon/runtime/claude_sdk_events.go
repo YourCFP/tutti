@@ -85,15 +85,6 @@ func (a *ClaudeCodeSDKAdapter) sidecarTurnEvents(adapterSession *claudeSDKAdapte
 				metadata["sourceGoalOperationId"] = operationID
 				metadata["sourceGoalRevision"] = revision
 				metadata["sourceGoalRepairEpoch"] = payloadInt64(event.Payload, "sourceGoalRepairEpoch")
-				a.mu.Lock()
-				latestRevision := adapterSession.goalRevision
-				a.mu.Unlock()
-				if revision > 0 && latestRevision > revision {
-					// The command already crossed the SDK handoff before a newer
-					// clear arrived. Fence this exact provider turn; never issue a
-					// generic session cancel, which would also discard the clear.
-					a.cancelClaudeSDKGoalTurn(adapterSession, session, turnID, revision)
-				}
 			}
 		}
 		if !providerCreatedGoalTurn {

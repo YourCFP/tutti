@@ -177,7 +177,7 @@ type codexAppServerSession struct {
 	rateLimits map[string]any
 	goal       map[string]any
 	// goalOperationID/revision identify the latest durable desired-goal write.
-	// They invalidate delayed work and are copied onto provider-created turns.
+	// They gate future scheduling; accepted Turns retain their own identity.
 	goalOperationID string
 	goalRevision    int64
 	goalRepairEpoch int64
@@ -186,6 +186,7 @@ type codexAppServerSession struct {
 	// established by matching a provider Goal generation observed in both a
 	// successful goal/set response and a turn-scoped goal/updated notification.
 	goalGenerationBindings           map[string]codexGoalGenerationBinding
+	goalGenerationOrder              []string
 	currentGoalGenerationFingerprint string
 	goalTurnEvidence                 map[string]*codexGoalTurnEvidence
 	pendingGoalTurns                 map[string]*codexPendingGoalTurn

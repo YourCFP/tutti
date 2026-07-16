@@ -139,8 +139,7 @@ func TestClaudeSDKCancelLiveTurnWaitsForProviderTerminal(t *testing.T) {
 // The controller calls adapter.Cancel(ctx, session, reason) — the third argument
 // is the cancel reason ("user"), not a turnID. Cancel must not stamp either
 // value as a terminal, and must leave the waiter registered so the sidecar's own
-// turn_canceled can still settle it (removing it would break /goal clear and
-// drop the natural settle).
+// turn_canceled can still settle it without dropping the natural terminal.
 func TestClaudeSDKCancelUsesRegistryTurnNotReasonArg(t *testing.T) {
 	t.Parallel()
 
@@ -164,9 +163,8 @@ func TestClaudeSDKCancelUsesRegistryTurnNotReasonArg(t *testing.T) {
 	if len(events) != 0 {
 		t.Fatalf("cancel events = %#v, want no unconfirmed terminal", events)
 	}
-	// The waiter must survive so the sidecar's natural turn_canceled still settles
-	// it (the /goal clear contract; the controller separately cancels the turn
-	// context to unblock Exec).
+	// The waiter must survive so the sidecar's natural turn_canceled still
+	// settles it after the controller cancels the turn context.
 	if adapter.claudeSDKTurnWaiter(adapterSession, "turn-live") == nil {
 		t.Fatal("Cancel removed the live turn waiter; the sidecar settle would be dropped")
 	}
@@ -346,8 +344,6 @@ func TestClaudeSDKExecGoalControl(t *testing.T) {
 		events, handled, err := adapter.ExecGoalControl(context.Background(), session, textPrompt("/goal clear"), "")
 		results <- goalExecResult{events, handled, err}
 	}()
-	cancelRequest := waitForClaudeSDKSentRequest(t, conn, "cancel")
-	conn.pushEvent(claudeSDKSidecarEvent{ID: cancelRequest.ID, Type: "ok"})
 	clearRequest := waitForClaudeSDKSentRequestMatching(t, conn, "exec", "/goal clear")
 	conn.pushEvent(claudeSDKSidecarEvent{ID: clearRequest.ID, Type: "ok"})
 	result := <-results
@@ -371,11 +367,9 @@ func TestClaudeSDKExecGoalControl(t *testing.T) {
 	if goal := adapter.localGoal(adapterSession); len(goal) != 0 {
 		t.Fatalf("goal after ExecGoalControl clear = %#v", goal)
 	}
-	// Clear must interrupt the live turn BEFORE forwarding the command: the
-	// sidecar queues goal execs behind the live turn, and a goal turn only
-	// settles once the goal is met — a queued clear would never run while
-	// the goal loop keeps working.
-	assertClaudeSDKCancelBeforeGoalExec(t, conn.sentRequests(), "/goal clear")
+	// Clear changes future Goal scheduling. The current provider Turn remains
+	// authoritative and must run to its natural terminal event.
+	assertClaudeSDKNoCancelForGoalExec(t, conn.sentRequests(), "/goal clear")
 	if terminals := activityEventsWithType(events, activityshared.EventTurnCompleted); len(terminals) != 0 {
 		t.Fatalf("goal clear emitted unconfirmed canonical terminal: %#v", terminals)
 	}
@@ -386,31 +380,28 @@ func TestClaudeSDKExecGoalControl(t *testing.T) {
 	}
 }
 
-func assertClaudeSDKCancelBeforeGoalExec(
+func assertClaudeSDKNoCancelForGoalExec(
 	t *testing.T,
 	sent []claudeSDKSidecarRequest,
 	prompt string,
 ) {
 	t.Helper()
-	cancelIndex, execIndex := -1, -1
-	for i, request := range sent {
-		switch {
-		case request.Type == "cancel" && cancelIndex == -1:
-			cancelIndex = i
-		case request.Type == "exec" &&
-			payloadString(request.Payload, "prompt") == prompt &&
-			execIndex == -1:
-			execIndex = i
+	foundExec := false
+	for _, request := range sent {
+		if request.Type == "cancel" {
+			t.Fatalf("goal control canceled the current Turn before %q: %#v", prompt, sent)
+		}
+		if request.Type == "exec" && payloadString(request.Payload, "prompt") == prompt {
+			foundExec = true
 		}
 	}
-	if cancelIndex == -1 || execIndex == -1 || cancelIndex > execIndex {
-		t.Fatalf("want sidecar cancel before %q exec, got %#v", prompt, sent)
+	if !foundExec {
+		t.Fatalf("missing %q exec in %#v", prompt, sent)
 	}
 }
 
 // A /goal set steered into a running turn must NOT interrupt it: the new
-// objective queues behind the live turn; only clear kills the running goal
-// loop.
+// objective queues behind the live turn.
 func TestClaudeSDKExecGoalControlSetDoesNotInterrupt(t *testing.T) {
 	t.Parallel()
 
@@ -442,9 +433,8 @@ func TestClaudeSDKExecGoalControlSetDoesNotInterrupt(t *testing.T) {
 	}
 }
 
-// Every reserved clear keyword must take the full clear path — /goal reset
-// interrupts like clear and must not arm a goal turn as if it set a new
-// objective.
+// Every reserved clear keyword must take the full clear path without
+// interrupting the current Turn or arming a new Goal Turn.
 func TestClaudeSDKGoalResetClearsWithoutArming(t *testing.T) {
 	t.Parallel()
 
@@ -464,15 +454,13 @@ func TestClaudeSDKGoalResetClearsWithoutArming(t *testing.T) {
 		_, handled, err := adapter.ExecGoalControl(context.Background(), session, textPrompt("/goal reset"), "")
 		results <- goalExecResult{handled, err}
 	}()
-	cancelRequest := waitForClaudeSDKSentRequest(t, conn, "cancel")
-	conn.pushEvent(claudeSDKSidecarEvent{ID: cancelRequest.ID, Type: "ok"})
 	request := waitForClaudeSDKSentRequestMatching(t, conn, "exec", "/goal reset")
 	conn.pushEvent(claudeSDKSidecarEvent{ID: request.ID, Type: "ok"})
 	result := <-results
 	if result.err != nil || !result.handled {
 		t.Fatalf("ExecGoalControl handled=%v err=%v", result.handled, result.err)
 	}
-	assertClaudeSDKCancelBeforeGoalExec(t, conn.sentRequests(), "/goal reset")
+	assertClaudeSDKNoCancelForGoalExec(t, conn.sentRequests(), "/goal reset")
 	adapter.mu.Lock()
 	armTurnID := adapterSession.goalArmTurnID
 	adapter.mu.Unlock()
@@ -481,9 +469,9 @@ func TestClaudeSDKGoalResetClearsWithoutArming(t *testing.T) {
 	}
 }
 
-// The direct control API path (GoalControlClear) has the same queued-exec
-// hazard as the typed path and must interrupt the live turn first too.
-func TestClaudeSDKGoalControlClearInterruptsLiveTurn(t *testing.T) {
+// The direct control API path has the same non-interrupting semantics as the
+// typed path: it clears future Goal work and lets the current Turn finish.
+func TestClaudeSDKGoalControlClearDoesNotInterruptLiveTurn(t *testing.T) {
 	t.Parallel()
 
 	adapter := NewClaudeCodeSDKAdapter(nil)
@@ -505,15 +493,13 @@ func TestClaudeSDKGoalControlClearInterruptsLiveTurn(t *testing.T) {
 		events, _, err := adapter.GoalControl(context.Background(), session, GoalControlClear, "")
 		results <- controlResult{events, err}
 	}()
-	cancelRequest := waitForClaudeSDKSentRequest(t, conn, "cancel")
-	conn.pushEvent(claudeSDKSidecarEvent{ID: cancelRequest.ID, Type: "ok"})
 	clearRequest := waitForClaudeSDKSentRequestMatching(t, conn, "exec", "/goal clear")
 	conn.pushEvent(claudeSDKSidecarEvent{ID: clearRequest.ID, Type: "ok"})
 	result := <-results
 	if result.err != nil {
 		t.Fatalf("GoalControl clear: %v", result.err)
 	}
-	assertClaudeSDKCancelBeforeGoalExec(t, conn.sentRequests(), "/goal clear")
+	assertClaudeSDKNoCancelForGoalExec(t, conn.sentRequests(), "/goal clear")
 	if terminals := activityEventsWithType(result.events, activityshared.EventTurnCompleted); len(terminals) != 0 {
 		t.Fatalf("goal clear emitted unconfirmed canonical terminal: %#v", terminals)
 	}
@@ -681,7 +667,7 @@ func TestClaudeSDKGoalArmTurnCarriesDurableGoalIdentity(t *testing.T) {
 	}
 }
 
-func TestClaudeSDKGoalSetAckThenImmediateClearFencesDelayedArmWithoutSyntheticTerminal(t *testing.T) {
+func TestClaudeSDKGoalSetAckThenImmediateClearPreservesDelayedArmUntilTerminal(t *testing.T) {
 	t.Parallel()
 
 	adapter := NewClaudeCodeSDKAdapter(nil)
@@ -733,15 +719,7 @@ func TestClaudeSDKGoalSetAckThenImmediateClearFencesDelayedArmWithoutSyntheticTe
 	if metadata["sourceGoalOperationId"] != "goal-op-set" || metadata["sourceGoalRevision"] != int64(1) {
 		t.Fatalf("delayed arm provenance=%#v", metadata)
 	}
-	cancelRequest := waitForClaudeSDKSentRequestMatching(t, conn, "cancel", "")
-	if payloadString(cancelRequest.Payload, "turnId") != setTurnID {
-		t.Fatalf("precise cancel payload=%#v", cancelRequest.Payload)
-	}
-	for _, request := range conn.sentRequests() {
-		if request.Type == "cancel" && payloadString(request.Payload, "turnId") == "" {
-			t.Fatalf("generic cancel used for goal clear: %#v", request)
-		}
-	}
+	assertClaudeSDKNoCancelForGoalExec(t, conn.sentRequests(), "/goal clear")
 
 	clearEvents, _, err := adapter.sidecarTurnEvents(adapterSession, session, payloadString(clearRequest.Payload, "turnId"), claudeSDKSidecarEvent{
 		Type: "goal_command_started",

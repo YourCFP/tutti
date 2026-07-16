@@ -17,6 +17,7 @@ const (
 	maxPendingGoalTurns             = 16
 	maxGoalTurnFingerprints         = 8
 	maxGoalTurnEvidence             = 256
+	maxGoalGenerationBindings       = 256
 	goalReconcileDurableAckTimeout  = 2 * time.Second
 	goalProvenanceDurableAckTimeout = 2 * time.Second
 )
@@ -151,9 +152,6 @@ func (a *CodexAppServerAdapter) bindGoalGeneration(_ context.Context, session Se
 		a.mu.Unlock()
 		return nil
 	}
-	if appSession.goalGenerationBindings == nil {
-		appSession.goalGenerationBindings = make(map[string]codexGoalGenerationBinding)
-	}
 	if sink == nil {
 		existing, found := appSession.goalGenerationBindings[fingerprint]
 		switch {
@@ -165,7 +163,7 @@ func (a *CodexAppServerAdapter) bindGoalGeneration(_ context.Context, session Se
 			binding.identity = goalOperationIdentity{}
 		}
 	}
-	appSession.goalGenerationBindings[fingerprint] = binding
+	rememberGoalGenerationBindingLocked(appSession, fingerprint, binding)
 	current := goalOperationIdentity{
 		operationID: appSession.goalOperationID,
 		revision:    appSession.goalRevision,
@@ -255,13 +253,10 @@ func (a *CodexAppServerAdapter) observeGoalTurnGeneration(session Session, provi
 				a.mu.Unlock()
 				return
 			}
-			if appSession.goalGenerationBindings == nil {
-				appSession.goalGenerationBindings = make(map[string]codexGoalGenerationBinding)
-			}
-			appSession.goalGenerationBindings[fingerprint] = codexGoalGenerationBinding{
+			rememberGoalGenerationBindingLocked(appSession, fingerprint, codexGoalGenerationBinding{
 				identity:  goalOperationIdentity{operationID: durable.OperationID, revision: durable.Revision, repairEpoch: durable.RepairEpoch},
 				ambiguous: durable.Ambiguous,
-			}
+			})
 			a.mu.Unlock()
 		}
 	}
@@ -385,11 +380,33 @@ func (*CodexAppServerAdapter) pruneGoalProvenanceLocked(appSession *codexAppServ
 			}
 		}
 	}
-	for fingerprint := range appSession.goalGenerationBindings {
-		if _, protected := protectedFingerprints[fingerprint]; !protected {
-			delete(appSession.goalGenerationBindings, fingerprint)
+	retainedOrder := make([]string, 0, len(appSession.goalGenerationOrder))
+	for _, fingerprint := range appSession.goalGenerationOrder {
+		if _, exists := appSession.goalGenerationBindings[fingerprint]; !exists {
+			continue
 		}
+		if len(appSession.goalGenerationBindings) > maxGoalGenerationBindings {
+			if _, protected := protectedFingerprints[fingerprint]; !protected {
+				delete(appSession.goalGenerationBindings, fingerprint)
+				continue
+			}
+		}
+		retainedOrder = append(retainedOrder, fingerprint)
 	}
+	appSession.goalGenerationOrder = retainedOrder
+}
+
+func rememberGoalGenerationBindingLocked(appSession *codexAppServerSession, fingerprint string, binding codexGoalGenerationBinding) {
+	if appSession == nil || strings.TrimSpace(fingerprint) == "" {
+		return
+	}
+	if appSession.goalGenerationBindings == nil {
+		appSession.goalGenerationBindings = make(map[string]codexGoalGenerationBinding)
+	}
+	if _, exists := appSession.goalGenerationBindings[fingerprint]; !exists {
+		appSession.goalGenerationOrder = append(appSession.goalGenerationOrder, fingerprint)
+	}
+	appSession.goalGenerationBindings[fingerprint] = binding
 }
 
 func (a *CodexAppServerAdapter) failGoalProvenanceSession(session Session, cause error) {
@@ -432,6 +449,7 @@ func (*CodexAppServerAdapter) degradeGoalProvenanceLocked(appSession *codexAppSe
 	// Degraded is the permanent ambiguity tombstone. The detailed caches may
 	// now be released without allowing a later fingerprint to be rebound.
 	appSession.goalGenerationBindings = nil
+	appSession.goalGenerationOrder = nil
 	appSession.goalTurnEvidence = nil
 	return pending
 }
@@ -489,6 +507,7 @@ func (a *CodexAppServerAdapter) bufferPendingGoalTurnNotification(agentSessionID
 			pending.notifications = nil
 			appSession.provenanceDegraded = true
 			appSession.goalGenerationBindings = nil
+			appSession.goalGenerationOrder = nil
 			appSession.goalTurnEvidence = nil
 			session := pending.session
 			activeTurn := appSession.activeTurn
@@ -590,12 +609,10 @@ func (a *CodexAppServerAdapter) tryResolvePendingGoalTurn(agentSessionID, provid
 	if evidence.bound {
 		identity = evidence.identity
 	}
-	current := goalOperationIdentity{
-		operationID: appSession.goalOperationID,
-		revision:    appSession.goalRevision,
-		repairEpoch: appSession.goalRepairEpoch,
-	}
-	shouldAdopt := identity.valid() && identity == current && appSession.activeTurn == nil
+	// A newer set/clear changes future Goal scheduling, not work the provider
+	// already accepted. Provenance is immutable, so a superseded but fully
+	// proven Turn is adopted with its original identity and allowed to settle.
+	shouldAdopt := identity.valid() && appSession.activeTurn == nil
 	session := pending.session
 	a.mu.Unlock()
 
@@ -612,7 +629,7 @@ func (a *CodexAppServerAdapter) tryResolvePendingGoalTurn(agentSessionID, provid
 		delete(appSession.goalTurnEvidence, providerTurnID)
 		a.pruneGoalProvenanceLocked(appSession)
 		a.mu.Unlock()
-		a.quiesceUnprovenGoalTurn(session, providerTurnID, "goal provenance superseded or ambiguous")
+		a.quiesceUnprovenGoalTurn(session, providerTurnID, "goal provenance ambiguous or could not be safely adopted")
 		return true
 	}
 	a.mu.Unlock()

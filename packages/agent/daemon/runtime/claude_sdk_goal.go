@@ -159,8 +159,6 @@ func (a *ClaudeCodeSDKAdapter) ApplyGoal(
 		}
 		events = a.goalMirrorEvents(session, "thread_goal_update")
 	case GoalControlClear:
-		durableIdentity := strings.TrimSpace(input.OperationID) != "" && input.Revision > 0
-		events = a.interruptLiveTurnsForGoalClear(ctx, session, adapterSession, !durableIdentity)
 		if err := a.applyGoalMirrorAndSend(ctx, session, adapterSession, nil, appServerSlashGoal+" clear", input.OperationID, input.Revision, input.RepairEpoch); err != nil {
 			restoreIdentity()
 			return GoalAdapterResult{}, err
@@ -277,7 +275,7 @@ func (a *ClaudeCodeSDKAdapter) ExecGoalControl(
 	displayPrompt string,
 ) ([]activityshared.Event, bool, error) {
 	explicitDisplayPrompt, visibleText := explicitAndVisiblePromptText(content, displayPrompt)
-	command, args := splitSlashCommand(visibleText)
+	command, _ := splitSlashCommand(visibleText)
 	if command != appServerSlashGoal {
 		return nil, false, nil
 	}
@@ -298,9 +296,6 @@ func (a *ClaudeCodeSDKAdapter) ExecGoalControl(
 	if event, ok := adapterSession.mirrorGoalSlashPrompt(session, visibleText); ok {
 		events = append(events, event)
 	}
-	if isGoalClearCommandArgs(args) {
-		events = append(events, a.interruptLiveTurnsForGoalClear(ctx, session, adapterSession, true)...)
-	}
 	if err := a.sendGoalCommandExec(ctx, session, adapterSession, visibleText, "", 0, 0); err != nil {
 		return events, true, err
 	}
@@ -317,78 +312,8 @@ func isGoalClearCommandArgs(args string) bool {
 	}
 }
 
-// interruptLiveTurnsForGoalClear quiesces only the live turn that armed the
-// goal for service-owned durable operations. Legacy compatibility entry points
-// predate durable Goal identity, so they fall back to the exact registered
-// waiter instead of issuing a generic session cancel; this preserves their
-// historical clear/reset behavior without weakening the durable path.
-func (a *ClaudeCodeSDKAdapter) interruptLiveTurnsForGoalClear(
-	ctx context.Context,
-	session Session,
-	adapterSession *claudeSDKAdapterSession,
-	allowLegacyFallback bool,
-) []activityshared.Event {
-	turnIDs := a.liveClaudeSDKGoalTurnIDs(adapterSession)
-	if len(turnIDs) == 0 && allowLegacyFallback {
-		turnIDs = a.liveClaudeSDKTurnIDs(adapterSession)
-	}
-	for _, turnID := range turnIDs {
-		a.cancelClaudeSDKGoalTurn(adapterSession, session, turnID, 0)
-	}
-	_ = ctx
-	return nil
-}
-
-// cancelClaudeSDKGoalTurn asks the sidecar to interrupt one exact active Goal
-// arm. The sidecar validates the provider turn ID before touching the query;
-// terminal lifecycle remains provider-owned and is not fabricated here.
-func (*ClaudeCodeSDKAdapter) cancelClaudeSDKGoalTurn(adapterSession *claudeSDKAdapterSession, session Session, turnID string, revision int64) {
-	turnID = strings.TrimSpace(turnID)
-	if adapterSession == nil || turnID == "" {
-		return
-	}
-	if err := adapterSession.send(claudeSDKSidecarRequest{
-		ID: newID(), Type: "cancel",
-		Payload: map[string]any{
-			"agentSessionId": session.AgentSessionID,
-			"turnId":         turnID,
-			"goalRevision":   revision,
-		},
-	}); err != nil {
-		slog.Warn("agent session claude sdk precise goal interrupt failed",
-			"event", "agent_session.claude_sdk.goal.precise_interrupt_failed",
-			"agent_session_id", session.AgentSessionID,
-			"turn_id", turnID,
-			"goal_revision", revision,
-			"error", err.Error(),
-		)
-	}
-}
-
-// liveClaudeSDKGoalTurnIDs returns the goal-arm turn only after its
-// turn_started event has been observed. If it is still queued behind a user
-// turn, canceling the sidecar would interrupt the wrong owner.
-func (a *ClaudeCodeSDKAdapter) liveClaudeSDKGoalTurnIDs(
-	adapterSession *claudeSDKAdapterSession,
-) []string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	turnID := strings.TrimSpace(adapterSession.goalArmTurnID)
-	if turnID == "" {
-		return nil
-	}
-	if _, settled := adapterSession.settledTurns[turnID]; settled {
-		return nil
-	}
-	if _, open := adapterSession.rootProviderTurns[turnID]; !open {
-		return nil
-	}
-	return []string{turnID}
-}
-
-// liveClaudeSDKTurnIDs is the generic live-waiter view used by an explicit
-// user cancel. Goal clear intentionally uses the narrower provenance-aware
-// helper above.
+// liveClaudeSDKTurnIDs is the diagnostic live-waiter view used by lifecycle
+// tests. Goal control never uses it to cancel an active Turn.
 func (a *ClaudeCodeSDKAdapter) liveClaudeSDKTurnIDs(
 	adapterSession *claudeSDKAdapterSession,
 ) []string {
