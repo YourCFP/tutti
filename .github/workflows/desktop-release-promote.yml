@@ -537,12 +537,6 @@ jobs:
         with:
           node-version-file: .node-version
 
-      - name: Download promoted release assets
-        if: env.FEISHU_WEBHOOK_URL != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release download "${RELEASE_TAG}" --dir release-assets
-
       - name: Download release summary
         if: env.FEISHU_WEBHOOK_URL != ''
         uses: actions/download-artifact@v4
@@ -553,7 +547,6 @@ jobs:
       - name: Send release card
         if: env.FEISHU_WEBHOOK_URL != ''
         env:
-          RELEASE_ASSET_DIRECTORY: release-assets
           RELEASE_SUMMARY_PATH: release-summary/release-summary.json
         run: node apps/desktop/scripts/send-release-feishu-card.mjs
 

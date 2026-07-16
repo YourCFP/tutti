@@ -7,6 +7,8 @@ VARIANT="${1:-unpack}"
 DAEMON_BUNDLE_DIR="${APP_DIR}/build/tuttid"
 CLI_BUNDLE_DIR="${APP_DIR}/build/tutti"
 DESKTOP_BUILD_VERSION="${TUTTI_DESKTOP_BUILD_VERSION:-}"
+MAC_ARCH="${TUTTI_DESKTOP_MAC_ARCH:-all}"
+MAC_ARCH_ARGS=()
 
 release_timing_log() {
   echo "[release-timing] $*"
@@ -207,7 +209,29 @@ run_electron_builder_unpack() {
   CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder --dir --publish never "-c.extraMetadata.version=${DESKTOP_BUILD_VERSION}"
 }
 
+resolve_macos_arch_args() {
+  case "${MAC_ARCH}" in
+    all)
+      MAC_ARCH_ARGS=(--x64 --arm64 --universal)
+      ;;
+    x64)
+      MAC_ARCH_ARGS=(--x64)
+      ;;
+    arm64)
+      MAC_ARCH_ARGS=(--arm64)
+      ;;
+    universal)
+      MAC_ARCH_ARGS=(--universal)
+      ;;
+    *)
+      echo "Unsupported macOS architecture: ${MAC_ARCH}" >&2
+      return 1
+      ;;
+  esac
+}
+
 run_electron_builder_mac_unsigned() {
+  resolve_macos_arch_args
   env \
     -u CSC_LINK \
     -u CSC_KEY_PASSWORD \
@@ -220,11 +244,12 @@ run_electron_builder_mac_unsigned() {
     -u APPLE_TEAM_ID \
     -u APPLE_KEYCHAIN_PROFILE \
     CSC_IDENTITY_AUTO_DISCOVERY=false \
-    pnpm exec electron-builder --mac --x64 --arm64 --universal --publish never -c.mac.notarize=false "-c.extraMetadata.version=${DESKTOP_BUILD_VERSION}"
+    pnpm exec electron-builder --mac "${MAC_ARCH_ARGS[@]}" --publish never -c.mac.notarize=false "-c.extraMetadata.version=${DESKTOP_BUILD_VERSION}"
 }
 
 run_electron_builder_mac_signed() {
-  pnpm exec electron-builder --mac --x64 --arm64 --universal --publish never -c.mac.notarize=true "-c.extraMetadata.version=${DESKTOP_BUILD_VERSION}"
+  resolve_macos_arch_args
+  pnpm exec electron-builder --mac "${MAC_ARCH_ARGS[@]}" --publish never -c.mac.notarize=true "-c.extraMetadata.version=${DESKTOP_BUILD_VERSION}"
 }
 
 run_electron_builder_win() {

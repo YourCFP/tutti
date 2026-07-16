@@ -1,5 +1,10 @@
 name: Desktop Release
 
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+      && format('Desktop Release · {0} · {1} · {2}', inputs.release_mode, inputs.publication_mode, github.ref_name)
+      || format('Desktop Release · {0} · {1}', github.event_name, github.ref_name) }}
+
 on:
   push:
     tags:
@@ -66,6 +71,24 @@ jobs:
       notify_feishu: ${{ steps.notify.outputs.notify_feishu }}
 
     steps:
+      - name: Summarize workflow dispatch inputs
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        env:
+          WORKFLOW_INPUTS: ${{ toJSON(inputs) }}
+        run: |
+          {
+            echo "## Desktop release request"
+            echo
+            printf -- '- Triggered by: %s\n' "${GITHUB_ACTOR}"
+            printf -- '- Ref: %s\n' "${GITHUB_REF_NAME}"
+            printf -- '- Commit: %s\n' "${GITHUB_SHA}"
+            echo
+            echo "### Workflow dispatch inputs"
+            echo
+            printf '%s\n' "${WORKFLOW_INPUTS}" | sed 's/^/    /'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Resolve target commit
         id: target
         shell: bash
@@ -258,10 +281,15 @@ jobs:
           echo "publication_mode=${publication_mode}" >> "$GITHUB_OUTPUT"
 
   build-macos:
-    name: Build macOS
+    name: Build macOS (${{ matrix.arch }})
     needs: resolve
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64, universal]
     env:
+      TUTTI_DESKTOP_MAC_ARCH: ${{ matrix.arch }}
       TUTTI_DESKTOP_RELEASE_TAG: ${{ needs.resolve.outputs.release_tag }}
       TUTTI_DESKTOP_RELEASE_TARGET: ${{ needs.resolve.outputs.release_target }}
       TUTTI_DESKTOP_DRY_RUN: ${{ needs.resolve.outputs.release_dry_run }}
@@ -397,13 +425,12 @@ jobs:
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: tutti-desktop-release-assets-macos
+          name: tutti-desktop-release-assets-macos-${{ matrix.arch }}
           compression-level: 0
           path: |
             apps/desktop/dist/*.blockmap
             apps/desktop/dist/*.dmg
             apps/desktop/dist/*.zip
-            apps/desktop/dist/*.yml
           if-no-files-found: error
           retention-days: 7
 
@@ -420,8 +447,10 @@ jobs:
       TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL: ${{ vars.TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL }}
       TUTTI_DESKTOP_RELEASE_ASSETS_S3_BUCKET: ${{ vars.TUTTI_DESKTOP_RELEASE_ASSETS_S3_BUCKET }}
       TUTTI_DESKTOP_RELEASE_ASSETS_S3_PREFIX: ${{ vars.TUTTI_DESKTOP_RELEASE_ASSETS_S3_PREFIX }}
+      TUTTI_DESKTOP_RELEASE_CHANNEL: ${{ needs.resolve.outputs.release_channel }}
       TUTTI_DESKTOP_RELEASE_TAG: ${{ needs.resolve.outputs.release_tag }}
       TUTTI_DESKTOP_RELEASE_TARGET: ${{ needs.resolve.outputs.release_target }}
+      TUTTI_DESKTOP_RELEASE_VERSION: ${{ needs.resolve.outputs.release_version }}
 
     steps:
       - name: Checkout
@@ -438,9 +467,18 @@ jobs:
       - name: Download built artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: tutti-desktop-release-assets-macos
-          merge-multiple: true
-          path: release-assets
+          pattern: tutti-desktop-release-assets-macos-*
+          merge-multiple: false
+          path: release-assets-input
+
+      - name: Merge macOS release artifacts and updater metadata
+        env:
+          RELEASE_CHANNEL: ${{ env.TUTTI_DESKTOP_RELEASE_CHANNEL }}
+          RELEASE_VERSION: ${{ env.TUTTI_DESKTOP_RELEASE_VERSION }}
+        run: |
+          node apps/desktop/scripts/merge-macos-release-artifacts.mjs \
+            release-assets-input \
+            release-assets
 
       - name: Generate checksums
         run: node apps/desktop/scripts/generate-checksums.mjs release-assets
@@ -580,14 +618,6 @@ jobs:
         with:
           node-version-file: .node-version
 
-      - name: Download built artifacts
-        if: env.FEISHU_WEBHOOK_URL != ''
-        uses: actions/download-artifact@v4
-        with:
-          pattern: tutti-desktop-release-assets-macos
-          merge-multiple: true
-          path: release-assets
-
       - name: Download release summary
         if: env.FEISHU_WEBHOOK_URL != ''
         uses: actions/download-artifact@v4
@@ -598,7 +628,6 @@ jobs:
       - name: Send draft release card
         if: env.FEISHU_WEBHOOK_URL != ''
         env:
-          RELEASE_ASSET_DIRECTORY: release-assets
           RELEASE_SUMMARY_PATH: release-summary/release-summary.json
         run: node apps/desktop/scripts/send-release-feishu-card.mjs
 
