@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,7 +42,7 @@ const files = execFileSync(
   .map((line) => line.trim())
   .filter(Boolean)
   .filter((file) => !ignoredPrefixes.some((prefix) => file.startsWith(prefix)))
-  .filter((file) => isFile(join(workspaceRoot, file)));
+  .filter((file) => existsSync(join(workspaceRoot, file)));
 
 const violations = [];
 
@@ -68,12 +68,4 @@ if (violations.length > 0) {
   }
   console.error("Move references to Tutti naming before merging.");
   process.exitCode = 1;
-}
-
-function isFile(path) {
-  try {
-    return statSync(path).isFile();
-  } catch {
-    return false;
-  }
 }

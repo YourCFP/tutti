@@ -10,36 +10,6 @@ import {
   runLanes,
   selectExistingLintFiles
 } from "./run-check-changed.mjs";
-import { resolvePinnedPnpmCommand } from "./pinned-pnpm-command.mjs";
-
-test("resolvePinnedPnpmCommand reuses an absolute PATH executable at the repository pin", () => {
-  const command = resolvePinnedPnpmCommand({
-    packageManager: "pnpm@10.11.0",
-    platform: "darwin",
-    resolveExecutable: () => "/tools/pnpm",
-    readVersion: () => "10.11.0"
-  });
-
-  assert.deepEqual(command, ["/tools/pnpm"]);
-});
-
-test("resolvePinnedPnpmCommand rejects a mismatched PATH executable", () => {
-  const command = resolvePinnedPnpmCommand({
-    packageManager: "pnpm@10.11.0",
-    platform: "darwin",
-    resolveExecutable: () => "/tools/pnpm",
-    readVersion: () => "10.32.1"
-  });
-
-  assert.deepEqual(command, ["corepack", "pnpm@10.11.0"]);
-});
-
-test("resolvePinnedPnpmCommand rejects an unpinned package manager", () => {
-  assert.throws(
-    () => resolvePinnedPnpmCommand({ packageManager: "pnpm" }),
-    /unsupported packageManager value/u
-  );
-});
 
 test("renderer boundary lane covers renderer and checker changes", () => {
   for (const file of [

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -16,33 +16,6 @@ test("allows legacy OAuth app id compatibility constants", () => {
   });
 
   assert.equal(result.status, 0, result.stderr);
-});
-
-test("ignores untracked symlinks that resolve to directories", async () => {
-  const fixtureTarget = join(
-    workspaceRoot,
-    `.tmp-tutti-name-directory-target-${Date.now()}`
-  );
-  const fixtureLink = `${fixtureTarget}-link`;
-
-  try {
-    await mkdir(fixtureTarget, { recursive: true });
-    await symlink(
-      fixtureTarget,
-      fixtureLink,
-      process.platform === "win32" ? "junction" : "dir"
-    );
-
-    const result = spawnSync("node", [scriptPath], {
-      cwd: workspaceRoot,
-      encoding: "utf8"
-    });
-
-    assert.equal(result.status, 0, result.stderr);
-  } finally {
-    await rm(fixtureLink, { force: true });
-    await rm(fixtureTarget, { recursive: true, force: true });
-  }
 });
 
 test("rejects legacy product tokens in file paths", async () => {

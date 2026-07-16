@@ -12,11 +12,10 @@ import {
   formatFailureExcerpt,
   formatSlowestLanes
 } from "./run-validation-lanes.mjs";
-import { resolvePinnedPnpmCommand } from "./pinned-pnpm-command.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = join(scriptDirectory, "..", "..");
-const pnpmCommand = resolvePinnedPnpmCommand({ workspaceRoot });
+const pnpmCommand = resolvePnpmCommand();
 const verbose = process.argv.includes("--verbose");
 const failureLinesPerTask = readPositiveIntegerOption("--tail-lines", 120);
 const tmpRoot = join(workspaceRoot, ".tmp", "check-full-runs");
@@ -223,6 +222,25 @@ function printTaskFailure(failure) {
   );
   console.error(`--- ${label} (full log: ${failure.logPathRelative}) ---`);
   console.error(excerpt.text);
+}
+
+function resolvePnpmCommand() {
+  const fallback = [process.platform === "win32" ? "pnpm.cmd" : "pnpm"];
+  try {
+    const packageJson = JSON.parse(
+      readFileSync(join(workspaceRoot, "package.json"), "utf8")
+    );
+    const match = /^pnpm@(.+)$/u.exec(String(packageJson.packageManager ?? ""));
+    if (!match) {
+      return fallback;
+    }
+    return [
+      process.platform === "win32" ? "corepack.cmd" : "corepack",
+      `pnpm@${match[1]}`
+    ];
+  } catch {
+    return fallback;
+  }
 }
 
 function readPositiveIntegerOption(name, defaultValue) {

@@ -6,7 +6,6 @@ import {
   readPositiveIntegerOption,
   runValidationLanes
 } from "./run-validation-lanes.mjs";
-import { resolvePinnedPnpmCommand } from "./pinned-pnpm-command.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = join(scriptDirectory, "..", "..");
@@ -45,7 +44,7 @@ if (isMainModule()) {
     process.exit(1);
   }
 
-  const pnpmCommand = resolvePinnedPnpmCommand({ workspaceRoot });
+  const pnpmCommand = resolvePnpmCommand();
   const lanes = plan.packages.map((packageInfo) => ({
     command: [...pnpmCommand, "--filter", packageInfo.name, "test"],
     key: packageInfo.name,
@@ -128,6 +127,25 @@ function gitLines(args) {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function resolvePnpmCommand() {
+  const fallback = [process.platform === "win32" ? "pnpm.cmd" : "pnpm"];
+  try {
+    const packageJson = JSON.parse(
+      readFileSync(join(workspaceRoot, "package.json"), "utf8")
+    );
+    const match = /^pnpm@(.+)$/u.exec(String(packageJson.packageManager ?? ""));
+    if (!match) {
+      return fallback;
+    }
+    return [
+      process.platform === "win32" ? "corepack.cmd" : "corepack",
+      `pnpm@${match[1]}`
+    ];
+  } catch {
+    return fallback;
+  }
 }
 
 function isMainModule() {

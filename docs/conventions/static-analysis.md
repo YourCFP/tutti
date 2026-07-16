@@ -33,14 +33,9 @@ Repository entrypoints:
 `pnpm check:full` remains the full local and CI validation command and includes linting and typechecking.
 
 Validation runners that spawn nested pnpm commands should read the root
-`packageManager` field. They may reuse the absolute `pnpm` executable resolved
-from the inherited `PATH` only after verifying that its reported version equals
-the repository pin; otherwise they must invoke the pinned version through
-Corepack. Do not pass an unverified bare `pnpm` into runner-spawned lanes,
-because login shells and local package-manager shims can resolve a different
-version. Reusing an already verified executable also keeps offline validation
-from asking Corepack to download a package-manager version that is already
-installed.
+`packageManager` field and invoke that pinned version through Corepack. Do not
+let runner-spawned lanes resolve a bare `pnpm` from `PATH`, because local
+package-manager shims can differ from the repository pin.
 
 Tests and checks that create temporary Git repositories must also isolate
 repository-local Git environment variables before invoking Git. In particular,
