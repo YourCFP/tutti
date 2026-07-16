@@ -82,9 +82,11 @@ Approval gates, plan exits, parent/child event attribution, background agents, a
   file-change approvals. AgentGUI should render structured file changes as
   changed-file paths. When absolute changed-file paths share a directory, the
   file list uses paths relative to that directory and renders the common
-  directory once; a duplicate single-file `path` is suppressed. A
-  lone `grantRoot` still renders as a path and a lone `reason` renders as the
-  explanation.
+  directory once; a duplicate single-file `path` is suppressed. Approval
+  reasons render directly below the approval title without a separate Summary
+  card. For file-change approvals, the correlated directory or path also
+  renders below the title without a separate Path card. A lone `grantRoot`
+  outside a file-change approval still renders as a labeled path detail.
 - References:
   [acp_turn_normalizer.go](../../../packages/agent/daemon/runtime/acp_turn_normalizer.go)
   [interactive_projection.go](../../../packages/agent/daemon/runtime/interactive_projection.go)
