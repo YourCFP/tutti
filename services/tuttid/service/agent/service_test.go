@@ -2916,7 +2916,9 @@ func TestServiceGetsComposerOptionsFromOpenCodeModelCatalogWithReasoning(t *test
 	runtime := newFakeRuntime()
 	service := newIsolatedAgentService(runtime)
 	imageSupported := true
+	catalogInputs := []AgentModelCatalogInput{}
 	service.ModelCatalog = fakeModelCatalog{
+		inputs: &catalogInputs,
 		result: AgentModelCatalogResult{
 			Provider: "opencode",
 			Source:   "opencode-cli",
@@ -2938,12 +2940,16 @@ func TestServiceGetsComposerOptionsFromOpenCodeModelCatalogWithReasoning(t *test
 
 	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
 		Provider: "opencode",
+		Cwd:      "/workspace",
 		Settings: ComposerSettings{
 			ReasoningEffort: "none",
 		},
 	})
 	if err != nil {
 		t.Fatalf("GetComposerOptions returned error: %v", err)
+	}
+	if len(catalogInputs) != 1 || catalogInputs[0].Provider != "opencode" || catalogInputs[0].Cwd != "/workspace" {
+		t.Fatalf("model catalog inputs = %#v, want one workspace-scoped OpenCode lookup", catalogInputs)
 	}
 	if options.EffectiveSettings.Model != "openai/gpt-5.3-codex-spark" {
 		t.Fatalf("effectiveSettings.model = %q, want openai/gpt-5.3-codex-spark", options.EffectiveSettings.Model)
@@ -5707,11 +5713,15 @@ func (f fakeSkillBundleRenderer) RenderSkillBundle(_ context.Context, input runt
 }
 
 type fakeModelCatalog struct {
+	inputs *([]AgentModelCatalogInput)
 	result AgentModelCatalogResult
 	err    error
 }
 
-func (f fakeModelCatalog) ListModels(context.Context, string) (AgentModelCatalogResult, error) {
+func (f fakeModelCatalog) ListModels(_ context.Context, input AgentModelCatalogInput) (AgentModelCatalogResult, error) {
+	if f.inputs != nil {
+		*f.inputs = append(*f.inputs, input)
+	}
 	return f.result, f.err
 }
 

@@ -112,7 +112,7 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	s.reportAgentServiceNodeSuccess(ctx, input.AgentSessionID, "session_create", "provider_runtime_checked", provider, nodeStartedAt)
 	logAgentSubmitTrace("service.create.provider_ready", workspaceID, input.AgentSessionID, input.Metadata, nil)
 	requestedModel := value(input.Model)
-	input.Model = s.resolveCreateSessionModel(ctx, provider, input.ProviderTargetRef, input.Model)
+	input.Model = s.resolveCreateSessionModel(ctx, provider, input.ProviderTargetRef, value(input.Cwd), input.Model)
 	nodeStartedAt = time.Now()
 	if providerTargetRefKind(input.ProviderTargetRef) != "agent_extension" {
 		if err := s.validateComposerModelForCreate(ctx, provider, workspaceID, value(input.Cwd), requestedModel); err != nil {
@@ -326,10 +326,10 @@ func (s *Service) resolveCreateSessionLaunch(ctx context.Context, input CreateSe
 	}, nil
 }
 
-func (s *Service) resolveCreateSessionModel(ctx context.Context, provider string, providerTargetRef map[string]any, model *string) *string {
+func (s *Service) resolveCreateSessionModel(ctx context.Context, provider string, providerTargetRef map[string]any, cwd string, model *string) *string {
 	resolved := clampComposerModelForLaunch(provider, providerTargetRef, value(model))
 	if resolved == "" {
-		resolved = composerDefaultModel(ctx, provider, s.ModelCatalog)
+		resolved = composerDefaultModel(ctx, provider, cwd, s.ModelCatalog)
 	}
 	if resolved == "" {
 		return nil
