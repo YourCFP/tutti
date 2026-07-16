@@ -162,10 +162,6 @@ test("desktop release workflow passes tsh-aligned Feishu card context", async ()
 
   assert.match(
     workflow,
-    /name:\s+Download built artifacts[\s\S]*pattern:\s+tutti-desktop-release-assets-macos/
-  );
-  assert.match(
-    workflow,
     /FEISHU_WEBHOOK_URL:\s+\${{\s*secrets\.FEISHU_RELEASE_WEBHOOK_URL\s*}}/
   );
   assert.match(workflow, /RELEASE_ACTOR:\s+\${{\s*github\.actor\s*}}/);
@@ -189,7 +185,7 @@ test("desktop release workflow passes tsh-aligned Feishu card context", async ()
     workflow,
     /RELEASE_URL:\s+\${{\s*needs\.stage\.outputs\.release_url\s*}}/
   );
-  assert.match(workflow, /RELEASE_ASSET_DIRECTORY:\s+release-assets/);
+  assert.doesNotMatch(workflow, /RELEASE_ASSET_DIRECTORY:\s+release-assets/);
 });
 
 test("desktop release workflow defaults Feishu notifications on outside manual dispatch", async () => {
@@ -205,7 +201,7 @@ test("desktop release workflow defaults Feishu notifications on outside manual d
   );
 });
 
-test("desktop release workflow downloads Feishu artifacts after checkout", async () => {
+test("desktop release workflow does not redownload release assets for Feishu", async () => {
   const workflow = await readFile(workflowPath, "utf8");
   const notifyJobMatch = workflow.match(
     /notify-draft-feishu:[\s\S]*?(?=\n\s{2}[a-z][a-z0-9_-]+:\n|$)/
@@ -216,19 +212,33 @@ test("desktop release workflow downloads Feishu artifacts after checkout", async
   const notifyJob = notifyJobMatch[0];
   const checkoutIndex = notifyJob.indexOf("name: Checkout notification script");
   const setupNodeIndex = notifyJob.indexOf("name: Setup Node.js");
-  const downloadIndex = notifyJob.indexOf("name: Download built artifacts");
+  const summaryIndex = notifyJob.indexOf("name: Download release summary");
   const sendIndex = notifyJob.indexOf("name: Send draft release card");
 
   assert.notEqual(checkoutIndex, -1, "notify job should checkout the script");
   assert.notEqual(setupNodeIndex, -1, "notify job should setup Node.js");
-  assert.notEqual(downloadIndex, -1, "notify job should download artifacts");
+  assert.notEqual(summaryIndex, -1, "notify job should download the summary");
   assert.notEqual(sendIndex, -1, "notify job should send the release card");
-  assert.ok(
-    checkoutIndex < downloadIndex,
-    "checkout must run before artifact download because actions/checkout cleans the workspace"
+  assert.equal(notifyJob.indexOf("name: Download built artifacts"), -1);
+  assert.equal(notifyJob.indexOf("RELEASE_ASSET_DIRECTORY"), -1);
+  assert.ok(checkoutIndex < summaryIndex);
+  assert.ok(setupNodeIndex < summaryIndex);
+  assert.ok(summaryIndex < sendIndex);
+});
+
+test("desktop promotion workflow does not redownload release assets for Feishu", async () => {
+  const promoteWorkflow = await readFile(promoteWorkflowPath, "utf8");
+  const notifyJobMatch = promoteWorkflow.match(
+    /notify-feishu:[\s\S]*?(?=\n\s{2}[a-z][a-z0-9_-]+:\n|$)/
   );
-  assert.ok(setupNodeIndex < downloadIndex);
-  assert.ok(downloadIndex < sendIndex);
+
+  assert.ok(notifyJobMatch, "promotion notify job should exist");
+  assert.doesNotMatch(
+    notifyJobMatch[0],
+    /Download promoted release assets|RELEASE_ASSET_DIRECTORY/
+  );
+  assert.match(notifyJobMatch[0], /name:\s+Download release summary/);
+  assert.match(notifyJobMatch[0], /name:\s+Send release card/);
 });
 
 test("desktop release workflow can mirror release assets to S3 and upsert direct download links", async () => {
@@ -547,19 +557,12 @@ test("desktop release workflow publishes only macOS release assets for now", asy
   assert.doesNotMatch(stageJobMatch[0], /build-windows|build-linux/);
   assert.match(
     stageJobMatch[0],
-    /pattern:\s+tutti-desktop-release-assets-macos/
+    /pattern:\s+tutti-desktop-release-assets-macos-\*/
   );
-  assert.doesNotMatch(
-    stageJobMatch[0],
-    /pattern:\s+tutti-desktop-release-assets-\*/
-  );
-  assert.match(
-    notifyJobMatch[0],
-    /pattern:\s+tutti-desktop-release-assets-macos/
-  );
+  assert.match(stageJobMatch[0], /merge-multiple:\s+false/);
   assert.doesNotMatch(
     notifyJobMatch[0],
-    /pattern:\s+tutti-desktop-release-assets-\*/
+    /pattern:\s+tutti-desktop-release-assets-macos/
   );
 });
 
@@ -601,7 +604,15 @@ test("desktop macOS packaging builds architecture-specific and universal artifac
     buildScript,
     /lipo\s+"\$\{output_path\}"\s+-verify_arch\s+arm64\s+x86_64\s+\|\|\s+\{/
   );
-  assert.match(buildScript, /electron-builder --mac --x64 --arm64 --universal/);
+  assert.match(buildScript, /MAC_ARCH="\$\{TUTTI_DESKTOP_MAC_ARCH:-all\}"/);
+  assert.match(buildScript, /MAC_ARCH_ARGS=\(--x64 --arm64 --universal\)/);
+  assert.match(buildScript, /MAC_ARCH_ARGS=\(--x64\)/);
+  assert.match(buildScript, /MAC_ARCH_ARGS=\(--arm64\)/);
+  assert.match(buildScript, /MAC_ARCH_ARGS=\(--universal\)/);
+  assert.match(
+    buildScript,
+    /electron-builder --mac "\$\{MAC_ARCH_ARGS\[@\]\}"/
+  );
   // The native claude binaries are provisioned at runtime by tuttid
   // (services/tuttid/service/agentstatus/claude_binary.go); the vendored
   // sidecar bundle must stay JS-only so every architecture ships identical
@@ -646,6 +657,15 @@ test("desktop package verifies channel-specific prerelease updater metadata", as
   assert.match(
     workflow,
     /updater_metadata="apps\/desktop\/dist\/\$\{TUTTI_DESKTOP_RELEASE_CHANNEL\}-mac\.yml"/
+  );
+  assert.match(workflow, /matrix:\s*\n\s*arch:\s*\[x64, arm64, universal\]/);
+  assert.match(
+    workflow,
+    /name:\s+Merge macOS release artifacts and updater metadata/
+  );
+  assert.match(
+    workflow,
+    /node apps\/desktop\/scripts\/merge-macos-release-artifacts\.mjs/
   );
   assert.doesNotMatch(workflow, /cp apps\/desktop\/dist\/latest-mac\.yml/);
 });

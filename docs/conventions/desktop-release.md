@@ -125,6 +125,14 @@ Expected release artifacts include:
 - update metadata such as `.yml` and `.blockmap`
 - `SHA256SUMS.txt`
 
+The release workflow builds macOS x64, arm64, and universal packages as a
+three-entry GitHub Actions matrix. Each architecture uploads an isolated
+intermediate artifact. The stage job flattens those artifacts and rebuilds one
+channel updater manifest (`latest-mac.yml`, `rc-mac.yml`, or `beta-mac.yml`)
+from the three signed ZIP files, including fresh SHA-512 digests and sizes.
+This prevents same-named per-architecture updater manifests from overwriting
+one another when matrix artifacts are downloaded.
+
 Release notes and Feishu notifications should point the primary macOS download at the universal `.dmg`. The x64 and arm64 artifacts remain attached to the GitHub Release for users or deployment tools that want an architecture-specific installer.
 
 ## Auto Update
@@ -168,6 +176,12 @@ macOS auto-update metadata must keep x64, arm64, and universal zip entries in `l
 
 For automatic updates, electron-updater should download the same-architecture zip first: Intel Macs use `mac-x64.zip`, Apple Silicon Macs use `mac-arm64.zip`, and `mac-universal.zip` remains a fallback and the primary manual download. Do not make universal the only auto-update zip while architecture-specific packages exist.
 
+The pinned `electron-updater` macOS selection behavior also accepts a
+universal-only updater manifest on both x64 and arm64. Keep this fallback under
+test so a future updater dependency change cannot silently break universal
+compatibility, even though normal releases continue to prefer matching
+architecture-specific ZIP files.
+
 Policy meanings:
 
 - `off`: update checks are disabled
@@ -196,6 +210,10 @@ For `draft_only`, the card links to the authorized GitHub Draft Release and uses
 The card links to available macOS, Windows, Linux, GitHub Release, and workflow run URLs.
 
 When `TUTTI_DESKTOP_RELEASE_ASSETS_BASE_URL` is configured, the download buttons prefer the mirrored release asset base URL instead of GitHub asset URLs. If the explicit base URL is absent but S3 mirroring is configured, the workflow falls back to the S3 accelerate base URL.
+
+Notification jobs must resolve release asset names through the authenticated
+GitHub Release API. They must not download the full promoted or draft artifact
+set again merely to construct mirrored download URLs.
 
 After a successful mirrored upload, the workflow also upserts a managed `Direct Downloads` section into the GitHub Release body so the release description matches the Feishu direct links.
 
