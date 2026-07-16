@@ -11,6 +11,16 @@ export function projectAgentProcessingRow(
     return null;
   }
   const turnId = detail.turns.at(-1)?.id ?? null;
+  const canonicalTurn = detail.sessionTurns?.find(
+    (turn) => turn.turnId === turnId
+  );
+  if (
+    canonicalTurn &&
+    canonicalTurn.phase !== "settled" &&
+    Number.isFinite(canonicalTurn.startedAtUnixMs)
+  ) {
+    return null;
+  }
   if (turnId && hasSpecificProgressRow(rows, turnId)) {
     return null;
   }

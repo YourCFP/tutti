@@ -1347,6 +1347,28 @@ describe("projectAgentConversationVM", () => {
     );
   });
 
+  it("uses canonical live turn timing instead of generic processing", () => {
+    const conversation = projectAgentConversationVM(
+      detailViewModel({
+        sessionTurns: [
+          {
+            agentSessionId: "session-1",
+            origin: "user_prompt",
+            phase: "running",
+            startedAtUnixMs: 5_000,
+            turnId: "turn-1",
+            updatedAtUnixMs: 6_000
+          }
+        ],
+        showProcessingIndicator: true
+      })
+    );
+
+    expect(conversation.rows.some((row) => row.kind === "processing")).toBe(
+      false
+    );
+  });
+
   it("uses active semantic progress instead of appending generic processing", () => {
     const baseTurn = detailViewModel().turns[0]!;
     const compactNotice = compactNoticeMessage("turn-1", "running");

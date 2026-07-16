@@ -31,6 +31,12 @@ describe("agentTurnWorkSectionModel", () => {
         66_999
       )
     ).toBeNull();
+    expect(
+      resolveAgentTurnTiming(
+        canonicalTurn({ phase: "settled", settledAtUnixMs: 4_999 }),
+        66_999
+      )
+    ).toBeNull();
   });
 
   it("formats seconds and minute boundaries without a zero-second suffix", () => {
