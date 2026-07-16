@@ -19,6 +19,16 @@ describe("agentTurnWorkSectionModel", () => {
     ).toBeNull();
 
     expect(
+      resolveAgentTurnTiming(canonicalTurn({ phase: "waiting" }), true)
+    ).toBeNull();
+    expect(
+      resolveAgentTurnTiming(canonicalTurn({ phase: "submitted" }), true)
+    ).toBeNull();
+    expect(
+      resolveAgentTurnTiming(canonicalTurn({ phase: "settling" }), true)
+    ).toBeNull();
+
+    expect(
       resolveAgentTurnTiming(
         canonicalTurn({
           phase: "settled",
