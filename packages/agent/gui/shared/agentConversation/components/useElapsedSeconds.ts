@@ -6,7 +6,7 @@ export function useElapsedSeconds(startUnixMs: number | null): number | null {
     if (startUnixMs === null) {
       return;
     }
-    // timing: drive second-level elapsed UI only while canonical live work is visible.
+    // timing: drive second-level elapsed UI only while the canonical active turn is visible.
     const timer = setInterval(() => setNowUnixMs(Date.now()), 1_000);
     return () => clearInterval(timer);
   }, [startUnixMs]);

@@ -217,11 +217,14 @@ Interaction projections.
 Turn elapsed-time and work-disclosure presentation reads canonical
 `sessionTurns`; transcript message timestamps are not a lifecycle fallback.
 Only the Turn identified by the session's canonical `activeTurnId` may tick
-locally from `startedAtUnixMs`, and only while its exact phase is `running`.
-`submitted`, `waiting`, and `settling` Turns must not display the live
-"processed" label or create a local timer. That second-level state stays inside
-the duration label so transcript rows do not re-render on every tick. A settled
-Turn freezes its canonical wall-clock total at `settledAtUnixMs`. A successfully
+locally from `startedAtUnixMs` throughout every non-settled phase. In particular,
+an active Turn awaiting an approval, question, or plan response remains the same
+Turn and continues displaying its wall-clock "processed" duration while
+`waiting`; the wait is included when timing resumes and in the final total.
+Once the Turn settles, `activeTurnId` clears and its duration freezes at
+`settledAtUnixMs`, so time spent waiting for the user's next ordinary prompt is
+not added to the completed Turn. That second-level state stays inside the
+duration label so transcript rows do not re-render on every tick. A successfully
 completed Turn may start with tool calls, thinking, progress, and file summaries
 collapsed when the projection has a distinct final assistant text target
 independent of copy availability. The disclosure model partitions that Turn in
