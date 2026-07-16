@@ -754,12 +754,13 @@ func (p *ActivityProjection) ListSessionMessages(
 }
 
 func (p *ActivityProjection) ListWorkspaceGeneratedFiles(
+	ctx context.Context,
 	input agentactivitybiz.ListWorkspaceGeneratedFilesInput,
 ) (GeneratedFileList, bool) {
 	if p == nil || p.repo == nil {
 		return GeneratedFileList{}, false
 	}
-	list, ok, err := p.repo.ListWorkspaceGeneratedFiles(context.Background(), input)
+	list, ok, err := p.repo.ListWorkspaceGeneratedFiles(ctx, input)
 	if err != nil {
 		slog.Warn("list workspace agent generated files failed",
 			"event", "workspace.agent_generated_files.list_failed",

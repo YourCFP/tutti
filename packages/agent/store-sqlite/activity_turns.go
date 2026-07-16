@@ -118,6 +118,9 @@ ON CONFLICT(workspace_id, agent_session_id, turn_id) DO UPDATE SET
 		nullString(merged.SourceGoalOperationID), nullInt64(merged.SourceGoalRevision), nullInt64WhenAbsent(merged.SourceGoalRepairEpoch, merged.SourceGoalOperationID != "")); err != nil {
 		return Turn{}, false, fmt.Errorf("upsert workspace agent turn: %w", err)
 	}
+	if err := replaceTurnFileProjectionTx(ctx, tx, merged); err != nil {
+		return Turn{}, false, err
+	}
 
 	if merged.Phase == TurnPhaseSettled {
 		if _, err := tx.ExecContext(ctx, `

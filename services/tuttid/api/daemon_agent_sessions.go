@@ -258,11 +258,9 @@ func (api DaemonAPI) ListWorkspaceAgentGeneratedFiles(ctx context.Context, reque
 		}, nil
 	}
 	input := agentservice.ListGeneratedFilesInput{}
+	input.SectionKey = strings.TrimSpace(request.Params.SectionKey)
 	if request.Params.Query != nil {
 		input.Query = strings.TrimSpace(*request.Params.Query)
-	}
-	if request.Params.SessionCwd != nil {
-		input.SessionCwd = strings.TrimSpace(*request.Params.SessionCwd)
 	}
 	if request.Params.AgentTargetIds != nil {
 		if len(*request.Params.AgentTargetIds) > agentservice.MaxGeneratedFileAgentTargetFilters {

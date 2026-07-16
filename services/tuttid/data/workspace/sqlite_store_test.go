@@ -1168,7 +1168,7 @@ func TestSQLiteStorePreservesAgentTargetIDAcrossStateReports(t *testing.T) {
 	}
 }
 
-func TestSQLiteStoreListsWorkspaceGeneratedFiles(t *testing.T) {
+func TestSQLiteStoreGeneratedFilesDoNotFallbackToMessages(t *testing.T) {
 	t.Parallel()
 
 	store := openTestSQLiteStore(t)
@@ -1275,7 +1275,7 @@ func TestSQLiteStoreListsWorkspaceGeneratedFiles(t *testing.T) {
 
 	result, ok, err := store.ListWorkspaceGeneratedFiles(ctx, agentactivitybiz.ListWorkspaceGeneratedFilesInput{
 		WorkspaceID: "ws-agent-generated-files",
-		SessionCwd:  "/workspace",
+		SectionKey:  "conversations",
 		Query:       "report",
 		Limit:       10,
 	})
@@ -1285,16 +1285,13 @@ func TestSQLiteStoreListsWorkspaceGeneratedFiles(t *testing.T) {
 	if !ok {
 		t.Fatal("ListWorkspaceGeneratedFiles() ok = false, want true")
 	}
-	if len(result.Files) != 1 {
-		t.Fatalf("len(files) = %d, want 1: %#v", len(result.Files), result.Files)
-	}
-	if result.Files[0].Path != "/workspace/report.md" || result.Files[0].Label != "report.md" {
-		t.Fatalf("file = %#v, want /workspace/report.md report.md", result.Files[0])
+	if len(result.Files) != 0 {
+		t.Fatalf("files = %#v, want no legacy message fallback", result.Files)
 	}
 
 	arrayResult, ok, err := store.ListWorkspaceGeneratedFiles(ctx, agentactivitybiz.ListWorkspaceGeneratedFilesInput{
 		WorkspaceID: "ws-agent-generated-files",
-		SessionCwd:  "/workspace",
+		SectionKey:  "conversations",
 		Query:       "slides",
 		Limit:       10,
 	})
@@ -1304,16 +1301,12 @@ func TestSQLiteStoreListsWorkspaceGeneratedFiles(t *testing.T) {
 	if !ok {
 		t.Fatal("ListWorkspaceGeneratedFiles(array changes) ok = false, want true")
 	}
-	if len(arrayResult.Files) != 2 {
-		t.Fatalf("len(array files) = %d, want 2: %#v", len(arrayResult.Files), arrayResult.Files)
-	}
-	if arrayResult.Files[0].Path != "/workspace/slides/02-why-now.html" ||
-		arrayResult.Files[1].Path != "/workspace/slides/01-cover.html" {
-		t.Fatalf("array files = %#v, want Codex Edit changes array paths", arrayResult.Files)
+	if len(arrayResult.Files) != 0 {
+		t.Fatalf("array files = %#v, want no legacy message fallback", arrayResult.Files)
 	}
 }
 
-func TestSQLiteStoreListWorkspaceGeneratedFilesIgnoresFailedAndReadTools(t *testing.T) {
+func TestSQLiteStoreGeneratedFilesIgnoreAllMessageToolPayloads(t *testing.T) {
 	t.Parallel()
 
 	store := openTestSQLiteStore(t)
@@ -1422,7 +1415,7 @@ func TestSQLiteStoreListWorkspaceGeneratedFilesIgnoresFailedAndReadTools(t *test
 
 	result, ok, err := store.ListWorkspaceGeneratedFiles(ctx, agentactivitybiz.ListWorkspaceGeneratedFilesInput{
 		WorkspaceID: "ws-agent-generated-files-failed",
-		SessionCwd:  "/workspace",
+		SectionKey:  "conversations",
 		Limit:       10,
 	})
 	if err != nil {
@@ -1431,11 +1424,8 @@ func TestSQLiteStoreListWorkspaceGeneratedFilesIgnoresFailedAndReadTools(t *test
 	if !ok {
 		t.Fatal("ListWorkspaceGeneratedFiles() ok = false, want true")
 	}
-	if len(result.Files) != 1 {
-		t.Fatalf("len(files) = %d, want 1: %#v", len(result.Files), result.Files)
-	}
-	if result.Files[0].Path != "/workspace/ok.md" {
-		t.Fatalf("file path = %q, want /workspace/ok.md", result.Files[0].Path)
+	if len(result.Files) != 0 {
+		t.Fatalf("files = %#v, want no message-derived files", result.Files)
 	}
 }
 

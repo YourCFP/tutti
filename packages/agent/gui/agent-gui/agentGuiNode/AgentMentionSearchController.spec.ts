@@ -126,6 +126,7 @@ function createTestAgentGeneratedFileProvider(
         workspaceId: context?.metadata?.workspaceId,
         query: keyword,
         limit: maxResults,
+        sectionKey: context?.metadata?.sectionKey,
         provenanceFilter: context?.metadata?.referenceProvenanceFilter
       });
       return (result.entries ?? []).map((entry: any) => ({
@@ -1250,6 +1251,42 @@ describe("AgentMentionSearchController", () => {
       ])
     });
     expect(queryFiles).toHaveBeenCalledTimes(1);
+    controller.dispose();
+  });
+
+  it("isolates generated-file browse cache entries by persisted section key", async () => {
+    const queryAgentGeneratedFiles = vi.fn().mockResolvedValue({ entries: [] });
+    const controller = new AgentMentionSearchController({
+      queryAgentGeneratedFiles,
+      queryFiles: vi.fn().mockResolvedValue({ entries: [] })
+    });
+    controller.setFilter("file");
+
+    controller.updateQuery({
+      workspaceId: "room-1",
+      query: "",
+      sectionKey: "project:/workspace/one"
+    });
+    await vi.waitFor(() =>
+      expect(queryAgentGeneratedFiles).toHaveBeenCalledTimes(1)
+    );
+
+    controller.updateQuery({
+      workspaceId: "room-1",
+      query: "",
+      sectionKey: "project:/workspace/two"
+    });
+    await vi.waitFor(() =>
+      expect(queryAgentGeneratedFiles).toHaveBeenCalledTimes(2)
+    );
+    expect(queryAgentGeneratedFiles).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ sectionKey: "project:/workspace/one" })
+    );
+    expect(queryAgentGeneratedFiles).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ sectionKey: "project:/workspace/two" })
+    );
     controller.dispose();
   });
 

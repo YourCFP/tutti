@@ -2,105 +2,135 @@ package storesqlite
 
 import (
 	"context"
-	"fmt"
 	"testing"
 )
 
-func TestListWorkspaceGeneratedFilesFiltersAgentTargetsBeforeScanLimit(t *testing.T) {
+func TestListWorkspaceGeneratedFilesUsesCanonicalTurnProjection(t *testing.T) {
 	t.Parallel()
 
-	store := openTestStore(t, testOptions(&staticProjectPaths{}))
+	store := openTestStore(t, testOptions(&staticProjectPaths{paths: []string{
+		"/workspace/project-a",
+		"/workspace/project-b",
+	}}))
 	ctx := context.Background()
-	const workspaceID = "workspace-generated-file-agent-filter"
+	const workspaceID = "workspace-generated-files"
 
-	for _, session := range []struct {
-		id            string
-		agentTargetID string
-		provider      string
-	}{
-		{id: "wanted-session", agentTargetID: testTargetIDCodex, provider: "codex"},
-		{id: "other-session", agentTargetID: testTargetIDClaude, provider: "claude-code"},
-	} {
-		if _, err := store.ReportSessionState(ctx, SessionStateReport{
-			WorkspaceID:      workspaceID,
-			AgentSessionID:   session.id,
-			Origin:           "runtime",
-			AgentTargetID:    session.agentTargetID,
-			Provider:         session.provider,
-			Cwd:              "/workspace",
-			Status:           "completed",
-			OccurredAtUnixMS: 10,
-		}); err != nil {
-			t.Fatalf("ReportSessionState(%s) error = %v", session.id, err)
-		}
-		if _, accepted, err := store.RecordTurnTransition(ctx, TurnTransition{
-			WorkspaceID: workspaceID, AgentSessionID: session.id, TurnID: "turn-" + session.id,
-			Phase: TurnPhaseSettled, Outcome: TurnOutcomeCompleted, Origin: TurnOriginLegacyUnknown, OccurredAtUnixMS: 11,
-		}); err != nil || !accepted {
-			t.Fatalf("RecordTurnTransition(%s) accepted=%v error=%v", session.id, accepted, err)
-		}
-	}
+	seedGeneratedFileSession(t, ctx, store, workspaceID, "wanted-session", testTargetIDCodex, "/workspace/project-a/apps/web")
+	seedGeneratedFileSession(t, ctx, store, workspaceID, "other-target-session", testTargetIDClaude, "/workspace/project-a")
+	seedGeneratedFileSession(t, ctx, store, workspaceID, "other-project-session", testTargetIDCodex, "/workspace/project-b")
 
-	if _, err := store.ReportSessionMessages(ctx, SessionMessageReport{
-		WorkspaceID:    workspaceID,
-		AgentSessionID: "wanted-session",
-		Origin:         "runtime",
-		Messages: []MessageUpdate{{
-			MessageID: "wanted-message",
-			TurnID:    "turn-wanted-session",
-			Role:      "assistant",
-			Kind:      "tool_call",
-			Status:    "completed",
-			Payload: map[string]any{
-				"toolName": "Write",
-				"fileChanges": map[string]any{
-					"files": []any{map[string]any{"path": "wanted.md"}},
-				},
-			},
-			OccurredAtUnixMS: 100,
-		}},
-	}); err != nil {
-		t.Fatalf("ReportSessionMessages(wanted) error = %v", err)
-	}
-
-	otherMessages := make([]MessageUpdate, 500)
-	for index := range otherMessages {
-		otherMessages[index] = MessageUpdate{
-			MessageID: fmt.Sprintf("other-message-%03d", index),
-			TurnID:    "turn-other-session",
-			Role:      "assistant",
-			Kind:      "tool_call",
-			Status:    "completed",
-			Payload: map[string]any{
-				"toolName": "Write",
-				"fileChanges": map[string]any{
-					"files": []any{map[string]any{"path": fmt.Sprintf("other-%03d.md", index)}},
-				},
-			},
-			OccurredAtUnixMS: int64(1_000 + index),
-		}
-	}
-	if _, err := store.ReportSessionMessages(ctx, SessionMessageReport{
-		WorkspaceID:    workspaceID,
-		AgentSessionID: "other-session",
-		Origin:         "runtime",
-		Messages:       otherMessages,
-	}); err != nil {
-		t.Fatalf("ReportSessionMessages(other) error = %v", err)
-	}
+	recordGeneratedFileTurn(t, ctx, store, workspaceID, "wanted-session", "turn-wanted", 100, []any{
+		map[string]any{"path": "src/report.md", "change": "added"},
+		map[string]any{"path": "/workspace/outside.md", "change": "added"},
+	})
+	recordGeneratedFileTurn(t, ctx, store, workspaceID, "other-target-session", "turn-other-target", 200, []any{
+		map[string]any{"path": "other-target.md", "change": "added"},
+	})
+	recordGeneratedFileTurn(t, ctx, store, workspaceID, "other-project-session", "turn-other-project", 300, []any{
+		map[string]any{"path": "other-project.md", "change": "added"},
+	})
 
 	result, ok, err := store.ListWorkspaceGeneratedFiles(ctx, ListWorkspaceGeneratedFilesInput{
 		WorkspaceID:    workspaceID,
+		SectionKey:     RailSectionKeyForProject("/workspace/project-a"),
 		AgentTargetIDs: []string{testTargetIDCodex},
-		Limit:          1,
+		Query:          "report",
+		Limit:          10,
 	})
-	if err != nil {
-		t.Fatalf("ListWorkspaceGeneratedFiles() error = %v", err)
+	if err != nil || !ok {
+		t.Fatalf("ListWorkspaceGeneratedFiles() ok=%v error=%v", ok, err)
 	}
-	if !ok {
-		t.Fatal("ListWorkspaceGeneratedFiles() ok = false, want true")
+	if len(result.Files) != 1 || result.Files[0].Path != "/workspace/project-a/apps/web/src/report.md" {
+		t.Fatalf("files = %#v, want only the selected section and target file", result.Files)
 	}
-	if len(result.Files) != 1 || result.Files[0].Path != "/workspace/wanted.md" {
-		t.Fatalf("files = %#v, want the older selected-agent file", result.Files)
+}
+
+func TestListWorkspaceGeneratedFilesUsesLatestPathState(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t, testOptions(&staticProjectPaths{paths: []string{"/workspace/project"}}))
+	ctx := context.Background()
+	const workspaceID = "workspace-generated-file-latest"
+	const sessionID = "session-1"
+	seedGeneratedFileSession(t, ctx, store, workspaceID, sessionID, testTargetIDCodex, "/workspace/project")
+
+	recordGeneratedFileTurn(t, ctx, store, workspaceID, sessionID, "turn-added", 100, []any{
+		map[string]any{"path": "report.md", "change": "added"},
+	})
+	recordGeneratedFileTurn(t, ctx, store, workspaceID, sessionID, "turn-deleted", 200, []any{
+		map[string]any{"path": "report.md", "change": "deleted"},
+	})
+
+	input := ListWorkspaceGeneratedFilesInput{
+		WorkspaceID: workspaceID,
+		SectionKey:  RailSectionKeyForProject("/workspace/project"),
+		Limit:       10,
+	}
+	result, ok, err := store.ListWorkspaceGeneratedFiles(ctx, input)
+	if err != nil || !ok {
+		t.Fatalf("ListWorkspaceGeneratedFiles(deleted) ok=%v error=%v", ok, err)
+	}
+	if len(result.Files) != 0 {
+		t.Fatalf("deleted files = %#v, want none", result.Files)
+	}
+
+	recordGeneratedFileTurn(t, ctx, store, workspaceID, sessionID, "turn-readded", 300, []any{
+		map[string]any{"path": "report.md", "change": "added"},
+	})
+	result, ok, err = store.ListWorkspaceGeneratedFiles(ctx, input)
+	if err != nil || !ok {
+		t.Fatalf("ListWorkspaceGeneratedFiles(readded) ok=%v error=%v", ok, err)
+	}
+	if len(result.Files) != 1 || result.Files[0].Path != "/workspace/project/report.md" {
+		t.Fatalf("readded files = %#v, want report.md", result.Files)
+	}
+}
+
+func seedGeneratedFileSession(
+	t *testing.T,
+	ctx context.Context,
+	store *Store,
+	workspaceID string,
+	sessionID string,
+	agentTargetID string,
+	cwd string,
+) {
+	t.Helper()
+	if _, err := store.ReportSessionState(ctx, SessionStateReport{
+		WorkspaceID:      workspaceID,
+		AgentSessionID:   sessionID,
+		Origin:           "runtime",
+		AgentTargetID:    agentTargetID,
+		Provider:         "codex",
+		Cwd:              cwd,
+		Status:           "active",
+		OccurredAtUnixMS: 10,
+	}); err != nil {
+		t.Fatalf("ReportSessionState(%s) error = %v", sessionID, err)
+	}
+}
+
+func recordGeneratedFileTurn(
+	t *testing.T,
+	ctx context.Context,
+	store *Store,
+	workspaceID string,
+	sessionID string,
+	turnID string,
+	occurredAt int64,
+	files []any,
+) {
+	t.Helper()
+	if _, accepted, err := store.RecordTurnTransition(ctx, TurnTransition{
+		WorkspaceID:      workspaceID,
+		AgentSessionID:   sessionID,
+		TurnID:           turnID,
+		Phase:            TurnPhaseSettled,
+		Outcome:          TurnOutcomeCompleted,
+		Origin:           TurnOriginLegacyUnknown,
+		FileChanges:      map[string]any{"files": files},
+		OccurredAtUnixMS: occurredAt,
+	}); err != nil || !accepted {
+		t.Fatalf("RecordTurnTransition(%s) accepted=%v error=%v", turnID, accepted, err)
 	}
 }

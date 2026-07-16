@@ -1225,8 +1225,8 @@ func TestDaemonAPIGeneratedRoutesListAgentSessionsRejectsLimitAboveContractMaxim
 				if input.Query != "report" {
 					t.Fatalf("query = %q, want report", input.Query)
 				}
-				if input.SessionCwd != "/workspace" {
-					t.Fatalf("sessionCwd = %q, want /workspace", input.SessionCwd)
+				if input.SectionKey != "project:/workspace" {
+					t.Fatalf("sectionKey = %q, want project:/workspace", input.SectionKey)
 				}
 				if !slices.Equal(input.AgentTargetIDs, []string{"local:codex", "local:claude-code"}) {
 					t.Fatalf("agentTargetIDs = %#v, want selected targets", input.AgentTargetIDs)
@@ -2154,8 +2154,8 @@ func TestDaemonAPIGeneratedRoutesListAgentGeneratedFiles(t *testing.T) {
 				if input.Query != "report" {
 					t.Fatalf("query = %q, want report", input.Query)
 				}
-				if input.SessionCwd != "/workspace" {
-					t.Fatalf("sessionCwd = %q, want /workspace", input.SessionCwd)
+				if input.SectionKey != "project:/workspace" {
+					t.Fatalf("sectionKey = %q, want project:/workspace", input.SectionKey)
 				}
 				if input.Limit != 25 {
 					t.Fatalf("limit = %d, want 25", input.Limit)
@@ -2177,7 +2177,7 @@ func TestDaemonAPIGeneratedRoutesListAgentGeneratedFiles(t *testing.T) {
 		t,
 		mux,
 		http.MethodGet,
-		"/v1/workspaces/ws-1/agent-generated-files?query=report&sessionCwd=/workspace&agentTargetIds=local%3Acodex&agentTargetIds=local%3Aclaude-code&limit=25",
+		"/v1/workspaces/ws-1/agent-generated-files?query=report&sectionKey=project%3A%2Fworkspace&agentTargetIds=local%3Acodex&agentTargetIds=local%3Aclaude-code&limit=25",
 		nil,
 	)
 	if recorder.Code != http.StatusOK {
@@ -2211,6 +2211,7 @@ func TestDaemonAPIGeneratedRoutesRejectsTooManyAgentTargetFilters(t *testing.T) 
 	}))
 
 	query := make(url.Values)
+	query.Set("sectionKey", "conversations")
 	for index := 0; index <= agentservice.MaxGeneratedFileAgentTargetFilters; index++ {
 		query.Add("agentTargetIds", fmt.Sprintf("agent-%d", index))
 	}

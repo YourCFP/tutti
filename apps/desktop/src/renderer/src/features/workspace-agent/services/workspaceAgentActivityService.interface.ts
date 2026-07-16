@@ -47,7 +47,7 @@ export interface WorkspaceAgentActivityListGeneratedFilesInput {
   agentTargetIds?: readonly string[];
   limit?: number;
   query?: string;
-  sessionCwd?: string;
+  sectionKey: string;
   signal?: AbortSignal;
   workspaceId: string;
 }

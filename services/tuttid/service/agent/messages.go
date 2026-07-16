@@ -36,7 +36,7 @@ type GeneratedFileList struct {
 
 type ListGeneratedFilesInput struct {
 	Query          string
-	SessionCwd     string
+	SectionKey     string
 	AgentTargetIDs []string
 	Limit          int
 }
@@ -51,6 +51,7 @@ type MessageReader interface {
 
 type GeneratedFileReader interface {
 	ListWorkspaceGeneratedFiles(
+		ctx context.Context,
 		input agentactivitybiz.ListWorkspaceGeneratedFilesInput,
 	) (GeneratedFileList, bool)
 }
@@ -118,9 +119,9 @@ func (s *Service) ListGeneratedFiles(
 	workspaceID string,
 	input ListGeneratedFilesInput,
 ) (GeneratedFileList, error) {
-	_ = ctx
 	workspaceID = strings.TrimSpace(workspaceID)
-	if workspaceID == "" || input.Limit < 0 {
+	sectionKey := strings.TrimSpace(input.SectionKey)
+	if workspaceID == "" || sectionKey == "" || sectionKey == agentactivitybiz.PinnedSessionPageKey || input.Limit < 0 {
 		return GeneratedFileList{}, ErrInvalidArgument
 	}
 	if input.Limit == 0 {
@@ -143,10 +144,10 @@ func (s *Service) ListGeneratedFiles(
 			Files:       []GeneratedFile{},
 		}, nil
 	}
-	files, ok := reader.ListWorkspaceGeneratedFiles(agentactivitybiz.ListWorkspaceGeneratedFilesInput{
+	files, ok := reader.ListWorkspaceGeneratedFiles(ctx, agentactivitybiz.ListWorkspaceGeneratedFilesInput{
 		WorkspaceID:    workspaceID,
 		Query:          strings.TrimSpace(input.Query),
-		SessionCwd:     strings.TrimSpace(input.SessionCwd),
+		SectionKey:     sectionKey,
 		AgentTargetIDs: agentTargetIDs,
 		Limit:          input.Limit,
 	})

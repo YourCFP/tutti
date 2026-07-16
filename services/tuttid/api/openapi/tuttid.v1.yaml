@@ -2470,10 +2470,12 @@ paths:
           schema:
             type: string
         - in: query
-          name: sessionCwd
-          required: false
+          name: sectionKey
+          required: true
+          description: Persisted conversation-rail section key used to scope generated files. The pinned aggregate key is not accepted.
           schema:
             type: string
+            minLength: 1
         - in: query
           name: agentTargetIds
           required: false

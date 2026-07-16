@@ -52,7 +52,7 @@ export interface AgentActivityRuntimeListGeneratedFilesInput {
   agentTargetIds?: readonly string[];
   limit?: number;
   query?: string;
-  sessionCwd?: string;
+  sectionKey: string;
   signal?: AbortSignal;
   workspaceId: string;
 }

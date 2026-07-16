@@ -99,6 +99,14 @@ Every daemon `WorkspaceAgentSession` response carries the persisted membership
 as required `railSectionKey`. The desktop adapter rejects a missing or blank
 value as a protocol contract error; it must not manufacture `conversations` or
 derive a project key from `cwd`.
+Agent-generated-file search follows the same membership contract. Canonical
+`Turn.fileChanges` snapshots are maintained as a transactional SQLite
+projection and queried by required `sectionKey`; the desktop provider passes
+the active conversation's `railSectionKey`, the selected project's persisted
+`sectionKey`, or the fixed `conversations` key. It fails closed when that
+identity is unavailable. Neither the daemon nor the renderer scans activity
+messages as a generated-file fallback, and pre-contract history is not
+backfilled from messages.
 The session service synchronously persists and reads back the initial runtime
 session before returning a successful Create response, so the response never
 races the runtime's asynchronous activity reporter. The store assigns

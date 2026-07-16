@@ -210,6 +210,8 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
   );
   const selectedProjectPath =
     composerSettings.selectedProjectPath?.trim() ?? "";
+  const selectedProjectSectionKey =
+    composerSettings.selectedProjectSectionKey?.trim() ?? "";
   const previousSelectedProjectPathRef = useRef(selectedProjectPath);
   const [mentionSearchState, setMentionSearchState] =
     useState<AgentMentionSearchState>({
@@ -459,6 +461,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     workspaceId,
     currentUserId,
     selectedProjectPath,
+    selectedProjectSectionKey,
     draftContent,
     fileMentionSuggestion,
     setFileMentionSuggestion,
@@ -599,6 +602,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     disabledReason,
     placeholder,
     selectedProjectPath,
+    selectedProjectSectionKey,
     previousSelectedProjectPathRef,
     setIsSelectedProjectMissing,
     fileMentionSuggestion,

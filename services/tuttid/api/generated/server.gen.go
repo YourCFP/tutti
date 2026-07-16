@@ -1334,15 +1334,15 @@ func (siw *ServerInterfaceWrapper) ListWorkspaceAgentGeneratedFiles(w http.Respo
 		return
 	}
 
-	// ------------- Optional query parameter "sessionCwd" -------------
+	// ------------- Required query parameter "sectionKey" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "sessionCwd", r.URL.Query(), &params.SessionCwd, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "sectionKey", r.URL.Query(), &params.SectionKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sessionCwd"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sectionKey"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionCwd", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sectionKey", Err: err})
 		}
 		return
 	}

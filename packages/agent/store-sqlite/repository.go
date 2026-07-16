@@ -86,7 +86,7 @@ type ListSessionMessagesInput struct {
 type ListWorkspaceGeneratedFilesInput struct {
 	WorkspaceID    string
 	Query          string
-	SessionCwd     string
+	SectionKey     string
 	AgentTargetIDs []string
 	Limit          int
 }

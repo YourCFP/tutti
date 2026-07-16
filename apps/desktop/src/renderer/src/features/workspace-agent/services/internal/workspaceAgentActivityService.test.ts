@@ -1297,9 +1297,14 @@ test("WorkspaceAgentActivityService.listAgentGeneratedFiles delegates to tuttid 
     tuttidClient: {
       listWorkspaceAgentGeneratedFiles: async (
         workspaceId: string,
-        request: Parameters<TuttidClient["listWorkspaceAgentGeneratedFiles"]>[1]
+        request: Parameters<
+          TuttidClient["listWorkspaceAgentGeneratedFiles"]
+        >[1],
+        requestOptions: Parameters<
+          TuttidClient["listWorkspaceAgentGeneratedFiles"]
+        >[2]
       ) => {
-        calls.push({ request, workspaceId });
+        calls.push({ request, requestOptions, workspaceId });
         return {
           entries: [{ label: "report.md", path: "/workspace/report.md" }],
           workspaceId
@@ -1315,7 +1320,7 @@ test("WorkspaceAgentActivityService.listAgentGeneratedFiles delegates to tuttid 
     agentTargetIds: [" local:codex ", "local:claude-code"],
     limit: 20,
     query: "report",
-    sessionCwd: "/workspace",
+    sectionKey: "project:/workspace",
     workspaceId: " ws-1 "
   });
 
@@ -1325,8 +1330,9 @@ test("WorkspaceAgentActivityService.listAgentGeneratedFiles delegates to tuttid 
         agentTargetIds: ["local:codex", "local:claude-code"],
         limit: 20,
         query: "report",
-        sessionCwd: "/workspace"
+        sectionKey: "project:/workspace"
       },
+      requestOptions: { signal: undefined },
       workspaceId: "ws-1"
     }
   ]);
@@ -1351,6 +1357,7 @@ test("WorkspaceAgentActivityService.listAgentGeneratedFiles fails closed for an 
 
   const result = await service.listAgentGeneratedFiles({
     agentTargetIds: [" ", ""],
+    sectionKey: "project:/workspace",
     workspaceId: " ws-1 "
   });
 

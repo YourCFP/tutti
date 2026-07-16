@@ -25,12 +25,16 @@ export class WorkspaceAgentActivityQueryOperations {
         workspaceId
       };
     }
-    return this.tuttidClient.listWorkspaceAgentGeneratedFiles(workspaceId, {
-      agentTargetIds,
-      limit: input.limit,
-      query: input.query?.trim() || undefined,
-      sessionCwd: input.sessionCwd?.trim() || undefined
-    });
+    return this.tuttidClient.listWorkspaceAgentGeneratedFiles(
+      workspaceId,
+      {
+        agentTargetIds,
+        limit: input.limit,
+        query: input.query?.trim() || undefined,
+        sectionKey: input.sectionKey.trim()
+      },
+      { signal: input.signal }
+    );
   }
 
   async listSessionsPage(

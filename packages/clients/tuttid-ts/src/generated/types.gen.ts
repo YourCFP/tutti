@@ -6384,9 +6384,12 @@ export type ListWorkspaceAgentGeneratedFilesData = {
   path: {
     workspaceID: string;
   };
-  query?: {
+  query: {
     query?: string;
-    sessionCwd?: string;
+    /**
+     * Persisted conversation-rail section key used to scope generated files. The pinned aggregate key is not accepted.
+     */
+    sectionKey: string;
     /**
      * Optional agent target filters applied before generated-file limiting.
      */

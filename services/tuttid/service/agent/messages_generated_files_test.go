@@ -21,6 +21,7 @@ func (*generatedFileReaderStub) ListSessionMessages(
 }
 
 func (s *generatedFileReaderStub) ListWorkspaceGeneratedFiles(
+	_ context.Context,
 	input agentactivitybiz.ListWorkspaceGeneratedFilesInput,
 ) (GeneratedFileList, bool) {
 	s.input = input
@@ -35,12 +36,16 @@ func TestListGeneratedFilesNormalizesAgentTargetFilters(t *testing.T) {
 	_, err := service.ListGeneratedFiles(context.Background(), " workspace-1 ", ListGeneratedFilesInput{
 		AgentTargetIDs: []string{" local:codex ", "local:claude-code", "local:codex"},
 		Limit:          10,
+		SectionKey:     " project:/workspace ",
 	})
 	if err != nil {
 		t.Fatalf("ListGeneratedFiles() error = %v", err)
 	}
 	if !reflect.DeepEqual(reader.input.AgentTargetIDs, []string{"local:codex", "local:claude-code"}) {
 		t.Fatalf("agent target ids = %#v, want normalized unique ids", reader.input.AgentTargetIDs)
+	}
+	if reader.input.SectionKey != "project:/workspace" {
+		t.Fatalf("section key = %q, want project:/workspace", reader.input.SectionKey)
 	}
 }
 
@@ -50,6 +55,7 @@ func TestListGeneratedFilesRejectsEmptyAgentTargetFilters(t *testing.T) {
 	service := &Service{MessageReader: &generatedFileReaderStub{}}
 	_, err := service.ListGeneratedFiles(context.Background(), "workspace-1", ListGeneratedFilesInput{
 		AgentTargetIDs: []string{" ", ""},
+		SectionKey:     "conversations",
 	})
 	if !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("ListGeneratedFiles() error = %v, want ErrInvalidArgument", err)
@@ -66,6 +72,7 @@ func TestListGeneratedFilesRejectsTooManyAgentTargetFilters(t *testing.T) {
 	service := &Service{MessageReader: &generatedFileReaderStub{}}
 	_, err := service.ListGeneratedFiles(context.Background(), "workspace-1", ListGeneratedFilesInput{
 		AgentTargetIDs: ids,
+		SectionKey:     "conversations",
 	})
 	if !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("ListGeneratedFiles() error = %v, want ErrInvalidArgument", err)

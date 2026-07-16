@@ -554,12 +554,13 @@ export interface TuttidClient {
   ): Promise<WorkspaceAgentSessionPageResponse>;
   listWorkspaceAgentGeneratedFiles(
     workspaceID: string,
-    request?: {
+    request: {
       agentTargetIds?: string[];
       limit?: number;
       query?: string;
-      sessionCwd?: string;
-    }
+      sectionKey: string;
+    },
+    requestOptions?: TuttidRequestOptions
   ): Promise<WorkspaceAgentGeneratedFileListResponse>;
   scanWorkspaceExternalAgentSessionImports(
     workspaceID: string,
