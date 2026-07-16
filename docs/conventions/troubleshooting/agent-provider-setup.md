@@ -861,10 +861,11 @@ file or directory`. If the CLI path exists but `codex app-server` cannot
 - Quick checks:
   Capture `/v1/oauth/token` traffic (mitmproxy). A failure may show `Client
 disconnected` immediately before later refresh attempts return `400
-invalid_grant`. Daemon logs may also show an extra `claude-code` process start
-  with `cwd=/`, `hasModel=false`, and a different `agent_session_id` from the
-  real conversation session; that shape is the hidden live-model discovery
-  session.
+invalid_grant`. Search `tuttid.log` for
+  `event=agent.model_discovery.hidden_session_triggered provider=claude-code`;
+  this info-level event confirms that Tutti actually triggered a hidden Claude
+  live-model discovery session. The event intentionally includes only the
+  provider and random discovery-session id.
 - Root cause:
   Composer-options loading spawned a hidden, `visible:false` Claude live-model
   discovery session that shares the on-disk credential store with the real
