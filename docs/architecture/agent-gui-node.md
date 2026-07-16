@@ -230,7 +230,11 @@ gap, the pending activation record in `AgentSessionEngine` owns one optimistic
 title projected from the submitted visible prompt; the rail and every header
 read that same record. Optimistic projection and daemon persistence use the same
 whitespace and Markdown-link-label normalization so engine reconciliation does
-not visibly rewrite valid rich-prompt titles. The localized untitled label is
+not visibly rewrite valid rich-prompt titles. In header and conversation-rail
+titles, Agent handoff/session, Agent-target, and workspace-app mentions render
+as normalized `@label` text without a second mention glyph; the active Agent's
+identity icon remains separate, while task and file references may keep their
+compact title markers. The localized untitled label is
 used only when this projection is unavailable, while canonical `session.title`
 remains empty until the daemon establishes it and then takes precedence. Runtime
 owns the initial-title-established bit and persists it in private runtime

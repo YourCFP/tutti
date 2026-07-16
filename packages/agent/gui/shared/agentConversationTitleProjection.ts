@@ -23,6 +23,10 @@ export type AgentGUIConversationTitleLeadingMentionKind =
   | "file"
   | "session"
   | "task";
+export type AgentGUIConversationTitleIconMentionKind = Extract<
+  AgentGUIConversationTitleLeadingMentionKind,
+  "file" | "task"
+>;
 
 const AGENT_GUI_UNRESOLVED_PROVIDER: AgentGUIResolvedProvider = "unknown";
 const AGENT_GUI_MAX_OPTIMISTIC_TITLE_CODE_POINTS = 120;
@@ -189,11 +193,19 @@ export function resolveAgentGUIConversationTitleLeadingMentionKind(
   const mentionKind = firstMention
     ? agentGUIConversationTitleMentionKind(firstMention)
     : null;
-  if (mentionKind) return mentionKind;
+  if (isAgentGUIConversationTitleIconMentionKind(mentionKind)) {
+    return mentionKind;
+  }
   if (firstMention) return null;
   return extractRichTextLinksFromContent(displayPrompt).length > 0
     ? "file"
     : null;
+}
+
+export function isAgentGUIConversationTitleIconMentionKind(
+  kind: AgentGUIConversationTitleLeadingMentionKind | null | undefined
+): kind is AgentGUIConversationTitleIconMentionKind {
+  return kind === "file" || kind === "task";
 }
 
 function agentGUIConversationTitleMentionKind(
@@ -230,9 +242,14 @@ function isAgentGUIConversationTitleDisplayPromptEligible(
   const mentions = extractRichTextMentionsFromContent(displayPrompt);
   if (
     mentions.some(
-      (mention) =>
-        mention.providerId !== "browser-element" &&
-        agentGUIConversationTitleMentionKind(mention) === null
+      (mention) => {
+        if (mention.providerId === "browser-element") {
+          return false;
+        }
+        return !isAgentGUIConversationTitleIconMentionKind(
+          agentGUIConversationTitleMentionKind(mention)
+        );
+      }
     )
   ) {
     return false;
