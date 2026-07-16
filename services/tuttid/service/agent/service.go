@@ -109,16 +109,9 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 			}
 		}()
 	}
-	nodeStartedAt := time.Now()
-	if err := s.ensureProviderRuntimeInstalledForLaunch(ctx, provider, input.ProviderTargetRef); err != nil {
-		s.reportAgentServiceNodeFailure(ctx, input.AgentSessionID, "session_create", "provider_runtime_checked", provider, nodeStartedAt, err)
-		return Session{}, err
-	}
-	s.reportAgentServiceNodeSuccess(ctx, input.AgentSessionID, "session_create", "provider_runtime_checked", provider, nodeStartedAt)
-	logAgentSubmitTrace("service.create.provider_ready", workspaceID, input.AgentSessionID, input.Metadata, nil)
 	requestedModel := value(input.Model)
 	input.Model = s.resolveCreateSessionModel(ctx, provider, input.ProviderTargetRef, value(input.Cwd), input.Model)
-	nodeStartedAt = time.Now()
+	nodeStartedAt := time.Now()
 	if providerTargetRefKind(input.ProviderTargetRef) != "agent_extension" {
 		if err := s.validateComposerModelForCreate(ctx, provider, workspaceID, value(input.Cwd), requestedModel); err != nil {
 			s.reportAgentServiceNodeFailure(ctx, input.AgentSessionID, "session_create", "model_validated", provider, nodeStartedAt, err)
@@ -204,6 +197,7 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 		})
 	}()
 	if err != nil {
+		s.invalidateProviderAvailability(provider)
 		normalizedErr := normalizeRuntimeError(err)
 		s.reportAgentServiceNodeFailure(ctx, input.AgentSessionID, "session_create", "runtime_started", provider, nodeStartedAt, normalizedErr)
 		return Session{}, cleanupPrepared(normalizedErr)
@@ -450,7 +444,18 @@ func (s *Service) GetDetail(ctx context.Context, workspaceID string, agentSessio
 	if err != nil {
 		return SessionDetail{}, err
 	}
-	detail := SessionDetail{Session: session, ChildSessions: []Session{}}
+	detail := SessionDetail{
+		Session:       session,
+		ChildSessions: []Session{},
+		Turns:         []agentactivitybiz.Turn{},
+	}
+	if s.TurnStore != nil {
+		turns, err := s.TurnStore.ListSessionTurns(ctx, strings.TrimSpace(workspaceID), session.ID)
+		if err != nil {
+			return SessionDetail{}, err
+		}
+		detail.Turns = turns
+	}
 	reader, ok := s.SessionReader.(ChildSessionReader)
 	if !ok {
 		return detail, nil

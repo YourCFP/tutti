@@ -4018,6 +4018,9 @@ type WorkspaceAgentSessionDetailResponse struct {
 	// ChildSessions Flat collection of every nested child session below session. Clients reconstruct the tree from the immutable parent fields.
 	ChildSessions []WorkspaceAgentSession `json:"childSessions"`
 	Session       WorkspaceAgentSession   `json:"session"`
+
+	// Turns Ordered durable turns owned by session. This detail-only collection is the canonical source for turn-scoped history such as file changes; clients must not reconstruct it from provider tool payloads.
+	Turns []WorkspaceAgentTurn `json:"turns"`
 }
 
 // WorkspaceAgentSessionEventEnvelope defines model for WorkspaceAgentSessionEventEnvelope.
@@ -4872,6 +4875,9 @@ type GetAgentProviderStatusesParams struct {
 
 	// IncludeNetwork Opt into the network connectivity probe (registry / provider API / proxy reachability). Off by default so the common detection path stays local and never blocks on the network; only the agent-env wizard's network diagnostic sets this.
 	IncludeNetwork *bool `form:"includeNetwork,omitempty" json:"includeNetwork,omitempty"`
+
+	// Refresh Bypass the daemon provider-readiness cache.
+	Refresh *bool `form:"refresh,omitempty" json:"refresh,omitempty"`
 }
 
 // ListCliCapabilitiesParams defines parameters for ListCliCapabilities.
@@ -4962,6 +4968,9 @@ type ListWorkspaceAgentSessionMessagesParamsOrder string
 type GetWorkspaceAppAgentProviderStatusesParams struct {
 	Providers      *[]WorkspaceAgentProvider `form:"providers,omitempty" json:"providers,omitempty"`
 	IncludeNetwork *bool                     `form:"includeNetwork,omitempty" json:"includeNetwork,omitempty"`
+
+	// Refresh Bypass the daemon provider-readiness cache.
+	Refresh *bool `form:"refresh,omitempty" json:"refresh,omitempty"`
 }
 
 // ListWorkspaceFileDirectoryParams defines parameters for ListWorkspaceFileDirectory.

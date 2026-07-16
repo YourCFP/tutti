@@ -21,7 +21,10 @@ import {
   reconcileAfterVersion,
   stringifyError
 } from "./workspaceAgentActivityDiagnostics.ts";
-import { agentActivitySessionFromTuttidSession } from "../desktopAgentActivityAdapter.ts";
+import {
+  agentActivitySessionFromTuttidSession,
+  agentActivityTurnFromTuttidTurn
+} from "../desktopAgentActivityAdapter.ts";
 import { reconcileAgentSessionMessagePages } from "./workspaceAgentActivityReconcileMessages.ts";
 import type {
   AgentActivitySessionDetail,
@@ -195,6 +198,7 @@ export abstract class WorkspaceAgentActivityReconcileBridge {
     const childSessions = detail.childSessions.map((session) =>
       agentActivitySessionFromTuttidSession(normalizedWorkspaceId, session)
     );
+    const turns = detail.turns.map(agentActivityTurnFromTuttidTurn);
     this.reportReconcileTrace({
       agentSessionId,
       traceEvent: `${source}.resolved`,
@@ -205,7 +209,7 @@ export abstract class WorkspaceAgentActivityReconcileBridge {
         childSessionIds: childSessions.map((session) => session.agentSessionId)
       }
     });
-    return { session: activitySession, childSessions };
+    return { session: activitySession, childSessions, turns };
   }
 
   protected upsertAuthoritativeSession(
@@ -222,11 +226,22 @@ export abstract class WorkspaceAgentActivityReconcileBridge {
 
   protected upsertAuthoritativeSessionDetail(
     detail: AgentActivitySessionDetail,
-    source: string
+    source: string,
+    options: { live?: boolean } = {}
   ): void {
-    this.upsertAuthoritativeSession(detail.session, source);
+    this.upsertEngineSession({
+      agentSessionId: detail.session.agentSessionId,
+      live: options.live,
+      session: detail.session,
+      source,
+      workspaceId: normalizeWorkspaceId(detail.session.workspaceId)
+    });
+    const entry = this.entry(detail.session.workspaceId);
+    for (const turn of detail.turns) {
+      entry.engine.dispatch({ type: "turn/upserted", turn });
+    }
     for (const childSession of detail.childSessions) {
-      this.upsertAuthoritativeSession(childSession, source);
+      this.upsertAuthoritativeSession(childSession, `${source}.child`);
     }
   }
 
@@ -620,19 +635,11 @@ export abstract class WorkspaceAgentActivityReconcileBridge {
     if (this.isSessionTombstoned(workspaceId, agentSessionId)) {
       return;
     }
-    this.upsertEngineSession({
-      agentSessionId: detail.session.agentSessionId,
-      live,
-      session: detail.session,
-      source: "reconcile.combined.state_upsert",
-      workspaceId
-    });
-    for (const childSession of detail.childSessions) {
-      this.upsertAuthoritativeSession(
-        childSession,
-        "reconcile.combined.child_state_upsert"
-      );
-    }
+    this.upsertAuthoritativeSessionDetail(
+      detail,
+      "reconcile.combined.state_upsert",
+      { live }
+    );
     const reconciledMessages = pages.flatMap((page) => page.messages);
     for (const message of reconciledMessages) {
       this.emitSessionEvent(workspaceId, hostMessageEventFromCore(message));
@@ -758,19 +765,9 @@ export abstract class WorkspaceAgentActivityReconcileBridge {
     if (this.isSessionTombstoned(workspaceId, agentSessionId)) {
       return;
     }
-    this.upsertEngineSession({
-      agentSessionId: detail.session.agentSessionId,
-      live,
-      session: detail.session,
-      source: "reconcile.state_upsert",
-      workspaceId
+    this.upsertAuthoritativeSessionDetail(detail, "reconcile.state_upsert", {
+      live
     });
-    for (const childSession of detail.childSessions) {
-      this.upsertAuthoritativeSession(
-        childSession,
-        "reconcile.child_state_upsert"
-      );
-    }
     this.emitLatestStateEvent(workspaceId, agentSessionId);
   }
 

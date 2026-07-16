@@ -997,6 +997,22 @@ sequencing transport calls in React effects.
 
 ## Submit And Startup Transactions
 
+Provider readiness is application-scoped daemon state, not a session-create
+precondition. `tuttid` caches each provider's resolved CLI/adapter, version, and
+auth snapshot independently of status request shape; concurrent reads share one
+probe, ordinary reads reuse the completed result, and explicit refresh or a
+runtime auth failure invalidates it. Desktop windows mirror that snapshot and
+must not force a full provider probe on every focus.
+
+Creating a session performs only request-scoped validation, cwd/runtime
+preparation, and the real provider handshake. It must not synchronously run CLI
+status, auth-status, version, network, or hidden model-discovery probes first.
+For Cursor, account-scoped model discovery may create one hidden ACP session and
+preserve its last-known-good catalog, but visible session creation never waits
+for that discovery: the visible session's own `session/new` can populate the
+same catalog. Process spawn, `initialize`, and `session/new` failures are the
+authoritative launch result and invalidate matching cached readiness data.
+
 `clientSubmitId` is the daemon-owned idempotency key, not merely a diagnostic
 field. Before invoking a provider, the daemon persists a submit claim scoped by
 workspace, session, and client submit ID. A duplicate accepted claim returns
@@ -1013,6 +1029,10 @@ The session engine owns activation deadlines. It passes one cancellation signal
 through the desktop command port and HTTP adapter. Adapters must not race the
 engine with an independent timeout budget; command timeout, cancellation, and
 uncertain-delivery reconciliation are one engine workflow.
+The outer new-session activation deadline must also leave room for process spawn
+and `initialize` before ACP `session/new` starts its own full 30-second timeout;
+an activation timer that starts at the user's click must not cancel
+`session/new` with only the leftover portion of that budget.
 
 ## Validation
 
@@ -1064,14 +1084,24 @@ agent fileChange/tool output
   -> git apply / git apply -R against the Git repository resolved from cwd
 ```
 
-The durable activity data is the original turn summary input:
+The response-tail presentation and executable patch actions have separate
+canonical inputs:
 
-- `patchBatches` with the tool call id, cwd, path, change type, and patch
-  payload needed to reconstruct per-batch diffs.
-- file-level unified diffs as a fallback for older or less structured activity.
-  This fallback also applies when recorded `patchBatches` exist but reconstruct
-  zero executable diffs; for absolute file paths with a synthetic `/` workspace
-  root, use the file's containing directory as the Git cwd.
+- `WorkspaceAgentSessionDetailResponse.turns[].fileChanges.files` owns each
+  turn's changed-file list and create/modify/delete semantics. The detail
+  response returns root-session turns in durable order; list responses keep
+  only active/latest turn projections.
+- completed tool-call `changes` payloads own executable `patchBatches`,
+  including tool call id, cwd, path, change type, and patch content used by
+  Undo/Reapply.
+
+AgentGUI may associate executable patch batches with files already present in
+the matching durable turn's `fileChanges`, but it must not reconstruct the
+changed-file list from tool calls, provider metadata, or activity-card
+`changedFiles`. The desktop reconcile bridge inserts detail turns into the
+existing activity engine `turnsById` store, and AgentGUI projects each settled
+turn's summary directly after that turn. Sessions written before this contract
+was enforced are not backfilled in the conversation UI.
 
 Claude SDK sidecars must not treat Edit/Write input text as authoritative patch
 data. They should collect the `PostToolUse` `tool_response.structuredPatch`
@@ -1081,15 +1111,17 @@ arrives. Provider diff metadata must be canonicalized at this adapter boundary
 before it becomes durable activity data. In particular, unified-diff control
 markers such as `\ No newline at end of file` must use Git's exact syntax;
 provider display formatting must not flow unchanged into executable
-`patchBatches`. AgentGUI also canonicalizes this marker while reading older
-persisted activity so pre-fix sessions remain reversible.
+`patchBatches`.
 
 Provider adapters that receive successful write/edit/apply_patch tool calls
-without a native turn-level diff event must still normalize the executed tool
-output into `fileChanges.files` and emit a `turn.updated` patch carrying those
-`fileChanges`. The AgentGUI turn summary reads the turn state as the shared
-source for the response-tail changed-file list; tool-only payloads are not a
-substitute for that state.
+without a native turn-level diff event must normalize the executed tool output
+into `fileChanges.files`, merge it with the current turn's canonical file set,
+and emit a `turn.updated` patch carrying the accumulated `fileChanges`. The
+shared runtime normalizer consumes provider semantics such as Cursor ACP
+`kind=delete`, Codex `changes[].kind.type`, and Claude Code structured patches;
+raw provider fields do not cross into AgentGUI business rules. The AgentGUI
+response-tail summary reads only the matching durable turn's `fileChanges`
+state from the session-detail turn collection.
 
 Approval transport calls may wrap pending Edit/Write input, but they are
 interaction plumbing rather than transcript content. Preserve that nested input

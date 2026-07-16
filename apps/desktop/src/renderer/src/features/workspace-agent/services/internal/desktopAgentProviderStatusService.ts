@@ -199,6 +199,7 @@ export class DesktopAgentProviderStatusService implements IAgentProviderStatusSe
     input: {
       providers?: WorkspaceAgentProvider[];
       includeNetwork?: boolean;
+      refresh?: boolean;
     } = {}
   ): Promise<AgentProviderStatusListResponse | null> {
     const requestKey = providerStatusRequestKey(input);
@@ -482,10 +483,14 @@ export class DesktopAgentProviderStatusService implements IAgentProviderStatusSe
   ): Promise<void> {
     const input = {
       providers,
-      includeNetwork: options?.includeNetwork
+      includeNetwork: options?.includeNetwork,
+      refresh: true
     };
     const inflightRequest = this.inflightRequests.get(
-      providerStatusRequestKey(input)
+      providerStatusRequestKey({
+        providers,
+        includeNetwork: options?.includeNetwork
+      })
     );
     if (inflightRequest) {
       await inflightRequest;
@@ -718,10 +723,12 @@ function pendingActionKey(
 function providerStatusRequestKey(input: {
   providers?: readonly WorkspaceAgentProvider[];
   includeNetwork?: boolean;
+  refresh?: boolean;
 }): string {
   const providers = [...new Set(input.providers ?? [])].sort();
   return JSON.stringify({
     includeNetwork: input.includeNetwork === true,
+    refresh: input.refresh === true,
     providers: providers.length > 0 ? providers : null
   });
 }

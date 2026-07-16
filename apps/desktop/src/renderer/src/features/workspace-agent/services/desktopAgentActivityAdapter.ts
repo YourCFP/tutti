@@ -3,6 +3,7 @@ import {
   type AgentActivityAdapter,
   type AgentActivityMessage,
   type AgentActivitySession,
+  type AgentActivityTurn,
   type AgentPromptContentBlock
 } from "@tutti-os/agent-activity-core";
 import type {
@@ -13,7 +14,8 @@ import type {
   SendWorkspaceAgentSessionInputRequest,
   WorkspaceAgentProvider,
   WorkspaceAgentSession,
-  WorkspaceAgentSessionMessage
+  WorkspaceAgentSessionMessage,
+  WorkspaceAgentTurn
 } from "@tutti-os/client-tuttid-ts";
 import type { DesktopRuntimeApi } from "@preload/types";
 import { getActiveLocale } from "../../../i18n/runtime.ts";
@@ -513,6 +515,33 @@ export function agentActivitySessionFromTuttidSession(
     endedAtUnixMs: session.endedAtUnixMs ?? null,
     createdAtUnixMs,
     updatedAtUnixMs
+  };
+}
+
+export function agentActivityTurnFromTuttidTurn(
+  turn: WorkspaceAgentTurn
+): AgentActivityTurn {
+  return {
+    agentSessionId: turn.agentSessionId,
+    completedCommand: turn.completedCommand,
+    error: turn.error,
+    fileChanges: turn.fileChanges,
+    outcome: turn.outcome,
+    origin: turn.origin,
+    phase: turn.phase,
+    ...(turn.sourceGoalOperationId !== undefined
+      ? { sourceGoalOperationId: turn.sourceGoalOperationId }
+      : {}),
+    ...(turn.sourceGoalRevision !== undefined
+      ? { sourceGoalRevision: turn.sourceGoalRevision }
+      : {}),
+    ...(turn.sourceGoalRepairEpoch !== undefined
+      ? { sourceGoalRepairEpoch: turn.sourceGoalRepairEpoch }
+      : {}),
+    settledAtUnixMs: turn.settledAtUnixMs,
+    startedAtUnixMs: turn.startedAtUnixMs,
+    turnId: turn.turnId,
+    updatedAtUnixMs: turn.updatedAtUnixMs
   };
 }
 

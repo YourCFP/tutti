@@ -884,6 +884,45 @@ Turn state, loading, cancel, restore, file-change undo, rail projection, event u
   [agentPatchMetadata.ts](../../../packages/agent/gui/shared/agentConversation/rules/agentPatchMetadata.ts)
   [git_patch.go](../../../services/tuttid/service/agent/git_patch.go)
 
+### Cursor deleted files appear as created or modified
+
+- Symptom:
+  After Cursor deletes a file, the settled turn's changed-files summary or tool
+  detail labels it as created or modified instead of deleted.
+- Quick checks:
+  Inspect the original completed ACP tool payload, its following `turn.updated`
+  event, and the durable turn row. Cursor reports deletion with ACP
+  `kind = delete`, but its canonical tool name is still `Write`. The
+  `turn.updated.metadata.fileChanges.files[]` entry and durable
+  `file_changes_json` must both say `change = deleted`.
+- Root cause:
+  The canonical tool name describes the file-writing tool family, not the
+  change direction. Inferring every `Write` as creation discards Cursor's
+  explicit ACP delete semantic. A second failure mode is normalizing the tool
+  call correctly but omitting canonical `fileChanges` from the subsequent turn
+  state patch, leaving AgentGUI without its authoritative response-tail input.
+- Fix:
+  Normalize recognized provider change kinds inside the shared runtime
+  file-change projector, accumulate the result per turn, and persist it through
+  `turn.updated`. The session-detail response must return all durable root turns,
+  and the desktop reconcile bridge must insert them into the existing activity
+  engine turn store. AgentGUI reads only the matching canonical turn's
+  `fileChanges`; do not add Cursor/ACP/Codex/Claude field inference to
+  conversation projection. Keep tool `changes` payloads independently for
+  Undo/Reapply patch batches. Do not backfill sessions whose historical turns
+  have no canonical file changes.
+- Validation:
+  Cover the Cursor completed-call to `turn.updated` path, durable turn state,
+  and canonical AgentGUI projection. Also cover Codex `changes[].kind.type` and
+  Claude Code started/completed tool merging because all three providers share
+  the same turn-level contract.
+- References:
+  [tool_file_changes.go](../../../packages/agent/daemon/runtime/tool_file_changes.go)
+  [acp_turn_normalizer.go](../../../packages/agent/daemon/runtime/acp_turn_normalizer.go)
+  [reporter_message.go](../../../packages/agent/daemon/runtime/reporter_message.go)
+  [reporter_state.go](../../../packages/agent/daemon/runtime/reporter_state.go)
+  [agentTurnSummaryProjection.ts](../../../packages/agent/gui/shared/agentConversation/projection/agentTurnSummaryProjection.ts)
+
 ### Remote agent cancel does not stop the local turn
 
 - Symptom:
@@ -1302,6 +1341,41 @@ Turn state, loading, cancel, restore, file-change undo, rail projection, event u
   [command_catalog.go](../../services/tuttid/service/agentsidecar/command_catalog.go)
   [controller_session_lifecycle.go](../../packages/agent/daemon/runtime/controller_session_lifecycle.go)
   [agent_runtime_adapter.go](../../services/tuttid/agent_runtime_adapter.go)
+
+### Cursor session/new is canceled before its 30-second timeout
+
+- Symptom:
+  Sending the first message to Cursor leaves AgentGUI activating until Tutti
+  reports a timeout. Cursor logs show `session/new` started, but it is canceled
+  substantially before the ACP runtime's configured 30-second deadline.
+- Quick checks:
+  Correlate `service.create.entered`, provider-status completion,
+  `runtime_start_requested`, ACP `initialize`, and `session/new`. If a full
+  provider-status probe runs inside `Service.Create`, or the renderer activation
+  expires 30 seconds after the click rather than 30 seconds after `session/new`
+  starts, the protocol call is receiving only a leftover budget.
+- Root cause:
+  Provider readiness was treated as a per-session precondition even though it
+  performs application-scoped binary, version, and auth detection. Cursor auth
+  fallback commands can consume several seconds before ACP starts. An outer
+  30-second activation timer then propagates cancellation into the daemon and
+  truncates the independent 30-second `session/new` timeout.
+- Fix:
+  Cache provider readiness in `tuttid` per provider with completion-time TTL and
+  single-flight refresh. Explicit setup refreshes bypass that cache; ordinary
+  session creation does not run status, version, auth, network, or hidden model
+  discovery. Let the actual process spawn and ACP handshake be authoritative.
+  Give new-session activation a larger outer safety deadline while preserving
+  the ACP runtime's own 30-second `session/new` deadline.
+- Validation:
+  Cover cache reuse across all-provider and single-provider requests, forced
+  refresh, concurrent single-flight reads, absence of availability checks from
+  `Service.Create`, and a new-session activation timeout larger than 30 seconds.
+- References:
+  [status_cache.go](../../../services/tuttid/service/agentstatus/status_cache.go)
+  [service.go](../../../services/tuttid/service/agent/service.go)
+  [pendingIntents.reducer.ts](../../../packages/agent/activity-core/src/engine/pendingIntents.reducer.ts)
+  [acp_shared.go](../../../packages/agent/daemon/runtime/acp_shared.go)
 
 ### Cursor auto-continue invents interrupted work after a network drop
 
