@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -18,15 +19,37 @@ type goalEvidenceFenceStore struct {
 	repairInputs    []agentactivitybiz.EnsureGoalRepairOperationInput
 	evidenceInputs  []agentactivitybiz.GoalControlOperationEvidence
 	reconcileInputs []agentactivitybiz.GoalObservationReconcile
+	stateErr        error
+	operationErr    error
 }
 
 func (s *goalEvidenceFenceStore) GetSessionGoalState(context.Context, string, string) (agentactivitybiz.SessionGoalState, bool, error) {
+	if s.stateErr != nil {
+		return agentactivitybiz.SessionGoalState{}, false, s.stateErr
+	}
 	return s.state, true, nil
 }
 
 func (s *goalEvidenceFenceStore) GetGoalControlOperation(_ context.Context, _ string, operationID string) (agentactivitybiz.GoalControlOperation, bool, error) {
+	if s.operationErr != nil {
+		return agentactivitybiz.GoalControlOperation{}, false, s.operationErr
+	}
 	operation, found := s.operations[operationID]
 	return operation, found, nil
+}
+
+func TestGoalReconcileEvidencePropagatesFenceReadFailure(t *testing.T) {
+	want := errors.New("transient store failure")
+	store := &goalEvidenceFenceStore{recordingGoalStateStore: &recordingGoalStateStore{}, stateErr: want}
+	service := newIsolatedAgentService(newFakeRuntime())
+	service.GoalStateStore = store
+	err := service.ReconcileGoalFromEvidence(context.Background(), GoalReconcileRequiredInput{
+		WorkspaceID: "ws", AgentSessionID: "session", RequestID: "request", ProviderTurnID: "turn",
+		FenceMode: "operation", ExpectedOperationID: "operation", ExpectedRevision: 1, QuiesceSucceeded: true,
+	})
+	if !errors.Is(err, want) {
+		t.Fatalf("ReconcileGoalFromEvidence error = %v", err)
+	}
 }
 
 func (s *goalEvidenceFenceStore) RecordGoalControlOperationEvidence(_ context.Context, input agentactivitybiz.GoalControlOperationEvidence) (agentactivitybiz.GoalControlOperation, bool, error) {
@@ -66,10 +89,14 @@ func TestGoalReconcileEvidenceRejectsOldOperationAfterSameRevisionRepair(t *test
 	}
 	service := newIsolatedAgentService(newFakeRuntime())
 	service.GoalStateStore = store
-	if service.goalReconcileEvidenceFenceMatches(context.Background(), GoalReconcileRequiredInput{
+	matches, err := service.goalReconcileEvidenceFenceMatches(context.Background(), GoalReconcileRequiredInput{
 		WorkspaceID: "ws", AgentSessionID: "session", FenceMode: "operation",
 		ExpectedOperationID: "old-op", ExpectedRevision: 2, ExpectedRepairEpoch: 0,
-	}) {
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if matches {
 		t.Fatal("old same-revision operation evidence passed after repair operation became current")
 	}
 }

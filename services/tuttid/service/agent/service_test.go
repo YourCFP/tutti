@@ -4213,6 +4213,34 @@ func TestActivityProjectionPublishesSessionAuditOutsideMessageUpdate(t *testing.
 	}
 }
 
+func TestActivityProjectionPreservesMixedMessageAuditOrder(t *testing.T) {
+	repo := &activityProjectionRepoStub{messageResult: agentactivitybiz.MessageReportResult{
+		AcceptedCount: 3, LatestVersion: 3,
+		Messages: []agentactivitybiz.Message{
+			{AgentSessionID: "session-order", MessageID: "message-1", Version: 1, TurnID: "turn-1", Role: "assistant", Kind: "text", Payload: map[string]any{}, OccurredAtUnixMS: 1},
+			{AgentSessionID: "session-order", MessageID: "audit-1", Version: 2, Role: "user", Kind: "session_audit", Payload: map[string]any{}, OccurredAtUnixMS: 2},
+			{AgentSessionID: "session-order", MessageID: "message-2", Version: 3, TurnID: "turn-1", Role: "assistant", Kind: "text", Payload: map[string]any{}, OccurredAtUnixMS: 3},
+		},
+	}}
+	publisher := &activityUpdatePublisherStub{}
+	projection := NewActivityProjection(repo)
+	projection.SetPublisher(publisher)
+	_, err := projection.ReportSessionMessages(context.Background(), agentsessionstore.ReportSessionMessagesInput{
+		WorkspaceID: "ws-order", AgentSessionID: "session-order", SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
+		Source:  agentsessionstore.EventSource{Provider: "codex"},
+		Updates: []agentsessionstore.WorkspaceAgentSessionMessageUpdate{{MessageID: "message-1", TurnID: "turn-1", Role: "assistant", Kind: "text"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(publisher.events) != 3 || publisher.events[0].eventType != "message_update" || publisher.events[1].eventType != "session_audit" || publisher.events[2].eventType != "message_update" {
+		t.Fatalf("published order = %#v", publisher.events)
+	}
+	if publisher.events[0].payload["latestVersion"] != uint64(1) || publisher.events[2].payload["latestVersion"] != uint64(3) {
+		t.Fatalf("message run cursors = %#v", publisher.events)
+	}
+}
+
 func TestActivityProjectionPublishesDeletedEventsForClearedSessions(t *testing.T) {
 	repo := &activityProjectionRepoStub{
 		clearResult: agentactivitybiz.ClearSessionsResult{
@@ -5118,6 +5146,7 @@ type recordingGoalStateStore struct {
 	prepared     []agentactivitybiz.GoalControlOperationPrepare
 	dispatched   []string
 	acknowledged []agentactivitybiz.GoalControlOperationAcknowledge
+	released     []agentactivitybiz.ReleaseGoalControlOperationInput
 }
 
 func (s *recordingGoalStateStore) PrepareGoalControlOperation(_ context.Context, input agentactivitybiz.GoalControlOperationPrepare) (agentactivitybiz.GoalControlOperation, agentactivitybiz.SessionGoalState, bool, error) {
@@ -5215,7 +5244,8 @@ func (*recordingGoalStateStore) ClaimGoalControlOperation(_ context.Context, inp
 	return agentactivitybiz.GoalControlOperation{OperationID: input.OperationID, GoalRevision: 1, LeaseOwner: input.LeaseOwner}, true, nil
 }
 
-func (*recordingGoalStateStore) ReleaseGoalControlOperation(context.Context, agentactivitybiz.ReleaseGoalControlOperationInput) (agentactivitybiz.GoalControlOperation, bool, error) {
+func (s *recordingGoalStateStore) ReleaseGoalControlOperation(_ context.Context, input agentactivitybiz.ReleaseGoalControlOperationInput) (agentactivitybiz.GoalControlOperation, bool, error) {
+	s.released = append(s.released, input)
 	return agentactivitybiz.GoalControlOperation{}, true, nil
 }
 
@@ -5237,6 +5267,27 @@ func (*recordingGoalStateStore) EnsureOrWakeGoalRepairOperation(context.Context,
 
 func (*recordingGoalStateStore) RequeueLeasedGoalControlOperationsOnStartup(context.Context, int64) (int64, error) {
 	return 0, nil
+}
+
+func TestRetryRecoveredGoalOperationPreservesRepairEvidence(t *testing.T) {
+	store := &recordingGoalStateStore{}
+	service := newIsolatedAgentService(newFakeRuntime())
+	service.GoalStateStore = store
+	op := agentactivitybiz.GoalControlOperation{
+		OperationID: "repair-op", WorkspaceID: "ws", AgentSessionID: "session", GoalRevision: 2,
+		LeaseOwner: service.goalOperationOwner(), RepairEpoch: 3, Attempt: 1,
+		Evidence: map[string]any{"repair": map[string]any{"repairId": "incident-1"}},
+	}
+	if err := service.retryRecoveredGoalOperation(context.Background(), op, context.DeadlineExceeded); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.released) != 1 {
+		t.Fatalf("release inputs = %#v", store.released)
+	}
+	repair, ok := store.released[0].Evidence["repair"].(map[string]any)
+	if !ok || repair["repairId"] != "incident-1" {
+		t.Fatalf("release evidence = %#v", store.released)
+	}
 }
 
 func TestServiceTypedGoalUsesDurableSagaBeforeTurnSubmit(t *testing.T) {

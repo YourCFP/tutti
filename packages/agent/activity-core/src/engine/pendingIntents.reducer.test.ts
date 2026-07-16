@@ -302,6 +302,24 @@ test("goal control send result confirms without manufacturing a Turn", () => {
   assert.equal(result.state.submitsByClientSubmitId["submit-1"]?.turnId, null);
 });
 
+test("malformed turnless goal control result is rejected before session upsert", () => {
+  const state = reduce(createInitialPendingIntentsState(), submit()).state;
+  const validation = validateSendInputResult(
+    {
+      kind: "goalControl",
+      session: {
+        agentSessionId: "session-1",
+        workspaceId: "workspace-1"
+      }
+    },
+    state.submitsByClientSubmitId["submit-1"]
+  );
+  assert.deepEqual(validation, {
+    kind: "invalid",
+    reason: "send_result_entities_missing"
+  });
+});
+
 test("timed out activation remains uncertain until its exact session appears", () => {
   let state = reduce(createInitialPendingIntentsState(), activation()).state;
   state = reduce(state, {

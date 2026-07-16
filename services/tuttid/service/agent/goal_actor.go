@@ -3,12 +3,11 @@ package agent
 import (
 	"context"
 	"strings"
-	"sync"
 	"time"
 )
 
 type goalActorEntry struct {
-	mu   sync.Mutex
+	gate chan struct{}
 	refs int
 }
 
@@ -20,23 +19,37 @@ func (s *Service) withGoalActor(ctx context.Context, workspaceID, agentSessionID
 	}
 	entry := s.goalActors[key]
 	if entry == nil {
-		entry = &goalActorEntry{}
+		entry = &goalActorEntry{gate: make(chan struct{}, 1)}
+		entry.gate <- struct{}{}
 		s.goalActors[key] = entry
 	}
 	entry.refs++
 	s.goalActorsMu.Unlock()
 
-	entry.mu.Lock()
+	select {
+	case <-ctx.Done():
+		s.releaseGoalActorReference(key, entry)
+		return ctx.Err()
+	case <-entry.gate:
+	}
+	if err := ctx.Err(); err != nil {
+		entry.gate <- struct{}{}
+		s.releaseGoalActorReference(key, entry)
+		return err
+	}
 	err := fn(ctx)
-	entry.mu.Unlock()
+	entry.gate <- struct{}{}
+	s.releaseGoalActorReference(key, entry)
+	return err
+}
 
+func (s *Service) releaseGoalActorReference(key string, entry *goalActorEntry) {
 	s.goalActorsMu.Lock()
 	entry.refs--
-	if entry.refs == 0 {
+	if entry.refs == 0 && s.goalActors[key] == entry {
 		delete(s.goalActors, key)
 	}
 	s.goalActorsMu.Unlock()
-	return err
 }
 
 func (s *Service) goalOperationNow() time.Time {

@@ -770,6 +770,33 @@ func TestClaudeSDKGoalArmTurnCanceledClearsMirror(t *testing.T) {
 	}
 }
 
+func TestClaudeSDKDelayedOlderRepairEpochIsPreciselyCanceled(t *testing.T) {
+	t.Parallel()
+	adapter := NewClaudeCodeSDKAdapter(nil)
+	conn := newBlockingClaudeSDKConnection()
+	defer func() { _ = conn.Close() }()
+	session, adapterSession := newClaudeSDKLifecycleTestSession(t, adapter, conn)
+	adapter.mu.Lock()
+	adapterSession.goalOperationID = "goal-op"
+	adapterSession.goalRevision = 7
+	adapterSession.goalRepairEpoch = 2
+	adapter.mu.Unlock()
+	_, _, err := adapter.sidecarTurnEvents(adapterSession, session, "goal-turn-old", claudeSDKSidecarEvent{
+		Type: "turn_started",
+		Payload: map[string]any{
+			"turnId": "goal-turn-old", "turnOrigin": "goal_continuation",
+			"sourceGoalOperationId": "goal-op", "sourceGoalRevision": float64(7), "sourceGoalRepairEpoch": float64(1),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent := conn.sentRequests()
+	if len(sent) != 1 || sent[0].Type != "cancel" || payloadString(sent[0].Payload, "turnId") != "goal-turn-old" || payloadInt64(sent[0].Payload, "goalRepairEpoch") != 1 {
+		t.Fatalf("precise stale repair cancellation = %#v", sent)
+	}
+}
+
 func TestClaudeSDKStaleFailureCannotRestoreNewerGoalState(t *testing.T) {
 	adapter := NewClaudeCodeSDKAdapter(nil)
 	adapterSession := &claudeSDKAdapterSession{}

@@ -28,10 +28,11 @@ type codexGoalGenerationBinding struct {
 }
 
 type codexGoalTurnEvidence struct {
-	fingerprints map[string]struct{}
-	identity     goalOperationIdentity
-	bound        bool
-	ambiguous    bool
+	fingerprints   map[string]struct{}
+	identity       goalOperationIdentity
+	bound          bool
+	ambiguous      bool
+	lookupInFlight int
 }
 
 type codexPendingGoalTurn struct {
@@ -235,6 +236,9 @@ func (a *CodexAppServerAdapter) observeGoalTurnGeneration(session Session, provi
 	}
 	sink := a.goalProvenanceSink
 	threadID := appSession.threadID
+	if sink != nil {
+		evidence.lookupInFlight++
+	}
 	a.mu.Unlock()
 	session.ProviderSessionID = threadID
 
@@ -268,6 +272,9 @@ func (a *CodexAppServerAdapter) observeGoalTurnGeneration(session Session, provi
 		return
 	}
 	evidence = appSession.goalTurnEvidence[providerTurnID]
+	if evidence != nil && sink != nil && evidence.lookupInFlight > 0 {
+		evidence.lookupInFlight--
+	}
 	a.resolveGoalTurnEvidenceLocked(appSession, evidence)
 	a.pruneGoalProvenanceLocked(appSession)
 	a.mu.Unlock()
@@ -340,13 +347,17 @@ func (a *CodexAppServerAdapter) queueGoalTurnForProvenance(session Session, prov
 	if a.tryResolvePendingGoalTurn(session.AgentSessionID, providerTurnID) {
 		return
 	}
+	a.schedulePendingGoalTurnExpiry(session.AgentSessionID, providerTurnID, grace)
+}
+
+func (a *CodexAppServerAdapter) schedulePendingGoalTurnExpiry(agentSessionID, providerTurnID string, grace time.Duration) {
 	go func() {
 		timer := time.NewTimer(grace)
 		defer timer.Stop()
 		select {
 		case <-timer.C:
-			a.expirePendingGoalTurn(session.AgentSessionID, providerTurnID)
-		case <-a.sessionClientDone(session.AgentSessionID):
+			a.expirePendingGoalTurn(agentSessionID, providerTurnID)
+		case <-a.sessionClientDone(agentSessionID):
 		}
 	}()
 }
@@ -646,6 +657,16 @@ func (a *CodexAppServerAdapter) expirePendingGoalTurn(agentSessionID, providerTu
 	pending := appSession.pendingGoalTurns[strings.TrimSpace(providerTurnID)]
 	if pending == nil || pending.state != codexGoalTurnPending {
 		a.mu.Unlock()
+		return
+	}
+	evidence := appSession.goalTurnEvidence[strings.TrimSpace(providerTurnID)]
+	if evidence != nil && evidence.lookupInFlight > 0 {
+		grace := a.goalProvenanceGraceWindow
+		if grace <= 0 {
+			grace = defaultCodexAppServerGoalProvenanceGraceWindow
+		}
+		a.mu.Unlock()
+		a.schedulePendingGoalTurnExpiry(agentSessionID, providerTurnID, grace)
 		return
 	}
 	delete(appSession.pendingGoalTurns, strings.TrimSpace(providerTurnID))

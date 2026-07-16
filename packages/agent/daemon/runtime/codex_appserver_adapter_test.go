@@ -4836,6 +4836,65 @@ type memoryGoalProvenanceLedger struct {
 	bindings map[string]GoalProvenanceBinding
 }
 
+type blockingGoalProvenanceLedger struct {
+	*memoryGoalProvenanceLedger
+	lookupStarted chan struct{}
+	releaseLookup chan struct{}
+}
+
+func (l *blockingGoalProvenanceLedger) LookupGoalProvenance(ctx context.Context, session Session, fingerprint string) (GoalProvenanceBinding, bool, error) {
+	select {
+	case <-l.lookupStarted:
+	default:
+		close(l.lookupStarted)
+	}
+	select {
+	case <-l.releaseLookup:
+	case <-ctx.Done():
+		return GoalProvenanceBinding{}, false, ctx.Err()
+	}
+	return l.memoryGoalProvenanceLedger.LookupGoalProvenance(ctx, session, fingerprint)
+}
+
+func TestCodexGoalProvenanceGraceWaitsForDurableLookup(t *testing.T) {
+	adapter, transport, session := startedAppServerAdapter(t)
+	adapter.goalProvenanceGraceWindow = 10 * time.Millisecond
+	ledger := &blockingGoalProvenanceLedger{
+		memoryGoalProvenanceLedger: &memoryGoalProvenanceLedger{bindings: make(map[string]GoalProvenanceBinding)},
+		lookupStarted:              make(chan struct{}), releaseLookup: make(chan struct{}),
+	}
+	adapter.SetGoalProvenanceDurableSink(ledger)
+	identity := goalOperationIdentity{operationID: "goal-op-slow", revision: 1}
+	goal := map[string]any{"threadId": session.ProviderSessionID, "objective": "ship", "createdAt": int64(1), "updatedAt": int64(2)}
+	adapter.replaceGoalOperationIdentity(session.AgentSessionID, identity.operationID, identity.revision, 0)
+	if err := adapter.bindGoalGeneration(context.Background(), session, goal, identity); err != nil {
+		t.Fatal(err)
+	}
+	adapter.queueGoalTurnForProvenance(session, "provider-turn-slow")
+	done := make(chan struct{})
+	go func() {
+		adapter.observeGoalTurnGeneration(session, "provider-turn-slow", goal)
+		close(done)
+	}()
+	<-ledger.lookupStarted
+	time.Sleep(35 * time.Millisecond)
+	adapter.mu.Lock()
+	_, pending := adapter.sessions[session.AgentSessionID].pendingGoalTurns["provider-turn-slow"]
+	adapter.mu.Unlock()
+	if !pending {
+		t.Fatal("pending Goal turn expired while durable lookup was in flight")
+	}
+	if requests := appServerRequestParamsList(t, transport.conn, appServerMethodTurnInterrupt); len(requests) != 0 {
+		t.Fatalf("Goal turn was interrupted during durable lookup: %#v", requests)
+	}
+	close(ledger.releaseLookup)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("durable lookup did not finish")
+	}
+}
+
 func (l *memoryGoalProvenanceLedger) BindGoalProvenance(_ context.Context, session Session, fingerprint string, proposed GoalProvenanceBinding) (GoalProvenanceBinding, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

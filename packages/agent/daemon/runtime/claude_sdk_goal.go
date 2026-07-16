@@ -264,6 +264,34 @@ func (a *ClaudeCodeSDKAdapter) restoreClaudeGoalMirrorIfCurrent(
 	adapterSession.liveState.goal = clonePayload(previous)
 }
 
+// cancelClaudeSDKGoalTurn fences one exact provider turn from a superseded
+// repair epoch. The sidecar validates turnId before interrupting the query;
+// terminal lifecycle remains provider-owned.
+func (*ClaudeCodeSDKAdapter) cancelClaudeSDKGoalTurn(adapterSession *claudeSDKAdapterSession, session Session, turnID string, revision, repairEpoch int64) {
+	turnID = strings.TrimSpace(turnID)
+	if adapterSession == nil || turnID == "" {
+		return
+	}
+	if err := adapterSession.send(claudeSDKSidecarRequest{
+		ID: newID(), Type: "cancel",
+		Payload: map[string]any{
+			"agentSessionId":  session.AgentSessionID,
+			"turnId":          turnID,
+			"goalRevision":    revision,
+			"goalRepairEpoch": repairEpoch,
+		},
+	}); err != nil {
+		slog.Warn("agent session claude sdk precise goal interrupt failed",
+			"event", "agent_session.claude_sdk.goal.precise_interrupt_failed",
+			"agent_session_id", session.AgentSessionID,
+			"turn_id", turnID,
+			"goal_revision", revision,
+			"goal_repair_epoch", repairEpoch,
+			"error", err.Error(),
+		)
+	}
+}
+
 // ExecGoalControl forwards a typed "/goal …" prompt through the sidecar's
 // native prompt queue while another turn holds the session's turn slot, so
 // the command is not rejected by the single-turn gate. handled is false when

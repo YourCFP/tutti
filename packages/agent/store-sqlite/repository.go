@@ -416,6 +416,7 @@ type SessionStateReport struct {
 	OccurredAtUnixMS     int64
 	StartedAtUnixMS      int64
 	EndedAtUnixMS        int64
+	CreatedAtUnixMS      int64
 }
 
 type StateReportResult struct {
@@ -444,6 +445,7 @@ type MessageUpdate struct {
 	Role              string
 	Kind              string
 	Status            string
+	Semantics         *MessageSemantics
 	ContentDelta      string
 	Payload           map[string]any
 	OccurredAtUnixMS  int64
@@ -469,12 +471,20 @@ type Message struct {
 	Role              string
 	Kind              string
 	Status            string
+	Semantics         *MessageSemantics
 	Payload           map[string]any
 	OccurredAtUnixMS  int64
 	StartedAtUnixMS   int64
 	CompletedAtUnixMS int64
 	CreatedAtUnixMS   int64
 	UpdatedAtUnixMS   int64
+}
+
+type MessageSemantics struct {
+	UserVisibleAssistantResponse bool   `json:"userVisibleAssistantResponse,omitempty"`
+	TurnSettling                 bool   `json:"turnSettling,omitempty"`
+	NoticeCommand                string `json:"noticeCommand,omitempty"`
+	NoticeCommandStatus          string `json:"noticeCommandStatus,omitempty"`
 }
 
 type MessagePage struct {

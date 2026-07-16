@@ -60,12 +60,13 @@ func ProjectActivityEventsToStreamEvents(session Session, events []activityshare
 
 func eventSourceFromSession(session Session) agentsessionstore.EventSource {
 	return agentsessionstore.EventSource{
-		Provider:          strings.TrimSpace(session.Provider),
-		ProviderSessionID: strings.TrimSpace(session.ProviderSessionID),
-		AgentID:           strings.TrimSpace(session.AgentSessionID),
-		AgentTargetID:     strings.TrimSpace(session.AgentTargetID),
-		CWD:               strings.TrimSpace(session.CWD),
-		SessionOrigin:     agentsessionstore.WorkspaceAgentSessionOriginRuntime,
+		Provider:               strings.TrimSpace(session.Provider),
+		ProviderSessionID:      strings.TrimSpace(session.ProviderSessionID),
+		SessionCreatedAtUnixMS: session.CreatedAtUnixMS,
+		AgentID:                strings.TrimSpace(session.AgentSessionID),
+		AgentTargetID:          strings.TrimSpace(session.AgentTargetID),
+		CWD:                    strings.TrimSpace(session.CWD),
+		SessionOrigin:          agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 	}
 }
 

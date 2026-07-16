@@ -82,9 +82,16 @@ func (a *ClaudeCodeSDKAdapter) sidecarTurnEvents(adapterSession *claudeSDKAdapte
 				a.beginClaudeSDKRootTurn(adapterSession, rootTurnID, providerTurnID)
 				operationID := payloadString(event.Payload, "sourceGoalOperationId")
 				revision := payloadInt64(event.Payload, "sourceGoalRevision")
+				repairEpoch := payloadInt64(event.Payload, "sourceGoalRepairEpoch")
 				metadata["sourceGoalOperationId"] = operationID
 				metadata["sourceGoalRevision"] = revision
-				metadata["sourceGoalRepairEpoch"] = payloadInt64(event.Payload, "sourceGoalRepairEpoch")
+				metadata["sourceGoalRepairEpoch"] = repairEpoch
+				a.mu.Lock()
+				latestRevision, latestRepairEpoch := adapterSession.goalRevision, adapterSession.goalRepairEpoch
+				a.mu.Unlock()
+				if revision > 0 && revision == latestRevision && repairEpoch < latestRepairEpoch {
+					a.cancelClaudeSDKGoalTurn(adapterSession, session, providerTurnID, revision, repairEpoch)
+				}
 			}
 		}
 		if !providerCreatedGoalTurn {

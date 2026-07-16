@@ -285,6 +285,7 @@ type SessionMessage struct {
 	Role              string
 	Kind              string
 	Status            string
+	Semantics         *agentactivitybiz.MessageSemantics
 	Payload           map[string]any
 	OccurredAtUnixMS  int64
 	StartedAtUnixMS   int64

@@ -147,7 +147,9 @@ function isSendInputResult(
     result.kind === "goalControl" &&
     result.session &&
     typeof result.session.agentSessionId === "string" &&
-    typeof result.session.workspaceId === "string"
+    typeof result.session.workspaceId === "string" &&
+    Array.isArray(result.session.latestTurnInteractions) &&
+    Array.isArray(result.session.pendingInteractions)
   ) {
     return true;
   }

@@ -233,7 +233,7 @@ func (s *Service) retryRecoveredGoalOperation(ctx context.Context, op agentactiv
 	fail := !isRetryableRuntimeOperationError(cause)
 	_, _, err := s.GoalStateStore.ReleaseGoalControlOperation(persistCtx, agentactivitybiz.ReleaseGoalControlOperationInput{
 		WorkspaceID: op.WorkspaceID, OperationID: op.OperationID, LeaseOwner: s.goalOperationOwner(),
-		ProviderPhase: op.ProviderPhase, LastError: cause.Error(), NowUnixMS: now.UnixMilli(),
+		ProviderPhase: op.ProviderPhase, Evidence: clonePayload(op.Evidence), LastError: cause.Error(), NowUnixMS: now.UnixMilli(),
 		NextAttemptAtMS: runtimeOperationNextAttemptAt(now, op.Attempt, fail), Fail: fail,
 		RepairEpoch: op.RepairEpoch,
 	})
@@ -260,7 +260,7 @@ func (s *Service) failRecoveredGoalOperation(ctx context.Context, op agentactivi
 	now := s.goalOperationNow()
 	_, _, err := s.GoalStateStore.ReleaseGoalControlOperation(ctx, agentactivitybiz.ReleaseGoalControlOperationInput{
 		WorkspaceID: op.WorkspaceID, OperationID: op.OperationID, LeaseOwner: s.goalOperationOwner(),
-		ProviderPhase: op.ProviderPhase, LastError: reason, NowUnixMS: now.UnixMilli(), Fail: true,
+		ProviderPhase: op.ProviderPhase, Evidence: clonePayload(op.Evidence), LastError: reason, NowUnixMS: now.UnixMilli(), Fail: true,
 		RepairEpoch: op.RepairEpoch,
 	})
 	return err

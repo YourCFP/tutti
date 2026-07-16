@@ -101,11 +101,22 @@ func (s *Service) escalateGoalReconcileInboxTerminal(ctx context.Context, item a
 			if !found {
 				return errors.New("goal reconcile inbox terminal escalation state is unavailable")
 			}
-			_, err = s.GoalStateStore.MarkGoalRevisionTerminalIncident(actorCtx, agentactivitybiz.GoalTerminalIncidentInput{
-				WorkspaceID: item.WorkspaceID, AgentSessionID: item.AgentSessionID, Revision: state.Revision,
-				SourceID: "goal-reconcile-inbox:" + item.RequestID, LastError: cause.Error(), OccurredAtUnixMS: s.goalOperationNow().UnixMilli(),
-				Expected: &agentactivitybiz.GoalObservationFence{Exists: true, Revision: state.Revision, PendingOperationID: state.PendingOperationID, ObservedAtUnixMS: state.ObservedAtUnixMS},
-			})
+			if state.Revision == 0 {
+				_, err = s.GoalStateStore.ReconcileSessionGoalObservation(actorCtx, agentactivitybiz.GoalObservationReconcile{
+					WorkspaceID: item.WorkspaceID, AgentSessionID: item.AgentSessionID,
+					Observed:  clonePayload(state.Observed),
+					Evidence:  map[string]any{"source": "goal_reconcile_inbox_terminal", "requestId": item.RequestID, "confidence": "unknown"},
+					LastError: cause.Error(), OccurredAtUnixMS: s.goalOperationNow().UnixMilli(),
+					Expected:         &agentactivitybiz.GoalObservationFence{Exists: true, Revision: 0, PendingOperationID: state.PendingOperationID, ObservedAtUnixMS: state.ObservedAtUnixMS},
+					ForceSyncUnknown: true,
+				})
+			} else {
+				_, err = s.GoalStateStore.MarkGoalRevisionTerminalIncident(actorCtx, agentactivitybiz.GoalTerminalIncidentInput{
+					WorkspaceID: item.WorkspaceID, AgentSessionID: item.AgentSessionID, Revision: state.Revision,
+					SourceID: "goal-reconcile-inbox:" + item.RequestID, LastError: cause.Error(), OccurredAtUnixMS: s.goalOperationNow().UnixMilli(),
+					Expected: &agentactivitybiz.GoalObservationFence{Exists: true, Revision: state.Revision, PendingOperationID: state.PendingOperationID, ObservedAtUnixMS: state.ObservedAtUnixMS},
+				})
+			}
 			if err == nil {
 				return nil
 			}

@@ -70,6 +70,7 @@ func activityMessageUpdates(updates []agentsessionstore.WorkspaceAgentSessionMes
 			Role:              strings.TrimSpace(update.Role),
 			Kind:              strings.TrimSpace(update.Kind),
 			Status:            strings.TrimSpace(update.Status),
+			Semantics:         activityMessageSemantics(update.Semantics),
 			ContentDelta:      update.ContentDelta,
 			Payload:           update.Payload,
 			OccurredAtUnixMS:  update.OccurredAtUnixMS,
@@ -104,6 +105,9 @@ func activityMessagesEventPayload(messages []agentactivitybiz.Message) []map[str
 		if status := strings.TrimSpace(message.Status); status != "" {
 			item["status"] = status
 		}
+		if semantics := activityMessageSemanticsPayload(message.Semantics); semantics != nil {
+			item["semantics"] = semantics
+		}
 		if message.StartedAtUnixMS > 0 {
 			item["startedAtUnixMs"] = message.StartedAtUnixMS
 		}
@@ -117,6 +121,37 @@ func activityMessagesEventPayload(messages []agentactivitybiz.Message) []map[str
 			item["updatedAtUnixMs"] = message.UpdatedAtUnixMS
 		}
 		out = append(out, item)
+	}
+	return out
+}
+
+func activityMessageSemantics(value *agentsessionstore.WorkspaceAgentMessageSemantics) *agentactivitybiz.MessageSemantics {
+	if value == nil {
+		return nil
+	}
+	return &agentactivitybiz.MessageSemantics{
+		UserVisibleAssistantResponse: value.UserVisibleAssistantResponse,
+		TurnSettling:                 value.TurnSettling,
+		NoticeCommand:                strings.TrimSpace(value.NoticeCommand),
+		NoticeCommandStatus:          strings.TrimSpace(value.NoticeCommandStatus),
+	}
+}
+
+func activityMessageSemanticsPayload(value *agentactivitybiz.MessageSemantics) map[string]any {
+	if value == nil {
+		return nil
+	}
+	out := map[string]any{}
+	out["userVisibleAssistantResponse"] = value.UserVisibleAssistantResponse
+	out["turnSettling"] = value.TurnSettling
+	if value.NoticeCommand != "" {
+		out["noticeCommand"] = value.NoticeCommand
+	}
+	if value.NoticeCommandStatus != "" {
+		out["noticeCommandStatus"] = value.NoticeCommandStatus
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

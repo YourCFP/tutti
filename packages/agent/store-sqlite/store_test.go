@@ -456,6 +456,48 @@ func TestHistoricalImportCompatibilityCannotBeForgedByOrigin(t *testing.T) {
 	}
 }
 
+func TestStoreMessageSemanticsRoundTrip(t *testing.T) {
+	t.Parallel()
+	store := openTestStore(t, testOptions(&staticProjectPaths{}))
+	ctx := context.Background()
+	if _, err := store.ReportSessionState(ctx, SessionStateReport{WorkspaceID: "ws-semantics", AgentSessionID: "session-semantics", Provider: "codex", OccurredAtUnixMS: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, accepted, err := store.RecordTurnTransition(ctx, TurnTransition{WorkspaceID: "ws-semantics", AgentSessionID: "session-semantics", TurnID: "turn-1", Phase: TurnPhaseRunning, OccurredAtUnixMS: 2}); err != nil || !accepted {
+		t.Fatalf("turn accepted=%v err=%v", accepted, err)
+	}
+	semantics := &MessageSemantics{UserVisibleAssistantResponse: true, TurnSettling: true, NoticeCommand: "compact", NoticeCommandStatus: "running"}
+	if _, err := store.ReportSessionMessages(ctx, SessionMessageReport{WorkspaceID: "ws-semantics", AgentSessionID: "session-semantics", Messages: []MessageUpdate{{MessageID: "message-1", TurnID: "turn-1", Role: "assistant", Kind: "text", Semantics: semantics, OccurredAtUnixMS: 3}}}); err != nil {
+		t.Fatal(err)
+	}
+	page, ok, err := store.ListSessionMessages(ctx, ListSessionMessagesInput{WorkspaceID: "ws-semantics", AgentSessionID: "session-semantics", Limit: 10})
+	if err != nil || !ok || len(page.Messages) != 1 || page.Messages[0].Semantics == nil || !page.Messages[0].Semantics.UserVisibleAssistantResponse || page.Messages[0].Semantics.NoticeCommand != "compact" {
+		t.Fatalf("message semantics page=%#v ok=%v err=%v", page, ok, err)
+	}
+}
+
+func TestReportActivityStateRejectsTurnForDeletedSession(t *testing.T) {
+	t.Parallel()
+	store := openTestStore(t, testOptions(&staticProjectPaths{}))
+	ctx := context.Background()
+	if _, err := store.ReportSessionState(ctx, SessionStateReport{WorkspaceID: "ws-deleted-activity", AgentSessionID: "session-deleted-activity", Provider: "codex", OccurredAtUnixMS: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if removed, err := store.DeleteSession(ctx, "ws-deleted-activity", "session-deleted-activity"); err != nil || !removed {
+		t.Fatalf("DeleteSession removed=%v err=%v", removed, err)
+	}
+	result, err := store.ReportActivityState(ctx, ActivityStateReport{
+		Session: SessionStateReport{WorkspaceID: "ws-deleted-activity", AgentSessionID: "session-deleted-activity", Provider: "codex", OccurredAtUnixMS: 2},
+		Turn:    &TurnTransition{WorkspaceID: "ws-deleted-activity", AgentSessionID: "session-deleted-activity", TurnID: "late-turn", Phase: TurnPhaseSettled, Outcome: TurnOutcomeCompleted, OccurredAtUnixMS: 2},
+	})
+	if err != nil || result.State.Accepted || result.TurnAccepted {
+		t.Fatalf("late activity result=%#v err=%v", result, err)
+	}
+	if _, found, err := store.GetTurn(ctx, "ws-deleted-activity", "session-deleted-activity", "late-turn"); err != nil || found {
+		t.Fatalf("late turn found=%v err=%v", found, err)
+	}
+}
+
 func TestStoreRejectsMessageReferencingUnknownTurn(t *testing.T) {
 	t.Parallel()
 

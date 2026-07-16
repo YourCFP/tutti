@@ -29,7 +29,15 @@ func (s *Service) ReconcileGoalFromEvidence(ctx context.Context, input GoalRecon
 		// A successful stale quiesce is harmless and may be dropped. A failed
 		// quiesce means the provider turn can still mutate the thread, so it must
 		// attach repair to whatever durable revision is current inside GoalActor.
-		if input.QuiesceSucceeded && !s.goalReconcileEvidenceFenceMatches(actorCtx, input) {
+		if input.QuiesceSucceeded {
+			matches, fenceErr := s.goalReconcileEvidenceFenceMatches(actorCtx, input)
+			if fenceErr != nil {
+				return fenceErr
+			}
+			if matches {
+				_, err := s.reconcileGoalLocked(actorCtx, input.WorkspaceID, input.AgentSessionID)
+				return err
+			}
 			slog.Info("agent goal provenance reconcile evidence superseded",
 				"event", "agent_session.goal.provenance_reconcile_superseded",
 				"workspace_id", input.WorkspaceID,
@@ -41,11 +49,7 @@ func (s *Service) ReconcileGoalFromEvidence(ctx context.Context, input GoalRecon
 			)
 			return nil
 		}
-		if !input.QuiesceSucceeded {
-			return s.attachGoalProvenanceQuiesceRepair(actorCtx, input)
-		}
-		_, err := s.reconcileGoalLocked(actorCtx, input.WorkspaceID, input.AgentSessionID)
-		return err
+		return s.attachGoalProvenanceQuiesceRepair(actorCtx, input)
 	})
 	if err != nil {
 		slog.Warn("agent goal provenance reconcile failed",
@@ -177,9 +181,9 @@ func (s *Service) markGoalProvenanceUnknown(ctx context.Context, state agentacti
 	return err
 }
 
-func (s *Service) goalReconcileEvidenceFenceMatches(ctx context.Context, input GoalReconcileRequiredInput) bool {
+func (s *Service) goalReconcileEvidenceFenceMatches(ctx context.Context, input GoalReconcileRequiredInput) (bool, error) {
 	if s.GoalStateStore == nil {
-		return true
+		return true, nil
 	}
 	switch strings.TrimSpace(input.FenceMode) {
 	case "current_durable":
@@ -187,27 +191,33 @@ func (s *Service) goalReconcileEvidenceFenceMatches(ctx context.Context, input G
 		// reconcile path reads current durable state inside GoalActor and CASes
 		// the observation after the provider query, so a concurrent new command
 		// wins rather than being overwritten by this evidence.
-		return strings.TrimSpace(input.ExpectedOperationID) == "" && input.ExpectedRevision == 0
+		return strings.TrimSpace(input.ExpectedOperationID) == "" && input.ExpectedRevision == 0, nil
 	case "operation":
 		operationID := strings.TrimSpace(input.ExpectedOperationID)
 		if operationID == "" || input.ExpectedRevision <= 0 {
-			return false
+			return false, nil
 		}
 		state, found, err := s.GoalStateStore.GetSessionGoalState(ctx, input.WorkspaceID, input.AgentSessionID)
-		if err != nil || !found || state.Revision != input.ExpectedRevision {
-			return false
+		if err != nil {
+			return false, err
+		}
+		if !found || state.Revision != input.ExpectedRevision {
+			return false, nil
 		}
 		operation, found, err := s.GoalStateStore.GetGoalControlOperation(ctx, input.WorkspaceID, operationID)
-		if err != nil || !found || operation.AgentSessionID != input.AgentSessionID ||
+		if err != nil {
+			return false, err
+		}
+		if !found || operation.AgentSessionID != input.AgentSessionID ||
 			operation.GoalRevision != input.ExpectedRevision || operation.RepairEpoch != input.ExpectedRepairEpoch {
-			return false
+			return false, nil
 		}
 		if pendingOperationID := strings.TrimSpace(state.PendingOperationID); pendingOperationID != "" {
 			return pendingOperationID == operationID &&
-				(operation.Status == agentactivitybiz.GoalOperationStatusPrepared || operation.Status == agentactivitybiz.GoalOperationStatusDispatched)
+				(operation.Status == agentactivitybiz.GoalOperationStatusPrepared || operation.Status == agentactivitybiz.GoalOperationStatusDispatched), nil
 		}
-		return operation.Status == agentactivitybiz.GoalOperationStatusCompleted && !operation.RepairRequired
+		return operation.Status == agentactivitybiz.GoalOperationStatusCompleted && !operation.RepairRequired, nil
 	default:
-		return false
+		return false, nil
 	}
 }

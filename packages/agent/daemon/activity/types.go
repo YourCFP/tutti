@@ -446,10 +446,11 @@ type ConnectorInfo struct {
 }
 
 type EventSource struct {
-	Provider          string `json:"provider,omitempty"`
-	ProviderSessionID string `json:"providerSessionId,omitempty"`
-	AgentID           string `json:"agentId,omitempty"`
-	AgentTargetID     string `json:"agentTargetId,omitempty"`
+	Provider               string `json:"provider,omitempty"`
+	ProviderSessionID      string `json:"providerSessionId,omitempty"`
+	SessionCreatedAtUnixMS int64  `json:"sessionCreatedAtUnixMs,omitempty"`
+	AgentID                string `json:"agentId,omitempty"`
+	AgentTargetID          string `json:"agentTargetId,omitempty"`
 	// DeviceID optionally identifies the reporting device so multi-device
 	// controlplanes can attribute and scope sessions. Empty means unset.
 	DeviceID      string `json:"deviceId,omitempty"`

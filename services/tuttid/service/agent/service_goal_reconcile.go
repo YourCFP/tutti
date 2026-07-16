@@ -34,7 +34,15 @@ func (s *Service) GetGoalState(ctx context.Context, workspaceID, agentSessionID 
 			WorkspaceID: workspaceID, AgentSessionID: agentSessionID,
 			Evidence:         map[string]any{"source": "upper_read_bootstrap", "confidence": "unknown"},
 			OccurredAtUnixMS: time.Now().UTC().UnixMilli(),
+			Expected:         &agentactivitybiz.GoalObservationFence{Exists: false},
+			ForceSyncUnknown: true,
 		})
+		if errors.Is(err, agentactivitybiz.ErrGoalReconcileConflict) {
+			state, found, err = s.GoalStateStore.GetSessionGoalState(ctx, workspaceID, agentSessionID)
+			if err == nil && !found {
+				err = agentactivitybiz.ErrGoalReconcileConflict
+			}
+		}
 		if err != nil {
 			return GoalStateSessionResult{}, err
 		}

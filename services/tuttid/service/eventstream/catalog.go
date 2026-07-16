@@ -599,6 +599,9 @@ func validateAgentActivityUpdatedData(decoded agentActivityUpdatedPayload) error
 			if strings.TrimSpace(message.Kind) == "" {
 				return fmt.Errorf("data.messages[%d].kind is required", index)
 			}
+			if strings.TrimSpace(message.Kind) == "session_audit" {
+				return fmt.Errorf("data.messages[%d].kind must not be session_audit", index)
+			}
 			if strings.TrimSpace(message.MessageID) == "" {
 				return fmt.Errorf("data.messages[%d].messageId is required", index)
 			}

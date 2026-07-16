@@ -88,6 +88,7 @@ func (s *Store) upsertAgentSessionTx(
 			OccurredAtUnixMS:     input.OccurredAtUnixMS,
 			StartedAtUnixMS:      input.StartedAtUnixMS,
 			EndedAtUnixMS:        input.EndedAtUnixMS,
+			CreatedAtUnixMS:      input.CreatedAtUnixMS,
 		},
 		now,
 	)

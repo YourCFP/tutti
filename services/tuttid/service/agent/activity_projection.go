@@ -240,6 +240,7 @@ func (p *ActivityProjection) ReportSessionState(
 		OccurredAtUnixMS:  input.State.OccurredAtUnixMS,
 		StartedAtUnixMS:   input.State.StartedAtUnixMS,
 		EndedAtUnixMS:     input.State.EndedAtUnixMS,
+		CreatedAtUnixMS:   input.Source.SessionCreatedAtUnixMS,
 	}
 	activityReport := agentactivitybiz.ActivityStateReport{Session: stateReport}
 	if transition, ok := turnTransitionFromStateInput(input); ok {
@@ -393,16 +394,23 @@ func (p *ActivityProjection) ReportSessionMessages(
 	}
 	if result.AcceptedCount > 0 {
 		publishedAgentSessionID := canonicalMessageUpdateSessionID(input.AgentSessionID, result.Messages)
-		messages, audits := partitionActivityMessages(result.Messages)
-		if len(messages) > 0 {
+		for start := 0; start < len(result.Messages); {
+			if strings.TrimSpace(result.Messages[start].Kind) == "session_audit" {
+				p.publishActivityUpdated(ctx, input.WorkspaceID, publishedAgentSessionID, "session_audit", activitySessionAuditEventPayload(input.WorkspaceID, publishedAgentSessionID, result.Messages[start]))
+				start++
+				continue
+			}
+			end := start + 1
+			for end < len(result.Messages) && strings.TrimSpace(result.Messages[end].Kind) != "session_audit" {
+				end++
+			}
+			run := result.Messages[start:end]
 			p.publishActivityUpdated(ctx, input.WorkspaceID, publishedAgentSessionID, "message_update", map[string]any{
-				"acceptedCount": len(messages), "agentSessionId": publishedAgentSessionID,
-				"eventType": "message_update", "latestVersion": result.LatestVersion,
-				"messages": activityMessagesEventPayload(messages), "workspaceId": strings.TrimSpace(input.WorkspaceID),
+				"acceptedCount": len(run), "agentSessionId": publishedAgentSessionID,
+				"eventType": "message_update", "latestVersion": run[len(run)-1].Version,
+				"messages": activityMessagesEventPayload(run), "workspaceId": strings.TrimSpace(input.WorkspaceID),
 			})
-		}
-		for _, audit := range audits {
-			p.publishActivityUpdated(ctx, input.WorkspaceID, publishedAgentSessionID, "session_audit", activitySessionAuditEventPayload(input.WorkspaceID, publishedAgentSessionID, audit))
+			start = end
 		}
 	}
 	reply := agentsessionstore.ReportSessionMessagesReply{
@@ -436,17 +444,6 @@ func (p *ActivityProjection) ReportGoalReconcileRequired(ctx context.Context, in
 		return agentsessionstore.ReportGoalReconcileRequiredReply{}, err
 	}
 	return agentsessionstore.ReportGoalReconcileRequiredReply{Accepted: true}, nil
-}
-
-func partitionActivityMessages(messages []agentactivitybiz.Message) (turnMessages []agentactivitybiz.Message, audits []agentactivitybiz.Message) {
-	for _, message := range messages {
-		if strings.TrimSpace(message.Kind) == "session_audit" {
-			audits = append(audits, message)
-		} else {
-			turnMessages = append(turnMessages, message)
-		}
-	}
-	return turnMessages, audits
 }
 
 func activitySessionAuditEventPayload(workspaceID, agentSessionID string, audit agentactivitybiz.Message) map[string]any {

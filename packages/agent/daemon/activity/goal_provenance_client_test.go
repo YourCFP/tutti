@@ -35,6 +35,15 @@ func TestClientBindAndLookupGoalProvenance(t *testing.T) {
 					Fingerprint: "generation", Ambiguous: true,
 				},
 			})
+		case "/v1/rooms/ws/agents/sessions/session/goal-reconcile-required":
+			var request WorkspaceAgentGoalReconcileRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatal(err)
+			}
+			if request.RequestID != "reconcile-1" || request.AgentSessionID != "session" {
+				t.Fatalf("reconcile request = %#v", request)
+			}
+			_ = json.NewEncoder(w).Encode(ReportGoalReconcileRequiredReply{Accepted: true})
 		default:
 			t.Fatalf("path = %s", r.URL.Path)
 		}
@@ -53,5 +62,11 @@ func TestClientBindAndLookupGoalProvenance(t *testing.T) {
 	})
 	if err != nil || !found || !binding.Ambiguous {
 		t.Fatalf("LookupGoalProvenance = %#v, found=%v, err=%v", binding, found, err)
+	}
+	reconcile, err := client.ReportGoalReconcileRequired(context.Background(), ReportGoalReconcileRequiredInput{
+		WorkspaceID: " ws ", Request: WorkspaceAgentGoalReconcileRequest{RequestID: "reconcile-1", AgentSessionID: " session ", FenceMode: "current_durable"},
+	})
+	if err != nil || !reconcile.Accepted {
+		t.Fatalf("ReportGoalReconcileRequired = %#v, %v", reconcile, err)
 	}
 }

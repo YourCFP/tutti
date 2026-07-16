@@ -79,6 +79,27 @@ func (c *Client) LookupGoalProvenance(ctx context.Context, input LookupGoalProve
 	return reply.Binding, reply.Found, nil
 }
 
+func (c *Client) ReportGoalReconcileRequired(ctx context.Context, input ReportGoalReconcileRequiredInput) (ReportGoalReconcileRequiredReply, error) {
+	workspaceID := strings.TrimSpace(input.WorkspaceID)
+	agentSessionID := strings.TrimSpace(input.Request.AgentSessionID)
+	if workspaceID == "" || agentSessionID == "" {
+		return ReportGoalReconcileRequiredReply{}, errors.New("workspace id and agent session id are required")
+	}
+	input.WorkspaceID = workspaceID
+	input.Request.AgentSessionID = agentSessionID
+	requestBody, err := marshalRequestBody(input.Request)
+	if err != nil {
+		return ReportGoalReconcileRequiredReply{}, fmt.Errorf("prepare goal reconcile request: %w", err)
+	}
+	endpoint := fmt.Sprintf("%s/rooms/%s/agents/sessions/%s/goal-reconcile-required",
+		resolveSessionAPIPrefix(c.cfg.BaseURL), url.PathEscape(workspaceID), url.PathEscape(agentSessionID))
+	var reply ReportGoalReconcileRequiredReply
+	if err := c.postJSONWithTransientRemoteRetry(ctx, endpoint, requestBody, &reply); err != nil {
+		return ReportGoalReconcileRequiredReply{}, WithRequestBodyBytes(err, len(requestBody))
+	}
+	return reply, nil
+}
+
 func (c *Client) ReportSessionState(ctx context.Context, input ReportSessionStateInput) (ReportSessionStateReply, error) {
 	workspaceID := strings.TrimSpace(input.WorkspaceID)
 	if workspaceID == "" {

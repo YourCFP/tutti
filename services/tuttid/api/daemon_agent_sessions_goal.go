@@ -103,9 +103,13 @@ func (api DaemonAPI) ReconcileWorkspaceAgentSessionGoal(ctx context.Context, req
 }
 
 func generatedAgentSessionGoalState(state agentactivitybiz.SessionGoalState) tuttigenerated.WorkspaceAgentSessionGoalState {
+	syncStatus := tuttigenerated.WorkspaceAgentSessionGoalStateSyncStatus(state.SyncStatus)
+	if !syncStatus.Valid() {
+		syncStatus = tuttigenerated.WorkspaceAgentSessionGoalStateSyncStatusUnknown
+	}
 	result := tuttigenerated.WorkspaceAgentSessionGoalState{
 		Revision: state.Revision, Tombstoned: state.Tombstoned,
-		SyncStatus:   tuttigenerated.WorkspaceAgentSessionGoalStateSyncStatus(state.SyncStatus),
+		SyncStatus:   syncStatus,
 		LastEvidence: map[string]any{}, UpdatedAtUnixMs: state.UpdatedAtUnixMS,
 	}
 	for key, value := range state.LastEvidence {
@@ -119,7 +123,7 @@ func generatedAgentSessionGoalState(state agentactivitybiz.SessionGoalState) tut
 	}
 	if len(state.Observed) > 0 {
 		var goal tuttigenerated.WorkspaceAgentSessionGoal
-		if decodeTypedAgentSessionField(state.Observed, &goal) {
+		if decodeTypedAgentSessionField(state.Observed, &goal) && goal.Objective != "" && goal.Status.Valid() {
 			result.Observed = &goal
 		}
 	}

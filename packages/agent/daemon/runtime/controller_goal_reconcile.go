@@ -17,8 +17,11 @@ type GoalReconcileResult struct {
 	Capabilities   GoalAdapterCapabilities
 }
 
-func (c *Controller) GoalCapabilities(_ context.Context, input GoalReconcileInput) (GoalAdapterCapabilities, error) {
-	release := c.acquireLifecycleLock(input.RoomID, input.AgentSessionID)
+func (c *Controller) GoalCapabilities(ctx context.Context, input GoalReconcileInput) (GoalAdapterCapabilities, error) {
+	release, err := c.acquireLifecycleLockContext(ctx, input.RoomID, input.AgentSessionID)
+	if err != nil {
+		return GoalAdapterCapabilities{}, err
+	}
 	defer release()
 	_, adapter, err := c.sessionAndAdapter(input.RoomID, input.AgentSessionID)
 	if err != nil {
@@ -35,7 +38,10 @@ func (c *Controller) GoalCapabilities(_ context.Context, input GoalReconcileInpu
 // returns normalized evidence. It never mutates durable desired state and
 // never creates a Turn.
 func (c *Controller) ReconcileGoal(ctx context.Context, input GoalReconcileInput) (GoalReconcileResult, error) {
-	releaseLifecycleLock := c.acquireLifecycleLock(input.RoomID, input.AgentSessionID)
+	releaseLifecycleLock, err := c.acquireLifecycleLockContext(ctx, input.RoomID, input.AgentSessionID)
+	if err != nil {
+		return GoalReconcileResult{}, err
+	}
 	defer releaseLifecycleLock()
 	session, adapter, err := c.sessionAndAdapter(input.RoomID, input.AgentSessionID)
 	if err != nil {

@@ -28,6 +28,13 @@ func TestExtensionProviderProjectsTurnLifecycleEvents(t *testing.T) {
 	}
 }
 
+func TestEventSourceCarriesStableSessionIncarnation(t *testing.T) {
+	source := eventSourceFromSession(Session{Provider: "codex", AgentSessionID: "session", CreatedAtUnixMS: 4242})
+	if source.SessionCreatedAtUnixMS != 4242 {
+		t.Fatalf("session incarnation = %d", source.SessionCreatedAtUnixMS)
+	}
+}
+
 func TestSessionAuditProjectsSeparatelyFromTurnMessages(t *testing.T) {
 	t.Parallel()
 	session := reportTestSession()

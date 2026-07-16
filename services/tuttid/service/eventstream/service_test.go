@@ -210,6 +210,14 @@ func TestAgentActivityUpdatedSessionAuditProtocolBoundary(t *testing.T) {
 	if err := catalog.ValidatePublish(TopicAgentActivityUpdated, DirectionServerToClient, turnlessMessage); err == nil {
 		t.Fatal("turnless ordinary message passed event protocol validation")
 	}
+	auditAsMessage := []byte(`{
+		"workspaceId":"workspace-1","agentSessionId":"session-1","eventType":"message_update",
+		"data":{"workspaceId":"workspace-1","agentSessionId":"session-1","eventType":"message_update","latestVersion":1,"acceptedCount":1,
+		"messages":[{"agentSessionId":"session-1","kind":"session_audit","messageId":"audit-1","payload":{},"role":"user","turnId":"turn-1","occurredAtUnixMs":100,"version":1}]}
+	}`)
+	if err := catalog.ValidatePublish(TopicAgentActivityUpdated, DirectionServerToClient, auditAsMessage); err == nil {
+		t.Fatal("session audit passed through message_update protocol")
+	}
 }
 
 func TestAgentActivityUpdatedValidationRejectsUnknownTypedEntityFields(t *testing.T) {

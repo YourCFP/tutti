@@ -36,6 +36,27 @@ func TestGoalProvenanceLedgerKeepsMoreThanMemoryCacheCapacity(t *testing.T) {
 	}
 }
 
+func TestGoalProvenanceLedgerUsesRuntimeSessionIncarnation(t *testing.T) {
+	t.Parallel()
+	store := openTestStore(t, testOptions(&staticProjectPaths{}))
+	ctx := context.Background()
+	const incarnation = int64(424242)
+	if _, err := store.ReportSessionState(ctx, SessionStateReport{
+		WorkspaceID: "ws-runtime-incarnation", AgentSessionID: "session-runtime-incarnation",
+		Provider: "codex", ProviderSessionID: "provider-session", OccurredAtUnixMS: incarnation + 1,
+		CreatedAtUnixMS: incarnation,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.BindGoalProvenance(ctx, BindGoalProvenanceInput{
+		WorkspaceID: "ws-runtime-incarnation", AgentSessionID: "session-runtime-incarnation",
+		SessionCreatedAtUnixMS: incarnation, ProviderSessionID: "provider-session",
+		Fingerprint: "generation", OperationID: "operation", Revision: 1, OccurredAtUnixMS: incarnation + 2,
+	}); err != nil {
+		t.Fatalf("runtime incarnation rejected: %v", err)
+	}
+}
+
 func TestGoalProvenanceLedgerCollisionIsPermanentlyAmbiguous(t *testing.T) {
 	t.Parallel()
 	store := openTestStore(t, testOptions(&staticProjectPaths{}))

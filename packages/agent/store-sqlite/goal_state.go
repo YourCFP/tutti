@@ -197,7 +197,7 @@ func (s *Store) GetGoalControlAudit(
 	}
 	row := s.db.QueryRowContext(ctx, `
 SELECT id, agent_session_id, message_id, version, turn_id, role, kind, status,
-       payload_json, occurred_at_unix_ms, started_at_unix_ms, completed_at_unix_ms,
+       semantics_json, payload_json, occurred_at_unix_ms, started_at_unix_ms, completed_at_unix_ms,
        created_at_unix_ms, updated_at_unix_ms
 FROM workspace_agent_messages
 WHERE workspace_id = ? AND agent_session_id = ? AND message_id = ? AND deleted_at_unix_ms = 0

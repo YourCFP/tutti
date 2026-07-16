@@ -54,6 +54,9 @@ func (r QueuedReporter) Report(ctx context.Context, input agentsessionstore.Repo
 	if client == nil {
 		return errors.New("agent session activity client is nil")
 	}
-	_, err := reportSessionActivity(ctx, client, input)
-	return err
+	reply, err := reportSessionActivity(ctx, client, input)
+	if err != nil {
+		return err
+	}
+	return validateReportActivityAccepted(input, reply)
 }

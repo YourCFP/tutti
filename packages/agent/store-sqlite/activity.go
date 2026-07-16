@@ -91,7 +91,7 @@ func (s *Store) ReportActivityState(
 	// first durable evidence attached to an otherwise exact-replay session
 	// snapshot (notably provider-initiated interactions). Apply them regardless
 	// of whether the enclosing session projection changed.
-	if input.Turn != nil {
+	if accepted && input.Turn != nil {
 		result.Turn, result.TurnAccepted, err = s.recordTurnTransitionTx(ctx, tx, *input.Turn, now)
 		if err != nil {
 			return ActivityStateReportResult{}, err
@@ -120,7 +120,7 @@ func (s *Store) ReportActivityState(
 	// Always validate and apply them even when the enclosing session report is
 	// an exact replay; otherwise an immutable-identity conflict could hide
 	// behind a stale session timestamp.
-	if input.Interaction != nil {
+	if accepted && input.Interaction != nil {
 		result.Interaction, result.InteractionResult, err = s.upsertInteractionTx(ctx, tx, *input.Interaction, now)
 		if err != nil {
 			return ActivityStateReportResult{}, err

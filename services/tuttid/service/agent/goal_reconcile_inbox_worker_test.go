@@ -124,3 +124,24 @@ func TestGoalReconcileInboxWorkerExhaustionPersistsRevisionTerminalFence(t *test
 		t.Fatalf("authoritative reconcile unlocked exhausted inbox state=%#v err=%v", state, err)
 	}
 }
+
+func TestGoalReconcileInboxWorkerExhaustionTerminatesRevisionZeroState(t *testing.T) {
+	store := &goalReconcileInboxWorkerStore{item: agentactivitybiz.GoalReconcileInboxItem{
+		RequestID: "request-zero", WorkspaceID: "ws", AgentSessionID: "session", Attempt: goalReconcileInboxMaxAttempts - 1,
+		PayloadError: "corrupt durable payload",
+	}}
+	goalStore := &goalEvidenceFenceStore{
+		recordingGoalStateStore: &recordingGoalStateStore{},
+		state:                   agentactivitybiz.SessionGoalState{WorkspaceID: "ws", AgentSessionID: "session", Revision: 0},
+		operations:              map[string]agentactivitybiz.GoalControlOperation{},
+	}
+	service := newIsolatedAgentService(newFakeRuntime())
+	service.GoalReconcileInboxStore = store
+	service.GoalStateStore = goalStore
+	if err := service.StepGoalReconcileInboxWorker(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !store.release.Fail || len(goalStore.reconcileInputs) != 1 || !goalStore.reconcileInputs[0].ForceSyncUnknown || goalStore.reconcileInputs[0].LastError == "" {
+		t.Fatalf("release=%#v reconcile=%#v", store.release, goalStore.reconcileInputs)
+	}
+}

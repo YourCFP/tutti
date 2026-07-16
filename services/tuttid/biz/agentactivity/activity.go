@@ -69,6 +69,7 @@ type MessageUpdate = agentstore.MessageUpdate
 type MessageReportResult = agentstore.MessageReportResult
 
 type Message = agentstore.Message
+type MessageSemantics = agentstore.MessageSemantics
 
 type MessagePage = agentstore.MessagePage
 
