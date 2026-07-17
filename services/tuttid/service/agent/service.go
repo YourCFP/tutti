@@ -445,6 +445,8 @@ func (s *Service) Clear(ctx context.Context, workspaceID string) (ClearSessionsR
 }
 
 func (s *Service) UpdatePin(ctx context.Context, workspaceID string, agentSessionID string, pinned bool) (Session, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	agentSessionID = strings.TrimSpace(agentSessionID)
 	result, err := s.ApplicationHost().UpdatePin(ctx, agenthost.UpdatePinInput{
 		WorkspaceID: workspaceID, AgentSessionID: agentSessionID, Pinned: pinned,
 	})
