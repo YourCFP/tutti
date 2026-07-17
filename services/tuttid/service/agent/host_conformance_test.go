@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	hostconformance "github.com/tutti-os/tutti/packages/agent/host/conformance"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
+	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
 )
 
 func TestLegacyServiceAgentHostConformance(t *testing.T) {
@@ -61,6 +63,26 @@ func TestHostCoordinatorConformance(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			for _, scenario := range hostconformance.CoordinatorScenarios() {
+				scenario := scenario
+				t.Run(scenario.Name, func(t *testing.T) {
+					driver := &legacyHostConformanceDriver{t: t, directHost: directHost}
+					if err := hostconformance.Run(context.Background(), driver, scenario); err != nil {
+						t.Fatal(err)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestHostGoalConformance(t *testing.T) {
+	for _, directHost := range []bool{false, true} {
+		name := "legacy_delegate"
+		if directHost {
+			name = "direct_host"
+		}
+		t.Run(name, func(t *testing.T) {
+			for _, scenario := range hostconformance.GoalScenarios() {
 				scenario := scenario
 				t.Run(scenario.Name, func(t *testing.T) {
 					driver := &legacyHostConformanceDriver{t: t, directHost: directHost}
@@ -155,6 +177,8 @@ type legacyHostConformanceDriver struct {
 	turns         *legacyHostConformanceTurnStore
 	operations    *runtimeOperationMemoryStore
 	operationPort *conformanceRuntimeOperationStore
+	goalStore     *conformanceGoalStateStore
+	goalInbox     *conformanceGoalInboxStore
 	recoverySteps *[]string
 	directHost    bool
 }
@@ -174,16 +198,66 @@ func (d *legacyHostConformanceDriver) Reset(_ context.Context, fixture hostconfo
 	d.service = newTestService(d.runtime)
 	d.service.SessionReader = d.sessions
 	d.service.SessionInitializer = legacyHostConformanceSessionInitializer{sessions: d.sessions}
-	d.service.SubmitClaimStore = openAgentServiceSQLiteStore(d.t)
+	canonicalStore := openAgentServiceSQLiteStore(d.t)
+	d.service.SubmitClaimStore = canonicalStore
 	d.service.RuntimeOperationStore = d.operationPort
 	d.service.StaleTurnSettler = conformanceStaleTurnSettler{steps: &steps}
 	d.service.RuntimeOperationOwner = "host-conformance-worker"
 	d.service.RuntimeOperationClock = func() time.Time { return time.UnixMilli(1_000) }
+	d.goalStore = &conformanceGoalStateStore{GoalStateStore: canonicalStore, steps: &steps}
+	d.goalInbox = &conformanceGoalInboxStore{GoalReconcileInboxStore: canonicalStore, steps: &steps}
+	d.service.GoalStateStore = d.goalStore
+	d.service.GoalReconcileInboxStore = d.goalInbox
+	d.service.GoalOperationOwner = "host-goal-conformance-worker"
+	d.service.GoalOperationClock = func() time.Time { return time.UnixMilli(1_000) }
+	if fixture.DisableGoalInbox {
+		d.service.GoalReconcileInboxStore = nil
+	}
+
+	var goalMu sync.Mutex
+	var providerGoal map[string]any
+	d.runtime.goalControlHook = func(_ context.Context, input RuntimeGoalControlInput) (RuntimeGoalControlResult, error) {
+		goalMu.Lock()
+		defer goalMu.Unlock()
+		switch input.Action {
+		case "set":
+			providerGoal = map[string]any{"objective": input.Objective, "status": "active"}
+		case "pause":
+			providerGoal = clonePayload(providerGoal)
+			providerGoal["status"] = "paused"
+		case "resume":
+			providerGoal = clonePayload(providerGoal)
+			providerGoal["status"] = "active"
+		case "clear":
+			providerGoal = nil
+		}
+		return RuntimeGoalControlResult{
+			AgentSessionID: input.AgentSessionID, Goal: clonePayload(providerGoal), ProviderPhase: "applied",
+			Evidence: map[string]any{"confidence": "authoritative"},
+		}, nil
+	}
+	d.runtime.goalReconcileHook = func(_ context.Context, input RuntimeGoalControlInput) (RuntimeGoalReconcileResult, error) {
+		goalMu.Lock()
+		defer goalMu.Unlock()
+		return RuntimeGoalReconcileResult{
+			AgentSessionID: input.AgentSessionID, Goal: clonePayload(providerGoal),
+			Evidence: map[string]any{"confidence": "authoritative"},
+		}, nil
+	}
 
 	if fixture.Session == nil {
 		return nil
 	}
 	seed := *fixture.Session
+	if err := canonicalStore.Create(context.Background(), workspacebiz.Summary{ID: seed.WorkspaceID, Name: "Host conformance"}); err != nil {
+		return err
+	}
+	if _, err := canonicalStore.ReportSessionState(context.Background(), agentactivitybiz.SessionStateReport{
+		WorkspaceID: seed.WorkspaceID, AgentSessionID: seed.AgentSessionID,
+		Provider: seed.Provider, ProviderSessionID: seed.ProviderSessionID, OccurredAtUnixMS: 1,
+	}); err != nil {
+		return err
+	}
 	kind := strings.TrimSpace(seed.Kind)
 	if kind == "" {
 		kind = agentactivitybiz.SessionKindRoot
@@ -330,17 +404,33 @@ func (d *legacyHostConformanceDriver) SendInput(
 		}
 		d.recordSubmittedTurn(ref.WorkspaceID, ref.AgentSessionID, result.TurnID)
 		session, err := d.service.Get(ctx, ref.WorkspaceID, ref.AgentSessionID)
-		return hostconformance.SendObservation{Session: legacyHostSessionObservation(session), TurnID: result.TurnID}, err
+		observation := hostconformance.SendObservation{
+			Session: legacyHostSessionObservation(session), TurnID: result.TurnID, Kind: result.Kind,
+		}
+		if result.GoalControl != nil {
+			observation.Goal = clonePayload(result.GoalControl.Goal)
+			if result.GoalControl.GoalState != nil {
+				observation.Revision = result.GoalControl.GoalState.Revision
+			}
+		}
+		return observation, err
 	}
 	result, err := d.service.SendInput(ctx, ref.WorkspaceID, ref.AgentSessionID, input)
 	if err != nil {
 		return hostconformance.SendObservation{}, err
 	}
 	d.recordSubmittedTurn(ref.WorkspaceID, ref.AgentSessionID, result.TurnID)
-	return hostconformance.SendObservation{
+	observation := hostconformance.SendObservation{
 		Session: legacyHostSessionObservation(result.Session),
-		TurnID:  result.TurnID,
-	}, nil
+		TurnID:  result.TurnID, Kind: result.Kind,
+	}
+	if result.GoalControl != nil {
+		observation.Goal = clonePayload(result.GoalControl.Goal)
+		if result.GoalControl.GoalState != nil {
+			observation.Revision = result.GoalControl.GoalState.Revision
+		}
+	}
+	return observation, nil
 }
 
 func (d *legacyHostConformanceDriver) CancelTurn(ctx context.Context, input agenthost.CancelTurnInput) (hostconformance.CancelObservation, error) {
@@ -427,11 +517,71 @@ func (d *legacyHostConformanceDriver) UpdateTitle(ctx context.Context, input age
 	return legacyHostSessionObservation(session), err
 }
 
+func (d *legacyHostConformanceDriver) GoalControl(ctx context.Context, input agenthost.GoalControlInput) (hostconformance.GoalObservation, error) {
+	if d.directHost {
+		result, err := d.service.applicationHost(serviceHostPreparation{service: d.service}).GoalControl(ctx, input)
+		return hostGoalControlObservation(result), err
+	}
+	result, err := d.service.goalControl(ctx, input.WorkspaceID, input.AgentSessionID, input.Action, input.Objective, input.SubmissionMetadata)
+	if err != nil {
+		return hostconformance.GoalObservation{}, err
+	}
+	observation := hostconformance.GoalObservation{Goal: clonePayload(result.Goal), PendingOperationID: result.OperationID}
+	if result.GoalState != nil {
+		observation.Revision = result.GoalState.Revision
+		observation.PendingOperationID = result.GoalState.PendingOperationID
+		observation.SyncStatus = result.GoalState.SyncStatus
+	}
+	return observation, nil
+}
+
+func (d *legacyHostConformanceDriver) GetGoalState(ctx context.Context, ref agenthost.SessionRef) (hostconformance.GoalObservation, error) {
+	if d.directHost {
+		result, err := d.service.applicationHost(serviceHostPreparation{service: d.service}).GetGoalState(ctx, ref)
+		return hostGoalStateObservation(result), err
+	}
+	result, err := d.service.GetGoalState(ctx, ref.WorkspaceID, ref.AgentSessionID)
+	if err != nil {
+		return hostconformance.GoalObservation{}, err
+	}
+	return hostGoalStateObservation(agenthost.GoalStateResult{State: result.State}), nil
+}
+
+func (d *legacyHostConformanceDriver) ReconcileGoal(ctx context.Context, ref agenthost.SessionRef) (hostconformance.GoalObservation, error) {
+	if d.directHost {
+		result, err := d.service.applicationHost(serviceHostPreparation{service: d.service}).ReconcileGoal(ctx, ref)
+		return hostGoalStateObservation(result), err
+	}
+	result, err := d.service.ReconcileGoal(ctx, ref.WorkspaceID, ref.AgentSessionID)
+	if err != nil {
+		return hostconformance.GoalObservation{}, err
+	}
+	return hostGoalStateObservation(agenthost.GoalStateResult{State: result.State}), nil
+}
+
+func hostGoalControlObservation(result agenthost.GoalControlResult) hostconformance.GoalObservation {
+	observation := hostconformance.GoalObservation{Goal: clonePayload(result.Goal), PendingOperationID: result.OperationID}
+	if result.GoalState != nil {
+		observation.Revision = result.GoalState.Revision
+		observation.PendingOperationID = result.GoalState.PendingOperationID
+		observation.SyncStatus = result.GoalState.SyncStatus
+	}
+	return observation
+}
+
+func hostGoalStateObservation(result agenthost.GoalStateResult) hostconformance.GoalObservation {
+	return hostconformance.GoalObservation{
+		Goal: clonePayload(result.State.Desired), Revision: result.State.Revision,
+		PendingOperationID: result.State.PendingOperationID, SyncStatus: result.State.SyncStatus,
+	}
+}
+
 func (d *legacyHostConformanceDriver) Metrics() hostconformance.Metrics {
 	metrics := hostconformance.Metrics{
 		StartCalls: len(d.runtime.startCalls), ResumeCalls: len(d.runtime.resumeCalls),
 		ExecCalls: len(d.runtime.execCalls), CancelCalls: len(d.runtime.cancelCalls),
 		InteractiveCalls: len(d.runtime.submitInteractiveCalls), UpdateSettingsCalls: len(d.runtime.updateSettingsCalls),
+		GoalControlCalls: len(d.runtime.goalControlCalls), GoalReconcileCalls: len(d.runtime.goalReconcileCalls),
 		RecoverySteps: append([]string(nil), (*d.recoverySteps)...),
 	}
 	if len(d.runtime.cancelCalls) > 0 {
@@ -461,6 +611,26 @@ func (d *legacyHostConformanceDriver) Recover(ctx context.Context) error {
 type conformanceRuntimeOperationStore struct {
 	*runtimeOperationMemoryStore
 	steps *[]string
+}
+
+type conformanceGoalStateStore struct {
+	agenthost.GoalStateStore
+	steps *[]string
+}
+
+func (s *conformanceGoalStateStore) RequeueLeasedGoalControlOperationsOnStartup(ctx context.Context, now int64) (int64, error) {
+	*s.steps = append(*s.steps, "goal_requeue")
+	return s.GoalStateStore.RequeueLeasedGoalControlOperationsOnStartup(ctx, now)
+}
+
+type conformanceGoalInboxStore struct {
+	agenthost.GoalReconcileInboxStore
+	steps *[]string
+}
+
+func (s *conformanceGoalInboxStore) RequeueLeasedGoalReconcileInboxOnStartup(ctx context.Context, now int64) (int64, error) {
+	*s.steps = append(*s.steps, "goal_inbox_requeue")
+	return s.GoalReconcileInboxStore.RequeueLeasedGoalReconcileInboxOnStartup(ctx, now)
 }
 
 func (s *conformanceRuntimeOperationStore) RequeueLeasedRuntimeOperationsOnStartup(ctx context.Context, now int64) (int64, error) {

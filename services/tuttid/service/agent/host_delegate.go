@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -246,6 +245,30 @@ func (a serviceHostRuntime) Close(ctx context.Context, input RuntimeCloseInput) 
 	return a.service.controller().Close(ctx, input)
 }
 
+type serviceHostGoalRuntime struct{ service *Service }
+
+func (a serviceHostGoalRuntime) GoalControl(ctx context.Context, input agenthost.RuntimeGoalControlInput) (agenthost.RuntimeGoalControlResult, error) {
+	result, err := a.service.controller().GoalControl(ctx, input)
+	return result, normalizeRuntimeError(err)
+}
+
+func (a serviceHostGoalRuntime) ReconcileGoal(ctx context.Context, input agenthost.RuntimeGoalControlInput) (agenthost.RuntimeGoalReconcileResult, error) {
+	reconciler, ok := a.service.controller().(RuntimeGoalReconciler)
+	if !ok {
+		return agenthost.RuntimeGoalReconcileResult{}, errors.New("agent runtime goal reconciliation is unavailable")
+	}
+	result, err := reconciler.ReconcileGoal(ctx, input)
+	return result, normalizeRuntimeError(err)
+}
+
+func (a serviceHostGoalRuntime) GoalRecoveryPolicy(ctx context.Context, input agenthost.RuntimeGoalControlInput) (agenthost.RuntimeGoalRecoveryPolicy, error) {
+	resolver, ok := a.service.controller().(RuntimeGoalRecoveryPolicyResolver)
+	if !ok {
+		return agenthost.RuntimeGoalRecoveryPolicy{}, nil
+	}
+	return resolver.GoalRecoveryPolicy(ctx, input)
+}
+
 type serviceHostClock struct{ service *Service }
 
 func (c serviceHostClock) Now() time.Time {
@@ -255,19 +278,16 @@ func (c serviceHostClock) Now() time.Time {
 	return time.Now().UTC()
 }
 
-type serviceHostLifecycleObserver struct{ service *Service }
+type serviceHostGoalClock struct{ service *Service }
 
-type serviceHostStartupRecovery struct{ service *Service }
-
-func (r serviceHostStartupRecovery) RecoverBeforeStaleTurnSettlement(ctx context.Context) error {
-	if err := r.service.RecoverGoalOperations(ctx); err != nil {
-		return fmt.Errorf("recover agent goal operations: %w", err)
+func (c serviceHostGoalClock) Now() time.Time {
+	if c.service != nil && c.service.GoalOperationClock != nil {
+		return c.service.GoalOperationClock().UTC()
 	}
-	if err := r.service.RecoverGoalReconcileInbox(ctx); err != nil {
-		return fmt.Errorf("recover agent goal reconcile inbox: %w", err)
-	}
-	return nil
+	return time.Now().UTC()
 }
+
+type serviceHostLifecycleObserver struct{ service *Service }
 
 func (o serviceHostLifecycleObserver) ObserveLifecycleStep(ctx context.Context, step agenthost.LifecycleStep) {
 	if step.Err != nil {
@@ -286,6 +306,9 @@ func (s *Service) applicationHostLocked(preparation serviceHostPreparation) *age
 }
 
 func (s *Service) newApplicationHost(preparation serviceHostPreparation, locker agenthost.SessionLocker) *agenthost.Host {
+	s.goalActorOnce.Do(func() {
+		s.goalActor = agenthost.NewGoalActor()
+	})
 	return agenthost.New(agenthost.Config{
 		CanonicalStore: serviceHostStore{service: s}, Runtime: serviceHostRuntime{service: s},
 		RuntimePreparation: preparation, Attachments: s.PromptAttachmentStore,
@@ -293,16 +316,14 @@ func (s *Service) newApplicationHost(preparation serviceHostPreparation, locker 
 		RuntimeStartGate:  serviceHostStartupGate{service: s},
 		LifecycleObserver: serviceHostLifecycleObserver{service: s},
 		RuntimeOperations: s.RuntimeOperationStore, OperationEvents: s.RuntimeOperationEventPublisher,
-		OperationOwner: s.RuntimeOperationOwner, StartupRecovery: serviceHostStartupRecovery{service: s},
-		StaleTurnSettler: s.StaleTurnSettler,
+		OperationOwner: s.RuntimeOperationOwner, StaleTurnSettler: s.StaleTurnSettler,
+		GoalStore: s.GoalStateStore, GoalRuntime: serviceHostGoalRuntime{service: s},
+		GoalAudits: s.GoalAuditPublisher, GoalInbox: s.GoalReconcileInboxStore,
+		GoalOwner: s.GoalOperationOwner, GoalClock: serviceHostGoalClock{service: s},
+		GoalAttemptTimeout: s.GoalOperationAttemptTimeout, GoalRecoveryBudget: s.GoalOperationRecoveryBudget,
+		GoalMaxAttempts: s.GoalOperationMaxAttempts, GoalDispatchDeadline: s.GoalOperationDispatchDeadline,
+		GoalActor: s.goalActor,
 	})
-}
-
-func (s *Service) cleanupHostCreateFailure(ctx context.Context, workspaceID, sessionID string, cause error) error {
-	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	closeErr := s.controller().Close(cleanupCtx, RuntimeCloseInput{WorkspaceID: workspaceID, AgentSessionID: sessionID})
-	return errors.Join(cause, closeErr, s.cleanupRuntime(cleanupCtx, workspaceID, sessionID))
 }
 
 func activitySessionFromPersisted(session PersistedSession) storesqlite.Session {

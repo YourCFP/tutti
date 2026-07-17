@@ -10,4 +10,5 @@ var (
 	ErrRuntimeSessionDisconnected = errors.New("agent runtime session is disconnected")
 	ErrRuntimeOperationInProgress = errors.New("agent runtime operation is already in progress")
 	ErrRuntimeOperationFailed     = errors.New("agent runtime operation failed")
+	ErrGoalConsumerUnavailable    = errors.New("agent goal reconcile consumer is unavailable")
 )

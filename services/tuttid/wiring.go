@@ -401,8 +401,8 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	agentSessionService.AvailabilityChecker = agentservice.AgentStatusProviderAvailabilityChecker{
 		Service: &agentStatusService,
 	}
-	// Host fixes startup order: durable runtime operations first, remaining
-	// durable coordinators next, and only then unrecoverable stale turns.
+	// Host fixes startup order: durable runtime operations first, then goal
+	// operations and reconcile inbox work, and only then stale turns.
 	if err := agentSessionService.Recover(ctx); err != nil {
 		return tuttiapi.DaemonAPI{}, nil, nil, nil, fmt.Errorf("recover agent host: %w", err)
 	}

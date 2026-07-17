@@ -68,10 +68,9 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	input.AgentSessionID = agentSessionIDOrNew(input.AgentSessionID)
 	logAgentSubmitTrace("service.create.entered", workspaceID, input.AgentSessionID, input.Metadata, map[string]any{"provider": provider})
 	var normalizedContent []PromptContentBlock
-	var normalizedPromptText string
 	if len(input.InitialContent) > 0 {
 		nodeStartedAt := time.Now()
-		normalizedContent, normalizedPromptText, err = normalizePromptContent(input.InitialContent)
+		normalizedContent, _, err = normalizePromptContent(input.InitialContent)
 		if err != nil {
 			s.reportAgentServiceNodeFailure(ctx, input.AgentSessionID, "session_create", "content_normalized", provider, nodeStartedAt, err)
 			return Session{}, err
@@ -79,11 +78,6 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 		s.reportAgentServiceNodeSuccess(ctx, input.AgentSessionID, "session_create", "content_normalized", provider, nodeStartedAt)
 	}
 	logAgentSubmitTrace("service.create.content_normalized", workspaceID, input.AgentSessionID, input.Metadata, map[string]any{"content_block_count": len(normalizedContent)})
-	typedGoal, isTypedGoal := parseTypedGoalControl(
-		normalizedContent,
-		firstNonEmptyString(strings.TrimSpace(input.InitialDisplayPrompt), normalizedPromptText),
-		false,
-	)
 	requestedModel := value(input.Model)
 	input.Model = s.resolveCreateSessionModel(ctx, provider, input.ProviderTargetRef, value(input.Cwd), input.Model)
 	nodeStartedAt := time.Now()
@@ -145,10 +139,6 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 		Speed:                  stringPointer(runtimeSettings.Speed),
 		ConversationDetailMode: input.ConversationDetailMode, Visible: input.Visible,
 	}
-	if isTypedGoal {
-		hostInput.InitialContent = nil
-		hostInput.Metadata = nil
-	}
 	logAgentSubmitTrace("service.create.runtime_start_requested", workspaceID, input.AgentSessionID, input.Metadata, nil)
 	hostResult, err := s.applicationHost(serviceHostPreparation{service: s, prepared: &prepared}).CreateSession(ctx, workspaceID, hostInput)
 	if err != nil {
@@ -160,12 +150,8 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	if strings.TrimSpace(session.ID) == "" && strings.TrimSpace(hostResult.TurnID) != "" {
 		return s.Get(ctx, workspaceID, input.AgentSessionID)
 	}
-	if isTypedGoal {
-		result, goalErr := s.goalControl(ctx, workspaceID, session.ID, typedGoal.Action, typedGoal.Objective, input.Metadata)
-		if goalErr != nil {
-			return Session{}, s.cleanupHostCreateFailure(ctx, workspaceID, session.ID, goalErr)
-		}
-		return result.Session, nil
+	if hostResult.Kind == "goalControl" {
+		return s.Get(ctx, workspaceID, session.ID)
 	}
 	if len(normalizedContent) == 0 {
 		return serviceSessionWithPersistedFreshness(
