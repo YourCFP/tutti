@@ -25,11 +25,13 @@ import type { AgentGUIComposerTargetData } from "./agentGuiController.composerPr
 import {
   acknowledgeAgentGUIComposerDefaultsMutation,
   createAgentGUIComposerDefaultsLedger,
+  prepareAcknowledgedComposerDefaultsAuthorityRead,
   registerAgentGUIComposerDefaultsMutation,
   removeRetiredComposerDefaults,
-  retireAcknowledgedComposerDefaults,
-  settingsWithoutAcknowledgedComposerDefaults,
+  retireAcknowledgedComposerDefaultsForRead,
   type AgentGUIComposerDefaultsLedger,
+  type AgentGUIComposerDefaultsAuthorityReconciler,
+  type AgentGUIComposerDefaultsAuthorityReadReceipt,
   type AgentGUIComposerDefaultsMutation,
   type AgentGUIRetiredComposerDefault
 } from "./agentGuiComposerDefaultsReconciliation";
@@ -63,9 +65,7 @@ interface UseAgentGUIComposerSettingsActionsInput {
   onDataChangeRef: RefObject<
     (updater: (current: AgentGUINodeData) => AgentGUINodeData) => void
   >;
-  onComposerDefaultsAuthorityReloadedRef: RefObject<
-    (target: AgentGUIComposerTargetData) => void
-  >;
+  onComposerDefaultsAuthorityReloadedRef: RefObject<AgentGUIComposerDefaultsAuthorityReconciler>;
   onRememberComposerDefaultsRef: RefObject<
     | ((
         input: AgentGUIRememberComposerDefaultsInput
@@ -121,34 +121,45 @@ export function useAgentGUIComposerSettingsActions(
   const composerDefaultsLedgerRef = useRef(
     createAgentGUIComposerDefaultsLedger()
   );
-  const retireAcknowledgedDefaultsForTarget = useCallback(
-    (target: AgentGUIComposerTargetData) => {
-      if (!isMountedRef.current || !target.agentTargetId) return;
-      const draftKey = nodeDefaultDraftKey(
-        target.provider,
-        target.agentTargetId
-      );
-      const currentDraft = draftSettingsBySessionIdRef.current[draftKey];
+  const retireAcknowledgedDefaultsForRead = useCallback(
+    (receipt: AgentGUIComposerDefaultsAuthorityReadReceipt | null) => {
+      if (!isMountedRef.current || !receipt) return;
+      const currentDraft =
+        draftSettingsBySessionIdRef.current[receipt.draftKey];
       if (!currentDraft) return;
-      const retired = retireAcknowledgedComposerDefaults(
+      const retired = retireAcknowledgedComposerDefaultsForRead(
         composerDefaultsLedgerRef.current,
-        draftKey,
+        receipt,
         currentDraft
       );
       if (retired.length === 0) return;
       draftSettingsBySessionIdRef.current = reconcileRetiredDraftMap(
         draftSettingsBySessionIdRef.current,
-        draftKey,
+        receipt.draftKey,
         retired
       );
       setDraftSettingsBySessionId((current) =>
-        reconcileRetiredDraftMap(current, draftKey, retired)
+        reconcileRetiredDraftMap(current, receipt.draftKey, retired)
       );
     },
     [draftSettingsBySessionIdRef, isMountedRef, setDraftSettingsBySessionId]
   );
-  onComposerDefaultsAuthorityReloadedRef.current =
-    retireAcknowledgedDefaultsForTarget;
+  const prepareComposerDefaultsAuthorityRead = useCallback(
+    (
+      target: AgentGUIComposerTargetData,
+      settings: AgentSessionComposerSettings
+    ) =>
+      prepareAcknowledgedComposerDefaultsAuthorityRead(
+        composerDefaultsLedgerRef.current,
+        nodeDefaultDraftKey(target.provider, target.agentTargetId),
+        settings
+      ),
+    []
+  );
+  onComposerDefaultsAuthorityReloadedRef.current = {
+    prepareRead: prepareComposerDefaultsAuthorityRead,
+    reloaded: retireAcknowledgedDefaultsForRead
+  };
   const updateComposerSettings = useCallback(
     (nextSettings: Partial<AgentSessionComposerSettings>) => {
       // Values pass through unclamped: the toggle visibility is capability
@@ -232,7 +243,6 @@ export function useAgentGUIComposerSettingsActions(
               ledger: composerDefaultsLedgerRef.current,
               mutation,
               reloadComposerOptionsForTarget,
-              retireAcknowledgedDefaultsForTarget,
               target: targetData
             }).catch(() => undefined);
           }
@@ -406,7 +416,6 @@ export function useAgentGUIComposerSettingsActions(
       composerSupport.permissionModeChangeDeferred,
       loadDraftComposerOptions,
       reloadComposerOptionsForTarget,
-      retireAcknowledgedDefaultsForTarget,
       sessionEngine,
       workspaceId
     ]
@@ -446,7 +455,6 @@ async function reconcileAcknowledgedHomeDefaults(input: {
     settings: AgentSessionComposerSettings;
     target: AgentGUIComposerTargetData;
   }): Promise<void>;
-  retireAcknowledgedDefaultsForTarget(target: AgentGUIComposerTargetData): void;
   target: AgentGUIComposerTargetData;
 }): Promise<void> {
   const result = await input.acknowledgement;
@@ -466,17 +474,10 @@ async function reconcileAcknowledgedHomeDefaults(input: {
   ) {
     return;
   }
-  const authoritySettings = settingsWithoutAcknowledgedComposerDefaults(
-    input.ledger,
-    input.draftKey,
-    currentDraft
-  );
   await input.reloadComposerOptionsForTarget({
-    settings: authoritySettings,
+    settings: currentDraft,
     target: input.target
   });
-  if (!input.isMountedRef.current) return;
-  input.retireAcknowledgedDefaultsForTarget(input.target);
 }
 
 function reconcileRetiredDraftMap(

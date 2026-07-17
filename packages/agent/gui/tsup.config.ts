@@ -1,4 +1,22 @@
-import { defineConfig } from "tsup";
+import { readFile } from "node:fs/promises";
+
+import { defineConfig, type Options } from "tsup";
+
+import { cssSafeSvgDataUrl } from "./build/cssSafeSvgDataUrl";
+
+const cssSafeSvgDataUrlPlugin: NonNullable<Options["esbuildPlugins"]>[number] =
+  {
+    name: "css-safe-svg-data-url",
+    setup(build) {
+      build.onLoad({ filter: /\.svg$/ }, async ({ path }) => {
+        const svg = await readFile(path, "utf8");
+        return {
+          contents: `export default ${JSON.stringify(cssSafeSvgDataUrl(svg))};`,
+          loader: "js"
+        };
+      });
+    }
+  };
 
 export default defineConfig({
   clean: true,
@@ -14,6 +32,7 @@ export default defineConfig({
     "agent-message-center/index": "agent-message-center/index.ts",
     "agent-conversation/index": "agent-conversation/index.ts",
     "agent-env/index": "shared/agentEnv/index.ts",
+    "agent-env/ui": "shared/agentEnv/ui.ts",
     "context-mention-palette/index": "context-mention-palette/index.ts",
     "context-mention-provider":
       "agent-gui/agentGuiNode/agentContextMentionProvider.ts",
@@ -33,10 +52,10 @@ export default defineConfig({
     "workspace-query-cache": "shared/query/workspaceQueryCache.ts"
   },
   external: ["react", "react-dom"],
+  esbuildPlugins: [cssSafeSvgDataUrlPlugin],
   format: ["esm"],
   loader: {
-    ".png": "dataurl",
-    ".svg": "dataurl"
+    ".png": "dataurl"
   },
   sourcemap: true
 });

@@ -47,6 +47,7 @@ import type {
 } from "./AgentComposer";
 import type { AgentContextMentionProvider } from "./agentContextMentionProvider";
 import type { AgentMessageMarkdownWorkspaceAppIcon } from "../../shared/AgentMessageMarkdown";
+import type { RichTextMentionService } from "@tutti-os/ui-rich-text/service";
 import type { AgentGUIEngagementEventSink } from "./engagement/agentGUIEngagement.types";
 import type { AgentGUIComposerAppendRequest } from "./controller/useAgentGUIComposerAppendRequest";
 
@@ -120,6 +121,9 @@ export interface AgentGUINodeHostCapabilities {
   accountMenuState?: AgentGUIAccountMenuState | null;
   agentTargets?: readonly AgentGUIAgentTarget[];
   agentTargetsLoading?: boolean;
+  /** Launch-only targets for active-conversation handoff. */
+  handoffAgentTargets?: readonly AgentGUIAgentTarget[];
+  handoffAgentTargetsLoading?: boolean;
   providerRailAllPresentation?: AgentGUIProviderRailAllPresentation | null;
   providerRailMode?: AgentGUIProviderRailMode;
   comingSoonProviders?: readonly AgentGUIProvider[];
@@ -129,6 +133,7 @@ export interface AgentGUINodeHostCapabilities {
   defaultAgentTargetId?: string | null;
   providerAuthAccountLabels?: Partial<Record<string, string>>;
   contextMentionProviders?: readonly AgentContextMentionProvider[];
+  mentionService?: RichTextMentionService;
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
   disabledHomeSuggestions?: readonly AgentGUIHomeSuggestionId[];
 }
@@ -190,6 +195,10 @@ function agentGuiStateEquals(
     (left.provider === right.provider &&
       (left.agentTargetId ?? null) === (right.agentTargetId ?? null) &&
       left.lastActiveAgentSessionId === right.lastActiveAgentSessionId &&
+      stringRecordsEqual(
+        left.lastActiveAgentSessionIdByAgentTargetId,
+        right.lastActiveAgentSessionIdByAgentTargetId
+      ) &&
       left.conversationRailWidthPx === right.conversationRailWidthPx &&
       left.conversationRailCollapsed === right.conversationRailCollapsed &&
       (left.composerOverrides?.model ?? null) ===
@@ -264,6 +273,20 @@ function composerOverridesByAgentTargetIdEqual(
   return true;
 }
 
+function stringRecordsEqual(
+  left: Record<string, string> | null | undefined,
+  right: Record<string, string> | null | undefined
+): boolean {
+  const leftKeys = Object.keys(left ?? {}).sort();
+  const rightKeys = Object.keys(right ?? {}).sort();
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key, index) => key === rightKeys[index] && left?.[key] === right?.[key]
+    )
+  );
+}
+
 export function areAgentGUINodePropsEqual(
   previous: AgentGUINodeProps,
   next: AgentGUINodeProps
@@ -329,6 +352,8 @@ export function areAgentGUINodePropsEqual(
     pc.accountMenuState === nc.accountMenuState &&
     pc.agentTargets === nc.agentTargets &&
     pc.agentTargetsLoading === nc.agentTargetsLoading &&
+    pc.handoffAgentTargets === nc.handoffAgentTargets &&
+    pc.handoffAgentTargetsLoading === nc.handoffAgentTargetsLoading &&
     pc.providerRailAllPresentation?.iconUrl ===
       nc.providerRailAllPresentation?.iconUrl &&
     pc.providerRailMode === nc.providerRailMode &&
@@ -337,6 +362,7 @@ export function areAgentGUINodePropsEqual(
     pc.defaultAgentTargetId === nc.defaultAgentTargetId &&
     pc.providerAuthAccountLabels === nc.providerAuthAccountLabels &&
     pc.contextMentionProviders === nc.contextMentionProviders &&
+    pc.mentionService === nc.mentionService &&
     pc.workspaceAppIcons === nc.workspaceAppIcons &&
     pc.disabledHomeSuggestions === nc.disabledHomeSuggestions &&
     pa.onLinkAction === na.onLinkAction &&

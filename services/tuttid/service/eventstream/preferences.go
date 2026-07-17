@@ -18,6 +18,51 @@ type AgentComposerDefaultsPatcher interface {
 	PatchAgentComposerDefaultsForTarget(context.Context, preferencesservice.PatchAgentComposerDefaultsForTargetInput) (preferencesbiz.AgentComposerDefaults, error)
 }
 
+func preferencesTopicDefinitions() []TopicDefinition {
+	return []TopicDefinition{
+		{
+			Name:               TopicPreferencesAgentComposerDefaultsChanged,
+			ClientCanPublish:   false,
+			ClientCanSubscribe: true,
+			Version:            1,
+			directions:         []Direction{DirectionServerToClient},
+			validators: map[Direction]PayloadValidator{
+				DirectionServerToClient: validateAgentComposerDefaultsChangedPayload,
+			},
+		},
+		{
+			Name:               TopicPreferencesAgentComposerDefaultsPatchRequested,
+			ClientCanPublish:   true,
+			ClientCanSubscribe: false,
+			Version:            1,
+			directions:         []Direction{DirectionClientToServer},
+			validators: map[Direction]PayloadValidator{
+				DirectionClientToServer: validateAgentComposerDefaultsPatchRequestedPayload,
+			},
+		},
+		{
+			Name:               TopicPreferencesDesktopUpdateRequested,
+			ClientCanPublish:   true,
+			ClientCanSubscribe: false,
+			Version:            1,
+			directions:         []Direction{DirectionClientToServer},
+			validators: map[Direction]PayloadValidator{
+				DirectionClientToServer: validateDesktopPreferencesUpdateRequestedPayload,
+			},
+		},
+		{
+			Name:               TopicPreferencesDesktopUpdated,
+			ClientCanPublish:   false,
+			ClientCanSubscribe: true,
+			Version:            1,
+			directions:         []Direction{DirectionServerToClient},
+			validators: map[Direction]PayloadValidator{
+				DirectionServerToClient: validateDesktopPreferencesUpdatedPayload,
+			},
+		},
+	}
+}
+
 type DesktopPreferencesPublisher struct {
 	Service *Service
 }

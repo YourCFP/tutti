@@ -49,6 +49,7 @@ export type {
   AgentGUIAgentAvailabilityAction,
   AgentGUIAgentAvailabilityStatus,
   AgentGUIAgentOwner,
+  AgentGUIAgentOwnership,
   AgentGUIHomeSuggestionId,
   AgentGUIAllAgentsPresentation,
   AgentGUIProvider,
@@ -122,6 +123,10 @@ export type {
 } from "./agentActivityRuntime";
 export type {
   AgentHostApi,
+  AgentHostAgentTargetAuthenticatedAccount,
+  AgentHostAgentTargetSetupSnapshot,
+  AgentHostAgentTargetSetupState,
+  AgentHostAgentTargetSetupWatch,
   AgentHostApplyWorkspaceGitPatchInput,
   AgentHostInputApi,
   AgentHostSelectFilesInput,

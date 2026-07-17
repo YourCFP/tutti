@@ -13,6 +13,7 @@ import type {
   AgentGUIRememberComposerDefaultsInput,
   AgentGUIRememberComposerDefaultsResult
 } from "./agentGuiController.providerHelpers";
+import type { AgentGUIComposerDefaultsAuthorityReconciler } from "./agentGuiComposerDefaultsReconciliation";
 
 interface UseAgentGUIControllerRefsInput {
   activeConversationId: string | null;
@@ -76,9 +77,15 @@ export function useAgentGUIControllerRefs(
   const handledPrefillPromptSequenceRef = useRef<number | null>(null);
   const handledComposerAppendSequenceRef = useRef<number | null>(null);
   const loadDraftComposerOptionsRef = useRef<() => void>(() => {});
-  const onComposerDefaultsAuthorityReloadedRef = useRef<
-    (target: AgentGUIComposerTargetData) => void
-  >(() => {});
+  const onComposerDefaultsAuthorityReloadedRef =
+    useRef<AgentGUIComposerDefaultsAuthorityReconciler>({
+      prepareRead: (_target, settings) => ({
+        force: false,
+        receipt: null,
+        settings
+      }),
+      reloaded: () => {}
+    });
   const conversationIdsRef = useRef(
     new Set(input.conversations.map((conversation) => conversation.id))
   );

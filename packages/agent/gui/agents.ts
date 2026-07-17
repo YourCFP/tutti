@@ -42,6 +42,9 @@ export function normalizeAgentGUIAgents(
             }
           }
         : {}),
+      ...(agent.ownership === "self" || agent.ownership === "shared"
+        ? { ownership: agent.ownership }
+        : {}),
       availability: {
         status: normalizeAgentGUIAgentAvailabilityStatus(
           agent.availability.status
@@ -51,7 +54,10 @@ export function normalizeAgentGUIAgents(
           ? { pendingAction: agent.availability.pendingAction }
           : {})
       },
-      provider: agent.provider
+      provider: agent.provider,
+      ...(agent.setupKind === "target_runtime"
+        ? { setupKind: "target_runtime" as const }
+        : {})
     });
   }
   return normalized;
@@ -93,7 +99,8 @@ export function projectAgentGUIAgentsToInternalTargets(
     ref: {
       kind: "agent-directory",
       provider: agent.provider,
-      agentTargetId: agent.agentTargetId
+      agentTargetId: agent.agentTargetId,
+      ...(agent.setupKind ? { setupKind: agent.setupKind } : {})
     },
     label: agent.name,
     availability: agent.availability,
@@ -109,7 +116,10 @@ export function projectAgentGUIAgentsToInternalTargets(
         }
       : {}),
     ...(agent.owner?.name ? { ownerLabel: agent.owner.name } : {}),
-    ...(agent.availability.status !== "ready" ? { disabled: true } : {}),
+    ...(agent.ownership ? { ownership: agent.ownership } : {}),
+    ...(agent.availability.status !== "ready" && !agent.setupKind
+      ? { disabled: true }
+      : {}),
     ...(agent.availability.reason
       ? { unavailableReason: agent.availability.reason }
       : {})

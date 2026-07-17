@@ -41,6 +41,7 @@ export function groupAgentGUINodeViewModelFixture(
       userProjects: flat.userProjects,
       activeConversation: flat.activeConversation,
       activeConversationId: flat.activeConversationId,
+      revealRequest: flat.revealRequest,
       isLoadingConversations: flat.isLoadingConversations,
       listError: flat.listError
     },
@@ -92,6 +93,7 @@ export function groupAgentGUINodeViewModelFixture(
       goalClearNoticeSequence: flat.goalClearNoticeSequence ?? 0,
       isDeletingConversation: flat.isDeletingConversation,
       isDeletingProjectConversations: flat.isDeletingProjectConversations,
+      isUserProjectMutationPending: flat.isUserProjectMutationPending ?? false,
       pendingDeleteConversation: flat.pendingDeleteConversation,
       pendingDeleteProjectConversations: flat.pendingDeleteProjectConversations
     }

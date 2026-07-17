@@ -142,7 +142,7 @@ func resolvedComposerValidationCwd(t *testing.T, service *Service, cwd string) s
 	if err != nil {
 		t.Fatalf("resolveCwd(%q) error = %v", cwd, err)
 	}
-	return resolved
+	return normalizeComposerProjectScope(resolved)
 }
 
 func configureCwdSensitiveExtensionModels(runtime *fakeRuntime, modelsByCwd map[string]string) {

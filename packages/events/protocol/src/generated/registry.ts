@@ -22,6 +22,8 @@ export const businessEventTopicPreferencesDesktopUpdateRequested =
   "preferences.desktop.update.requested" as const;
 export const businessEventTopicPreferencesDesktopUpdated =
   "preferences.desktop.updated" as const;
+export const businessEventTopicUserProjectUpdated =
+  "user.project.updated" as const;
 export const businessEventTopicWorkspaceAppUpdated =
   "workspace.app.updated" as const;
 export const businessEventTopicWorkspaceAppfactoryJobUpdated =
@@ -39,7 +41,7 @@ export interface BusinessEventDefinition {
   scope: BusinessEventScopeName;
 }
 
-export const businessEventCatalogRevision = "sha256:53e4df5f71ffc64b" as const;
+export const businessEventCatalogRevision = "sha256:44808dc720c31ca4" as const;
 
 export const businessEventDefinitions = [
   {
@@ -90,6 +92,13 @@ export const businessEventDefinitions = [
     direction: "server->client",
     owner: "core",
     scope: "desktop"
+  },
+  {
+    topic: "user.project.updated",
+    version: 1,
+    direction: "server->client",
+    owner: "core",
+    scope: "global"
   },
   {
     topic: "workspace.app.updated",
@@ -170,6 +179,13 @@ export const businessEventDefinitionByTopic = {
     direction: "server->client",
     owner: "core",
     scope: "desktop"
+  },
+  "user.project.updated": {
+    topic: "user.project.updated",
+    version: 1,
+    direction: "server->client",
+    owner: "core",
+    scope: "global"
   },
   "workspace.app.updated": {
     topic: "workspace.app.updated",

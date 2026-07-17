@@ -22,6 +22,7 @@ import {
 } from "./agentGuiController.stableHelpers";
 import { conversationBusyStatusFromAgentActivityDisplayStatus } from "./agentGuiController.draftMessageHelpers";
 import { mergeVisibleConversations } from "./agentGuiController.conversationHelpers";
+import { rememberAgentGUIActiveConversation } from "../model/agentGuiSessionNavigationMemory";
 import { resolveConversationSummaryById } from "./useAgentConversationSelection";
 
 interface CurrentValue<T> {
@@ -142,6 +143,13 @@ export function useAgentGUIConversationPresentation(
       );
     }
     if (!input.activeConversationId) return stabilize(null);
+    const fallbackAgentTarget = resolveAgentGUIAgentTarget({
+      agentTargetId: input.data.agentTargetId,
+      defaultAgentTargetId: input.defaultAgentTargetId,
+      provider: input.data.provider,
+      agentTargets: input.normalizedProviderTargets,
+      useStaticCatalog: input.shouldUseStaticProviderTargets
+    });
     const fallbackStatus =
       input.isSubmitting ||
       input.isCreatingConversation ||
@@ -164,6 +172,9 @@ export function useAgentGUIConversationPresentation(
         : Date.now();
     return stabilize({
       id: input.activeConversationId,
+      agentTargetId:
+        normalizeOptionalText(input.data.agentTargetId) ??
+        fallbackAgentTarget?.agentTargetId,
       userId: input.currentUserId?.trim() || undefined,
       provider: input.data.provider,
       title: "",
@@ -183,12 +194,16 @@ export function useAgentGUIConversationPresentation(
     input.activeLatestPendingSubmitTurnId,
     input.activityDisplayStatuses,
     input.currentUserId,
+    input.data.agentTargetId,
     input.data.provider,
+    input.defaultAgentTargetId,
     input.draftByScopeKey,
     input.hasUnconfirmedSubmit,
     input.isCreatingConversation,
     input.isNoProjectPath,
     input.isSubmitting,
+    input.normalizedProviderTargets,
+    input.shouldUseStaticProviderTargets,
     input.userProjects,
     conversationProjection.semanticConversations,
     input.workspacePath
@@ -215,7 +230,18 @@ export function useAgentGUIConversationPresentation(
       summaryAgentTargetId !== null &&
       normalizeOptionalText(input.dataRef.current.agentTargetId) !==
         summaryAgentTargetId;
-    if (!providerMismatch && !agentTargetMismatch) return;
+    const rememberedSessionMismatch =
+      summaryAgentTargetId !== null &&
+      input.dataRef.current.lastActiveAgentSessionIdByAgentTargetId?.[
+        summaryAgentTargetId
+      ] !== input.activeConversationId;
+    if (
+      !providerMismatch &&
+      !agentTargetMismatch &&
+      !rememberedSessionMismatch
+    ) {
+      return;
+    }
     const sessionTarget = resolveAgentGUIAgentTarget({
       agentTargetId: summaryAgentTargetId,
       defaultAgentTargetId: input.defaultAgentTargetId,
@@ -244,15 +270,24 @@ export function useAgentGUIConversationPresentation(
         isExplicit: sessionTargetIsExplicit,
         target: sessionTarget
       });
+      const nextData = rememberAgentGUIActiveConversation(
+        targetData.data,
+        input.activeConversationId,
+        summaryAgentTargetId
+      );
       if (
         current.provider === targetData.provider &&
         normalizeOptionalText(current.agentTargetId) ===
-          targetData.agentTargetId
+          targetData.agentTargetId &&
+        (summaryAgentTargetId === null ||
+          current.lastActiveAgentSessionIdByAgentTargetId?.[
+            summaryAgentTargetId
+          ] === input.activeConversationId)
       ) {
         return current;
       }
-      input.dataRef.current = targetData.data;
-      return targetData.data;
+      input.dataRef.current = nextData;
+      return nextData;
     });
   }, [
     input.activeConversationId,

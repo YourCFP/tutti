@@ -2,6 +2,7 @@ import type { WorkspaceFileReference } from "@tutti-os/workspace-file-reference/
 import type {
   WorkspaceUserProject,
   WorkspaceUserProjectDefaultSelection,
+  WorkspaceUserProjectMoveInput,
   WorkspaceUserProjectPathCheck,
   WorkspaceUserProjectSelectionPreparation,
   WorkspaceUserProjectSelectionPreparationInput,
@@ -42,6 +43,23 @@ export interface TuttiExternalAtQueryResult {
   subtitle?: string;
   thumbnailUrl?: string | null;
   insert: TuttiExternalAtInsertResult;
+}
+
+export interface TuttiExternalAtResolveInput {
+  providerId: TuttiExternalAtProviderId;
+  entityId: string;
+  scope?: Readonly<Record<string, string>>;
+}
+
+export interface TuttiExternalAtResolveResult {
+  label?: string;
+  presentation?: TuttiExternalAtMentionPresentation;
+}
+
+export interface TuttiExternalAtInvalidation {
+  providerIds?: readonly TuttiExternalAtProviderId[];
+  entityIds?: readonly string[];
+  revision?: number;
 }
 
 export interface TuttiExternalAtMentionPresentation {
@@ -267,6 +285,12 @@ export interface TuttiExternalBridge {
     query(
       input: TuttiExternalAtQueryInput
     ): Promise<TuttiExternalAtQueryResult[]>;
+    resolve?(
+      input: TuttiExternalAtResolveInput
+    ): Promise<TuttiExternalAtResolveResult | null>;
+    subscribe?(
+      listener: (event: TuttiExternalAtInvalidation) => void
+    ): () => void;
   };
   files: {
     select(
@@ -310,6 +334,7 @@ export interface TuttiExternalBridge {
     getDefaultSelection(): Promise<WorkspaceUserProjectDefaultSelection | null>;
     getSnapshot(): Promise<WorkspaceUserProjectServiceSnapshot>;
     list(): Promise<{ projects: WorkspaceUserProject[] }>;
+    move(input: WorkspaceUserProjectMoveInput): Promise<void>;
     prepareSelection(
       input: WorkspaceUserProjectSelectionPreparationInput
     ): Promise<WorkspaceUserProjectSelectionPreparation>;
@@ -335,6 +360,13 @@ export interface TuttiExternalBridge {
 }
 
 export type TuttiExternalRendererRequest =
+  | {
+      appId: string;
+      input: TuttiExternalAtResolveInput;
+      operation: "at.resolve";
+      requestId: string;
+      workspaceId: string;
+    }
   | {
       appId: string;
       input: TuttiExternalAtQueryInput;
@@ -399,6 +431,13 @@ export type TuttiExternalRendererRequest =
   | {
       appId: string;
       operation: "userProjects.list";
+      requestId: string;
+      workspaceId: string;
+    }
+  | {
+      appId: string;
+      input: WorkspaceUserProjectMoveInput;
+      operation: "userProjects.move";
       requestId: string;
       workspaceId: string;
     }

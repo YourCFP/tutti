@@ -9,6 +9,7 @@ import type { AgentActivityRuntime } from "../../../agentActivityRuntime";
 import type { AgentSessionComposerSettings } from "../../../shared/agentSessionTypes";
 import type { AgentGUINodeData } from "../../../types";
 import type { AgentGUIRememberComposerDefaultsResult } from "./agentGuiController.providerHelpers";
+import type { AgentGUIComposerDefaultsAuthorityReconciler } from "./agentGuiComposerDefaultsReconciliation";
 import type { useAgentGUIActivation } from "./useAgentGUIActivation";
 import { useAgentGUIComposerSettingsActions } from "./useAgentGUIComposerSettingsActions";
 
@@ -72,7 +73,8 @@ describe("useAgentGUIComposerSettingsActions", () => {
         draftSettingsBySessionIdRef,
         isMountedRef: { current: true },
         loadDraftComposerOptions: vi.fn(),
-        onComposerDefaultsAuthorityReloadedRef: { current: vi.fn() },
+        onComposerDefaultsAuthorityReloadedRef:
+          createComposerDefaultsAuthorityReconcilerRef(),
         onDataChangeRef: { current: onDataChange },
         onRememberComposerDefaultsRef: {
           current: onRememberComposerDefaults
@@ -226,7 +228,8 @@ describe("useAgentGUIComposerSettingsActions", () => {
         draftSettingsBySessionIdRef,
         isMountedRef: { current: true },
         loadDraftComposerOptions: vi.fn(),
-        onComposerDefaultsAuthorityReloadedRef: { current: vi.fn() },
+        onComposerDefaultsAuthorityReloadedRef:
+          createComposerDefaultsAuthorityReconcilerRef(),
         onDataChangeRef: { current: onDataChange },
         onRememberComposerDefaultsRef: {
           current: onRememberComposerDefaults
@@ -299,12 +302,27 @@ describe("useAgentGUIComposerSettingsActions", () => {
       .mockImplementationOnce(() => first.promise)
       .mockImplementationOnce(() => second.promise)
       .mockImplementationOnce(() => third.promise);
-    const reloadComposerOptionsForTarget = vi.fn(async () => {});
     const draftSettingsBySessionIdRef: {
       current: Record<string, AgentSessionComposerSettings>;
     } = { current: {} };
     const setDraftSettingsBySessionId = vi.fn();
-    const onComposerDefaultsAuthorityReloadedRef = { current: vi.fn() };
+    const onComposerDefaultsAuthorityReloadedRef =
+      createComposerDefaultsAuthorityReconcilerRef();
+    const reloadComposerOptionsForTarget = vi.fn(
+      async (reloadInput: {
+        settings: AgentSessionComposerSettings;
+        target: typeof target;
+      }) => {
+        const authorityRead =
+          onComposerDefaultsAuthorityReloadedRef.current.prepareRead(
+            reloadInput.target,
+            reloadInput.settings
+          );
+        onComposerDefaultsAuthorityReloadedRef.current.reloaded(
+          authorityRead.receipt
+        );
+      }
+    );
     const rendered = renderHook(() =>
       useAgentGUIComposerSettingsActions({
         activation: {
@@ -375,7 +393,12 @@ describe("useAgentGUIComposerSettingsActions", () => {
       await second.promise;
     });
     expect(reloadComposerOptionsForTarget).toHaveBeenCalledWith({
-      settings: { permissionModeId: "ask" },
+      settings: {
+        model: "opencode/new-model",
+        permissionModeId: "ask",
+        reasoningEffort: "high",
+        speed: "fast"
+      },
       target
     });
     expect(
@@ -394,7 +417,7 @@ describe("useAgentGUIComposerSettingsActions", () => {
       await third.promise;
     });
     expect(reloadComposerOptionsForTarget).toHaveBeenCalledWith({
-      settings: {},
+      settings: { permissionModeId: "ask" },
       target
     });
     expect(draftSettingsBySessionIdRef.current).toEqual({});
@@ -423,7 +446,8 @@ describe("useAgentGUIComposerSettingsActions", () => {
     const draftSettingsBySessionIdRef: {
       current: Record<string, AgentSessionComposerSettings>;
     } = { current: {} };
-    const onComposerDefaultsAuthorityReloadedRef = { current: vi.fn() };
+    const onComposerDefaultsAuthorityReloadedRef =
+      createComposerDefaultsAuthorityReconcilerRef();
     const onShowMessage = vi.fn();
     const reloadComposerOptionsForTarget = vi.fn(async () => {
       throw new Error("transient options failure");
@@ -465,6 +489,25 @@ describe("useAgentGUIComposerSettingsActions", () => {
         permissionModeId: "full-access"
       });
     });
+    const preAckRead =
+      onComposerDefaultsAuthorityReloadedRef.current.prepareRead(
+        target,
+        draftSettingsBySessionIdRef.current[
+          "__agent_gui_node_defaults__:target:local:opencode"
+        ] ?? {}
+      );
+    expect(preAckRead.receipt).toBeNull();
+    act(() => {
+      // The daemon changed event may be observed before the publish ack.
+      onComposerDefaultsAuthorityReloadedRef.current.reloaded(
+        preAckRead.receipt
+      );
+    });
+    expect(
+      draftSettingsBySessionIdRef.current[
+        "__agent_gui_node_defaults__:target:local:opencode"
+      ]
+    ).toEqual({ permissionModeId: "full-access" });
     await act(async () => {
       acknowledgement.resolve({
         acknowledgedFields: ["permissionModeId"],
@@ -480,12 +523,46 @@ describe("useAgentGUIComposerSettingsActions", () => {
     ).toEqual({ permissionModeId: "full-access" });
     expect(onShowMessage).not.toHaveBeenCalled();
 
+    const authorityRead =
+      onComposerDefaultsAuthorityReloadedRef.current.prepareRead(
+        target,
+        draftSettingsBySessionIdRef.current[
+          "__agent_gui_node_defaults__:target:local:opencode"
+        ] ?? {}
+      );
+    expect(authorityRead).toMatchObject({
+      force: true,
+      receipt: {
+        draftKey: "__agent_gui_node_defaults__:target:local:opencode",
+        fields: {
+          permissionModeId: { value: "full-access" }
+        }
+      },
+      settings: {}
+    });
     act(() => {
-      onComposerDefaultsAuthorityReloadedRef.current(target);
+      onComposerDefaultsAuthorityReloadedRef.current.reloaded(
+        authorityRead.receipt
+      );
     });
     expect(draftSettingsBySessionIdRef.current).toEqual({});
   });
 });
+
+function createComposerDefaultsAuthorityReconcilerRef(): {
+  current: AgentGUIComposerDefaultsAuthorityReconciler;
+} {
+  return {
+    current: {
+      prepareRead: vi.fn((_target, settings) => ({
+        force: false,
+        receipt: null,
+        settings
+      })),
+      reloaded: vi.fn()
+    }
+  };
+}
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;

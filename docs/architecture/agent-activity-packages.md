@@ -42,9 +42,12 @@ packages/agent/store-sqlite/canonical
 ```
 
 `packages/agent/store-sqlite/canonical` is the single authority for canonical
-activity contract vocabulary; other packages import its phase, outcome,
-origin, interaction-kind, and interaction-status definitions rather than
-redeclaring them.
+activity contracts. It owns phase, outcome, origin, interaction-kind and
+interaction-status vocabulary; pure activity projection snapshots and merge
+functions; commit-observer report types; and the provider identity,
+capability, and plan-decision vocabulary needed by canonical persistence.
+Daemon packages retain compatibility aliases, while runtime mechanics remain
+daemon-owned.
 
 ## Responsibilities
 
@@ -58,11 +61,29 @@ hooks. The `conformance` subpackage owns reusable typed lifecycle scenarios so
 the legacy `tuttid` service, the extracted Host, and downstream adapters can be
 checked against the same behavior baseline.
 
-The module does not own transport, authorization, room or device identity,
+`store-sqlite` owns the transaction implementation. Its caller-owned
+`TransactionParticipant` seam lets an adapter append a durable outbox marker
+to the same transaction as runtime/goal operation intent, canonical facts, and
+non-re-derivable deletion tombstones without exposing `*sql.Tx` to Host domain
+code. The seam is reserved for facts that must commit or roll back together;
+re-derivable projection gates are repaired by consumers instead.
+
+After commit, Host emits typed `CommittedDelta` values through one
+`CommitObserver`. Activity state, messages, root settlement, runtime and goal
+operation milestones, projection-dirty identities, and canonical view
+invalidations all use that path. Observer failure cannot roll back an already
+committed command. Reliable delivery therefore depends on the durable marker,
+while event-stream publication and cache invalidation remain post-commit wake
+hints.
+
+The Host release module depends on `store-sqlite` and its `canonical` module,
+not on daemon, sidecar, or `tuttid` packages. It exposes `Run` to supervise the
+runtime-operation, goal-operation, and reconcile-inbox workers as one
+lifecycle, while retaining the individual worker entrypoints. The module does
+not own transport, authorization, room or device identity,
 process or VM implementations, HTTP/OpenAPI shapes, Electron integration, or
-control-plane DTOs. `tuttid` remains the production implementation until the
-later extraction slices explicitly switch its wiring; introducing this module
-does not change production routing.
+control-plane DTOs. `tuttid` production wiring delegates lifecycle decisions
+to Host and keeps only its adapter responsibilities.
 
 ### `packages/agent/activity-replication`
 

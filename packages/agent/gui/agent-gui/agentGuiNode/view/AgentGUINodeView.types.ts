@@ -354,6 +354,8 @@ export interface AgentGUIViewLabels {
   handoffConversation: string;
   handoffConversationTooltip: string;
   handoffConversationMenu: string;
+  handoffTargetSelf: string;
+  handoffTargetShared: string;
   projectLocked: string;
   projectMissingDescription: string;
   syncPending: string;
@@ -418,7 +420,7 @@ export interface AgentGUINodeViewProps {
     ) => void;
     selectConversationFilterTarget: (input: {
       provider: AgentGUIProvider;
-      agentTargetId?: string | null;
+      agentTargetId: string;
     }) => void;
     createConversation: (options?: {
       projectPath?: string | null;
@@ -475,6 +477,10 @@ export interface AgentGUINodeViewProps {
       title: string
     ) => Promise<void>;
     removeProject: (path: string) => void;
+    moveProject: (
+      projectId: string,
+      beforeProjectId: string | null
+    ) => Promise<void>;
     confirmDeleteProjectConversations: (
       sectionKey?: string,
       agentTargetId?: string | null

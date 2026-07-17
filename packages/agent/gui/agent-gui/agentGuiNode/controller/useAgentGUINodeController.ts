@@ -37,6 +37,7 @@ import {
 } from "./agentGuiController.errors";
 import {
   areAgentGUIUserProjectsEqual,
+  readAgentGUIUserProjectMutationPending,
   readAgentGUIUserProjectSnapshot,
   upsertAgentGUIUserProject
 } from "./agentGuiController.interactiveHelpers";
@@ -118,6 +119,8 @@ interface UseAgentGUINodeControllerInput {
   data: AgentGUINodeData;
   agentTargets?: readonly AgentGUIAgentTarget[];
   agentTargetsLoading?: boolean;
+  handoffAgentTargets?: readonly AgentGUIAgentTarget[];
+  handoffAgentTargetsLoading?: boolean;
   providerRailMode?: AgentGUIProviderRailMode;
   comingSoonProviders?: readonly AgentGUIProvider[];
   providerReadinessGates?: Partial<
@@ -156,6 +159,8 @@ export function useAgentGUINodeController({
   data,
   agentTargets,
   agentTargetsLoading = false,
+  handoffAgentTargets,
+  handoffAgentTargetsLoading = false,
   providerRailMode = "catalog",
   comingSoonProviders,
   providerReadinessGates = null,
@@ -193,7 +198,9 @@ export function useAgentGUINodeController({
     providerRailMode,
     providerReadinessGates,
     agentTargets,
-    agentTargetsLoading
+    agentTargetsLoading,
+    handoffAgentTargets,
+    handoffAgentTargetsLoading
   });
   const {
     effectiveSelectedProviderTarget,
@@ -223,16 +230,19 @@ export function useAgentGUINodeController({
   });
   const {
     activeConversationId,
+    clearRailRevealRequest,
     draftByScopeKey,
     draftSettingsBySessionId,
     intent,
     isComposerHome,
     selectedProjectPath,
+    requestRailReveal,
     setActiveConversationId,
     setDetailError,
     setIntent,
     setIsComposerHome,
     setIsLoadingMessages,
+    setIsUserProjectMutationPending,
     setSelectedProjectPath,
     setUserProjects,
     userProjects
@@ -451,6 +461,9 @@ export function useAgentGUINodeController({
     const api = agentHostApi.userProjects;
     let disposed = false;
     setUserProjectsSnapshot(readAgentGUIUserProjectSnapshot(api));
+    setIsUserProjectMutationPending(
+      readAgentGUIUserProjectMutationPending(api)
+    );
     const loadUserProjects = async () => {
       const requestSeq = ++userProjectsLoadSeqRef.current;
       if (!api) {
@@ -474,13 +487,21 @@ export function useAgentGUINodeController({
     const unsubscribe = previewMode
       ? undefined
       : api?.subscribe?.(() => {
+          setIsUserProjectMutationPending(
+            readAgentGUIUserProjectMutationPending(api)
+          );
           void loadUserProjects();
         });
     return () => {
       disposed = true;
       unsubscribe?.();
     };
-  }, [agentHostApi.userProjects, previewMode, setUserProjectsSnapshot]);
+  }, [
+    agentHostApi.userProjects,
+    previewMode,
+    setIsUserProjectMutationPending,
+    setUserProjectsSnapshot
+  ]);
 
   // NOTE: project metadata is intentionally NOT written back into the shared
   // conversation store. `conversation.project` is a per-window JOIN of cwd ×
@@ -502,7 +523,9 @@ export function useAgentGUINodeController({
     agentActivityRuntime,
     attentionReadRecordsBySessionId: attentionReadState.recordsBySessionId,
     conversationIdsRef,
+    conversationsRef,
     conversationListQuery,
+    clearRailRevealRequest,
     currentUserId,
     data,
     dataRef,
@@ -514,11 +537,13 @@ export function useAgentGUINodeController({
     onDataChangeRef,
     reloadSelectedConversationRef,
     sessionEngine,
+    requestRailReveal,
     setActiveConversationId,
     setDetailError,
     setIntent,
     setIsComposerHome,
     setIsLoadingMessages,
+    transientConversation,
     workspaceId
   });
   const persistActiveConversation =
@@ -537,6 +562,7 @@ export function useAgentGUINodeController({
           id: string;
           path: string;
           label: string;
+          sectionKey?: string;
           createdAtUnixMs?: number;
           updatedAtUnixMs?: number;
           lastUsedAtUnixMs?: number | null;

@@ -17,10 +17,11 @@ type composerLiveModelCache struct {
 }
 
 type composerLiveModelCacheEntry struct {
-	agentTargetID string
-	cachedAt      time.Time
-	options       []ComposerConfigOptionValue
-	provider      string
+	agentTargetID  string
+	cachedAt       time.Time
+	options        []ComposerConfigOptionValue
+	provider       string
+	runtimeContext map[string]any
 }
 
 func newComposerLiveModelCache() *composerLiveModelCache {
@@ -57,19 +58,19 @@ func (c *composerLiveModelCache) set(scope composerLiveModelScope, now time.Time
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	entry := composerLiveModelCacheEntry{
-		agentTargetID: strings.TrimSpace(scope.agentTargetID),
-		cachedAt:      now,
-		options:       cloneComposerConfigOptionValues(options),
-		provider:      agentprovider.NormalizeOpen(scope.provider),
-	}
-	c.entries[scope.key()] = entry
+	key := scope.key()
+	entry := c.entries[key]
+	entry.agentTargetID = strings.TrimSpace(scope.agentTargetID)
+	entry.cachedAt = now
+	entry.options = cloneComposerConfigOptionValues(options)
+	entry.provider = agentprovider.NormalizeOpen(scope.provider)
+	c.entries[key] = entry
 	if entry.agentTargetID != "" {
 		// The scoped entry serves composer presentation and may expire. Keep a
 		// separate last-known-good target catalog for sparse defaults patches,
 		// which carry no workspace/cwd and therefore cannot safely rediscover
 		// the menu's descriptor at mutation time.
-		c.targetCatalogs[scope.key()] = entry
+		c.targetCatalogs[key] = entry
 	}
 }
 
@@ -106,6 +107,35 @@ func (c *composerLiveModelCache) optionsForTarget(
 		}
 	}
 	return cloneComposerConfigOptionValues(result), len(result) > 0
+}
+
+func (c *composerLiveModelCache) getRuntimeContext(key string, now time.Time, ttl time.Duration) (map[string]any, bool) {
+	if c == nil {
+		return nil, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.entries[key]
+	if !ok || len(entry.runtimeContext) == 0 {
+		return nil, false
+	}
+	if ttl > 0 && now.Sub(entry.cachedAt) > ttl {
+		delete(c.entries, key)
+		return nil, false
+	}
+	return clonePayload(entry.runtimeContext), true
+}
+
+func (c *composerLiveModelCache) setRuntimeContext(key string, now time.Time, runtimeContext map[string]any) {
+	if c == nil || len(runtimeContext) == 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry := c.entries[key]
+	entry.cachedAt = now
+	entry.runtimeContext = clonePayload(runtimeContext)
+	c.entries[key] = entry
 }
 
 func (c *composerLiveModelCache) invalidateProvider(provider string) int {
@@ -230,6 +260,14 @@ func (s *Service) liveComposerModelOptionsForTarget(
 		provider,
 		agentTargetID,
 	)
+}
+
+func (s *Service) getComposerRuntimeContextForScope(scope composerLiveModelScope, now time.Time) (map[string]any, bool) {
+	return s.liveComposerModelCache().getRuntimeContext(scope.key(), now, s.liveModelCacheTTL(scope.provider))
+}
+
+func (s *Service) setComposerRuntimeContextForScope(scope composerLiveModelScope, now time.Time, runtimeContext map[string]any) {
+	s.liveComposerModelCache().setRuntimeContext(scope.key(), now, runtimeContext)
 }
 
 // composerLiveModelCacheKey buckets the cache by provider, workspace, cwd scope,

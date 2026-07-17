@@ -46,6 +46,7 @@ export interface AgentGUINodeData {
   provider: AgentGUIProvider;
   agentTargetId?: string | null;
   lastActiveAgentSessionId: string | null;
+  lastActiveAgentSessionIdByAgentTargetId?: Record<string, string> | null;
   conversationCount?: number | null;
   conversationRailWidthPx?: number | null;
   conversationRailCollapsed?: boolean | null;
@@ -100,6 +101,9 @@ export interface AgentGUIAgentOwner {
   avatarUrl?: string | null;
 }
 
+/** Host-authoritative ownership classification for Agent directory entries. */
+export type AgentGUIAgentOwnership = "self" | "shared";
+
 /**
  * Host-projected entry from the workspace `/agents` directory.
  *
@@ -114,8 +118,10 @@ export interface AgentGUIAgent {
   heroImageUrl?: string | null;
   description?: string | null;
   owner?: AgentGUIAgentOwner | null;
+  ownership?: AgentGUIAgentOwnership | null;
   availability: AgentGUIAgentAvailability;
   provider: AgentGUIProvider;
+  setupKind?: "target_runtime" | null;
 }
 
 export type AgentGUIAgentDirectoryStatus =
@@ -162,6 +168,7 @@ export interface AgentGUIAgentTarget {
   heroImageUrl?: string | null;
   badge?: AgentGUIAgentTargetBadge | null;
   ownerLabel?: string;
+  ownership?: AgentGUIAgentOwnership;
   availability?: AgentGUIAgentAvailability;
   disabled?: boolean;
   unavailableReason?: string;

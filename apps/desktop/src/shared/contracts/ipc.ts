@@ -54,6 +54,9 @@ import type {
   TuttiExternalPdfPrintHtmlResult,
   TuttiExternalReferenceOpenInput,
   TuttiExternalRendererRequest,
+  TuttiExternalAtResolveResult,
+  TuttiExternalAtResolveInput,
+  TuttiExternalAtInvalidation,
   TuttiExternalSettingsOpenInput,
   TuttiExternalUserProjectCreateInput,
   TuttiExternalUserProjectPathInput,
@@ -64,6 +67,7 @@ import type {
 import type {
   WorkspaceUserProject,
   WorkspaceUserProjectDefaultSelection,
+  WorkspaceUserProjectMoveInput,
   WorkspaceUserProjectPathCheck,
   WorkspaceUserProjectSelectionPreparation,
   WorkspaceUserProjectSelectionPreparationInput,
@@ -93,6 +97,7 @@ export const desktopIpcChannels = {
   appExternal: {
     activityReportActive: "workspace-app-activity:report-active",
     atQuery: "workspace-app-at:query",
+    atResolve: "workspace-app-at:resolve",
     filesOpen: "workspace-app-files:open",
     filesSelect: "workspace-app-files:select",
     filesUploadCancel: "workspace-app-files:upload-cancel",
@@ -113,6 +118,7 @@ export const desktopIpcChannels = {
       "workspace-app-user-projects:get-default-selection",
     userProjectsGetSnapshot: "workspace-app-user-projects:get-snapshot",
     userProjectsList: "workspace-app-user-projects:list",
+    userProjectsMove: "workspace-app-user-projects:move",
     userProjectsPrepareSelection:
       "workspace-app-user-projects:prepare-selection",
     userProjectsRefresh: "workspace-app-user-projects:refresh",
@@ -617,6 +623,7 @@ export type DesktopIpcResult<TResult> =
 
 export type DesktopWorkspaceAppExternalRendererResult =
   | TuttiExternalAtQueryResult[]
+  | TuttiExternalAtResolveResult
   | TuttiExternalFileSelectResult
   | WorkspaceUserProject
   | WorkspaceUserProjectDefaultSelection
@@ -634,6 +641,11 @@ export interface DesktopWorkspaceAppExternalRendererResponse {
 }
 
 export type DesktopWorkspaceAppExternalRendererEvent =
+  | {
+      invalidation: TuttiExternalAtInvalidation;
+      type: "at.invalidated";
+      workspaceId: string;
+    }
   | {
       snapshot: WorkspaceUserProjectServiceSnapshot;
       type: "userProjects.changed";
@@ -828,6 +840,7 @@ export interface DesktopInvokePayloadByChannel {
   [desktopIpcChannels.appContext.get]: undefined;
   [desktopIpcChannels.appExternal.activityReportActive]: undefined;
   [desktopIpcChannels.appExternal.atQuery]: TuttiExternalAtQueryInput;
+  [desktopIpcChannels.appExternal.atResolve]: TuttiExternalAtResolveInput;
   [desktopIpcChannels.appExternal.filesOpen]: TuttiExternalFileOpenInput;
   [desktopIpcChannels.appExternal.filesSelect]: TuttiExternalFileSelectInput;
   [desktopIpcChannels.appExternal
@@ -849,6 +862,8 @@ export interface DesktopInvokePayloadByChannel {
   [desktopIpcChannels.appExternal.userProjectsGetDefaultSelection]: undefined;
   [desktopIpcChannels.appExternal.userProjectsGetSnapshot]: undefined;
   [desktopIpcChannels.appExternal.userProjectsList]: undefined;
+  [desktopIpcChannels.appExternal
+    .userProjectsMove]: WorkspaceUserProjectMoveInput;
   [desktopIpcChannels.appExternal
     .userProjectsPrepareSelection]: WorkspaceUserProjectSelectionPreparationInput;
   [desktopIpcChannels.appExternal.userProjectsRefresh]: undefined;
@@ -981,6 +996,8 @@ export interface DesktopInvokeResultByChannel {
   [desktopIpcChannels.appContext.get]: DesktopWorkspaceAppContext;
   [desktopIpcChannels.appExternal.activityReportActive]: void;
   [desktopIpcChannels.appExternal.atQuery]: TuttiExternalAtQueryResult[];
+  [desktopIpcChannels.appExternal
+    .atResolve]: TuttiExternalAtResolveResult | null;
   [desktopIpcChannels.appExternal.filesOpen]: void;
   [desktopIpcChannels.appExternal.filesSelect]: TuttiExternalFileSelectResult;
   [desktopIpcChannels.appExternal.filesUploadCancel]: void;
@@ -1004,6 +1021,7 @@ export interface DesktopInvokeResultByChannel {
   [desktopIpcChannels.appExternal.userProjectsList]: {
     projects: WorkspaceUserProject[];
   };
+  [desktopIpcChannels.appExternal.userProjectsMove]: void;
   [desktopIpcChannels.appExternal
     .userProjectsPrepareSelection]: WorkspaceUserProjectSelectionPreparation;
   [desktopIpcChannels.appExternal

@@ -1,4 +1,5 @@
 import type { AgentSessionComposerSettings } from "../../../shared/agentSessionTypes";
+import type { AgentGUIComposerTargetData } from "./agentGuiController.composerPresentation";
 import { normalizeOptionalText } from "./agentGuiController.promptHelpers";
 import {
   rememberComposerDefaultsFields,
@@ -7,7 +8,7 @@ import {
   type AgentGUIRememberComposerDefaultsResult
 } from "./agentGuiController.providerHelpers";
 
-interface ComposerDefaultsGeneration {
+interface AgentGUIComposerDefaultsGeneration {
   generation: number;
   value: string;
 }
@@ -15,14 +16,16 @@ interface ComposerDefaultsGeneration {
 export interface AgentGUIComposerDefaultsMutation {
   draftKey: string;
   fields: Partial<
-    Record<AgentGUIComposerDefaultsField, ComposerDefaultsGeneration>
+    Record<AgentGUIComposerDefaultsField, AgentGUIComposerDefaultsGeneration>
   >;
 }
 
 export interface AgentGUIComposerDefaultsLedger {
   acknowledgedByDraftKey: Record<
     string,
-    Partial<Record<AgentGUIComposerDefaultsField, ComposerDefaultsGeneration>>
+    Partial<
+      Record<AgentGUIComposerDefaultsField, AgentGUIComposerDefaultsGeneration>
+    >
   >;
   latestByDraftKey: Record<
     string,
@@ -34,6 +37,27 @@ export interface AgentGUIComposerDefaultsLedger {
 export interface AgentGUIRetiredComposerDefault {
   field: AgentGUIComposerDefaultsField;
   value: string;
+}
+
+export interface AgentGUIComposerDefaultsAuthorityRead {
+  force: boolean;
+  receipt: AgentGUIComposerDefaultsAuthorityReadReceipt | null;
+  settings: AgentSessionComposerSettings;
+}
+
+export interface AgentGUIComposerDefaultsAuthorityReadReceipt {
+  draftKey: string;
+  fields: Partial<
+    Record<AgentGUIComposerDefaultsField, AgentGUIComposerDefaultsGeneration>
+  >;
+}
+
+export interface AgentGUIComposerDefaultsAuthorityReconciler {
+  prepareRead(
+    target: AgentGUIComposerTargetData,
+    settings: AgentSessionComposerSettings
+  ): AgentGUIComposerDefaultsAuthorityRead;
+  reloaded(receipt: AgentGUIComposerDefaultsAuthorityReadReceipt | null): void;
 }
 
 export function createAgentGUIComposerDefaultsLedger(): AgentGUIComposerDefaultsLedger {
@@ -89,50 +113,68 @@ export function acknowledgeAgentGUIComposerDefaultsMutation(
   return changed;
 }
 
-export function settingsWithoutAcknowledgedComposerDefaults(
+export function prepareAcknowledgedComposerDefaultsAuthorityRead(
   ledger: AgentGUIComposerDefaultsLedger,
   draftKey: string,
   settings: AgentSessionComposerSettings
-): AgentSessionComposerSettings {
-  const result = { ...settings };
+): AgentGUIComposerDefaultsAuthorityRead {
+  const authoritySettings = { ...settings };
+  const receipt: AgentGUIComposerDefaultsAuthorityReadReceipt = {
+    draftKey,
+    fields: {}
+  };
   const latest = ledger.latestByDraftKey[draftKey];
   const acknowledged = ledger.acknowledgedByDraftKey[draftKey];
-  if (!latest || !acknowledged) return result;
-  for (const field of rememberComposerDefaultsFields) {
-    const entry = acknowledged[field];
-    if (
-      entry &&
-      latest[field] === entry.generation &&
-      normalizeOptionalText(result[field]) === entry.value
-    ) {
-      delete result[field];
+  if (latest && acknowledged) {
+    for (const field of rememberComposerDefaultsFields) {
+      const entry = acknowledged[field];
+      if (
+        entry &&
+        latest[field] === entry.generation &&
+        normalizeOptionalText(authoritySettings[field]) === entry.value
+      ) {
+        receipt.fields[field] = { ...entry };
+        delete authoritySettings[field];
+      }
     }
   }
-  return result;
+  const hasAcknowledgedFields = Object.keys(receipt.fields).length > 0;
+  return {
+    // An acknowledged field must cross the authority boundary again before
+    // its optimistic draft can retire. Bypass a potentially pre-ack cache.
+    force: hasAcknowledgedFields,
+    receipt: hasAcknowledgedFields ? receipt : null,
+    settings: authoritySettings
+  };
 }
 
-export function retireAcknowledgedComposerDefaults(
+export function retireAcknowledgedComposerDefaultsForRead(
   ledger: AgentGUIComposerDefaultsLedger,
-  draftKey: string,
+  receipt: AgentGUIComposerDefaultsAuthorityReadReceipt,
   settings: AgentSessionComposerSettings
 ): AgentGUIRetiredComposerDefault[] {
-  const latest = ledger.latestByDraftKey[draftKey];
-  const acknowledged = ledger.acknowledgedByDraftKey[draftKey];
+  const latest = ledger.latestByDraftKey[receipt.draftKey];
+  const acknowledged = ledger.acknowledgedByDraftKey[receipt.draftKey];
   if (!latest || !acknowledged) return [];
   const retired: AgentGUIRetiredComposerDefault[] = [];
   for (const field of rememberComposerDefaultsFields) {
-    const entry = acknowledged[field];
-    if (!entry) continue;
+    const readEntry = receipt.fields[field];
+    const currentEntry = acknowledged[field];
     if (
-      latest[field] === entry.generation &&
-      normalizeOptionalText(settings[field]) === entry.value
+      !readEntry ||
+      !currentEntry ||
+      currentEntry.generation !== readEntry.generation ||
+      latest[field] !== readEntry.generation
     ) {
-      retired.push({ field, value: entry.value });
+      continue;
+    }
+    if (normalizeOptionalText(settings[field]) === readEntry.value) {
+      retired.push({ field, value: readEntry.value });
     }
     delete acknowledged[field];
   }
   if (Object.keys(acknowledged).length === 0) {
-    delete ledger.acknowledgedByDraftKey[draftKey];
+    delete ledger.acknowledgedByDraftKey[receipt.draftKey];
   }
   return retired;
 }

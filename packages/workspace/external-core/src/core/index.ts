@@ -4,6 +4,8 @@ import {
   tuttiExternalWorkspaceAgentProviders,
   type TuttiExternalAtProviderId,
   type TuttiExternalAtQueryInput,
+  type TuttiExternalAtResolveInput,
+  type TuttiExternalAtInvalidation,
   type TuttiExternalBrowserOpenUrlInput,
   type TuttiExternalFileOpenInput,
   type TuttiExternalFileSelectInput,
@@ -23,7 +25,10 @@ import {
   type TuttiExternalWorkspaceFeature,
   type TuttiExternalWorkspaceOpenFeatureInput
 } from "../contracts/index.ts";
-import type { WorkspaceUserProjectSelectionPreparationInput } from "@tutti-os/workspace-user-project/contracts";
+import type {
+  WorkspaceUserProjectMoveInput,
+  WorkspaceUserProjectSelectionPreparationInput
+} from "@tutti-os/workspace-user-project/contracts";
 
 export {
   tuttiExternalAtProviderIds,
@@ -96,6 +101,58 @@ export function normalizeTuttiExternalAtQueryInput(
     keyword: keywordValue,
     maxResults: normalizeMaxResults(input.maxResults),
     providers: normalizeProviders(input.providers)
+  };
+}
+
+export function normalizeTuttiExternalAtResolveInput(
+  input: unknown
+): TuttiExternalAtResolveInput {
+  if (!isRecord(input)) {
+    throw new Error("at.resolve input must be an object.");
+  }
+  if (!isTuttiExternalAtProviderId(input.providerId)) {
+    throw new Error("at.resolve providerId is unsupported.");
+  }
+  const entityId = normalizeRequiredString(
+    input.entityId,
+    "at.resolve entityId"
+  );
+  return {
+    providerId: input.providerId,
+    entityId,
+    ...(input.scope === undefined || input.scope === null
+      ? {}
+      : { scope: normalizeTuttiExternalAtScope(input.scope) })
+  };
+}
+
+export function normalizeTuttiExternalAtInvalidation(
+  input: unknown
+): TuttiExternalAtInvalidation {
+  if (!isRecord(input)) {
+    throw new Error("at invalidation must be an object.");
+  }
+  const providerIds =
+    input.providerIds === undefined
+      ? undefined
+      : normalizeProviders(input.providerIds);
+  const entityIds =
+    input.entityIds === undefined
+      ? undefined
+      : normalizeRequiredStringList(
+          input.entityIds,
+          "at invalidation entityIds"
+        );
+  if (
+    input.revision !== undefined &&
+    (typeof input.revision !== "number" || !Number.isFinite(input.revision))
+  ) {
+    throw new Error("at invalidation revision must be finite.");
+  }
+  return {
+    ...(providerIds ? { providerIds } : {}),
+    ...(entityIds ? { entityIds } : {}),
+    ...(typeof input.revision === "number" ? { revision: input.revision } : {})
   };
 }
 
@@ -327,6 +384,31 @@ export function normalizeTuttiExternalUserProjectPathInput(
   }
   return {
     path: normalizeRequiredString(input.path, `userProjects.${operation} path`)
+  };
+}
+
+export function normalizeTuttiExternalUserProjectMoveInput(
+  input: unknown
+): WorkspaceUserProjectMoveInput {
+  if (!isRecord(input)) {
+    throw new Error("userProjects.move input must be an object.");
+  }
+  if (!("beforeProjectId" in input)) {
+    throw new Error("userProjects.move beforeProjectId is required.");
+  }
+  const projectId = normalizeRequiredString(
+    input.projectId,
+    "userProjects.move projectId"
+  );
+  if (input.beforeProjectId === null) {
+    return { beforeProjectId: null, projectId };
+  }
+  return {
+    beforeProjectId: normalizeRequiredString(
+      input.beforeProjectId,
+      "userProjects.move beforeProjectId"
+    ),
+    projectId
   };
 }
 
@@ -668,6 +750,23 @@ function normalizeRequiredString(value: unknown, field: string): string {
     throw new Error(`${field} is required.`);
   }
   return value.trim();
+}
+
+function normalizeTuttiExternalAtScope(
+  value: unknown
+): Readonly<Record<string, string>> {
+  if (!isRecord(value)) {
+    throw new Error("at.resolve scope must be an object.");
+  }
+  const scope: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    const normalizedKey = key.trim();
+    if (!normalizedKey || typeof entry !== "string") {
+      throw new Error("at.resolve scope must contain string values.");
+    }
+    scope[normalizedKey] = entry;
+  }
+  return scope;
 }
 
 function normalizeRequiredStringList(value: unknown, field: string): string[] {

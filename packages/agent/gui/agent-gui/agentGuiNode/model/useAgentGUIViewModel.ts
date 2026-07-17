@@ -24,6 +24,7 @@ export function useAgentGUIViewModel(
       candidate.rail.isLoadingConversations,
       candidate.rail.listError,
       candidate.rail.providerRailMode,
+      candidate.rail.revealRequest,
       candidate.rail.agentTargets,
       candidate.rail.agentTargetsLoading,
       candidate.rail.selectedAgentTarget,
@@ -92,6 +93,7 @@ export function useAgentGUIViewModel(
       candidate.operations.goalClearNoticeSequence,
       candidate.operations.isDeletingConversation,
       candidate.operations.isDeletingProjectConversations,
+      candidate.operations.isUserProjectMutationPending,
       candidate.operations.pendingDeleteConversation,
       candidate.operations.pendingDeleteProjectConversations
     ]

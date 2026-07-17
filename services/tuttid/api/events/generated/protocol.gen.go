@@ -6,7 +6,7 @@ import "encoding/json"
 
 const (
 	BusinessEventProtocolVersion = 1
-	BusinessEventCatalogRevision = "sha256:53e4df5f71ffc64b"
+	BusinessEventCatalogRevision = "sha256:44808dc720c31ca4"
 )
 
 type Topic string
@@ -19,6 +19,7 @@ const (
 	TopicPreferencesAgentComposerDefaultsPatchRequested Topic = "preferences.agent.composer.defaults.patch.requested"
 	TopicPreferencesDesktopUpdateRequested              Topic = "preferences.desktop.update.requested"
 	TopicPreferencesDesktopUpdated                      Topic = "preferences.desktop.updated"
+	TopicUserProjectUpdated                             Topic = "user.project.updated"
 	TopicWorkspaceAppUpdated                            Topic = "workspace.app.updated"
 	TopicWorkspaceAppfactoryJobUpdated                  Topic = "workspace.appfactory.job.updated"
 	TopicWorkspaceIssueUpdated                          Topic = "workspace.issue.updated"
@@ -154,6 +155,16 @@ type PreferencesDesktopPreferences struct {
 	} `json:"workbenchWindowSnapping,omitempty"`
 }
 
+type UserUserProject struct {
+	Id               string `json:"id"`
+	Path             string `json:"path"`
+	Label            string `json:"label"`
+	SectionKey       string `json:"sectionKey"`
+	CreatedAtUnixMs  int64  `json:"createdAtUnixMs"`
+	UpdatedAtUnixMs  int64  `json:"updatedAtUnixMs"`
+	LastUsedAtUnixMs int64  `json:"lastUsedAtUnixMs"`
+}
+
 type WorkspaceWorkspaceAppFactoryJob struct {
 	JobId            string          `json:"jobId"`
 	WorkspaceId      string          `json:"workspaceId"`
@@ -269,6 +280,10 @@ type PreferencesDesktopUpdatedPayload struct {
 	Preferences PreferencesDesktopPreferences `json:"preferences"`
 }
 
+type UserProjectUpdatedPayload struct {
+	Projects []UserUserProject `json:"projects"`
+}
+
 type WorkspaceAppUpdatedPayload struct {
 	App WorkspaceWorkspaceApp `json:"app"`
 }
@@ -356,6 +371,15 @@ type PreferencesDesktopUpdatedEvent struct {
 	EmittedAt string                           `json:"emittedAt"`
 	Scope     *EventScope                      `json:"scope,omitempty"`
 	Payload   PreferencesDesktopUpdatedPayload `json:"payload"`
+}
+
+type UserProjectUpdatedEvent struct {
+	ID        string                    `json:"id"`
+	Topic     Topic                     `json:"topic"`
+	Version   int                       `json:"version"`
+	EmittedAt string                    `json:"emittedAt"`
+	Scope     *EventScope               `json:"scope,omitempty"`
+	Payload   UserProjectUpdatedPayload `json:"payload"`
 }
 
 type WorkspaceAppUpdatedEvent struct {
@@ -503,6 +527,13 @@ var BusinessEventDefinitions = []EventDefinition{
 		Scope:     ScopeNameDesktop,
 	},
 	{
+		Topic:     TopicUserProjectUpdated,
+		Version:   1,
+		Direction: DirectionServerToClient,
+		Owner:     "core",
+		Scope:     ScopeNameGlobal,
+	},
+	{
 		Topic:     TopicWorkspaceAppUpdated,
 		Version:   1,
 		Direction: DirectionServerToClient,
@@ -540,10 +571,11 @@ var businessEventDefinitionByTopic = map[Topic]EventDefinition{
 	TopicPreferencesAgentComposerDefaultsPatchRequested: BusinessEventDefinitions[4],
 	TopicPreferencesDesktopUpdateRequested:              BusinessEventDefinitions[5],
 	TopicPreferencesDesktopUpdated:                      BusinessEventDefinitions[6],
-	TopicWorkspaceAppUpdated:                            BusinessEventDefinitions[7],
-	TopicWorkspaceAppfactoryJobUpdated:                  BusinessEventDefinitions[8],
-	TopicWorkspaceIssueUpdated:                          BusinessEventDefinitions[9],
-	TopicWorkspaceWorkbenchNodeLaunchRequested:          BusinessEventDefinitions[10],
+	TopicUserProjectUpdated:                             BusinessEventDefinitions[7],
+	TopicWorkspaceAppUpdated:                            BusinessEventDefinitions[8],
+	TopicWorkspaceAppfactoryJobUpdated:                  BusinessEventDefinitions[9],
+	TopicWorkspaceIssueUpdated:                          BusinessEventDefinitions[10],
+	TopicWorkspaceWorkbenchNodeLaunchRequested:          BusinessEventDefinitions[11],
 }
 
 var ClientToServerTopics = []Topic{
@@ -557,6 +589,7 @@ var ServerToClientTopics = []Topic{
 	TopicAnalyticsDebugReported,
 	TopicPreferencesAgentComposerDefaultsChanged,
 	TopicPreferencesDesktopUpdated,
+	TopicUserProjectUpdated,
 	TopicWorkspaceAppUpdated,
 	TopicWorkspaceAppfactoryJobUpdated,
 	TopicWorkspaceIssueUpdated,
@@ -596,6 +629,8 @@ func IsServerToClientTopic(topic Topic) bool {
 		return true
 	case TopicPreferencesDesktopUpdated:
 		return true
+	case TopicUserProjectUpdated:
+		return true
 	case TopicWorkspaceAppUpdated:
 		return true
 	case TopicWorkspaceAppfactoryJobUpdated:
@@ -625,6 +660,8 @@ func PayloadPrototypeForTopic(topic Topic) (any, bool) {
 		return &PreferencesDesktopUpdateRequestedPayload{}, true
 	case TopicPreferencesDesktopUpdated:
 		return &PreferencesDesktopUpdatedPayload{}, true
+	case TopicUserProjectUpdated:
+		return &UserProjectUpdatedPayload{}, true
 	case TopicWorkspaceAppUpdated:
 		return &WorkspaceAppUpdatedPayload{}, true
 	case TopicWorkspaceAppfactoryJobUpdated:
@@ -654,6 +691,8 @@ func EventPrototypeForTopic(topic Topic) (any, bool) {
 		return &PreferencesDesktopUpdateRequestedEvent{}, true
 	case TopicPreferencesDesktopUpdated:
 		return &PreferencesDesktopUpdatedEvent{}, true
+	case TopicUserProjectUpdated:
+		return &UserProjectUpdatedEvent{}, true
 	case TopicWorkspaceAppUpdated:
 		return &WorkspaceAppUpdatedEvent{}, true
 	case TopicWorkspaceAppfactoryJobUpdated:

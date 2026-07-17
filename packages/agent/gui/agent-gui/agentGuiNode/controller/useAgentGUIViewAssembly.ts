@@ -147,6 +147,7 @@ export function useAgentGUIViewAssembly(input: UseAgentGUIViewAssemblyInput) {
       userProjects: input.userProjects,
       activeConversation,
       activeConversationId: input.activeConversationId,
+      revealRequest: input.railRevealRequest,
       isLoadingConversations: input.isLoadingConversations,
       listError: input.listError
     },
@@ -206,6 +207,7 @@ export function useAgentGUIViewAssembly(input: UseAgentGUIViewAssemblyInput) {
       goalClearNoticeSequence: input.goalClearNoticeSequence,
       isDeletingConversation: input.isDeletingConversation,
       isDeletingProjectConversations: input.isDeletingProjectConversations,
+      isUserProjectMutationPending: input.isUserProjectMutationPending,
       pendingDeleteConversation: input.pendingDeleteConversation,
       pendingDeleteProjectConversations: input.pendingDeleteProjectConversations
     }

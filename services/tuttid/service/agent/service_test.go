@@ -13,7 +13,9 @@ import (
 	"time"
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
+	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
 	"github.com/tutti-os/tutti/packages/agent/daemon/titletext"
+	agenthost "github.com/tutti-os/tutti/packages/agent/host"
 	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
@@ -90,6 +92,19 @@ func TestServiceCreateInheritsTargetComposerDefaultsAndExplicitOverridesWin(t *t
 	started := runtime.startCalls[0]
 	if started.Model != explicitModel || started.PermissionModeID != "full-access" || started.ReasoningEffort != "high" || started.Speed != "fast" {
 		t.Fatalf("runtime start = %#v", started)
+	}
+}
+
+func TestServiceApplicationHostUsesConfiguredSingleton(t *testing.T) {
+	service := newTestService(newFakeRuntime())
+	host := NewApplicationHost(service)
+	service.SetApplicationHost(host)
+
+	if got := service.ApplicationHost(); got != host {
+		t.Fatalf("ApplicationHost() = %p, want configured host %p", got, host)
+	}
+	if got := service.ApplicationHost(); got != host {
+		t.Fatalf("second ApplicationHost() = %p, want configured host %p", got, host)
 	}
 }
 
@@ -1554,6 +1569,7 @@ func TestServiceImportsExternalAgentSessionsByProject(t *testing.T) {
 
 	runtime := newFakeRuntime()
 	service := newIsolatedAgentService(runtime)
+	service.AgentTargetStore = fakeAgentTargetStore{targets: defaultTestAgentTargets()}
 	projection := NewActivityProjection(store)
 	service.SessionReader = projection
 	service.MessageReader = projection
@@ -2786,55 +2802,178 @@ func TestServiceGetComposerOptionsResolvesProviderFromAgentTargetID(t *testing.T
 	}
 }
 
-func TestServiceGetComposerOptionsPreservesExtensionProviderFromAgentTargetID(t *testing.T) {
+func TestServiceGetComposerOptionsPreservesGenericExtensionTargetAndProjectsSignedLiveComposerData(t *testing.T) {
 	runtime := newFakeRuntime()
 	runtime.startHook = func(input RuntimeStartInput, session ProviderRuntimeSession) ProviderRuntimeSession {
 		if input.Visible != nil && !*input.Visible {
-			session.RuntimeContext = map[string]any{
+			runtimeContext := clonePayload(session.RuntimeContext)
+			for key, value := range map[string]any{
 				"configOptions": []any{
 					map[string]any{
-						"id": "model",
+						"currentValue": "example-pro",
+						"id":           "model-choice",
 						"options": []any{
-							map[string]any{"value": "gemini-2.5-pro", "name": "Gemini 2.5 Pro"},
+							map[string]any{"value": "example-pro", "name": "Example Pro"},
+						},
+					},
+					map[string]any{
+						"currentValue": "default",
+						"id":           "approval-mode",
+						"options": []any{
+							map[string]any{"value": "default", "name": "Default"},
+							map[string]any{"value": "acceptEdits", "name": "Accept edits"},
+							map[string]any{"value": "auto", "name": "Auto"},
+							map[string]any{"value": "dontAsk", "name": "Don't ask"},
+							map[string]any{"value": "bypassPermissions", "name": "Bypass permissions"},
+							map[string]any{"value": "fullAccess", "name": "Full access"},
+							map[string]any{"value": "plan", "name": "Plan"},
+						},
+					},
+					map[string]any{
+						"currentValue": "enabled",
+						"id":           "reasoning_effort",
+						"runtimeId":    "thought_level",
+						"options": []any{
+							map[string]any{"value": "disabled", "name": "Off"},
+							map[string]any{"value": "enabled", "name": "On"},
+							map[string]any{"value": "deep", "name": "Deep"},
+						},
+					},
+					map[string]any{
+						"currentValue": "false",
+						"id":           "sandbox",
+						"options": []any{
+							map[string]any{"value": "false", "name": "Off"},
+							map[string]any{"value": "true", "name": "On"},
 						},
 					},
 				},
+				"capabilities": []any{"compact", "compact", "planMode", "unknown"},
+				"availableCommands": []any{
+					map[string]any{"name": "compact", "description": "Compact history", "inputHint": "optional focus"},
+					map[string]any{"name": "status", "description": "Show status"},
+					map[string]any{"name": "goal", "description": "Set goal"},
+					map[string]any{"name": "plan", "description": "Toggle plan"},
+					map[string]any{"name": "review", "description": "Review code"},
+					map[string]any{"name": "effort", "description": "Set thinking effort"},
+				},
+			} {
+				runtimeContext[key] = value
 			}
+			session.RuntimeContext = runtimeContext
 		}
 		return session
 	}
 	service := newIsolatedAgentService(runtime)
 	service.AgentTargetStore = fakeAgentTargetStore{targets: map[string]agenttargetbiz.Target{
-		"extension:gemini": {
-			ID:            "extension:gemini",
-			Provider:      "acp:gemini",
-			LaunchRefJSON: `{"type":"agent_extension","extensionInstallationId":"gemini@1.0.0"}`,
-			Name:          "Gemini CLI",
+		"extension:example": {
+			ID:            "extension:example",
+			Provider:      "acp:example",
+			LaunchRefJSON: `{"type":"agent_extension","extensionInstallationId":"example@1.0.0"}`,
+			Name:          "Example Agent",
 			Enabled:       true,
 			Source:        agenttargetbiz.SourceSystem,
 		},
 	}}
 	service.CapabilityLister = &recordingComposerCapabilityLister{}
+	service.ExtensionComposerProfiles = extensionComposerProfileResolverStub{
+		profile: ExtensionComposerProfile{
+			Capabilities:             []string{"compact", "compact", "planMode", "unknown"},
+			ModelConfigOptionID:      "model-choice",
+			PermissionConfigOptionID: "approval-mode",
+			ReasoningConfigOptionID:  "thought_level",
+			PermissionModes: []ExtensionComposerPermissionMode{
+				{RuntimeID: "default", Semantic: PermissionModeSemanticAskBeforeWrite},
+				{RuntimeID: "acceptEdits", Semantic: PermissionModeSemanticAcceptEdits},
+				{RuntimeID: "auto", Semantic: PermissionModeSemanticAuto},
+				{RuntimeID: "dontAsk", Semantic: PermissionModeSemanticLockedDown},
+				{RuntimeID: "bypassPermissions", Semantic: PermissionModeSemanticFullAccess},
+				{RuntimeID: "fullAccess", Semantic: PermissionModeSemanticFullAccess},
+			},
+			SlashCommandCatalogAuthoritative: true,
+			SlashCommands: []ExtensionComposerSlashCommand{
+				{Name: "compact", Effect: string(providerregistry.SlashCommandEffectSubmitImmediate)},
+				{Name: "status", Effect: string(providerregistry.SlashCommandEffectShowStatus)},
+				{Name: "goal", Effect: string(providerregistry.SlashCommandEffectActivateGoalMode)},
+				{Name: "plan", Effect: string(providerregistry.SlashCommandEffectTogglePlanMode)},
+			},
+		},
+	}
 
 	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
-		AgentTargetID: "extension:gemini",
-		Provider:      "acp:gemini",
+		AgentTargetID: "extension:example",
+		Provider:      "acp:example",
 		WorkspaceID:   "workspace-1",
+		Cwd:           t.TempDir(),
+		Settings: ComposerSettings{
+			PermissionModeID: "ask-before-write",
+			ReasoningEffort:  "deep",
+		},
 	})
 	if err != nil {
 		t.Fatalf("GetComposerOptions returned error: %v", err)
 	}
-	if options.Provider != "acp:gemini" {
-		t.Fatalf("provider = %q, want acp:gemini", options.Provider)
+	if options.Provider != "acp:example" {
+		t.Fatalf("provider = %q, want acp:example", options.Provider)
 	}
-	if options.RuntimeContext["agentTargetId"] != "extension:gemini" {
-		t.Fatalf("runtimeContext agentTargetId = %#v, want extension:gemini", options.RuntimeContext["agentTargetId"])
+	if options.RuntimeContext["agentTargetId"] != "extension:example" {
+		t.Fatalf("runtimeContext agentTargetId = %#v, want extension:example", options.RuntimeContext["agentTargetId"])
 	}
-	if !options.ModelConfig.Configurable || len(options.ModelConfig.Options) != 1 || options.ModelConfig.Options[0].Value != "gemini-2.5-pro" {
+	if !options.ModelConfig.Configurable || len(options.ModelConfig.Options) != 1 || options.ModelConfig.Options[0].Value != "example-pro" {
 		t.Fatalf("modelConfig = %#v, want live extension model options", options.ModelConfig)
+	}
+	if !options.PermissionConfig.Configurable ||
+		options.PermissionConfig.DefaultValue != "ask-before-write" ||
+		len(options.PermissionConfig.Modes) != 5 ||
+		options.PermissionConfig.Modes[1].Semantic != PermissionModeSemanticAcceptEdits ||
+		options.PermissionConfig.Modes[4].Semantic != PermissionModeSemanticFullAccess {
+		t.Fatalf("permissionConfig = %#v, want runtime extension permission modes", options.PermissionConfig)
+	}
+	permissionModeIDs := make([]string, 0, len(options.PermissionConfig.Modes))
+	for _, mode := range options.PermissionConfig.Modes {
+		permissionModeIDs = append(permissionModeIDs, mode.ID)
+	}
+	if !slices.Equal(permissionModeIDs, []string{"ask-before-write", "accept-edits", "auto", "locked-down", "full-access"}) {
+		t.Fatalf("permission mode ids = %#v, want semantic representatives", permissionModeIDs)
+	}
+	if !options.ReasoningConfig.Configurable ||
+		options.ReasoningConfig.CurrentValue != "enabled" ||
+		len(options.ReasoningConfig.Options) != 3 ||
+		options.ReasoningConfig.Options[2].Value != "deep" {
+		t.Fatalf("reasoningConfig = %#v, want runtime extension thought_level options", options.ReasoningConfig)
+	}
+	if !slices.Equal(options.Capabilities, []string{"compact", "planMode"}) {
+		t.Fatalf("capabilities = %#v, want deduplicated signed/live known capabilities", options.Capabilities)
+	}
+	if options.SlashCommandPolicy == nil ||
+		!options.SlashCommandPolicy.CommandCatalogAuthoritative ||
+		!slices.Equal(options.SlashCommandPolicy.FallbackCommands, []string{"compact", "status", "goal", "plan"}) ||
+		len(options.SlashCommandPolicy.CommandEffects) != 4 ||
+		options.SlashCommandPolicy.CommandEffects[2].Effect != providerregistry.SlashCommandEffectActivateGoalMode {
+		t.Fatalf("slashCommandPolicy = %#v, want extension slash command profile", options.SlashCommandPolicy)
+	}
+	commands := options.Commands
+	if len(commands) != 4 || commands[0].Name != "compact" || commands[0].Description != "Compact history" || commands[0].InputHint != "optional focus" || commands[3].Name != "plan" {
+		t.Fatalf("commands = %#v, want filtered runtime commands", commands)
+	}
+	configOptions, ok := options.RuntimeContext["configOptions"].([]map[string]any)
+	if !ok || len(configOptions) != 5 ||
+		configOptions[0]["id"] != "model" ||
+		configOptions[1]["id"] != "model-choice" ||
+		configOptions[2]["id"] != "approval-mode" ||
+		configOptions[3]["id"] != "reasoning_effort" ||
+		configOptions[3]["runtimeId"] != "thought_level" ||
+		configOptions[4]["id"] != "sandbox" {
+		t.Fatalf("configOptions = %#v, want model + runtime extension config options", options.RuntimeContext["configOptions"])
 	}
 	if len(runtime.startCalls) != 1 || runtime.startCalls[0].ProviderTargetRef["kind"] != "agent_extension" {
 		t.Fatalf("runtime start calls = %#v, want one target-scoped extension discovery", runtime.startCalls)
+	}
+	if runtime.startCalls[0].PermissionModeID != "ask-before-write" || runtime.startCalls[0].ReasoningEffort != "deep" {
+		t.Fatalf("runtime start settings = %#v, want signed semantic permission and requested reasoning", runtime.startCalls[0])
+	}
+	if len(runtime.closeCalls) != 1 || len(runtime.sessions) != 0 {
+		t.Fatalf("runtime cleanup = calls %#v sessions %#v, want hidden discovery closed immediately", runtime.closeCalls, runtime.sessions)
 	}
 }
 
@@ -3030,12 +3169,9 @@ func TestServiceGetsComposerOptionsFromCodexModelCatalog(t *testing.T) {
 	if options.RuntimeContext["modelCatalogSource"] != "codex-cli" {
 		t.Fatalf("modelCatalogSource = %#v, want codex-cli", options.RuntimeContext["modelCatalogSource"])
 	}
-	reasoningProfiles, ok := options.RuntimeContext["modelReasoningOptionsByModel"].(map[string]any)
-	if !ok {
-		t.Fatalf("modelReasoningOptionsByModel = %#v", options.RuntimeContext["modelReasoningOptionsByModel"])
-	}
-	gpt5Reasoning, ok := reasoningProfiles["gpt-5"].(map[string]any)
-	if !ok || gpt5Reasoning["defaultValue"] != "minimal" {
+	reasoningProfiles := options.ReasoningOptionsByModel
+	gpt5Reasoning, ok := reasoningProfiles["gpt-5"]
+	if !ok || gpt5Reasoning.DefaultValue != "minimal" {
 		t.Fatalf("gpt-5 reasoning profile = %#v", reasoningProfiles["gpt-5"])
 	}
 	if len(runtime.sessions) != 0 {
@@ -3149,20 +3285,17 @@ func TestServiceGetsComposerOptionsFromOpenCodeModelCatalogWithReasoning(t *test
 	if !ok || len(modelOptions) == 0 || modelOptions[0]["supportsImageInput"] != true {
 		t.Fatalf("model options = %#v, want supportsImageInput true", configOptions[0]["options"])
 	}
-	profiles, ok := options.RuntimeContext["modelReasoningOptionsByModel"].(map[string]any)
-	if !ok {
-		t.Fatalf("model reasoning profiles = %#v", options.RuntimeContext["modelReasoningOptionsByModel"])
-	}
-	sparkProfile, ok := profiles["openai/gpt-5.3-codex-spark"].(map[string]any)
-	if !ok || sparkProfile["defaultValue"] != "low" {
+	profiles := options.ReasoningOptionsByModel
+	sparkProfile, ok := profiles["openai/gpt-5.3-codex-spark"]
+	if !ok || sparkProfile.DefaultValue != "low" {
 		t.Fatalf("spark reasoning profile = %#v", sparkProfile)
 	}
-	bigPickleProfile, ok := profiles["opencode/big-pickle"].(map[string]any)
+	bigPickleProfile, ok := profiles["opencode/big-pickle"]
 	if !ok {
 		t.Fatalf("Big Pickle reasoning profile = %#v", profiles["opencode/big-pickle"])
 	}
-	if reasoningOptions, ok := bigPickleProfile["options"].([]map[string]string); !ok || len(reasoningOptions) != 0 {
-		t.Fatalf("Big Pickle reasoning options = %#v, want empty", bigPickleProfile["options"])
+	if len(bigPickleProfile.Options) != 0 {
+		t.Fatalf("Big Pickle reasoning options = %#v, want empty", bigPickleProfile.Options)
 	}
 	if options.RuntimeContext["modelCatalogSource"] != "opencode-cli" {
 		t.Fatalf("modelCatalogSource = %#v, want opencode-cli", options.RuntimeContext["modelCatalogSource"])
@@ -3270,14 +3403,10 @@ func TestServiceGetsComposerOptionsPreservesCodexModelCatalogReasoningEffort(t *
 	if !slices.Equal(values, []string{"low", "medium", "high", "xhigh", "max"}) {
 		t.Fatalf("reasoningConfig values = %#v, want selected Luna model capabilities", values)
 	}
-	profiles, ok := options.RuntimeContext["modelReasoningOptionsByModel"].(map[string]any)
-	if !ok {
-		t.Fatalf("modelReasoningOptionsByModel = %#v", options.RuntimeContext["modelReasoningOptionsByModel"])
-	}
-	solProfile := profiles["gpt-5.6-sol"].(map[string]any)
-	lunaProfile := profiles["gpt-5.6-luna"].(map[string]any)
-	if len(solProfile["options"].([]map[string]string)) != 2 ||
-		len(lunaProfile["options"].([]map[string]string)) != 5 {
+	profiles := options.ReasoningOptionsByModel
+	solProfile := profiles["gpt-5.6-sol"]
+	lunaProfile := profiles["gpt-5.6-luna"]
+	if len(solProfile.Options) != 2 || len(lunaProfile.Options) != 5 {
 		t.Fatalf("reasoning profiles = %#v, want model-specific option counts", profiles)
 	}
 }
@@ -3310,17 +3439,13 @@ func TestServiceGetsComposerOptionsPreservesAdvertisedEmptyReasoningEfforts(t *t
 	if options.EffectiveSettings.ReasoningEffort != "" || len(options.ReasoningConfig.Options) != 0 {
 		t.Fatalf("reasoningConfig = %#v, want authoritative empty options", options.ReasoningConfig)
 	}
-	profiles, ok := options.RuntimeContext["modelReasoningOptionsByModel"].(map[string]any)
-	if !ok {
-		t.Fatalf("modelReasoningOptionsByModel = %#v", options.RuntimeContext["modelReasoningOptionsByModel"])
-	}
-	profile, ok := profiles["no-reasoning"].(map[string]any)
+	profiles := options.ReasoningOptionsByModel
+	profile, ok := profiles["no-reasoning"]
 	if !ok {
 		t.Fatalf("no-reasoning profile = %#v", profiles["no-reasoning"])
 	}
-	profileOptions, ok := profile["options"].([]map[string]string)
-	if !ok || len(profileOptions) != 0 {
-		t.Fatalf("no-reasoning profile options = %#v, want empty", profile["options"])
+	if len(profile.Options) != 0 {
+		t.Fatalf("no-reasoning profile options = %#v, want empty", profile.Options)
 	}
 }
 
@@ -4430,6 +4555,14 @@ func TestActivityProjectionPreservesMixedMessageAuditOrder(t *testing.T) {
 func TestActivityProjectionPublishesDeletedEventsForClearedSessions(t *testing.T) {
 	repo := &activityProjectionRepoStub{
 		clearResult: agentactivitybiz.ClearSessionsResult{
+			TransactionID: "tx-clear",
+			CommitDelta: agentactivitybiz.TransactionDelta{
+				TransactionID: "tx-clear",
+				Mutations: []agentactivitybiz.TransactionMutation{
+					{WorkspaceID: "ws-1", AgentSessionID: "session-1", EntityKind: agentactivitybiz.MutationEntitySession, EntityID: "session-1", Operation: "delete"},
+					{WorkspaceID: "ws-1", AgentSessionID: "session-2", EntityKind: agentactivitybiz.MutationEntitySession, EntityID: "session-2", Operation: "delete"},
+				},
+			},
 			RemovedMessages:   5,
 			RemovedSessions:   2,
 			RemovedSessionIDs: []string{"session-1", "session-2"},
@@ -5391,8 +5524,11 @@ type recordingGoalAuditPublisher struct {
 	audits []agentactivitybiz.Message
 }
 
-func (p *recordingGoalAuditPublisher) PublishGoalControlAudit(_ context.Context, _ string, _ string, audit agentactivitybiz.Message) {
-	p.audits = append(p.audits, audit)
+func (p *recordingGoalAuditPublisher) ObserveCommitted(_ context.Context, delta agenthost.CommittedDelta) error {
+	if delta.GoalOperation != nil && delta.GoalOperation.Audit != nil {
+		p.audits = append(p.audits, *delta.GoalOperation.Audit)
+	}
+	return nil
 }
 
 func (*recordingGoalStateStore) CompleteGoalControlOperation(context.Context, agentactivitybiz.GoalControlOperationComplete) (agentactivitybiz.GoalControlOperation, agentactivitybiz.SessionGoalState, bool, error) {
@@ -5455,27 +5591,6 @@ func (*recordingGoalStateStore) RequeueLeasedGoalControlOperationsOnStartup(cont
 	return 0, nil
 }
 
-func TestRetryRecoveredGoalOperationPreservesRepairEvidence(t *testing.T) {
-	store := &recordingGoalStateStore{}
-	service := newIsolatedAgentService(newFakeRuntime())
-	service.GoalStateStore = store
-	op := agentactivitybiz.GoalControlOperation{
-		OperationID: "repair-op", WorkspaceID: "ws", AgentSessionID: "session", GoalRevision: 2,
-		LeaseOwner: service.goalOperationOwner(), RepairEpoch: 3, Attempt: 1,
-		Evidence: map[string]any{"repair": map[string]any{"repairId": "incident-1"}},
-	}
-	if err := service.retryRecoveredGoalOperation(context.Background(), op, context.DeadlineExceeded); err != nil {
-		t.Fatal(err)
-	}
-	if len(store.released) != 1 {
-		t.Fatalf("release inputs = %#v", store.released)
-	}
-	repair, ok := store.released[0].Evidence["repair"].(map[string]any)
-	if !ok || repair["repairId"] != "incident-1" {
-		t.Fatalf("release evidence = %#v", store.released)
-	}
-}
-
 func TestServiceTypedGoalUsesDurableSagaBeforeTurnSubmit(t *testing.T) {
 	runtime := newFakeRuntime()
 	runtime.sessions["ws-typed:session-typed"] = ProviderRuntimeSession{
@@ -5495,7 +5610,7 @@ func TestServiceTypedGoalUsesDurableSagaBeforeTurnSubmit(t *testing.T) {
 	}
 	service := newIsolatedAgentService(runtime)
 	service.GoalStateStore = store
-	service.GoalAuditPublisher = publisher
+	service.CommitObserver = publisher
 
 	result, err := service.SendInput(context.Background(), "ws-typed", "session-typed", SendInput{
 		Content:  TextPromptContent("/goal ship it"),
@@ -5598,7 +5713,7 @@ func TestGoalActorSlowRevisionOneResultCannotOverwriteRevisionTwoClear(t *testin
 	if len(calls) != 2 || calls[0].Action != "set" || calls[1].Action != "clear" {
 		t.Fatalf("provider calls before worker=%#v, want no synchronous compensation", calls)
 	}
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatalf("run durable repair: %v", err)
 	}
 	state, found, err = store.GetSessionGoalState(ctx, "ws-goal-actor", "session-goal-actor")
@@ -5659,7 +5774,7 @@ func TestGoalActorAmbiguousOldErrorSchedulesDurableRepairOfNewerRevision(t *test
 	if err != nil || !found || state.Revision != 2 || state.PendingOperationID == "" || state.SyncStatus != agentactivitybiz.GoalSyncStatusPending {
 		t.Fatalf("durable repair state=%#v found=%v err=%v", state, found, err)
 	}
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatalf("repair ambiguous old result: %v", err)
 	}
 	state, found, err = store.GetSessionGoalState(ctx, "ws-goal-error", "session-goal-error")
@@ -5711,7 +5826,7 @@ func TestGoalRecoveryDoesNotReplayAcceptedClaudeSet(t *testing.T) {
 	service.GoalStateStore = store
 	service.GoalOperationOwner = "goal-recovery-worker"
 	service.GoalOperationClock = func() time.Time { return time.UnixMilli(6000) }
-	if err := service.StepGoalOperationWorker(ctx, true); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, true); err != nil {
 		t.Fatalf("recover accepted Claude set: %v", err)
 	}
 	if len(runtime.goalControlCalls) != 0 {
@@ -5732,14 +5847,14 @@ func TestGoalRecoveryPolicyIsCapabilityDrivenAndMissingResolverFailsClosed(t *te
 	runtime.goalRecoveryPolicyHook = func(context.Context, RuntimeGoalControlInput) (RuntimeGoalRecoveryPolicy, error) {
 		return RuntimeGoalRecoveryPolicy{QuerySupported: true, ReplaySetAfterRestart: true}, nil
 	}
-	policy, err := resolveRuntimeGoalRecoveryPolicy(context.Background(), runtime, RuntimeGoalControlInput{})
+	policy, err := agenthost.ResolveRuntimeGoalRecoveryPolicy(context.Background(), runtime, RuntimeGoalControlInput{})
 	if err != nil || !policy.QuerySupported || !policy.ReplaySetAfterRestart {
 		t.Fatalf("adapter policy=%#v err=%v", policy, err)
 	}
 	// Embedding only the mandatory controller contract deliberately hides the
 	// optional resolver, modeling an unknown/older provider adapter.
 	unknown := struct{ RuntimeController }{RuntimeController: runtime}
-	policy, err = resolveRuntimeGoalRecoveryPolicy(context.Background(), unknown, RuntimeGoalControlInput{})
+	policy, err = agenthost.ResolveRuntimeGoalRecoveryPolicy(context.Background(), unknown, RuntimeGoalControlInput{})
 	if err != nil || policy.QuerySupported || policy.ReplaySetAfterRestart {
 		t.Fatalf("missing-resolver policy must fail closed: %#v err=%v", policy, err)
 	}
@@ -5781,7 +5896,7 @@ func TestGoalRecoveryTimeoutThenRestartDoesNotReplayClaudeSet(t *testing.T) {
 	service.GoalOperationAttemptTimeout = 25 * time.Millisecond
 	service.GoalOperationMaxAttempts = 1
 	started := time.Now()
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatalf("timeout attempt: %v", err)
 	}
 	if elapsed := time.Since(started); elapsed > time.Second {
@@ -5793,7 +5908,7 @@ func TestGoalRecoveryTimeoutThenRestartDoesNotReplayClaudeSet(t *testing.T) {
 		t.Fatalf("timed out operation=%#v found=%v err=%v", op, found, err)
 	}
 	nowMS = op.NextAttemptAtMS
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatalf("startup recovery: %v", err)
 	}
 	op, found, err = store.GetGoalControlOperation(ctx, "ws-goal-timeout", "goal-timeout-set")
@@ -5856,7 +5971,7 @@ func TestGoalRepairSetTimeoutThenRestartDoesNotReplayClaudeSet(t *testing.T) {
 	service.GoalOperationClock = func() time.Time { return time.UnixMilli(nowMS) }
 	service.GoalOperationAttemptTimeout = 25 * time.Millisecond
 	service.GoalOperationMaxAttempts = 1
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	repair, found, err := store.GetGoalControlOperation(ctx, "ws-repair-set-timeout", repair.OperationID)
@@ -5864,7 +5979,7 @@ func TestGoalRepairSetTimeoutThenRestartDoesNotReplayClaudeSet(t *testing.T) {
 		t.Fatalf("timed out repair=%#v found=%v err=%v", repair, found, err)
 	}
 	nowMS = repair.NextAttemptAtMS
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	repair, found, err = store.GetGoalControlOperation(ctx, "ws-repair-set-timeout", repair.OperationID)
@@ -5903,12 +6018,12 @@ func TestGoalClearRepeatedTimeoutEventuallyFails(t *testing.T) {
 	service.GoalOperationClock = func() time.Time { return time.UnixMilli(now) }
 	service.GoalOperationAttemptTimeout = 20 * time.Millisecond
 	service.GoalOperationMaxAttempts = 1
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, _, _ := store.GetGoalControlOperation(ctx, "ws-clear-timeout", "clear-timeout")
 	now = op.NextAttemptAtMS
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, _, _ = store.GetGoalControlOperation(ctx, "ws-clear-timeout", "clear-timeout")
@@ -5940,7 +6055,7 @@ func TestGoalRuntimeUnavailableKeepsPreparedUntilFirstProviderDispatch(t *testin
 	service.GoalOperationClock = func() time.Time { return time.UnixMilli(now) }
 	service.GoalOperationAttemptTimeout = 20 * time.Millisecond
 	service.GoalOperationMaxAttempts = 1
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, _, _ := store.GetGoalControlOperation(ctx, "ws-runtime-late", "late")
@@ -5949,7 +6064,7 @@ func TestGoalRuntimeUnavailableKeepsPreparedUntilFirstProviderDispatch(t *testin
 	}
 	runtime.sessions["ws-runtime-late:s"] = ProviderRuntimeSession{ID: "s", Provider: "claude-code", Status: "ready"}
 	now = op.NextAttemptAtMS
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, _, _ = store.GetGoalControlOperation(ctx, "ws-runtime-late", "late")
@@ -5960,7 +6075,7 @@ func TestGoalRuntimeUnavailableKeepsPreparedUntilFirstProviderDispatch(t *testin
 		t.Fatalf("recovered submission metadata=%#v", runtime.goalControlCalls[0].SubmissionMetadata)
 	}
 	now = op.NextAttemptAtMS
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, _, _ = store.GetGoalControlOperation(ctx, "ws-runtime-late", "late")
@@ -6017,7 +6132,7 @@ func TestGoalRecoveryProviderQueryAndApplyTimeoutReleaseLease(t *testing.T) {
 			service.GoalOperationAttemptTimeout = 25 * time.Millisecond
 			service.GoalOperationMaxAttempts = 1
 			started := time.Now()
-			if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+			if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 				t.Fatalf("worker timeout: %v", err)
 			}
 			if elapsed := time.Since(started); elapsed > time.Second {
@@ -6031,7 +6146,7 @@ func TestGoalRecoveryProviderQueryAndApplyTimeoutReleaseLease(t *testing.T) {
 			}
 			if phase == "apply" {
 				nowMS = op.NextAttemptAtMS
-				if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+				if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 					t.Fatal(err)
 				}
 				op, _, _ = store.GetGoalControlOperation(ctx, workspaceID, operationID)
@@ -6075,7 +6190,7 @@ func TestGoalRecoveryStartupBudgetBoundsHangingProvider(t *testing.T) {
 	service.GoalOperationAttemptTimeout = time.Second
 	service.GoalOperationRecoveryBudget = 40 * time.Millisecond
 	started := time.Now()
-	if err := service.RecoverGoalOperations(ctx); err != nil {
+	if err := service.ApplicationHost().RecoverGoalOperations(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if elapsed := time.Since(started); elapsed > time.Second {
@@ -6120,7 +6235,7 @@ func TestAcceptedClaudeGoalExpiresWithoutProviderReplay(t *testing.T) {
 	service.GoalStateStore = store
 	service.GoalOperationOwner = "goal-accepted-worker"
 	service.GoalOperationClock = func() time.Time { return time.UnixMilli(130_000) }
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, found, err := store.GetGoalControlOperation(ctx, "ws-goal-accepted-age", "goal-accepted-age")
@@ -6156,7 +6271,7 @@ func TestAcceptedClaudeClearExpiresWhenLifecycleEvidenceIsLost(t *testing.T) {
 	service.GoalStateStore = store
 	service.GoalOperationOwner = "clear-age-worker"
 	service.GoalOperationClock = func() time.Time { return time.UnixMilli(130_000) }
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, found, err := store.GetGoalControlOperation(ctx, "ws-clear-age", "clear-age")
@@ -6273,20 +6388,20 @@ func TestParseTypedGoalControlUsesSemanticContentAndUnicodeWhitespace(t *testing
 		name          string
 		content       string
 		displayPrompt string
-		want          typedGoalControl
+		want          agenthost.TypedGoalControl
 		wantOK        bool
 	}{
-		{name: "space", content: "/goal clear", want: typedGoalControl{Action: "clear"}, wantOK: true},
-		{name: "tab", content: "/goal\tclear", want: typedGoalControl{Action: "clear"}, wantOK: true},
-		{name: "newline", content: "/goal\nship it", want: typedGoalControl{Action: "set", Objective: "ship it"}, wantOK: true},
-		{name: "unicode space", content: "/goal\u3000ship it", want: typedGoalControl{Action: "set", Objective: "ship it"}, wantOK: true},
-		{name: "display cannot hide control", content: "/goal clear", displayPrompt: "clear chip", want: typedGoalControl{Action: "clear"}, wantOK: true},
+		{name: "space", content: "/goal clear", want: agenthost.TypedGoalControl{Action: "clear"}, wantOK: true},
+		{name: "tab", content: "/goal\tclear", want: agenthost.TypedGoalControl{Action: "clear"}, wantOK: true},
+		{name: "newline", content: "/goal\nship it", want: agenthost.TypedGoalControl{Action: "set", Objective: "ship it"}, wantOK: true},
+		{name: "unicode space", content: "/goal\u3000ship it", want: agenthost.TypedGoalControl{Action: "set", Objective: "ship it"}, wantOK: true},
+		{name: "display cannot hide control", content: "/goal clear", displayPrompt: "clear chip", want: agenthost.TypedGoalControl{Action: "clear"}, wantOK: true},
 		{name: "display cannot create control", content: "ordinary prompt", displayPrompt: "/goal clear", wantOK: false},
 		{name: "bare goal is not a mutation", content: "/goal", wantOK: false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, ok := parseTypedGoalControl(TextPromptContent(test.content), test.displayPrompt, false)
+			got, ok := agenthost.ParseTypedGoalControl(TextPromptContent(test.content), false)
 			if ok != test.wantOK || got != test.want {
 				t.Fatalf("parseTypedGoalControl()=(%#v,%v), want (%#v,%v)", got, ok, test.want, test.wantOK)
 			}
@@ -6856,6 +6971,8 @@ func TestServiceListMessagesValidatesInputs(t *testing.T) {
 type fakeRuntime struct {
 	mu                     sync.Mutex
 	nextID                 int
+	canResumeCalls         []RuntimeResumeInput
+	canResumeHook          func(RuntimeResumeInput) bool
 	cancelCalls            []RuntimeCancelInput
 	cancelResult           RuntimeCancelResult
 	cancelResultSet        bool
@@ -7253,17 +7370,23 @@ func (f *fakeRuntime) GoalRecoveryPolicy(ctx context.Context, input RuntimeGoalC
 
 func (f *fakeRuntime) Close(_ context.Context, input RuntimeCloseInput) error {
 	f.closeCalls = append(f.closeCalls, input)
+	err := f.closeErr
+	if err == nil {
+		delete(f.sessions, input.WorkspaceID+":"+input.AgentSessionID)
+	}
+	// Hooks observe completion, so publish them only after the fake's state is
+	// fully updated. Tests use this callback as the synchronization boundary.
 	if f.closeHook != nil {
 		f.closeHook(input)
 	}
-	if f.closeErr != nil {
-		return f.closeErr
-	}
-	delete(f.sessions, input.WorkspaceID+":"+input.AgentSessionID)
-	return nil
+	return err
 }
 
-func (*fakeRuntime) CanResume(input RuntimeResumeInput) bool {
+func (f *fakeRuntime) CanResume(input RuntimeResumeInput) bool {
+	f.canResumeCalls = append(f.canResumeCalls, input)
+	if f.canResumeHook != nil {
+		return f.canResumeHook(input)
+	}
 	return strings.TrimSpace(input.Provider) != ""
 }
 
@@ -7549,6 +7672,7 @@ func (f fakeAgentTargetLookup) GetAgentTarget(_ context.Context, id string) (age
 type activityProjectionRepoStub struct {
 	clearResult    agentactivitybiz.ClearSessionsResult
 	settleStaleErr error
+	settlements    []agentactivitybiz.StaleTurnSettlement
 	stateResult    agentactivitybiz.StateReportResult
 	stateInput     agentactivitybiz.SessionStateReport
 	messageInput   agentactivitybiz.SessionMessageReport
@@ -7569,8 +7693,8 @@ func (r *activityProjectionRepoStub) ClearSessions(context.Context, string) (age
 	return r.clearResult, nil
 }
 
-func (*activityProjectionRepoStub) DeleteSession(context.Context, string, string) (bool, error) {
-	return false, nil
+func (*activityProjectionRepoStub) DeleteSessionWithCommit(context.Context, string, string) (agentactivitybiz.DeleteSessionResult, error) {
+	return agentactivitybiz.DeleteSessionResult{}, nil
 }
 
 func (*activityProjectionRepoStub) GetSession(context.Context, string, string) (agentactivitybiz.Session, bool, error) {
@@ -7745,7 +7869,7 @@ func (*activityProjectionRepoStub) RecordTurnTransition(_ context.Context, trans
 }
 
 func (r *activityProjectionRepoStub) SettleStaleTurns(context.Context) ([]agentactivitybiz.StaleTurnSettlement, error) {
-	return nil, r.settleStaleErr
+	return append([]agentactivitybiz.StaleTurnSettlement(nil), r.settlements...), r.settleStaleErr
 }
 
 func (*activityProjectionRepoStub) UpsertInteraction(_ context.Context, upsert agentactivitybiz.InteractionUpsert) (agentactivitybiz.Interaction, agentactivitybiz.InteractionTransitionResult, error) {
