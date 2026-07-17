@@ -42,7 +42,7 @@ describe("MentionPill", () => {
 
     expect(
       container.querySelector('[data-mention-pill-fallback-icon="true"]')
-    ).not.toBeInTheDocument();
+    ).toBeInTheDocument();
 
     fireEvent.error(image!);
 
@@ -75,6 +75,22 @@ describe("MentionPill", () => {
       "src",
       "https://example.test/new.png"
     );
+  });
+
+  it("keeps the semantic icon underneath a transparent image", () => {
+    const transparentPixel =
+      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+    const { container } = render(
+      <MentionPill iconUrl={transparentPixel} kind="app" label="Weather" />
+    );
+
+    expect(container.querySelector("img")).toHaveAttribute(
+      "src",
+      transparentPixel
+    );
+    expect(
+      container.querySelector('[data-mention-pill-fallback-icon="true"]')
+    ).toBeInTheDocument();
   });
 
   it("uses a semantic icon when no image URL is available", () => {

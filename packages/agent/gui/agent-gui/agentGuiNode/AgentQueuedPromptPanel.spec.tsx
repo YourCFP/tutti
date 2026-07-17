@@ -280,7 +280,7 @@ describe("AgentQueuedPromptPanel", () => {
     expect(image).toHaveAttribute("src", iconUrl);
     expect(
       mention?.querySelector('[data-agent-mention-fallback-icon="true"]')
-    ).not.toBeInTheDocument();
+    ).toBeInTheDocument();
 
     fireEvent.error(image!);
 

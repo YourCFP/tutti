@@ -1,12 +1,10 @@
-import { useMemo, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   RichTextMentionServiceProvider,
+  useEffectiveRichTextMentionService,
   useRichTextMentionService
 } from "@tutti-os/ui-rich-text/editor";
-import {
-  createRichTextMentionService,
-  type RichTextMentionService
-} from "@tutti-os/ui-rich-text/service";
+import type { RichTextMentionService } from "@tutti-os/ui-rich-text/service";
 import type { RichTextTriggerProvider } from "@tutti-os/ui-rich-text/types";
 
 export function AgentGUIMentionServiceBoundary({
@@ -19,16 +17,16 @@ export function AgentGUIMentionServiceBoundary({
   service?: RichTextMentionService;
 }): ReactNode {
   const inheritedService = useRichTextMentionService();
-  const legacyService = useMemo(
-    () =>
-      service || inheritedService || !legacyProviders?.length
-        ? null
-        : createRichTextMentionService({ providers: legacyProviders }),
-    [inheritedService, legacyProviders, service]
-  );
-  const effectiveService = service ?? inheritedService ?? legacyService;
+  const effectiveService = useEffectiveRichTextMentionService({
+    mentionService: service,
+    triggerProviders: legacyProviders
+  });
 
-  return effectiveService && effectiveService !== inheritedService ? (
+  if (!service && !inheritedService && !legacyProviders?.length) {
+    return children;
+  }
+
+  return effectiveService !== inheritedService ? (
     <RichTextMentionServiceProvider service={effectiveService}>
       {children}
     </RichTextMentionServiceProvider>

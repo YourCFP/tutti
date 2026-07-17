@@ -13,4 +13,7 @@ export {
   type DesktopAgentSessionStatusView
 } from "./providers/desktopAgentSessionMentionProvider.ts";
 export { createDesktopAgentSessionStatusViewResolver } from "./providers/desktopAgentSessionStatusView.ts";
-export { createDesktopRichTextMentionService } from "./services/internal/createDesktopRichTextMentionService.ts";
+export {
+  createDesktopRichTextMentionService,
+  type DesktopRichTextMentionInvalidationSource
+} from "./services/internal/createDesktopRichTextMentionService.ts";

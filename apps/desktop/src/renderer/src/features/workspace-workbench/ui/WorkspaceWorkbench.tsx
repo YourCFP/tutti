@@ -30,6 +30,8 @@ import { useWorkspaceCatalogService } from "@renderer/features/workspace-catalog
 import { AgentEnvPanel } from "@renderer/features/workspace-agent/ui/AgentEnvPanel.tsx";
 import { DesktopAgentProviderManageDialog } from "@renderer/features/workspace-agent/ui/DesktopAgentProviderManageDialog.tsx";
 import { IAgentProviderStatusService } from "@renderer/features/workspace-agent/services/agentProviderStatusService.interface.ts";
+import { IAgentsService } from "@renderer/features/workspace-agent/services/agentsService.interface.ts";
+import { IWorkspaceAgentActivityService } from "@renderer/features/workspace-agent/services/workspaceAgentActivityService.interface.ts";
 import {
   registerWorkspaceAgentGuiLaunchHandler,
   requestWorkspaceAgentGuiLaunch
@@ -222,24 +224,55 @@ function ReadyWorkspaceWorkbenchWithSession({
 }: ReadyWorkspaceWorkbenchProps & {
   hostSession: WorkspaceWorkbenchHostSessionBinding;
 }) {
-  const { service: appCenterService, state: appCenterState } =
-    useWorkspaceAppCenterService();
+  const { service: appCenterService } = useWorkspaceAppCenterService();
+  const agentsService = useService(IAgentsService);
+  const workspaceAgentActivityService = useService(
+    IWorkspaceAgentActivityService
+  );
   const richTextAtService = useService(IDesktopRichTextAtService);
   const mentionService = useMemo(
     () =>
       createDesktopRichTextMentionService({
+        invalidationSources: [
+          {
+            selector: {
+              providerId: "workspace-app",
+              workspaceId: state.workspace.id
+            },
+            subscribe: (listener) => appCenterService.subscribe(listener)
+          },
+          {
+            selector: {
+              providerId: "agent-target",
+              workspaceId: state.workspace.id
+            },
+            subscribe: (listener) => agentsService.subscribe(listener)
+          },
+          {
+            debounceMs: 100,
+            selector: {
+              providerId: "agent-session",
+              workspaceId: state.workspace.id
+            },
+            subscribe: (listener) =>
+              workspaceAgentActivityService.subscribe(
+                state.workspace.id,
+                listener
+              )
+          }
+        ],
         richTextAtService,
         workspaceId: state.workspace.id
       }),
-    [richTextAtService, state.workspace.id]
+    [
+      agentsService,
+      appCenterService,
+      richTextAtService,
+      state.workspace.id,
+      workspaceAgentActivityService
+    ]
   );
   useEffect(() => () => mentionService.dispose(), [mentionService]);
-  useEffect(() => {
-    mentionService.invalidate({
-      providerId: "workspace-app",
-      workspaceId: state.workspace.id
-    });
-  }, [appCenterState.revision, mentionService, state.workspace.id]);
   const agentProviderStatusService = useService(IAgentProviderStatusService);
   const runtime = useWorkspaceWorkbenchShellRuntime({
     enableWindowCloseGuard,

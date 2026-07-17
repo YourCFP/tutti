@@ -166,23 +166,35 @@ export function StandaloneAgentWindow({
   const mentionService = useMemo(
     () =>
       createDesktopRichTextMentionService({
+        invalidationSources: [
+          {
+            selector: { providerId: "workspace-app", workspaceId },
+            subscribe: (listener) =>
+              workspaceAppCenterService.subscribe(listener)
+          },
+          {
+            selector: { providerId: "agent-target", workspaceId },
+            subscribe: (listener) => agentsService.subscribe(listener)
+          },
+          {
+            debounceMs: 100,
+            selector: { providerId: "agent-session", workspaceId },
+            subscribe: (listener) =>
+              workspaceAgentActivityService.subscribe(workspaceId, listener)
+          }
+        ],
         richTextAtService,
         workspaceId
       }),
-    [richTextAtService, workspaceId]
+    [
+      agentsService,
+      richTextAtService,
+      workspaceAgentActivityService,
+      workspaceAppCenterService,
+      workspaceId
+    ]
   );
   useEffect(() => () => mentionService.dispose(), [mentionService]);
-  const appCenterRevision = useSyncExternalStore(
-    (listener) => workspaceAppCenterService.subscribe(listener),
-    () => workspaceAppCenterService.store.revision,
-    () => workspaceAppCenterService.store.revision
-  );
-  useEffect(() => {
-    mentionService.invalidate({
-      providerId: "workspace-app",
-      workspaceId
-    });
-  }, [appCenterRevision, mentionService, workspaceId]);
   const [panelHostsReady, setPanelHostsReady] = useState(false);
   useEffect(() => {
     const animationFrame = window.requestAnimationFrame(() => {
