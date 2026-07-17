@@ -209,7 +209,7 @@
   overflow: hidden;
   border: 1px solid var(--line-2);
   border-radius: 8px;
-  background: var(--background-panel);
+  background: var(--background-fronted);
   box-shadow: 0 18px 40px color-mix(in srgb, black 26%, transparent);
   color: var(--text-primary);
   padding: 4px;
@@ -274,9 +274,12 @@
 }
 
 .tsh-zoom-dialog__icon-button:hover,
-.tsh-zoom-dialog__image-actions button:hover,
-.tsh-image-context-menu button:hover {
+.tsh-zoom-dialog__image-actions button:hover {
   background: color-mix(in srgb, var(--background-panel) 82%, white 12%);
+}
+
+.tsh-image-context-menu button:hover {
+  background: var(--transparency-hover);
 }
 
 .tsh-zoom-dialog__zoom-controls button:not(:disabled):hover {
