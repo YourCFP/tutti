@@ -9,7 +9,10 @@ import type { AgentComposerSubmitOptions } from "../composer/AgentComposer.types
 import type { AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
 import type { AgentGUIComposerTargetData } from "./agentGuiController.composerPresentation";
 import type { AgentGUIOpenSessionRequest } from "./agentGuiController.draftMessageHelpers";
-import type { AgentGUIRememberComposerDefaultsInput } from "./agentGuiController.providerHelpers";
+import type {
+  AgentGUIRememberComposerDefaultsInput,
+  AgentGUIRememberComposerDefaultsResult
+} from "./agentGuiController.providerHelpers";
 
 interface UseAgentGUIControllerRefsInput {
   activeConversationId: string | null;
@@ -27,7 +30,9 @@ interface UseAgentGUIControllerRefsInput {
     updater: (current: AgentGUINodeData) => AgentGUINodeData
   ) => void;
   onRememberComposerDefaults:
-    | ((input: AgentGUIRememberComposerDefaultsInput) => void | Promise<void>)
+    | ((
+        input: AgentGUIRememberComposerDefaultsInput
+      ) => void | Promise<AgentGUIRememberComposerDefaultsResult>)
     | undefined;
   onShowMessage:
     | ((message: string, tone?: "info" | "warning" | "error") => void)
@@ -71,7 +76,9 @@ export function useAgentGUIControllerRefs(
   const handledPrefillPromptSequenceRef = useRef<number | null>(null);
   const handledComposerAppendSequenceRef = useRef<number | null>(null);
   const loadDraftComposerOptionsRef = useRef<() => void>(() => {});
-  const lastActiveModelByProviderRef = useRef<Record<string, string>>({});
+  const onComposerDefaultsAuthorityReloadedRef = useRef<
+    (target: AgentGUIComposerTargetData) => void
+  >(() => {});
   const conversationIdsRef = useRef(
     new Set(input.conversations.map((conversation) => conversation.id))
   );
@@ -152,10 +159,10 @@ export function useAgentGUIControllerRefs(
     isCreatingConversationRef,
     isMountedRef,
     isNoProjectPathRef,
-    lastActiveModelByProviderRef,
     lastRenderStateDiagnosticKeyRef,
     loadDraftComposerOptionsRef,
     onDataChangeRef,
+    onComposerDefaultsAuthorityReloadedRef,
     onRememberComposerDefaultsRef,
     onShowMessageRef,
     pendingOpenSessionRequestRef,

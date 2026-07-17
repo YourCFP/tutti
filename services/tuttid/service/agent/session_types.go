@@ -11,6 +11,7 @@ import (
 	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
+	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
 	userprojectbiz "github.com/tutti-os/tutti/services/tuttid/biz/userproject"
 	claudecodeservice "github.com/tutti-os/tutti/services/tuttid/service/claudecode"
 	reporterservice "github.com/tutti-os/tutti/services/tuttid/service/reporter"
@@ -49,6 +50,7 @@ type Service struct {
 	ComputerUseAvailable           func() bool
 	CapabilityLister               ComposerCapabilityLister
 	ExtensionComposerProfiles      ExtensionComposerProfileResolver
+	AgentComposerDefaultsReader    AgentComposerDefaultsReader
 	ProviderAvailabilityCacheTTL   time.Duration
 	CapabilityCatalogCacheTTL      time.Duration
 	LiveModelCacheTTL              time.Duration
@@ -121,6 +123,10 @@ type AgentTargetStore interface {
 	GetAgentTarget(context.Context, string) (agenttargetbiz.Target, error)
 }
 
+type AgentComposerDefaultsReader interface {
+	GetAgentComposerDefaultsForTarget(context.Context, string) (preferencesbiz.AgentComposerDefaults, error)
+}
+
 type ComposerCapabilityLister interface {
 	ListComposerCapabilityOptions(context.Context, string, string, []ComposerSkillOption) ([]ComposerCapabilityOption, []string)
 }
@@ -130,7 +136,13 @@ type ExtensionComposerProfileResolver interface {
 }
 
 type ExtensionComposerProfile struct {
-	Skills *ExtensionComposerSkillProfile
+	PermissionModes []ExtensionComposerPermissionMode
+	Skills          *ExtensionComposerSkillProfile
+}
+
+type ExtensionComposerPermissionMode struct {
+	RuntimeID string
+	Semantic  PermissionModeSemantic
 }
 
 type ExtensionComposerSkillProfile struct {

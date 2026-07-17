@@ -58,14 +58,21 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	}
 	input.Provider = provider
 	input.ProviderTargetRef = launch.ProviderTargetRef
+	if err := s.applyCreateSessionComposerDefaults(ctx, &input); err != nil {
+		return Session{}, err
+	}
 	input.ConversationDetailMode = preferencesbiz.NormalizeDesktopAgentConversationDetailMode(input.ConversationDetailMode)
-	if normalizedPermissionModeID := normalizePermissionModeIDForProvider(
-		provider,
-		value(input.PermissionModeID),
-	); normalizedPermissionModeID != "" {
-		input.PermissionModeID = &normalizedPermissionModeID
+	if providerTargetRefKind(input.ProviderTargetRef) == "agent_extension" {
+		input.PermissionModeID = optionalTrimmedString(input.PermissionModeID)
 	} else {
-		input.PermissionModeID = nil
+		if normalizedPermissionModeID := normalizePermissionModeIDForProvider(
+			provider,
+			value(input.PermissionModeID),
+		); normalizedPermissionModeID != "" {
+			input.PermissionModeID = &normalizedPermissionModeID
+		} else {
+			input.PermissionModeID = nil
+		}
 	}
 	input.AgentSessionID = agentSessionIDOrNew(input.AgentSessionID)
 	logAgentSubmitTrace("service.create.entered", workspaceID, input.AgentSessionID, input.Metadata, map[string]any{"provider": provider})
@@ -99,12 +106,17 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	logAgentSubmitTrace("service.create.model_validated", workspaceID, input.AgentSessionID, input.Metadata, map[string]any{
 		"model": value(input.Model),
 	})
-	input.ReasoningEffort = s.clampReasoningEffortPointerForModel(
-		ctx,
-		provider,
-		value(input.Model),
-		input.ReasoningEffort,
-	)
+	if providerTargetRefKind(input.ProviderTargetRef) == "agent_extension" {
+		input.ReasoningEffort = optionalTrimmedString(input.ReasoningEffort)
+		input.Speed = optionalTrimmedString(input.Speed)
+	} else {
+		input.ReasoningEffort = s.clampReasoningEffortPointerForModel(
+			ctx,
+			provider,
+			value(input.Model),
+			input.ReasoningEffort,
+		)
+	}
 	nodeStartedAt = time.Now()
 	cwd, err := s.resolveCwd(ctx, input.Cwd)
 	if err != nil {
@@ -115,6 +127,14 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	logAgentSubmitTrace("service.create.cwd_resolved", workspaceID, input.AgentSessionID, input.Metadata, map[string]any{
 		"cwd": cwd,
 	})
+	if providerTargetRefKind(input.ProviderTargetRef) == "agent_extension" {
+		nodeStartedAt = time.Now()
+		if err := s.validateExtensionComposerSettingsForCreate(ctx, workspaceID, cwd, input); err != nil {
+			s.reportAgentServiceNodeFailure(ctx, input.AgentSessionID, "session_create", "settings_validated", provider, nodeStartedAt, err)
+			return Session{}, err
+		}
+		s.reportAgentServiceNodeSuccess(ctx, input.AgentSessionID, "session_create", "settings_validated", provider, nodeStartedAt)
+	}
 	nodeStartedAt = time.Now()
 	prepared, err := s.prepareRuntime(ctx, workspaceID, cwd, input)
 	if err != nil {
@@ -132,9 +152,9 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 		PlanMode:         boolPointer(clampComposerPlanModeForProvider(provider, valueBool(input.PlanMode))),
 		BrowserUse:       input.BrowserUse, ComputerUse: input.ComputerUse,
 		ProviderTargetRef:      input.ProviderTargetRef,
-		ReasoningEffort:        stringPointer(normalizeReasoningEffortForProvider(provider, value(input.ReasoningEffort))),
+		ReasoningEffort:        normalizedCreateSessionSettingPointer(provider, input.ProviderTargetRef, input.ReasoningEffort, normalizeReasoningEffortForProvider),
 		RuntimeContext:         input.RuntimeContext,
-		Speed:                  stringPointer(normalizeSpeedForProvider(provider, value(input.Speed))),
+		Speed:                  normalizedCreateSessionSettingPointer(provider, input.ProviderTargetRef, input.Speed, normalizeSpeedForProvider),
 		ConversationDetailMode: input.ConversationDetailMode, Visible: input.Visible,
 	}
 	if isTypedGoal {
@@ -174,6 +194,52 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 		persistedSession,
 		s.controller().CanResume(runtimeResumeInputFromRuntimeSession(session)),
 	), nil
+}
+
+func (s *Service) applyCreateSessionComposerDefaults(ctx context.Context, input *CreateSessionInput) error {
+	if input == nil || s.AgentComposerDefaultsReader == nil {
+		return nil
+	}
+	defaults, err := s.AgentComposerDefaultsReader.GetAgentComposerDefaultsForTarget(ctx, input.AgentTargetID)
+	if err != nil {
+		return fmt.Errorf("get agent composer defaults for create: %w", err)
+	}
+	if input.Model == nil && strings.TrimSpace(defaults.Model) != "" {
+		input.Model = stringPointer(defaults.Model)
+	}
+	if input.PermissionModeID == nil && strings.TrimSpace(defaults.PermissionModeID) != "" {
+		input.PermissionModeID = stringPointer(defaults.PermissionModeID)
+	}
+	if input.ReasoningEffort == nil && strings.TrimSpace(defaults.ReasoningEffort) != "" {
+		input.ReasoningEffort = stringPointer(defaults.ReasoningEffort)
+	}
+	if input.Speed == nil && strings.TrimSpace(defaults.Speed) != "" {
+		input.Speed = stringPointer(defaults.Speed)
+	}
+	return nil
+}
+
+func optionalTrimmedString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	normalized := strings.TrimSpace(*value)
+	if normalized == "" {
+		return nil
+	}
+	return &normalized
+}
+
+func normalizedCreateSessionSettingPointer(
+	provider string,
+	providerTargetRef map[string]any,
+	selected *string,
+	normalize func(string, string) string,
+) *string {
+	if providerTargetRefKind(providerTargetRef) == "agent_extension" {
+		return optionalTrimmedString(selected)
+	}
+	return stringPointer(normalize(provider, value(selected)))
 }
 
 type resolvedCreateSessionLaunch struct {

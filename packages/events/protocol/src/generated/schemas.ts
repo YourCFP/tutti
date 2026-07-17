@@ -1306,6 +1306,56 @@ export const analyticsDebugReportedPayloadSchema = {
   }
 } as const;
 
+export const preferencesAgentComposerDefaultsChangedPayloadSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["agentTargetId"],
+  properties: {
+    agentTargetId: {
+      type: "string",
+      minLength: 1,
+      maxLength: 128
+    }
+  }
+} as const;
+
+export const preferencesAgentComposerDefaultsPatchRequestedPayloadSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["agentTargetId", "patch"],
+  properties: {
+    agentTargetId: {
+      type: "string",
+      minLength: 1,
+      maxLength: 128
+    },
+    patch: {
+      type: "object",
+      additionalProperties: false,
+      minProperties: 1,
+      properties: {
+        model: {
+          type: ["string", "null"]
+        },
+        permissionModeId: {
+          type: ["string", "null"]
+        },
+        reasoningEffort: {
+          type: ["string", "null"]
+        },
+        speed: {
+          type: ["string", "null"]
+        }
+      }
+    },
+    clientMutationId: {
+      type: "string",
+      minLength: 1,
+      maxLength: 128
+    }
+  }
+} as const;
+
 export const preferencesDesktopUpdateRequestedPayloadSchema = {
   type: "object",
   additionalProperties: false,
@@ -2765,6 +2815,10 @@ export const businessEventPayloadSchemas = {
   "agent.activity.updated": agentActivityUpdatedPayloadSchema,
   "agent.model.catalog.invalidated": agentModelCatalogInvalidatedPayloadSchema,
   "analytics.debug.reported": analyticsDebugReportedPayloadSchema,
+  "preferences.agent.composer.defaults.changed":
+    preferencesAgentComposerDefaultsChangedPayloadSchema,
+  "preferences.agent.composer.defaults.patch.requested":
+    preferencesAgentComposerDefaultsPatchRequestedPayloadSchema,
   "preferences.desktop.update.requested":
     preferencesDesktopUpdateRequestedPayloadSchema,
   "preferences.desktop.updated": preferencesDesktopUpdatedPayloadSchema,

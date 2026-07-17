@@ -17,6 +17,7 @@ import (
 	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
+	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
 	userprojectbiz "github.com/tutti-os/tutti/services/tuttid/biz/userproject"
 	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
 	workspacedata "github.com/tutti-os/tutti/services/tuttid/data/workspace"
@@ -61,6 +62,34 @@ func TestServiceCreatesAndListsSessions(t *testing.T) {
 	}
 	if got.ID != session.ID {
 		t.Fatalf("got session ID = %q, want %q", got.ID, session.ID)
+	}
+}
+
+func TestServiceCreateInheritsTargetComposerDefaultsAndExplicitOverridesWin(t *testing.T) {
+	runtime := newFakeRuntime()
+	service := newTestService(runtime)
+	service.AgentComposerDefaultsReader = fakeAgentComposerDefaultsReader{
+		agenttargetbiz.IDLocalCodex: {
+			Model:            "gpt-5",
+			PermissionModeID: "full-access",
+			ReasoningEffort:  "high",
+			Speed:            "fast",
+		},
+	}
+	explicitModel := "gpt-5-codex"
+	if _, err := service.Create(context.Background(), "ws-defaults", CreateSessionInput{
+		AgentSessionID: "12121212-1212-4121-8121-121212121212",
+		AgentTargetID:  agenttargetbiz.IDLocalCodex,
+		Model:          &explicitModel,
+	}); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if len(runtime.startCalls) != 1 {
+		t.Fatalf("start calls = %d", len(runtime.startCalls))
+	}
+	started := runtime.startCalls[0]
+	if started.Model != explicitModel || started.PermissionModeID != "full-access" || started.ReasoningEffort != "high" || started.Speed != "fast" {
+		t.Fatalf("runtime start = %#v", started)
 	}
 }
 
@@ -6856,6 +6885,12 @@ type fakeRuntime struct {
 type fakeAgentTargetStore struct {
 	err     error
 	targets map[string]agenttargetbiz.Target
+}
+
+type fakeAgentComposerDefaultsReader map[string]preferencesbiz.AgentComposerDefaults
+
+func (f fakeAgentComposerDefaultsReader) GetAgentComposerDefaultsForTarget(_ context.Context, agentTargetID string) (preferencesbiz.AgentComposerDefaults, error) {
+	return f[strings.TrimSpace(agentTargetID)], nil
 }
 
 func (f fakeAgentTargetStore) GetAgentTarget(_ context.Context, id string) (agenttargetbiz.Target, error) {

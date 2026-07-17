@@ -602,8 +602,7 @@ Turn state, loading, cancel, restore, file-change undo, rail projection, event u
 
 - Symptom:
   A user selects a different AgentGUI model, but the next provider call still
-  uses the previous model. Logs may show
-  `agent.gui.composer_defaults.remembered` for the new model while
+  uses the previous model. The target-default patch may be acknowledged while
   `workspace_agent_sessions.settings_json`, `runtimeContext.model`, or
   app-server `turn/start` still show the old model. For an Agent Extension, the
   selected model may also change back to Auto as soon as a new session is
@@ -615,8 +614,10 @@ Turn state, loading, cancel, restore, file-change undo, rail projection, event u
   `workspace.agent_session.settings.update_requested`,
   `agent_session.settings.update.requested`,
   `agent_session.app_server.settings.applied`, and
-  `agent_session.app_server.turn_start.params`. If only the defaults event is
-  present, the UI changed the target default draft, not the active session. If
+  `agent_session.app_server.turn_start.params`. Also distinguish the dedicated
+  defaults patch intent from the Session update. If only the defaults ack is
+  present, the UI remembered a future target default but did not update the
+  active Session. If
   daemon settings update completed but `turn_start.params.model` is old or
   empty, inspect the app-server adapter path. If persistence and the provider
   request both contain the selected model but the daemon session response omits
@@ -624,7 +625,7 @@ Turn state, loading, cancel, restore, file-change undo, rail projection, event u
   renderer selector.
 - Root cause:
   AgentGUI has two distinct composer surfaces. The target home composer writes
-  remembered defaults and node drafts. An active conversation composer must
+  remembered defaults and a sparse local display draft. An active conversation composer must
   additionally call `updateSessionSettings`; Codex app-server providers then
   apply model changes as per-turn overrides on the next `turn/start`, not to an
   already-running turn. If the daemon applies the settings but the update
@@ -637,7 +638,7 @@ Turn state, loading, cancel, restore, file-change undo, rail projection, event u
   produces an empty built-in provider, clamps the model, and makes the UI
   correctly render Auto from an already-corrupted session projection.
 - Fix:
-  Preserve the default-draft path, but make active-session model changes
+  Preserve the dedicated target-default patch path, but make active-session model changes
   observable at every layer. Do not conclude that a provider ignored the model
   until the logs show the active session settings update reached the daemon and
   the following `turn/start` carried the requested model. Keep closed
@@ -661,6 +662,64 @@ Turn state, loading, cancel, restore, file-change undo, rail projection, event u
   [service_session.go](../../../services/tuttid/service/agent/service_session.go)
   [controller.go](../../../packages/agent/daemon/runtime/controller.go)
   [codex_appserver_adapter.go](../../../packages/agent/daemon/runtime/codex_appserver_adapter.go)
+
+### AgentGUI shows the selected settings but a new session does not inherit them
+
+- Symptom:
+  The home composer continues to show the selected model, permission,
+  reasoning effort, or speed, but closing the Agent window, opening another
+  window, restarting Tutti, or creating a Session restores an older value. A
+  running Session may still use the selected value, which can make the problem
+  look provider-specific.
+- Quick checks:
+  Start with the exact `agentTargetId`, not only the provider. Confirm the
+  `preferences.agent.composer.defaults.patch.requested` intent receives an ack,
+  then inspect
+  `desktop_preferences.agent_composer_defaults_by_agent_target_json` for that
+  target and field. Confirm a
+  `preferences.agent.composer.defaults.changed` event carries only the same
+  target id. Finally request target-scoped composer options and verify
+  `effectiveSettings`, then create a Session without explicit overrides and
+  inspect the daemon's resolved create settings. For an Agent Extension model,
+  confirm the daemon first observed that value in a live catalog for the exact
+  target; a catalog observed only for another target cannot validate the patch.
+- Root cause:
+  Target defaults and current Session settings are separate durable concerns.
+  The renderer's home draft can display an optimistic selection even when a
+  defaults write failed. Conversely, a Session settings update can succeed
+  while the future-default patch fails. A stale renderer preferences snapshot
+  must never be merged and written back as the defaults map; options snapshots
+  must never sanitize a newly selected menu value before persistence.
+- Fix:
+  Keep `rememberAgentComposerDefaultsForAgentTarget` on the dedicated patch
+  intent. Merge its sparse fields only in the tuttid SQLite transaction, publish
+  target invalidation after success, and reread defaults through
+  composer-options. Keep Create Session inheritance in `agent.Service.Create`;
+  callers pass only explicit overrides. Do not repair this with debounce,
+  localStorage, node/workbench overlays, or another full preferences write.
+  Do not add workspace/cwd to the target-default patch. Extension model
+  validation uses the daemon-observed last-known-good catalog for the exact
+  target. Its evidence survives the workspace/cwd display-cache TTL and is
+  cleared by explicit provider invalidation; Create performs the separate
+  actual-workspace/cwd validation.
+- Validation:
+  Change different fields from two windows and confirm both survive. Repeat the
+  same SET, then change the same field again and confirm daemon acceptance order
+  determines the result. Force an options refresh with an older permission or
+  model list and confirm the explicit selection remains visible and is still
+  patched. Exercise A-to-B-to-A on one field and confirm only the exact latest
+  generation can leave the optimistic layer. Fail the first options reload
+  after a successful patch, then confirm a later successful target invalidation
+  read converges the acknowledged draft. Reopen the window and restart the app;
+  `effectiveSettings` and a new Session must resolve the remembered values.
+  Open a historical Session and confirm its settings do not change future
+  defaults.
+- References:
+  [service.go](../../../services/tuttid/service/preferences/service.go)
+  [sqlite_preferences.go](../../../services/tuttid/data/workspace/sqlite_preferences.go)
+  [composer_options.go](../../../services/tuttid/service/agent/composer_options.go)
+  [desktopPreferencesService.ts](../../../apps/desktop/src/renderer/src/features/desktop-preferences/services/internal/desktopPreferencesService.ts)
+  [useAgentGUIComposerSettingsActions.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUIComposerSettingsActions.ts)
 
 ### Historical AgentGUI permission changes time out or stop responding
 

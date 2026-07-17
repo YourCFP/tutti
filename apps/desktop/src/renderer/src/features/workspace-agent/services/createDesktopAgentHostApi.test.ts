@@ -23,7 +23,7 @@ type DesktopAgentHostApiUnderTest = AgentHostInputApi & {
   userProjects: NonNullable<AgentHostInputApi["userProjects"]>;
 };
 
-test("desktop agent host api forwards model catalog invalidation as a host event", async () => {
+test("desktop agent host api forwards model catalog and target defaults invalidation as host events", async () => {
   const topicHandlers = new Map<string, (event: unknown) => void>();
   const tuttidClient = createTuttidClient();
   const activityService = new WorkspaceAgentActivityService({
@@ -74,11 +74,26 @@ test("desktop agent host api forwards model catalog invalidation as a host event
       occurredAtUnixMs: 4200
     }
   ]);
+  const defaultsInvalidationHandler = topicHandlers.get(
+    "preferences.agent.composer.defaults.changed"
+  );
+  assert.ok(
+    defaultsInvalidationHandler,
+    "expected target defaults topic subscription"
+  );
+  defaultsInvalidationHandler({
+    payload: { agentTargetId: "local:codex" }
+  });
+  assert.deepEqual(hostEvents.at(-1), {
+    agentTargetId: "local:codex",
+    scope: "global",
+    type: "agent-composer-defaults-invalidated"
+  });
   unsubscribe?.();
   invalidationHandler({
     payload: { providers: ["codex"], occurredAtUnixMs: 4300 }
   });
-  assert.equal(hostEvents.length, 1);
+  assert.equal(hostEvents.length, 2);
 });
 
 test("desktop agent host api writes images through the host clipboard", async () => {

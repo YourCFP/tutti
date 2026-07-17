@@ -1720,6 +1720,9 @@ function createWorkspaceAgentActivityService(
     onModelCatalogInvalidated() {
       return () => {};
     },
+    onComposerDefaultsInvalidated() {
+      return () => {};
+    },
     ensureSessionSynchronized() {
       return () => {};
     },

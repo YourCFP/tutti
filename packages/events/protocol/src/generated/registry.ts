@@ -14,6 +14,10 @@ export const businessEventTopicAgentModelCatalogInvalidated =
   "agent.model.catalog.invalidated" as const;
 export const businessEventTopicAnalyticsDebugReported =
   "analytics.debug.reported" as const;
+export const businessEventTopicPreferencesAgentComposerDefaultsChanged =
+  "preferences.agent.composer.defaults.changed" as const;
+export const businessEventTopicPreferencesAgentComposerDefaultsPatchRequested =
+  "preferences.agent.composer.defaults.patch.requested" as const;
 export const businessEventTopicPreferencesDesktopUpdateRequested =
   "preferences.desktop.update.requested" as const;
 export const businessEventTopicPreferencesDesktopUpdated =
@@ -35,7 +39,7 @@ export interface BusinessEventDefinition {
   scope: BusinessEventScopeName;
 }
 
-export const businessEventCatalogRevision = "sha256:260d4aaa4021fbd9" as const;
+export const businessEventCatalogRevision = "sha256:53e4df5f71ffc64b" as const;
 
 export const businessEventDefinitions = [
   {
@@ -57,6 +61,20 @@ export const businessEventDefinitions = [
     version: 1,
     direction: "server->client",
     owner: "desktop",
+    scope: "desktop"
+  },
+  {
+    topic: "preferences.agent.composer.defaults.changed",
+    version: 1,
+    direction: "server->client",
+    owner: "core",
+    scope: "desktop"
+  },
+  {
+    topic: "preferences.agent.composer.defaults.patch.requested",
+    version: 1,
+    direction: "client->server",
+    owner: "core",
     scope: "desktop"
   },
   {
@@ -123,6 +141,20 @@ export const businessEventDefinitionByTopic = {
     version: 1,
     direction: "server->client",
     owner: "desktop",
+    scope: "desktop"
+  },
+  "preferences.agent.composer.defaults.changed": {
+    topic: "preferences.agent.composer.defaults.changed",
+    version: 1,
+    direction: "server->client",
+    owner: "core",
+    scope: "desktop"
+  },
+  "preferences.agent.composer.defaults.patch.requested": {
+    topic: "preferences.agent.composer.defaults.patch.requested",
+    version: 1,
+    direction: "client->server",
+    owner: "core",
     scope: "desktop"
   },
   "preferences.desktop.update.requested": {

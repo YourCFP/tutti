@@ -161,15 +161,29 @@ export function createDesktopAgentHostApi({
     // The desktop host forwards daemon business events the Agent GUI event bus
     // understands. Today that is the model-catalog invalidation broadcast; the
     // GUI reacts by force-reloading composer options and session state.
-    onHostEvent: (listener: (event: unknown) => void) =>
-      agentActivityService.onModelCatalogInvalidated((event) => {
-        listener({
-          scope: "global",
-          type: "agent-model-catalog-invalidated",
-          providers: event.providers,
-          occurredAtUnixMs: event.occurredAtUnixMs
+    onHostEvent: (listener: (event: unknown) => void) => {
+      const disposeModelCatalog =
+        agentActivityService.onModelCatalogInvalidated((event) => {
+          listener({
+            scope: "global",
+            type: "agent-model-catalog-invalidated",
+            providers: event.providers,
+            occurredAtUnixMs: event.occurredAtUnixMs
+          });
         });
-      }),
+      const disposeComposerDefaults =
+        agentActivityService.onComposerDefaultsInvalidated((event) => {
+          listener({
+            agentTargetId: event.agentTargetId,
+            scope: "global",
+            type: "agent-composer-defaults-invalidated"
+          });
+        });
+      return () => {
+        disposeModelCatalog();
+        disposeComposerDefaults();
+      };
+    },
     persistence: {
       readWorkspaceAgentReadState: readDesktopWorkspaceAgentReadState,
       writeWorkspaceAgentReadState: writeDesktopWorkspaceAgentReadState

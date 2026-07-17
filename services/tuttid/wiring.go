@@ -227,9 +227,11 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	fileAdapter := workspacedata.LocalFilesAdapter{}
 
 	events := eventstreamservice.NewService(eventstreamservice.DefaultCatalog(), nil)
-	preferences := preferencesservice.Service{
-		Store:     preferencesStore,
-		Publisher: eventstreamservice.DesktopPreferencesPublisher{Service: events},
+	preferencesPublisher := eventstreamservice.DesktopPreferencesPublisher{Service: events}
+	preferences := &preferencesservice.Service{
+		Store:                          preferencesStore,
+		Publisher:                      preferencesPublisher,
+		AgentComposerDefaultsPublisher: preferencesPublisher,
 	}
 	agentTargets := agenttargetservice.Service{
 		Store: agentTargetStore,
@@ -250,6 +252,10 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	events.RegisterIntentHandler(
 		eventstreamservice.TopicPreferencesDesktopUpdateRequested,
 		eventstreamservice.NewPreferencesDesktopUpdateRequestedHandler(preferences),
+	)
+	events.RegisterIntentHandler(
+		eventstreamservice.TopicPreferencesAgentComposerDefaultsPatchRequested,
+		eventstreamservice.NewPreferencesAgentComposerDefaultsPatchRequestedHandler(preferences),
 	)
 	agentActivityProjection := agentservice.NewActivityProjection(agentActivityRepo)
 	agentActivityProjection.SetAnalyticsReporter(analyticsReporter)
@@ -315,6 +321,8 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	agentSessionService.ModelCatalog = agentModelCatalog
 	agentSessionService.ModelCapabilities = agentModelCapabilities
 	agentSessionService.AgentTargetStore = agentTargetStore
+	agentSessionService.AgentComposerDefaultsReader = preferences
+	preferences.AgentComposerDefaultsValidator = agentSessionService
 	agentSessionService.ExtensionComposerProfiles = agentExtensionComposerProfileResolver{
 		manager: agentExtensionManager,
 	}

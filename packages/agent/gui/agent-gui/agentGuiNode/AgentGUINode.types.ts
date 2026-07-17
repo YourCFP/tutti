@@ -28,7 +28,8 @@ import type {
 import type {
   AgentGUIOpenSessionRequest,
   AgentGUIPrefillPromptRequest,
-  AgentGUIRememberComposerDefaultsInput
+  AgentGUIRememberComposerDefaultsInput,
+  AgentGUIRememberComposerDefaultsResult
 } from "./controller/useAgentGUINodeController";
 import type {
   AgentGUISidebarFooterContext,
@@ -152,7 +153,7 @@ export interface AgentGUINodeHostActions {
   ) => void;
   onRememberComposerDefaults?: (
     input: AgentGUIRememberComposerDefaultsInput
-  ) => void | Promise<void>;
+  ) => void | Promise<AgentGUIRememberComposerDefaultsResult>;
   isMuted?: boolean;
   onMinimize?: () => void;
   onToggleMaximize?: () => void;

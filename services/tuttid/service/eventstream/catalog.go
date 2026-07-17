@@ -12,15 +12,17 @@ import (
 )
 
 const (
-	TopicAnalyticsDebugReported                = "analytics.debug.reported"
-	TopicAgentActivityUpdated                  = "agent.activity.updated"
-	TopicAgentModelCatalogInvalidated          = "agent.model.catalog.invalidated"
-	TopicPreferencesDesktopUpdateRequested     = "preferences.desktop.update.requested"
-	TopicPreferencesDesktopUpdated             = "preferences.desktop.updated"
-	TopicWorkspaceIssueUpdated                 = "workspace.issue.updated"
-	TopicWorkspaceAppFactoryJobUpdated         = "workspace.appfactory.job.updated"
-	TopicWorkspaceAppUpdated                   = "workspace.app.updated"
-	TopicWorkspaceWorkbenchNodeLaunchRequested = "workspace.workbench.node.launch.requested"
+	TopicAnalyticsDebugReported                         = "analytics.debug.reported"
+	TopicAgentActivityUpdated                           = "agent.activity.updated"
+	TopicAgentModelCatalogInvalidated                   = "agent.model.catalog.invalidated"
+	TopicPreferencesAgentComposerDefaultsChanged        = "preferences.agent.composer.defaults.changed"
+	TopicPreferencesAgentComposerDefaultsPatchRequested = "preferences.agent.composer.defaults.patch.requested"
+	TopicPreferencesDesktopUpdateRequested              = "preferences.desktop.update.requested"
+	TopicPreferencesDesktopUpdated                      = "preferences.desktop.updated"
+	TopicWorkspaceIssueUpdated                          = "workspace.issue.updated"
+	TopicWorkspaceAppFactoryJobUpdated                  = "workspace.appfactory.job.updated"
+	TopicWorkspaceAppUpdated                            = "workspace.app.updated"
+	TopicWorkspaceWorkbenchNodeLaunchRequested          = "workspace.workbench.node.launch.requested"
 )
 
 // Direction, ValidationCode and ValidationError now live in stream-go and are
@@ -110,6 +112,26 @@ func DefaultCatalog() StaticCatalog {
 			directions:         []Direction{DirectionServerToClient},
 			validators: map[Direction]PayloadValidator{
 				DirectionServerToClient: validateAgentModelCatalogInvalidatedPayload,
+			},
+		},
+		{
+			Name:               TopicPreferencesAgentComposerDefaultsChanged,
+			ClientCanPublish:   false,
+			ClientCanSubscribe: true,
+			Version:            1,
+			directions:         []Direction{DirectionServerToClient},
+			validators: map[Direction]PayloadValidator{
+				DirectionServerToClient: validateAgentComposerDefaultsChangedPayload,
+			},
+		},
+		{
+			Name:               TopicPreferencesAgentComposerDefaultsPatchRequested,
+			ClientCanPublish:   true,
+			ClientCanSubscribe: false,
+			Version:            1,
+			directions:         []Direction{DirectionClientToServer},
+			validators: map[Direction]PayloadValidator{
+				DirectionClientToServer: validateAgentComposerDefaultsPatchRequestedPayload,
 			},
 		},
 		{

@@ -471,6 +471,26 @@ test("WorkspaceAgentActivityService model catalog invalidation drops composer ca
     workspaceId: "ws-1"
   });
   assert.equal(composerOptionCalls, 2);
+
+  const defaultsInvalidationHandler = topicHandlers.get(
+    "preferences.agent.composer.defaults.changed"
+  );
+  assert.ok(
+    defaultsInvalidationHandler,
+    "service must subscribe to target defaults invalidation"
+  );
+  const targetInvalidations: unknown[] = [];
+  service.onComposerDefaultsInvalidated((event) => {
+    targetInvalidations.push(event);
+  });
+  defaultsInvalidationHandler({ payload: { agentTargetId: "local:codex" } });
+  assert.deepEqual(targetInvalidations, [{ agentTargetId: "local:codex" }]);
+  await service.getComposerOptions({
+    agentTargetId: "local:codex",
+    provider: "codex",
+    workspaceId: "ws-1"
+  });
+  assert.equal(composerOptionCalls, 3);
 });
 
 test("WorkspaceAgentActivityService starts session-event streams and preserves uncached outcome patches", async () => {
@@ -536,6 +556,10 @@ test("WorkspaceAgentActivityService starts session-event streams and preserves u
     {
       scope: null,
       topic: "agent.model.catalog.invalidated"
+    },
+    {
+      scope: null,
+      topic: "preferences.agent.composer.defaults.changed"
     }
   ]);
   assert.equal(connectCalls, 1);
@@ -623,7 +647,7 @@ test("WorkspaceAgentActivityService dispose releases every event stream subscrip
   });
 
   service.onSessionEvent("ws-1", () => {});
-  assert.equal(activeSubscriptions.size, 3);
+  assert.equal(activeSubscriptions.size, 4);
 
   service.dispose();
   service.dispose();

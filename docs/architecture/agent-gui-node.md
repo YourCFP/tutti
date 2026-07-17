@@ -496,16 +496,88 @@ When an empty composer has an `agentTargetId`, model, permission, reasoning,
 and speed options are target-scoped. Do not fall back to provider-level options
 for that target; a missing target-scoped option snapshot should remain a
 loading/missing state until the target options arrive.
-An explicit permission choice from the currently rendered target-scoped menu
-must also survive a concurrent options refresh. The settings action may use a
-runtime options snapshot to clean up older stored defaults, but it must not
-erase the user's current or just-selected permission merely because that
-snapshot lags the menu render. Unrelated patches such as clearing plan mode must
-not mutate permission as collateral cleanup; the daemon remains the authority
-that validates provider settings.
-Controlled permission selects may emit a transient empty value while closing or
-restoring focus. This is presentation state, not a user request to clear the
-permission default, and must be rejected at the selection boundary.
+
+Target composer defaults have one durable owner and one mutation path:
+
+```text
+explicit rendered-menu selection
+  -> optimistic home draft or active Session command
+  -> preferences.agent.composer.defaults.patch.requested
+  -> tuttid validates the Agent Target descriptor
+  -> transaction reads latest agent_composer_defaults_by_agent_target_json
+  -> merge only model / permissionModeId / reasoningEffort / speed
+  -> preferences.agent.composer.defaults.changed(agentTargetId)
+  -> clients invalidate and reload target-scoped composer options
+```
+
+The renderer must not merge this patch into a cached `DesktopPreferences` or
+publish `preferences.desktop.update.requested`. The full preferences mutation
+keeps the legacy defaults fields readable for migration and old clients, but it
+does not write target defaults. The changed event carries only
+`agentTargetId`; it is a reread signal, not a defaults snapshot, so duplicate or
+out-of-order invalidations are harmless.
+
+An Agent Extension model catalog can be workspace/cwd scoped even though the
+target-default patch intentionally is not. After target-scoped composer options
+observe a live catalog, tuttid records that authoritative catalog under the
+exact provider and `agentTargetId`. Extension model patches validate against
+the last-known-good union observed for that target across caller scopes.
+Workspace/cwd display cache entries may expire, but target validation evidence
+remains until explicit provider invalidation; catalogs from another target
+never qualify. Do not attach the last renderer cwd to the patch: two windows
+can use the same target in different projects. Create Session still revalidates
+the remembered model against the actual workspace/cwd descriptor before
+starting a visible runtime.
+
+`composer-options` owns capability lists and `effectiveSettings`. For a new
+home composer, those effective settings are the authoritative target defaults.
+The local target draft is only a sparse optimistic overlay for values the user
+explicitly selected. Workbench/node `composerOverrides` and desktop preference
+snapshots must not inject or reconstruct durable defaults. Before the first
+target options response, controls remain in their loading/unknown state.
+
+The same optimistic rule covers `model`, `permissionModeId`,
+`reasoningEffort`, and `speed` as one field set. A choice from the currently
+rendered menu stays above a stale options response and unrelated settings
+patches until authoritative state catches up. Options refresh may update
+capabilities and effective values, but it must not sanitize a just-selected
+value out of the local intent or persistence patch. Controlled selects may emit
+a transient empty value while closing or restoring focus; that is presentation
+state and is ignored for every persisted field. Final target/value validation
+belongs to tuttid.
+
+The mutation result correlates acknowledgement to the exact target, field, and
+local generation. A coordinator may settle an older request as superseded, but
+AgentGUI must not interpret that settlement as a daemon acknowledgement. On an
+exact acknowledgement, AgentGUI records the generation as awaiting authority,
+force-reloads target composer options without that generation's fields as
+request overrides, and removes only the still-current generation after a
+successful authoritative read. A newer choice for the same field therefore
+survives an older acknowledgement, including an A-to-B-to-A sequence. A failed
+mutation keeps the optimistic intent; a failed reload keeps the exact
+acknowledged generation pending so any later successful target-authority read
+can converge it. The target-only invalidation event has no mutation correlation
+and must never clear an unacknowledged intent by itself.
+
+Create Session sends only sparse explicit overrides. `Service.Create` reads the
+latest defaults for the exact `agentTargetId`, fills fields without explicit
+overrides, and then validates the final merged settings against that target's
+descriptor. Agent Extension targets use the same rule; an invisible discovery
+runtime may resolve a target-owned catalog, but unsupported settings must be
+rejected before the visible Session runtime starts. This makes Dock, standalone
+Agent windows, CLI, App Center, and other daemon callers share the same create
+semantics without a renderer cache or provider-keyed fallback.
+
+An explicit selection in an active Session has two independent effects: the
+`AgentSessionEngine` updates current Session settings, and the target-defaults
+patch remembers the value for future Sessions. Neither command rolls back the
+other. A current-Session failure silently restores canonical Session settings
+and is logged; a defaults failure keeps current behavior, retries with the
+latest per-field intent, and produces only safe diagnostics. A provider may
+return `settings_require_new_session` while the future-default patch succeeds.
+Opening or restoring history only reads that Session's persisted settings and
+never promotes them to defaults. Existing Full access confirmation remains the
+gate before either explicit command is emitted.
 Providers whose model catalog exists only after runtime session bootstrap must
 declare hidden live-model probing and its cache scope in their provider
 descriptor. The daemon may

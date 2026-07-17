@@ -71,6 +71,10 @@ type PreferencesStore interface {
 	PutDesktopPreferences(context.Context, preferencesbiz.DesktopPreferences) (preferencesbiz.DesktopPreferences, error)
 }
 
+type AgentComposerDefaultsPatchStore interface {
+	PatchAgentComposerDefaultsForTarget(context.Context, string, preferencesbiz.AgentComposerDefaultsPatch) (preferencesbiz.AgentComposerDefaults, error)
+}
+
 type ManagedCredentialsStore interface {
 	DeleteManagedModelGrant(context.Context, string, string, string) error
 	DeleteManagedModelProviderConfig(context.Context, string, managedcredentialsbiz.ProviderID) error

@@ -41,7 +41,6 @@ export interface UseAgentGUINewConversationActivationInput {
   isComposerHomeRef: RefObject<boolean>;
   conversationsRef: RefObject<AgentGUIConversationSummary[]>;
   activeSessionState: AgentSessionState | null;
-  lastActiveModelByProviderRef: RefObject<Record<string, string>>;
   sessionEngine: AgentSessionEngine;
   conversationListQuery: AgentGUIConversationListQuery | null;
   currentUserId: string | null | undefined;
