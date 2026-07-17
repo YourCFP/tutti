@@ -219,11 +219,13 @@ export function useAgentGUINodeController({
   });
   const {
     activeConversationId,
+    clearRailRevealRequest,
     draftByScopeKey,
     draftSettingsBySessionId,
     intent,
     isComposerHome,
     selectedProjectPath,
+    requestRailReveal,
     setActiveConversationId,
     setDetailError,
     setIntent,
@@ -432,18 +434,6 @@ export function useAgentGUINodeController({
     getErrorCode: getAgentGUIErrorCode
   });
   const activeConversationLiveState = activation.stateFor(activeConversationId);
-  const removeConversations = useCallback(
-    (conversationIds: readonly string[]) => {
-      for (const agentSessionId of conversationIds) {
-        sessionEngine.dispatch({
-          type: "session/removed",
-          agentSessionId
-        });
-      }
-    },
-    [sessionEngine]
-  );
-
   const setUserProjectsSnapshot = useCallback(
     (projects: readonly AgentHostUserProject[]) => {
       setUserProjects((current) =>
@@ -521,7 +511,9 @@ export function useAgentGUINodeController({
     agentActivityRuntime,
     attentionReadRecordsBySessionId: attentionReadState.recordsBySessionId,
     conversationIdsRef,
+    conversationsRef,
     conversationListQuery,
+    clearRailRevealRequest,
     currentUserId,
     data,
     dataRef,
@@ -533,11 +525,13 @@ export function useAgentGUINodeController({
     onDataChangeRef,
     reloadSelectedConversationRef,
     sessionEngine,
+    requestRailReveal,
     setActiveConversationId,
     setDetailError,
     setIntent,
     setIsComposerHome,
     setIsLoadingMessages,
+    transientConversation,
     workspaceId
   });
   const persistActiveConversation =
@@ -689,7 +683,6 @@ export function useAgentGUINodeController({
     planImplementationTurnIdRef,
     prefillPromptRequest,
     previewMode,
-    removeConversations,
     reportActiveConversationCleared: reportAgentGUIActiveConversationCleared,
     sessionEngine,
     setUserProjectsSnapshot,

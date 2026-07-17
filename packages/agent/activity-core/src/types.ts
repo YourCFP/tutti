@@ -566,6 +566,25 @@ export interface AgentActivityDeleteSessionResult {
   removed: boolean;
 }
 
+export interface AgentActivityDeleteSessionsInput {
+  workspaceId: string;
+  agentSessionIds: readonly string[];
+  signal?: AbortSignal;
+}
+
+export interface AgentActivityDeleteSessionsResult {
+  removedMessages: number;
+  removedSessionIds: string[];
+  removedSessions: number;
+}
+
+export interface AgentActivitySetSessionPinnedInput {
+  workspaceId: string;
+  agentSessionId: string;
+  pinned: boolean;
+  signal?: AbortSignal;
+}
+
 export type AgentActivityNeedsAttentionKind =
   | "permission"
   | "question"
@@ -723,7 +742,11 @@ export interface AgentActivitySessionUsage {
 export interface AgentActivityTurnCancelResponse {
   cancel: {
     canceled: boolean;
-    reason: "turn_canceled" | "already_settled" | "not_found";
+    reason:
+      | "cancel_requested"
+      | "turn_canceled"
+      | "already_settled"
+      | "not_found";
   };
   turn?: AgentActivityTurn;
 }

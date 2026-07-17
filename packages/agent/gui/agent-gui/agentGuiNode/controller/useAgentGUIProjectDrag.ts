@@ -38,6 +38,7 @@ interface ProjectDragState {
 interface ProjectDragRuntime {
   active: boolean;
   clientY: number | null;
+  dragState: ProjectDragState | null;
   frame: number | null;
   image: HTMLElement | null;
   viewport: HTMLElement | null;
@@ -57,6 +58,7 @@ export function useAgentGUIProjectDrag(input: {
   const [runtime] = useState<ProjectDragRuntime>(() => ({
     active: false,
     clientY: null,
+    dragState: null,
     frame: null,
     image: null,
     viewport: null
@@ -75,6 +77,7 @@ export function useAgentGUIProjectDrag(input: {
     runtime.image?.remove();
     runtime.image = null;
     runtime.active = false;
+    runtime.dragState = null;
     runtime.viewport = null;
     setDragState(null);
   }, [runtime, stopAutoScroll]);
@@ -122,12 +125,14 @@ export function useAgentGUIProjectDrag(input: {
           .closest("aside")
           ?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]') ??
         null;
-      setDragState({
+      const nextDragState: ProjectDragState = {
         beforeProjectId: projectId,
         indicator: null,
         indicatorSectionId: null,
         projectId
-      });
+      };
+      runtime.dragState = nextDragState;
+      setDragState(nextDragState);
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", projectId);
       const image = document.createElement("div");
@@ -154,31 +159,35 @@ export function useAgentGUIProjectDrag(input: {
       event: React.DragEvent<HTMLElement>
     ) => {
       const targetId = section.project?.id?.trim() ?? "";
-      if (!runtime.active || !dragState || !targetId) return;
+      const currentDragState = runtime.dragState;
+      if (!runtime.active || !currentDragState || !targetId) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
       const targetIndex = input.userProjects.findIndex(
         (project) => project.id === targetId
       );
-      setDragState({
-        ...dragState,
+      const nextDragState: ProjectDragState = {
+        ...currentDragState,
         beforeProjectId:
           edge === "before"
             ? targetId
             : (input.userProjects[targetIndex + 1]?.id ?? null),
         indicator: edge,
         indicatorSectionId: section.id
-      });
+      };
+      runtime.dragState = nextDragState;
+      setDragState(nextDragState);
       trackPosition(event.clientY);
     },
-    [dragState, input.userProjects, runtime, trackPosition]
+    [input.userProjects, runtime, trackPosition]
   );
 
   const drop = useCallback(
     async (event: React.DragEvent<HTMLElement>) => {
-      if (!dragState || !runtime.active) return;
+      const currentDragState = runtime.dragState;
+      if (!currentDragState || !runtime.active) return;
       event.preventDefault();
-      const { beforeProjectId, projectId } = dragState;
+      const { beforeProjectId, projectId } = currentDragState;
       clear();
       setIsMovePending(true);
       try {
@@ -187,7 +196,7 @@ export function useAgentGUIProjectDrag(input: {
         setIsMovePending(false);
       }
     },
-    [clear, dragState, input.onMoveProject, runtime]
+    [clear, input.onMoveProject, runtime]
   );
 
   const installGlobalListeners = useCallback(() => {

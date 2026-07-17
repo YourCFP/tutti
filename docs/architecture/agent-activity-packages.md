@@ -30,9 +30,39 @@ packages/agent/gui
 
 packages/agent/activity-replication
   github.com/tutti-os/tutti/packages/agent/activity-replication
+
+packages/agent/host
+  github.com/tutti-os/tutti/packages/agent/host
+
+packages/agent/store-sqlite
+  github.com/tutti-os/tutti/packages/agent/store-sqlite
+
+packages/agent/store-sqlite/canonical
+  github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical
 ```
 
+`packages/agent/store-sqlite/canonical` is the single authority for canonical
+activity contract vocabulary; other packages import its phase, outcome,
+origin, interaction-kind, and interaction-status definitions rather than
+redeclaring them.
+
 ## Responsibilities
+
+### `packages/agent/host`
+
+`host` is the provider-neutral Go application boundary for canonical agent
+session and turn lifecycle work. It owns lifecycle input/result contracts,
+narrow canonical-store and runtime ports, runtime preparation and attachment
+materialization ports, clock and scheduler ports, and post-commit observer
+hooks. The `conformance` subpackage owns reusable typed lifecycle scenarios so
+the legacy `tuttid` service, the extracted Host, and downstream adapters can be
+checked against the same behavior baseline.
+
+The module does not own transport, authorization, room or device identity,
+process or VM implementations, HTTP/OpenAPI shapes, Electron integration, or
+control-plane DTOs. `tuttid` remains the production implementation until the
+later extraction slices explicitly switch its wiring; introducing this module
+does not change production routing.
 
 ### `packages/agent/activity-replication`
 
@@ -170,6 +200,25 @@ AgentGUI controller. Fresh first pages are reused for 30 seconds across panel
 remounts and repeated target switches; stale pages remain visible while one
 coalesced background request revalidates the scope. The cache never owns session
 entities, titles, lifecycle, or interaction state.
+Pin and delete are engine mutations, not direct runtime calls from AgentGUI.
+The engine records the pending mutation, emits one semantic command, and feeds
+the command result back through its reducer loop. Successful pin results and
+delete tombstones enter canonical state as follow-up intents in the same engine
+drain. The desktop activity facade may await that engine record, but its command
+port is the only transport executor. Settled mutation records use a bounded
+window; they are workflow evidence, not an unbounded history store.
+When one of those canonical commits changes page membership, the rail query
+controller reloads only the affected first pages. Its public snapshot contains
+both derived engine conversations and daemon membership. The snapshot itself is
+the committed value: the controller keeps it unchanged while draft page requests
+are pending, then rebuilds and publishes it once from the latest engine state and
+resolved membership. The controller does not inspect engine mutation records.
+The view has no independent engine subscription or stale-page cache. A failed
+targeted read leaves the committed snapshot visible and locks
+membership-sensitive actions until an authoritative scoped refresh succeeds.
+Attach compares current canonical membership with the last observed membership
+and invalidates interrupted draft work before bootstrap, so changes completed
+while every panel is closed are revalidated without mutation-history coupling.
 Section first-page reloads should be tied to workspace, rail filter, user
 project, or session membership changes.
 Historical rows already owned by loaded section pages can be absent from a
@@ -271,6 +320,11 @@ provider request
 
 `call.started` / `call.completed` / `call.failed` continue to own historical
 tool-call messages, but they never create or restore an actionable Interaction.
+When acknowledging an interactive response can make the provider immediately
+settle its Turn, the adapter must serialize that acknowledgement and the
+matching call-resolution event with Turn finalization. The terminal Turn event
+must not overtake `call.completed` or `call.failed` and close the event stream
+before the historical call row resolves.
 Likewise, a runtime session snapshot may describe provider-local execution
 state but must not enrich a report with an Interaction transition. Runtime
 reports may submit only `pending` and `superseded`; `answered` belongs solely to

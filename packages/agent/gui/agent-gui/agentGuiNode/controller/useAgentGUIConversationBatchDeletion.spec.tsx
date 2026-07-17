@@ -1,7 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useState } from "react";
-import type { AgentSessionEngine } from "@tutti-os/agent-activity-core";
 import type { AgentActivityRuntime } from "../../../agentActivityRuntime";
 import { useAgentGUIConversationBatchDeletion } from "./useAgentGUIConversationBatchDeletion";
 
@@ -31,7 +30,6 @@ function createInput(agentActivityRuntime: AgentActivityRuntime) {
     markSelectedConversationDetailPending: vi.fn(() => null),
     persistActiveConversation: vi.fn(),
     removeConversations: vi.fn(),
-    sessionEngine: { dispatch: vi.fn() } as unknown as AgentSessionEngine,
     sessionViewRef: (agentSessionId: string | null | undefined) => ({
       agentSessionId,
       origin: "local",
@@ -96,11 +94,12 @@ describe("useAgentGUIConversationBatchDeletion", () => {
     });
     expect(deleteSession).not.toHaveBeenCalled();
     await waitFor(() =>
-      expect(input.removeConversations).toHaveBeenCalledWith([
-        "loaded-session",
-        "unloaded-session"
-      ])
+      expect(input.deleteAgentSessionView).toHaveBeenCalledTimes(2)
     );
+    expect(input.removeConversations).toHaveBeenCalledWith([
+      "loaded-session",
+      "unloaded-session"
+    ]);
   });
 
   it("refreshes activity and does not delete when the candidate snapshot is empty", async () => {
@@ -188,7 +187,7 @@ describe("useAgentGUIConversationBatchDeletion", () => {
       "surviving-session"
     );
     await waitFor(() =>
-      expect(input.removeConversations).toHaveBeenCalledWith(["loaded-session"])
+      expect(input.deleteAgentSessionView).toHaveBeenCalledTimes(1)
     );
   });
 });

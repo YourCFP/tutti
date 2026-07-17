@@ -330,8 +330,8 @@ dock-entry reuse for AgentGUI, otherwise it collapses into the normal
 restore/focus behavior instead of opening a fresh Agent window.
 Unified dock and launchpad chrome should keep the generic Agent title and
 generic Agent artwork instead of provider-branded entries. Workbench Agent node
-headers show the generic Agent title while the conversation rail is expanded;
-standalone native Agent window headers omit that redundant app title. When the
+headers and standalone native Agent window headers both show the generic Agent
+title while the conversation rail is expanded. When the
 conversation rail is collapsed, the title area shows the active conversation's
 agent icon and conversation title as soon as a local session id exists. The
 engine-owned optimistic title bridges conversation-title persistence; the
@@ -383,9 +383,41 @@ create/send commands. Once a session is active, the composer agent select is
 display-only and must not switch the running session. The conversation rail
 agent grid is a navigation surface: clicking an agent scopes the visible rail
 list by its exact `agentTargetId`. If the active conversation belongs to that
-target, it remains active. Otherwise the click enters that agent's empty home
-composer; it must not implicitly activate another matching history item.
+target, it remains active. Otherwise the click restores the last conversation
+that this AgentGUI node or standalone Agent window activated for that exact
+target. This memory is keyed by `agentTargetId` in node-local state; it must not
+come from a workspace-global recent conversation or group targets by provider.
+If no remembered conversation exists, or canonical state proves that the
+remembered session was deleted or belongs to another target, the click enters
+that agent's empty home composer. A remembered bounded-history session may be
+activated before its rail row is loaded, then reconciled through the normal
+session-authoritative detail path.
 Empty-home rail clicks may also sync the home composer launch target.
+The conversation rail keeps one in-memory view scope for each exact target and
+the all-target view. Returning to a visited scope restores its scroll offset,
+collapsed project sections, and per-section visible item limits only after the
+query controller confirms that the rendered memberships belong to that exact
+scope. The rendered request scope is synchronous view intent, while the query
+controller snapshot supplies resolved-scope evidence. Readiness must compare
+those identities during render instead of waiting for passive controller
+configuration; otherwise a layout effect can restore and record the new
+scope's scroll position against the previous scope's DOM. A committed stale
+membership snapshot for the resolved scope is ready for restoration while its
+background revalidation is pending; only an initial load with no committed
+membership blocks restoration. Search is a transient
+navigation mode: each changed query starts at the top and exiting search
+restores the underlying target scope without retaining one permanent view-state
+entry per query string.
+Scope restoration takes precedence over active-session reveal. A first visit
+may reveal its active session, but `activeConversationId` is selection truth,
+not an implicit DOM scroll command. Rail row clicks and provider session
+restoration never scroll again; the clicked row is already visible and the
+restored provider owns its remembered offset. Only explicit reveal intents,
+currently external session opens and newly created sessions, may reveal a row
+in an already settled scope. These view scopes and reveal intents belong to the
+mounted AgentGUI node's React conversation-list
+module. They are not persisted node data, engine state, query-controller data,
+or a module-global store.
 In an active session, the composer footer may replace the display-only provider
 select with a handoff affordance. Handoff is a workbench launch, not an
 in-session provider switch: AgentGUI serializes the active session as a single
@@ -496,6 +528,16 @@ When an empty composer has an `agentTargetId`, model, permission, reasoning,
 and speed options are target-scoped. Do not fall back to provider-level options
 for that target; a missing target-scoped option snapshot should remain a
 loading/missing state until the target options arrive.
+An explicit permission choice from the currently rendered target-scoped menu
+must also survive a concurrent options refresh. The settings action may use a
+runtime options snapshot to clean up older stored defaults, but it must not
+erase the user's current or just-selected permission merely because that
+snapshot lags the menu render. Unrelated patches such as clearing plan mode must
+not mutate permission as collateral cleanup; the daemon remains the authority
+that validates provider settings.
+Controlled permission selects may emit a transient empty value while closing or
+restoring focus. This is presentation state, not a user request to clear the
+permission default, and must be rejected at the selection boundary.
 Providers whose model catalog exists only after runtime session bootstrap must
 declare hidden live-model probing and its cache scope in their provider
 descriptor. The daemon may
@@ -1192,6 +1234,13 @@ keeps a workspace/session-scoped `awaitingTurn` cancel until the first canonical
 Turn arrives. That transition then emits an exact `turn/cancel`; a bounded
 expiry removes the detached operation so a later, unrelated Turn cannot be
 canceled. Empty reconcile snapshots must preserve this detached operation.
+An adapter may durably accept that exact-turn cancel before the Turn reaches a
+terminal outcome. It returns the official `cancel_requested` result with the
+same Turn projected in `settling` phase; the engine keeps cancellation in its
+`accepted` operation state and the GUI continues to present stopping until an
+authoritative settled Turn clears it. Acceptance must never be rewritten as
+`turn_canceled` or `already_settled`, and a transport failure must remain a
+failed command rather than manufacturing terminal state.
 When request cancellation causes create to fail, daemon rollback uses a bounded
 context detached from the canceled request so provisional runtime state is
 still closed and removed.
@@ -1502,6 +1551,18 @@ session id. Persist them in the no-project Chats section with
 presentation, but AgentGUI must keep the imported history read-only and route
 continued work through the existing "continue in a new conversation" flow.
 
+For a project-backed external import, the exact project selection matched by
+the import service is authoritative rail-classification input. It must reach
+the activity store with the session report before the API registers successful
+projects in the user-project inventory; otherwise an already registered parent
+project can capture a nested session permanently. The store accepts this hint
+only for imported, project-backed sessions and verifies that the selected path
+contains the imported cwd. Ordinary runtime-session membership remains
+immutable. Re-importing the same historical session may repair only a Chats or
+ancestor-project assignment to that explicit descendant selection; it must not
+reclassify from the current user-project inventory or move a correctly assigned
+child session back to a parent.
+
 ### Conversation List Loading
 
 ```text
@@ -1524,6 +1585,12 @@ The session list is not owned by AgentGuiNode. AgentGuiNode may keep query,
 selection, pending create/delete/submit overlays, and read-state UI metadata.
 The session rows themselves come from the runtime snapshot and are refreshed
 through `load`, event reconciliation, or explicit session fetches.
+Deleting the selected conversation commits `activeConversationId=null` and the
+home intent before the delete command runs. It must not auto-select an adjacent
+row, including a row that later fills the deleted page slot. Deleting a
+non-selected conversation preserves the current selection. If the command
+fails after the home transition, report the failure without restoring or
+selecting another conversation.
 The desktop adapter should keep broad session-list loads bounded before they
 enter `AgentActivityRuntime`; large workspaces can accumulate hundreds or
 thousands of historical agent sessions, and pushing all of them through the
@@ -1572,9 +1639,10 @@ visible from the current section inventory even when no exact membership rows
 exist or the initial membership request fails; preserving that chrome must not
 place any session into it. The daemon assigns the key before Create succeeds
 and treats it as immutable session identity metadata; later cwd observations do
-not move the session to another rail section. Removing a project removes that
-rail section from the section list; re-adding the same path reveals historical
-sessions with the same section key.
+not move the session to another rail section. The sole correction path is the
+explicit external-import selection repair described above. Removing a project
+removes that rail section from the section list; re-adding the same path reveals
+historical sessions with the same section key.
 The daemon first-page reader is a required production repository seam, not an
 optional fast path with a per-section fallback. Its SQLite query must be driven
 by the requested section keys: ordinary branches use the rail-section page
@@ -1628,22 +1696,38 @@ empty failure state.
 Section-query `pending` has two presentation meanings. An unresolved first page
 is blocking and may reveal the delayed rail skeleton. A same-scope membership
 refresh is non-blocking: keep the resolved membership visible and interactive
-until authoritative daemon pages replace it. Session mutation responses first
-update or tombstone canonical engine entities. The rail query controller then
-compares before/after membership and reloads only affected first pages: ordinary
-delete reloads its section, pinned delete reloads pinned, and pin/unpin reloads
-both pinned and the session's ordinary section. Rename does not reload section
-pages; an active backend search is reissued because title changes can alter its
-membership. Targeted pages resolve together before replacing cache state. A
-targeted failure keeps old page state and transient canonical overlays, and
-leaves that scope cache stale for later authoritative bootstrap. It must not
-fall back to `listSessionSections` or a workspace activity `load`. A scope
-change may also keep the previous page visible to avoid destructive layout
-churn, but actions whose section or target scope could be stale remain locked
-until the new scope resolves. Derive these meanings inside the dedicated rail
-query controller from its current and resolved scope keys; do not add engine
-mutation state, manually move rows, or make the view reinterpret raw request
-state.
+until authoritative daemon pages replace it. Pin and delete enter the workspace
+engine as typed mutation intents. Their reducers own pending, success, failure,
+and unknown outcomes, emit one semantic external command, and commit returned
+sessions or deletion tombstones through follow-up intents in the same engine
+drain. AgentGUI and desktop facades may await the mutation selector for local
+cleanup or reporting, but they must not execute the transport command or patch
+canonical entities themselves.
+The rail query controller compares canonical before/after membership and reloads
+only affected first pages: ordinary delete reloads its section, pinned delete
+reloads pinned, and pin/unpin reloads both pinned and the session's ordinary
+section. Rename does not reload section pages; an active backend search is
+reissued because title changes can alter its membership. Canonical entity and
+page membership clocks meet at one composite rail snapshot seam: the controller
+publishes derived engine conversations together with daemon membership. While
+targeted reads are pending, it retains the prior immutable composite snapshot;
+after all reads resolve, it ingests returned entities and publishes the complete
+next snapshot once. The view must not subscribe to the engine separately or keep
+stale sections. A targeted failure keeps the committed snapshot and locks
+membership-sensitive actions until an authoritative scoped refresh succeeds.
+This derived committed snapshot is not a writable session cache; canonical
+entities remain engine-owned and query state still stores only ids, cursor, and
+totals. The controller never reads engine mutation history. Attach compares the
+current canonical membership with its last observed records and invalidates
+interrupted draft query work before bootstrap; canonical changes completed while
+the panel is detached must be revalidated without preserving an old lock.
+Targeted revalidation must not fall back to `listSessionSections` or a
+workspace activity `load`. A
+scope change may also keep the previous page visible to avoid destructive
+layout churn, but actions whose section or target scope could be stale remain
+locked until the new scope resolves. Derive these meanings inside the dedicated
+rail query controller from its current and resolved scope keys; do not manually
+move rows or make the view reinterpret raw request state.
 The active conversation is a
 display overlay, not a pageable row: it may render beside the first five rows,
 but it must not consume the local visible-item limit or advance the cursor.
@@ -3532,13 +3616,13 @@ provenance-aware generated-file provider for either active dimension, even when
 the ordinary generated-files group is otherwise disabled. Generated-file and
 picker result groups remain source-owned. The Agent Session and Agent target
 `@` lists are the exceptions when a host injects an Agent provenance catalog.
-Session rows group by exact `agentTargetId` in Agent catalog order. Agent target
-rows use each Agent option's `parentMemberId` to group under the matching Member
-catalog entry, so one member's targets share a group while filtering still uses
-the individual target ids. Collaboration hosts should build this catalog from
-the complete Agent directory, using `AgentGUIAgent.owner.userId` for shared
-targets, rather than deriving ownership only from sessions; targets without
-history must still join their owner's group. Hosts that omit a matching Member entry retain the
+Session and Agent target rows use each Agent option's `parentMemberId` to group
+under the matching Member catalog entry, so one member's sessions and targets
+share a group across Agent targets while filtering still uses the individual
+target ids. Collaboration hosts should build this catalog from the complete
+Agent directory, using `AgentGUIAgent.owner.userId` for shared targets, rather
+than deriving ownership only from sessions; targets without history must still
+join their owner's group. Hosts that omit a matching Member entry retain the
 per-Agent group. AgentGUI does not synthesize owner-aware row labels because
 that presentation remains host-owned. Rows outside the catalog remain visible
 in stable uncatalogued groups only while no explicit Agent filter is selected.
@@ -3606,6 +3690,17 @@ merges the unresolved in-flight patch, any queued patch, and the latest selectio
 in that order, so the newest value wins without losing settings that the daemon
 may not have applied before the timeout.
 
+Provider-specific safety confirmation belongs at the composer setting selection
+boundary, before the settings change reaches the engine. Selecting Codex
+`full-access` opens a localized warning and must not dispatch a settings change
+until the user confirms; canceling preserves the previous selection. Confirmation
+still dispatches exactly one ordinary settings patch, so the engine and daemon do
+not acquire a second safety-dialog state machine. Other providers' modes continue
+to follow their provider contracts without inheriting this Codex-specific gate.
+The warning's safety-reference link uses the host link-action boundary. Workspace
+surfaces may route it to their Browser node; the standalone Agent window must fall
+back to the desktop external-browser bridge rather than silently dropping the URL.
+
 The daemon selects the mutation path from session liveness. A live session
 updates through its provider adapter. A historical session updates the durable
 activity projection directly and publishes reconciliation without resuming the
@@ -3648,6 +3743,16 @@ path does not open a misleading workbench node. Both workspace and standalone
 Agent window host routes must honor that validation intent and surface the same
 localized missing-target feedback instead of opening an empty files surface or
 silently doing nothing.
+
+Bare HTTP links use the GFM literal-autolink parser, but transcript rendering
+also repairs CJK sentence punctuation boundaries after Markdown parsing because
+the upstream GFM boundary set is ASCII-oriented. This repair applies only to
+literal autolinks and must preserve explicit Markdown links, angle autolinks,
+code, and intentionally authored Unicode link destinations. Streaming and
+settled transcript rendering must use the same boundary transform so an href
+does not change when a turn finishes. Raw CJK punctuation in a literal autolink
+is a sentence boundary; a URL that intentionally contains that punctuation must
+percent-encode it or use an explicit Markdown link destination.
 
 Provider host-app-context prompts should mirror that contract: when agents
 reference code or workspace files in responses, instruct them to emit Markdown

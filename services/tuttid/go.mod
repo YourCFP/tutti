@@ -11,8 +11,10 @@ require (
 	github.com/klauspost/compress v1.17.7
 	github.com/oapi-codegen/runtime v1.4.1
 	github.com/tutti-os/tutti/packages/agent/daemon v0.0.0
+	github.com/tutti-os/tutti/packages/agent/host v0.0.0
 	github.com/tutti-os/tutti/packages/agent/runtimeprep v0.0.0
 	github.com/tutti-os/tutti/packages/agent/store-sqlite v0.0.0
+	github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical v0.0.0
 	github.com/tutti-os/tutti/packages/appcli/core v0.0.0
 	github.com/tutti-os/tutti/packages/auth/bridge-go v0.0.0
 	github.com/tutti-os/tutti/packages/events/stream-go v0.0.0
@@ -23,6 +25,7 @@ require (
 	golang.org/x/mod v0.33.0
 	golang.org/x/sync v0.19.0
 	golang.org/x/sys v0.41.0
+	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.45.0
 )
 
@@ -30,11 +33,17 @@ replace github.com/tutti-os/tutti/packages/events/stream-go => ../../packages/ev
 
 replace github.com/tutti-os/tutti/packages/workbench/service => ../../packages/workbench/service
 
+replace github.com/tutti-os/tutti/packages/agent/activity-replication => ../../packages/agent/activity-replication
+
 replace github.com/tutti-os/tutti/packages/agent/daemon => ../../packages/agent/daemon
+
+replace github.com/tutti-os/tutti/packages/agent/host => ../../packages/agent/host
 
 replace github.com/tutti-os/tutti/packages/agent/runtimeprep => ../../packages/agent/runtimeprep
 
 replace github.com/tutti-os/tutti/packages/agent/store-sqlite => ../../packages/agent/store-sqlite
+
+replace github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical => ../../packages/agent/store-sqlite/canonical
 
 replace github.com/tutti-os/tutti/packages/workspace/files => ../../packages/workspace/files
 
@@ -89,7 +98,6 @@ require (
 	golang.org/x/tools v0.42.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

@@ -5,7 +5,6 @@ import {
   type SetStateAction
 } from "react";
 import { flushSync } from "react-dom";
-import type { AgentSessionEngine } from "@tutti-os/agent-activity-core";
 import type { AgentActivityRuntime } from "../../../agentActivityRuntime";
 import type { useAgentHostApi } from "../../../agentActivityHost";
 import type { AgentSessionViewRef } from "../../../contexts/workspace/presentation/renderer/agentSessions/useAgentSessionTransport";
@@ -40,7 +39,6 @@ export interface UseAgentGUIConversationBatchDeletionInput {
     SetStateAction<Record<string, AgentComposerDraft>>
   >;
   submittedDraftSnapshotsRef: RefObject<Record<string, SubmittedDraftSnapshot>>;
-  sessionEngine: AgentSessionEngine;
   activeConversationIdRef: RefObject<string | null>;
   markSelectedConversationDetailPending: (
     agentSessionId: string
@@ -49,7 +47,7 @@ export interface UseAgentGUIConversationBatchDeletionInput {
   setIsLoadingMessages: Dispatch<SetStateAction<boolean>>;
   setActiveConversationId: Dispatch<SetStateAction<string | null>>;
   persistActiveConversation: (agentSessionId: string | null) => void;
-  removeConversations: (conversationIds: readonly string[]) => void;
+  removeConversations: (agentSessionIds: readonly string[]) => void;
   workspaceId: string;
   setIsDeletingProjectConversations: Dispatch<SetStateAction<boolean>>;
   agentActivityRuntime: AgentActivityRuntime;
@@ -69,7 +67,6 @@ export function useAgentGUIConversationBatchDeletion(
     sessionViewRef,
     setDraftByScopeKey,
     submittedDraftSnapshotsRef,
-    sessionEngine,
     activeConversationIdRef,
     markSelectedConversationDetailPending,
     setIntent,
@@ -102,18 +99,9 @@ export function useAgentGUIConversationBatchDeletion(
         scopeKeys: deletedScopeKeys,
         targetAgentSessionIds: targetIds
       });
-      for (const id of targetIds) {
-        sessionEngine.dispatch({
-          agentSessionId: id,
-          type: "queue/sessionCleaned"
-        });
-      }
-      removeConversations([...targetIds]);
     },
     [
       deleteAgentSessionView,
-      removeConversations,
-      sessionEngine,
       sessionViewRef,
       setDraftByScopeKey,
       submittedDraftSnapshotsRef
@@ -218,9 +206,12 @@ export function useAgentGUIConversationBatchDeletion(
         workspaceId
       })
         .then((result) => {
-          finalizeConversationBatchDeletion(
-            new Set([...targetIds, ...result.removedSessionIds])
-          );
+          const removedIds = new Set([
+            ...targetIds,
+            ...result.removedSessionIds
+          ]);
+          removeConversations([...removedIds]);
+          finalizeConversationBatchDeletion(removedIds);
         })
         .catch((error) => {
           const message = getAgentGUIErrorMessage(error);
@@ -251,6 +242,7 @@ export function useAgentGUIConversationBatchDeletion(
       isDeletingProjectConversations,
       markSelectedConversationDetailPending,
       persistActiveConversation,
+      removeConversations,
       setActiveConversationId,
       setDetailError,
       setIntent,

@@ -1,19 +1,12 @@
-import {
-  selectWorkspaceAgentConsumerSessions,
-  type AgentSessionEngineState
-} from "@tutti-os/agent-activity-core";
 import { useEffect, useMemo, useRef } from "react";
 import { useAgentActivityRuntime } from "../../../agentActivityRuntime";
-import { projectCanonicalAgentGUIConversationSummaries } from "../../../contexts/workspace/presentation/renderer/agentGuiConversationList/useAgentGuiConversationList";
-import { createAgentGUIConversationRailTitlePromptSelector } from "../../../shared/agentConversationRailTitlePromptSelector";
 import { useEngineSelector } from "../../../shared/engine/useEngineSelector";
-import type { AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
-import { conversationSummariesRenderEqual } from "../model/agentGuiConversationRail";
 import type { AgentGUINodeViewModel } from "../model/agentGuiNodeTypes";
 import {
   AgentGUIConversationRailQueryController,
   type AgentGUIConversationRailQuerySnapshot
 } from "./AgentGUIConversationRailQueryController";
+import { resolveConversationRailQueryScope } from "./agentGuiConversationRailQueryTypes";
 
 export interface AgentGUIConversationRailInput {
   activeConversationId: string | null;
@@ -75,17 +68,21 @@ export function useAgentGUIConversationRailQuery({
     identitySnapshot,
     Object.is
   );
-  const selectRuntimeRailConversations = useMemo(
+  const requestedRailScopeKey = useMemo(
     () =>
-      createRuntimeRailConversationsSelector(
-        createAgentGUIConversationRailTitlePromptSelector()
-      ),
-    []
-  );
-  const runtimeRailConversations = useEngineSelector(
-    engine,
-    selectRuntimeRailConversations,
-    conversationSummaryListsRenderEqual
+      resolveConversationRailQueryScope(workspaceId, {
+        conversationFilter,
+        previewMode,
+        sectionAgentTargetFallbackId,
+        userProjects
+      }).scopeKey,
+    [
+      conversationFilter,
+      previewMode,
+      sectionAgentTargetFallbackId,
+      userProjects,
+      workspaceId
+    ]
   );
   return useMemo(
     () => ({
@@ -97,37 +94,12 @@ export function useAgentGUIConversationRailQuery({
         loadMore: controller.loadMoreSearchResults,
         retry: controller.retrySearchResults
       },
-      runtimeRailConversations
+      runtimeRailScopeResolved:
+        !querySnapshot.runtimeSectionsEnabled ||
+        querySnapshot.runtimeRailResolvedScopeKey === requestedRailScopeKey,
+      runtimeRailConversations: querySnapshot.runtimeRailConversations
     }),
-    [controller, querySnapshot, runtimeRailConversations]
-  );
-}
-
-function createRuntimeRailConversationsSelector(
-  selectTitlePrompts: ReturnType<
-    typeof createAgentGUIConversationRailTitlePromptSelector
-  >
-): (state: AgentSessionEngineState) => AgentGUIConversationSummary[] {
-  return (state) =>
-    projectCanonicalAgentGUIConversationSummaries(
-      selectWorkspaceAgentConsumerSessions(state),
-      selectTitlePrompts(state)
-    );
-}
-
-function conversationSummaryListsRenderEqual(
-  left: readonly AgentGUIConversationSummary[],
-  right: readonly AgentGUIConversationSummary[]
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every((conversation, index) => {
-      const other = right[index];
-      return (
-        other !== undefined &&
-        conversationSummariesRenderEqual(conversation, other)
-      );
-    })
+    [controller, querySnapshot, requestedRailScopeKey]
   );
 }
 

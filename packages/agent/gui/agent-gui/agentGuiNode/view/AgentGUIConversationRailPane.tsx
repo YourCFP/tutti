@@ -3,7 +3,6 @@ import {
   memo,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState
@@ -36,6 +35,7 @@ import {
   stabilizeConversationSections
 } from "../model/agentGuiConversationRail";
 import { preserveConversationRailSectionTemplates } from "../model/agentGuiConversationRailSectionTemplates";
+import { agentGUIConversationRailViewScopeKey } from "../model/agentGuiConversationRailViewState";
 import type { useAgentGUIConversationRailQuery } from "../controller/useAgentGUIConversationRailQuery";
 import { useAgentGUIProjectDrag } from "../controller/useAgentGUIProjectDrag";
 import { AgentGUIConversationRailSection } from "./AgentGUIConversationRailSection";
@@ -47,6 +47,7 @@ import {
   roundAgentGuiPerfMs
 } from "./agentGUIViewUtils";
 import styles from "../AgentGUINode.styles";
+import { useAgentGUIConversationRailViewState } from "./useAgentGUIConversationRailViewState";
 
 function useDelayedBoolean(value: boolean, delayMs: number): boolean {
   const [delayedValue, setDelayedValue] = useState(false);
@@ -69,6 +70,7 @@ export interface AgentGUIConversationRailControllerProps {
   userProjects: AgentGUINodeViewModel["rail"]["userProjects"];
   activeConversation: AgentGUINodeViewModel["rail"]["activeConversation"];
   activeConversationId: string | null;
+  revealRequest: AgentGUINodeViewModel["rail"]["revealRequest"];
   pendingDeleteConversationId: string | null;
   isLoadingConversations: boolean;
   isDeletingConversation: boolean;
@@ -160,6 +162,7 @@ export const AgentGUIConversationRailPane = memo(
     userProjects,
     activeConversation,
     activeConversationId,
+    revealRequest,
     pendingDeleteConversationId,
     isLoadingConversations,
     isDeletingConversation,
@@ -193,8 +196,6 @@ export const AgentGUIConversationRailPane = memo(
     onConversationQueryChange
   }: AgentGUIConversationRailPaneProps): React.JSX.Element {
     "use memo";
-    const [collapsedProjectSectionIds, setCollapsedProjectSectionIds] =
-      useState<ReadonlySet<string>>(() => new Set());
     const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
     const [pendingProjectAction, setPendingProjectAction] =
       useState<AgentGUIProjectActionDialog | null>(null);
@@ -205,12 +206,6 @@ export const AgentGUIConversationRailPane = memo(
     >(null);
     const { railSearch } = railQuery;
     const railElementRef = useRef<HTMLElement | null>(null);
-    const conversationListRef = useRef<HTMLDivElement | null>(null);
-    const conversationItemElementsRef = useRef(
-      new Map<string, HTMLDivElement>()
-    );
-    const activeConversationScrollCompletedRef = useRef<string | null>(null);
-    const previousActiveConversationIdRef = useRef<string | null>(null);
     const railActiveConversationRef = useRef<
       AgentGUINodeViewModel["rail"]["conversations"]
     >([]);
@@ -222,6 +217,7 @@ export const AgentGUIConversationRailPane = memo(
       runtimeRailConversations,
       runtimeRailMemberships,
       runtimeRailReconcilingSessionIds,
+      runtimeRailScopeResolved,
       runtimeRailSectionsPending,
       sectionPageStates
     } = railQuery;
@@ -249,21 +245,6 @@ export const AgentGUIConversationRailPane = memo(
       pendingProjectAction !== null ||
       openProjectMenuSectionId !== null ||
       previewMode;
-    const {
-      clear: clearProjectDrag,
-      dragState: projectDragState,
-      drop: dropProject,
-      installGlobalListeners: installProjectDragGlobalListeners,
-      isMovePending: isProjectMovePending,
-      start: startProjectDrag,
-      updateTarget: updateProjectDropTarget
-    } = useAgentGUIProjectDrag({
-      disabled: projectDragBaseLocked,
-      onMoveProject,
-      scrollViewportRef: conversationListRef,
-      userProjects
-    });
-    const projectDragLocked = projectDragBaseLocked || isProjectMovePending;
     const backendSearchConversations = backendSearchActive
       ? railSearch.sessionIds.flatMap((id) => {
           const conversation = railConversationEntitiesById.get(id);
@@ -310,18 +291,6 @@ export const AgentGUIConversationRailPane = memo(
       userProjects
     });
     const railActiveOverlay = runtimeDisplayProjection.activeOverlay;
-
-    useEffect(() => {
-      // timing: refresh relative timestamps in the rail once a minute
-      const cleanupProjectDrag = installProjectDragGlobalListeners();
-      const timer = window.setInterval(() => {
-        setCurrentTimeMs(Date.now());
-      }, 60_000);
-      return () => {
-        window.clearInterval(timer);
-        cleanupProjectDrag();
-      };
-    }, [installProjectDragGlobalListeners]);
 
     const displayConversations = useMemo(() => {
       if (backendSearchActive) {
@@ -436,22 +405,11 @@ export const AgentGUIConversationRailPane = memo(
       userProjects
     ]);
     const groupedConversations = groupedConversationResult.groups;
-    const sectionPaginationScopeKey = `${
-      conversationFilter.kind === "agentTarget"
-        ? `${workspaceId}:agentTarget:${conversationFilter.agentTargetId.trim()}`
-        : `${workspaceId}:all:${sectionAgentTargetFallbackId?.trim() ?? ""}`
-    }:search:${conversationQuery.trim()}`;
-    const toggleProjectSectionCollapsed = useCallback((sectionId: string) => {
-      setCollapsedProjectSectionIds((current) => {
-        const next = new Set(current);
-        if (next.has(sectionId)) {
-          next.delete(sectionId);
-        } else {
-          next.add(sectionId);
-        }
-        return next;
-      });
-    }, []);
+    const railViewScopeKey = agentGUIConversationRailViewScopeKey({
+      conversationFilter,
+      sectionAgentTargetFallbackId,
+      workspaceId
+    });
     const groupedConversationIdentityKey = useMemo(
       () =>
         `${groupedConversations
@@ -523,38 +481,45 @@ export const AgentGUIConversationRailPane = memo(
       backendSearchActive &&
       railSearch.failed &&
       railSearch.sessionIds.length === 0;
-    const registerConversationItemElement = useCallback(
-      (itemId: string, element: HTMLDivElement | null) => {
-        if (element) {
-          conversationItemElementsRef.current.set(itemId, element);
-        } else {
-          conversationItemElementsRef.current.delete(itemId);
-        }
-      },
-      []
-    );
+    const railViewState = useAgentGUIConversationRailViewState({
+      activeConversationId,
+      contentReady:
+        (backendSearchActive
+          ? !railSearch.pending
+          : runtimeRailScopeResolved && !isRuntimeRailLoading) &&
+        !shouldShowConversationSkeleton,
+      groupedConversationIdentityKey,
+      revealRequest,
+      searchQuery: conversationQuery,
+      scopeKey: railViewScopeKey
+    });
+    const {
+      clear: clearProjectDrag,
+      dragState: projectDragState,
+      drop: dropProject,
+      installGlobalListeners: installProjectDragGlobalListeners,
+      isMovePending: isProjectMovePending,
+      start: startProjectDrag,
+      updateTarget: updateProjectDropTarget
+    } = useAgentGUIProjectDrag({
+      disabled: projectDragBaseLocked,
+      onMoveProject,
+      scrollViewportRef: railViewState.conversationListRef,
+      userProjects
+    });
+    const projectDragLocked = projectDragBaseLocked || isProjectMovePending;
 
-    useLayoutEffect(() => {
-      const activeId = activeConversationId?.trim() ?? "";
-      if (!activeId) {
-        previousActiveConversationIdRef.current = null;
-        activeConversationScrollCompletedRef.current = null;
-        return;
-      }
-      if (previousActiveConversationIdRef.current !== activeId) {
-        previousActiveConversationIdRef.current = activeId;
-        activeConversationScrollCompletedRef.current = null;
-      }
-      if (activeConversationScrollCompletedRef.current === activeId) {
-        return;
-      }
-      const activeElement = conversationItemElementsRef.current.get(activeId);
-      if (!activeElement) {
-        return;
-      }
-      activeElement.scrollIntoView({ block: "nearest" });
-      activeConversationScrollCompletedRef.current = activeId;
-    }, [activeConversationId, groupedConversationIdentityKey]);
+    useEffect(() => {
+      const cleanupProjectDrag = installProjectDragGlobalListeners();
+      // timing: refresh relative timestamps in the rail once a minute
+      const timer = window.setInterval(() => {
+        setCurrentTimeMs(Date.now());
+      }, 60_000);
+      return () => {
+        window.clearInterval(timer);
+        cleanupProjectDrag();
+      };
+    }, [installProjectDragGlobalListeners]);
 
     return (
       <aside
@@ -584,7 +549,7 @@ export const AgentGUIConversationRailPane = memo(
         <ScrollArea
           scrollbarMode="native"
           className="min-h-0 flex-1 [&_[data-orientation=vertical][data-slot=scroll-area-scrollbar]]:opacity-100"
-          viewportRef={conversationListRef}
+          viewportRef={railViewState.conversationListRef}
           viewportClassName={styles.conversationList}
         >
           {shouldShowConversationSkeleton ? (
@@ -630,7 +595,7 @@ export const AgentGUIConversationRailPane = memo(
                     groupedConversations[sectionIndex - 1]?.kind === "pinned");
                 const isSectionCollapsed =
                   isProjectSection &&
-                  collapsedProjectSectionIds.has(section.id);
+                  railViewState.collapsedSectionIds.has(section.id);
                 const sectionPageState = sectionPageStates.get(section.id);
                 const searchSectionHasMore =
                   backendSearchActive &&
@@ -711,7 +676,8 @@ export const AgentGUIConversationRailPane = memo(
                       isRailInteractionLocked={isInteractionLocked}
                       projectDragDisabled={projectDragLocked}
                       projectDragging={
-                        projectDragState?.projectId === section.project?.id
+                        projectDragState !== null &&
+                        projectDragState.projectId === section.project?.id
                       }
                       projectDropIndicator={
                         projectDragState?.indicatorSectionId === section.id
@@ -721,14 +687,18 @@ export const AgentGUIConversationRailPane = memo(
                       isSectionCollapsed={isSectionCollapsed}
                       labels={labels}
                       pendingDeleteConversationId={pendingDeleteConversationId}
-                      paginationScopeKey={sectionPaginationScopeKey}
                       previewMode={previewMode}
                       projectLabel={projectLabel}
                       projectPath={projectPath}
-                      registerItemElement={registerConversationItemElement}
+                      registerItemElement={
+                        railViewState.registerConversationItemElement
+                      }
                       section={section}
                       sectionHasMore={sectionHasMore}
                       sectionTotalCount={sectionTotalCount}
+                      visibleItemLimit={railViewState.visibleItemLimitForSection(
+                        section.id
+                      )}
                       uiLanguage={uiLanguage}
                       workspaceId={workspaceId}
                       onCancelDeleteConversation={onCancelDeleteConversation}
@@ -751,7 +721,10 @@ export const AgentGUIConversationRailPane = memo(
                       onOpenProjectFiles={onOpenProjectFiles}
                       onOpenConversationWindow={onOpenConversationWindow}
                       onToggleProjectSectionCollapsed={
-                        toggleProjectSectionCollapsed
+                        railViewState.toggleProjectSectionCollapsed
+                      }
+                      onVisibleItemLimitChange={
+                        railViewState.setSectionVisibleItemLimit
                       }
                       onProjectDragStart={startProjectDrag}
                       onProjectDragEnd={clearProjectDrag}

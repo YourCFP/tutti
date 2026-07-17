@@ -11,7 +11,7 @@ import {
   screen,
   waitFor
 } from "@testing-library/react";
-import { Profiler, type PropsWithChildren } from "react";
+import { Profiler, useLayoutEffect, type PropsWithChildren } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
   AgentActivityRuntimeProvider,
@@ -23,12 +23,156 @@ import { createTestAgentSessionEngine } from "../../../shared/testing/createTest
 import type { AgentGUINodeData } from "../../../types";
 import { useAgentGUIConversationRailQuery } from "./useAgentGUIConversationRailQuery";
 import { useAgentGUILocalState } from "./useAgentGUILocalState";
-import { projectDragAutoScrollDelta } from "./useAgentGUIProjectDrag";
+import {
+  projectDragAutoScrollDelta,
+  useAgentGUIProjectDrag
+} from "./useAgentGUIProjectDrag";
 import { AgentGUIConversationRailPane } from "../view/AgentGUIConversationRailPane";
 import type { AgentGUIViewLabels } from "../view/AgentGUINodeView.types";
 import { createDefaultWorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
 
 describe("useAgentGUIConversationRailQuery search", () => {
+  it("commits the latest dragover target even before React renders it", async () => {
+    const projects = ["Alpha", "Beta", "Gamma"].map((label) => ({
+      id: label.toLowerCase(),
+      label,
+      path: `/workspace/${label.toLowerCase()}`,
+      sectionKey: `project:/workspace/${label.toLowerCase()}`
+    }));
+    const moveProject = vi.fn(() => Promise.resolve());
+    const header = document.createElement("div");
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    icon.dataset.projectDragIcon = "true";
+    header.append(icon);
+    document.body.append(header);
+    const dataTransfer = {
+      dropEffect: "none",
+      effectAllowed: "none",
+      setData() {},
+      setDragImage() {}
+    };
+    const event = {
+      clientY: 0,
+      currentTarget: header,
+      dataTransfer,
+      preventDefault: vi.fn(),
+      target: header
+    } as unknown as React.DragEvent<HTMLElement>;
+    const alphaSection = {
+      id: projects[0]?.sectionKey ?? "",
+      items: [],
+      kind: "project" as const,
+      label: "Alpha",
+      project: projects[0] ?? null
+    };
+    const gammaSection = {
+      id: projects[2]?.sectionKey ?? "",
+      items: [],
+      kind: "project" as const,
+      label: "Gamma",
+      project: projects[2] ?? null
+    };
+    const { result } = renderHook(() =>
+      useAgentGUIProjectDrag({
+        disabled: false,
+        onMoveProject: moveProject,
+        scrollViewportRef: { current: null },
+        userProjects: projects
+      })
+    );
+
+    act(() => result.current.start(alphaSection, event));
+    const updateTargetBeforeRender = result.current.updateTarget;
+    const dropBeforeRender = result.current.drop;
+    await act(async () => {
+      updateTargetBeforeRender(gammaSection, "after", event);
+      await dropBeforeRender(event);
+    });
+
+    expect(moveProject).toHaveBeenCalledWith("alpha", null);
+
+    act(() => result.current.start(gammaSection, event));
+    const updateTopTargetBeforeRender = result.current.updateTarget;
+    const dropAtTopBeforeRender = result.current.drop;
+    await act(async () => {
+      updateTopTargetBeforeRender(alphaSection, "before", event);
+      await dropAtTopBeforeRender(event);
+    });
+
+    expect(moveProject).toHaveBeenNthCalledWith(2, "gamma", "alpha");
+    header.remove();
+  });
+
+  it("marks a newly rendered target unresolved before its controller effect settles", async () => {
+    const engine = createTestAgentSessionEngine("workspace-1");
+    const sectionResolvers: Array<() => void> = [];
+    const runtime = {
+      getSessionEngine: () => engine,
+      listSessionSections: vi.fn(
+        (input: { workspaceId: string }) =>
+          new Promise<{ sections: []; workspaceId: string }>((resolve) => {
+            sectionResolvers.push(() =>
+              resolve({ sections: [], workspaceId: input.workspaceId })
+            );
+          })
+      ),
+      listSessionSectionPage: vi.fn()
+    } as unknown as AgentActivityRuntime;
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <AgentActivityRuntimeProvider runtime={runtime}>
+        {children}
+      </AgentActivityRuntimeProvider>
+    );
+    const layoutObservations: Array<{
+      agentTargetId: string;
+      scopeResolved: boolean;
+    }> = [];
+    function ScopeResolutionProbe({
+      agentTargetId
+    }: {
+      agentTargetId: string;
+    }): null {
+      const query = useAgentGUIConversationRailQuery({
+        activeConversationId: null,
+        conversationFilter: { agentTargetId, kind: "agentTarget" },
+        conversationQuery: "",
+        previewMode: false,
+        sectionAgentTargetFallbackId: null,
+        userProjects: [],
+        workspaceId: "workspace-1"
+      });
+      useLayoutEffect(() => {
+        layoutObservations.push({
+          agentTargetId,
+          scopeResolved: query.runtimeRailScopeResolved
+        });
+      }, [agentTargetId, query.runtimeRailScopeResolved]);
+      return null;
+    }
+    const view = render(<ScopeResolutionProbe agentTargetId="local:codex" />, {
+      wrapper
+    });
+
+    await waitFor(() => expect(sectionResolvers).toHaveLength(1));
+    await act(async () => sectionResolvers.shift()?.());
+    await waitFor(() =>
+      expect(layoutObservations).toContainEqual({
+        agentTargetId: "local:codex",
+        scopeResolved: true
+      })
+    );
+
+    const observationCountBeforeSwitch = layoutObservations.length;
+    view.rerender(<ScopeResolutionProbe agentTargetId="local:claude-code" />);
+
+    expect(layoutObservations[observationCountBeforeSwitch]).toEqual({
+      agentTargetId: "local:claude-code",
+      scopeResolved: false
+    });
+    view.unmount();
+    engine.dispose();
+  });
+
   it("searches every backend page and stores returned entities in the workspace engine", async () => {
     const engine = createTestAgentSessionEngine("workspace-1");
     const calls: AgentActivityRuntimeListSessionsPageInput[] = [];
@@ -263,6 +407,7 @@ describe("useAgentGUIConversationRailQuery search", () => {
           }}
         >
           <AgentGUIConversationRailPane
+            revealRequest={null}
             activeConversation={activeConversation}
             activeConversationId="session-1"
             agentTargets={[]}
@@ -377,6 +522,7 @@ describe("useAgentGUIConversationRailQuery search", () => {
       });
       return (
         <AgentGUIConversationRailPane
+          revealRequest={null}
           activeConversation={null}
           activeConversationId={null}
           agentTargets={[]}
@@ -492,6 +638,7 @@ describe("useAgentGUIConversationRailQuery search", () => {
       });
       return (
         <AgentGUIConversationRailPane
+          revealRequest={null}
           activeConversation={null}
           activeConversationId={null}
           agentTargets={[]}
@@ -542,6 +689,9 @@ describe("useAgentGUIConversationRailQuery search", () => {
     );
     const alphaSection = (await screen.findByText("Alpha")).closest("section");
     const gammaSection = screen.getByText("Gamma").closest("section");
+    const conversationsSection = screen
+      .getByText("Conversations")
+      .closest("section");
     const alphaHeader = alphaSection?.firstElementChild as HTMLElement;
     const gammaHeader = gammaSection?.firstElementChild as HTMLElement;
     const setDragImage = vi.fn();
@@ -551,6 +701,9 @@ describe("useAgentGUIConversationRailQuery search", () => {
       setData() {},
       setDragImage
     };
+    expect(
+      conversationsSection?.getAttribute("data-project-dragging")
+    ).toBeNull();
 
     const alphaToggle = alphaHeader.querySelector("button") as HTMLElement;
     const moreButton = screen.getAllByRole("button", {
