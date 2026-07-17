@@ -205,7 +205,7 @@ test("standalone Agent auto-hides the conversation rail below the standalone wid
 test("standalone Agent widens a narrow window before expanding the conversation rail", () => {
   assert.match(
     standaloneWindowSource,
-    /AGENT_GUI_EXPANDED_TARGET_WIDTH_PX[\s\S]*?frame\.width < 640[\s\S]*?resizeContentWidth\(\{\s*width: AGENT_GUI_EXPANDED_TARGET_WIDTH_PX\s*\}\)/
+    /frame\.width < 640[\s\S]*?resizeContentWidth\(AGENT_GUI_EXPANDED_TARGET_WIDTH_PX\)/
   );
 });
 

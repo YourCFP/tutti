@@ -519,9 +519,7 @@ export function StandaloneAgentWindow({
   const handleConversationRailToggle = useCallback(
     (collapsed: boolean) => {
       if (!collapsed && frame.width < 640) {
-        void hostWindowApi.resizeContentWidth({
-          width: AGENT_GUI_EXPANDED_TARGET_WIDTH_PX
-        });
+        void resizeContentWidth(AGENT_GUI_EXPANDED_TARGET_WIDTH_PX);
       }
       setNodeState((current) => ({
         ...current,
@@ -539,7 +537,7 @@ export function StandaloneAgentWindow({
         )
       );
     },
-    [frame.width, hostWindowApi, instanceId]
+    [frame.width, instanceId, resizeContentWidth]
   );
   const handleCreateConversation = useCallback(() => {
     window.dispatchEvent(
