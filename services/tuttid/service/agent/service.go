@@ -59,10 +59,8 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	input.Provider = provider
 	input.ProviderTargetRef = launch.ProviderTargetRef
 	input.ConversationDetailMode = preferencesbiz.NormalizeDesktopAgentConversationDetailMode(input.ConversationDetailMode)
-	if normalizedPermissionModeID := normalizePermissionModeIDForProvider(
-		provider,
-		value(input.PermissionModeID),
-	); normalizedPermissionModeID != "" {
+	normalizedPermissionModeID := normalizePermissionModeIDForLaunch(provider, input.ProviderTargetRef, value(input.PermissionModeID))
+	if normalizedPermissionModeID != "" {
 		input.PermissionModeID = &normalizedPermissionModeID
 	} else {
 		input.PermissionModeID = nil
@@ -99,9 +97,10 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	logAgentSubmitTrace("service.create.model_validated", workspaceID, input.AgentSessionID, input.Metadata, map[string]any{
 		"model": value(input.Model),
 	})
-	input.ReasoningEffort = s.clampReasoningEffortPointerForModel(
+	input.ReasoningEffort = s.clampReasoningEffortPointerForLaunch(
 		ctx,
 		provider,
+		input.ProviderTargetRef,
 		value(input.Model),
 		input.ReasoningEffort,
 	)
@@ -123,18 +122,27 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	}
 	s.reportAgentServiceNodeSuccess(ctx, input.AgentSessionID, "session_create", "runtime_prepared", provider, nodeStartedAt)
 	logAgentSubmitTrace("service.create.runtime_prepared", workspaceID, input.AgentSessionID, input.Metadata, map[string]any{"cwd": prepared.Cwd, "env_count": len(prepared.Env)})
+	runtimeSettings := ComposerSettings{
+		Model:            clampComposerModelForLaunch(provider, input.ProviderTargetRef, value(input.Model)),
+		PermissionModeID: value(input.PermissionModeID),
+		PlanMode:         clampComposerPlanModeForLaunch(provider, input.ProviderTargetRef, valueBool(input.PlanMode)),
+		BrowserUse:       input.BrowserUse,
+		ComputerUse:      input.ComputerUse,
+		ReasoningEffort:  normalizeReasoningEffortForLaunch(provider, input.ProviderTargetRef, value(input.ReasoningEffort)),
+		Speed:            normalizeSpeedForLaunch(provider, input.ProviderTargetRef, value(input.Speed)),
+	}
 	hostInput := agenthost.CreateSessionInput{
 		AgentSessionID: input.AgentSessionID, AgentTargetID: input.AgentTargetID, Provider: input.Provider,
 		InitialContent: normalizedContent, InitialDisplayPrompt: input.InitialDisplayPrompt,
 		Metadata: input.Metadata, Title: input.Title, Cwd: stringPointer(prepared.Cwd),
 		PermissionModeID: input.PermissionModeID,
-		Model:            stringPointer(clampComposerModelForLaunch(provider, input.ProviderTargetRef, value(input.Model))),
-		PlanMode:         boolPointer(clampComposerPlanModeForProvider(provider, valueBool(input.PlanMode))),
+		Model:            stringPointer(runtimeSettings.Model),
+		PlanMode:         boolPointer(runtimeSettings.PlanMode),
 		BrowserUse:       input.BrowserUse, ComputerUse: input.ComputerUse,
 		ProviderTargetRef:      input.ProviderTargetRef,
-		ReasoningEffort:        stringPointer(normalizeReasoningEffortForProvider(provider, value(input.ReasoningEffort))),
-		RuntimeContext:         input.RuntimeContext,
-		Speed:                  stringPointer(normalizeSpeedForProvider(provider, value(input.Speed))),
+		ReasoningEffort:        stringPointer(runtimeSettings.ReasoningEffort),
+		RuntimeContext:         stampAgentExtensionComposerScope(input.RuntimeContext, input.ProviderTargetRef, cwd, runtimeSettings),
+		Speed:                  stringPointer(runtimeSettings.Speed),
 		ConversationDetailMode: input.ConversationDetailMode, Visible: input.Visible,
 	}
 	if isTypedGoal {
@@ -174,6 +182,27 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 		persistedSession,
 		s.controller().CanResume(runtimeResumeInputFromRuntimeSession(session)),
 	), nil
+}
+
+func normalizePermissionModeIDForLaunch(provider string, providerTargetRef map[string]any, value string) string {
+	if providerTargetRefKind(providerTargetRef) == "agent_extension" {
+		return strings.TrimSpace(value)
+	}
+	return normalizePermissionModeIDForProvider(provider, value)
+}
+
+func normalizeReasoningEffortForLaunch(provider string, providerTargetRef map[string]any, value string) string {
+	if providerTargetRefKind(providerTargetRef) == "agent_extension" {
+		return strings.TrimSpace(value)
+	}
+	return normalizeReasoningEffortForProvider(provider, value)
+}
+
+func normalizeSpeedForLaunch(provider string, providerTargetRef map[string]any, value string) string {
+	if providerTargetRefKind(providerTargetRef) == "agent_extension" {
+		return strings.TrimSpace(value)
+	}
+	return normalizeSpeedForProvider(provider, value)
 }
 
 type resolvedCreateSessionLaunch struct {
@@ -249,22 +278,19 @@ func (s *Service) prepareRuntime(ctx context.Context, workspaceID string, cwd st
 	}
 	provider := strings.TrimSpace(input.Provider)
 	prepared, err := s.RuntimePreparer.Prepare(ctx, runtimeprep.PrepareInput{
-		WorkspaceID:       workspaceID,
-		AgentSessionID:    strings.TrimSpace(input.AgentSessionID),
-		AgentTargetID:     strings.TrimSpace(input.AgentTargetID),
-		Provider:          provider,
-		Cwd:               cwd,
-		Title:             value(input.Title),
-		PermissionModeID:  value(input.PermissionModeID),
-		PlanMode:          clampComposerPlanModeForProvider(provider, valueBool(input.PlanMode)),
-		BrowserUse:        clampComposerBrowserUseForProvider(provider, input.BrowserUse),
-		ComputerUse:       clampComposerComputerUseForProvider(provider, input.ComputerUse),
-		ProviderTargetRef: clonePayload(input.ProviderTargetRef),
-		Model:             clampComposerModelForLaunch(provider, input.ProviderTargetRef, value(input.Model)),
-		ReasoningEffort: normalizeReasoningEffortForProvider(
-			provider,
-			value(input.ReasoningEffort),
-		),
+		WorkspaceID:               workspaceID,
+		AgentSessionID:            strings.TrimSpace(input.AgentSessionID),
+		AgentTargetID:             strings.TrimSpace(input.AgentTargetID),
+		Provider:                  provider,
+		Cwd:                       cwd,
+		Title:                     value(input.Title),
+		PermissionModeID:          value(input.PermissionModeID),
+		PlanMode:                  clampComposerPlanModeForLaunch(provider, input.ProviderTargetRef, valueBool(input.PlanMode)),
+		BrowserUse:                clampComposerBrowserUseForProvider(provider, input.BrowserUse),
+		ComputerUse:               clampComposerComputerUseForProvider(provider, input.ComputerUse),
+		ProviderTargetRef:         clonePayload(input.ProviderTargetRef),
+		Model:                     clampComposerModelForLaunch(provider, input.ProviderTargetRef, value(input.Model)),
+		ReasoningEffort:           normalizeReasoningEffortForLaunch(provider, input.ProviderTargetRef, value(input.ReasoningEffort)),
 		ConversationDetailMode:    input.ConversationDetailMode,
 		ExtraSkills:               sessionSkillBundlesToProviderSkillBundles(input.ExtraSkills),
 		Metadata:                  input.Metadata,
@@ -423,7 +449,7 @@ func (s *Service) get(ctx context.Context, workspaceID string, agentSessionID st
 			}
 			return s.withProtocolV2TurnState(ctx, workspaceID, sessionFromPersisted(
 				persisted,
-				persistedSessionCanResume(s.controller(), persisted),
+				s.persistedSessionCanResume(ctx, persisted),
 			))
 		}
 	}
@@ -522,7 +548,7 @@ func (s *Service) UpdatePin(ctx context.Context, workspaceID string, agentSessio
 	}
 	return sessionFromPersisted(
 		persisted,
-		persistedSessionCanResume(s.controller(), persisted),
+		s.persistedSessionCanResume(ctx, persisted),
 	), nil
 }
 
