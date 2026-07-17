@@ -7,7 +7,7 @@ import { AgentGUIConversationRailSection } from "./AgentGUIConversationRailSecti
 describe("AgentGUIConversationRailSection project pin presentation", () => {
   it("renders pinned accessibility, empty state, ordered menu, and unpin action", async () => {
     const onToggleProjectPinned = vi.fn(() => Promise.resolve());
-    const { container } = renderProjectSection({
+    renderProjectSection({
       pinnedAtUnixMs: 10,
       onToggleProjectPinned
     });
@@ -15,8 +15,6 @@ describe("AgentGUIConversationRailSection project pin presentation", () => {
     expect(
       screen.getByRole("button", { name: "Pinned project: Alpha" })
     ).toHaveAttribute("aria-expanded", "true");
-    const pinIcon = container.querySelector("[data-project-drag-pin-icon]");
-    expect(pinIcon).toHaveAttribute("aria-hidden", "true");
     expect(screen.getByText("No sessions")).toBeInTheDocument();
 
     fireEvent.pointerDown(

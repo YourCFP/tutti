@@ -93,8 +93,6 @@ const styles = {
   conversationSectionLabel: "agent-gui-node__conversation-section-label",
   conversationSectionLabelIcon:
     "agent-gui-node__conversation-section-label-icon",
-  conversationSectionPinnedIcon:
-    "agent-gui-node__conversation-section-pinned-icon",
   conversationSectionMoreButton:
     "agent-gui-node__conversation-section-more-button",
   conversationSectionPagination:

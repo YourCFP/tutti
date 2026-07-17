@@ -145,14 +145,9 @@ export function useAgentGUIProjectDrag(input: {
         "[data-project-drag-icon]"
       );
       const icon = sourceIcon?.cloneNode(true);
-      const sourcePinIcon = event.currentTarget.querySelector(
-        "[data-project-drag-pin-icon]"
-      );
-      const pinIcon = sourcePinIcon?.cloneNode(true);
       const label = document.createElement("span");
       label.textContent = section.label;
       if (icon instanceof SVGElement) image.append(icon);
-      if (pinIcon instanceof SVGElement) image.append(pinIcon);
       image.append(label);
       document.body.append(image);
       runtime.image = image;

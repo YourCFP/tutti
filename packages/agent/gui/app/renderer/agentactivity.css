@@ -6064,19 +6064,6 @@ button.agent-gui-node__conversation-section-toggle:hover
   transition: opacity 140ms ease;
 }
 
-.agent-gui-node__conversation-section-pinned-icon {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 auto;
-  color: var(--text-tertiary);
-}
-
-.agent-gui-node__project-drag-image
-  > .agent-gui-node__conversation-section-pinned-icon {
-  width: 12px;
-  height: 12px;
-}
-
 .agent-gui-node__conversation-section[data-kind="project"]
   > .agent-gui-node__conversation-section-header:hover
   .agent-gui-node__conversation-section-label-icon {

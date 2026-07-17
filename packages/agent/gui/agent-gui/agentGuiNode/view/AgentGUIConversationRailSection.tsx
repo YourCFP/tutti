@@ -14,8 +14,7 @@ import {
   CreateChatIcon,
   FolderIcon,
   FolderOpenLinedIcon,
-  MoreHorizontalIcon,
-  PinFilledIcon
+  MoreHorizontalIcon
 } from "@tutti-os/ui-system/icons";
 import type { UiLanguage } from "../../../contexts/settings/domain/agentSettings";
 import type { WorkspaceLinkAction } from "../../../actions/workspaceLinkActions";
@@ -308,13 +307,6 @@ export const AgentGUIConversationRailSection = memo(
                   />
                 )}
                 <span>{section.label}</span>
-                {projectPinned ? (
-                  <PinFilledIcon
-                    aria-hidden="true"
-                    className={styles.conversationSectionPinnedIcon}
-                    data-project-drag-pin-icon="true"
-                  />
-                ) : null}
               </span>
             </button>
           ) : (
