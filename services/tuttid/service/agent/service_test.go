@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -5339,6 +5340,35 @@ func TestServiceDeletesPersistedSession(t *testing.T) {
 	}
 }
 
+func TestServiceGetReturnsLiveSessionWithoutLegacySessionReader(t *testing.T) {
+	runtime := newFakeRuntime()
+	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{
+		ID: "session-1", WorkspaceID: "ws-1", Provider: "codex", Title: "Live session",
+	}
+	service := newIsolatedAgentService(runtime)
+	service.TurnStore = failingTurnStore{sessionMissing: true}
+
+	session, err := service.Get(context.Background(), "ws-1", "session-1")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if session.ID != "session-1" || value(session.Title) != "Live session" {
+		t.Fatalf("Get() session = %#v, want live runtime observation", session)
+	}
+}
+
+func TestServiceDeleteNormalizesWrappedRuntimeSessionNotFound(t *testing.T) {
+	runtime := newFakeRuntime()
+	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{ID: "session-1", WorkspaceID: "ws-1"}
+	runtime.closeErr = fmt.Errorf("runtime close: %w", ErrSessionNotFound)
+	service := newIsolatedAgentService(runtime)
+
+	_, err := service.Delete(context.Background(), "ws-1", "session-1")
+	if err != ErrSessionNotFound {
+		t.Fatalf("Delete() error = %v, want canonical ErrSessionNotFound", err)
+	}
+}
+
 func TestServiceDeleteClosesRuntimeSession(t *testing.T) {
 	runtime := newFakeRuntime()
 	service := newTestService(runtime)
@@ -7533,6 +7563,33 @@ func (f *fakeSessionReader) UpdateSessionTitle(_ context.Context, workspaceID st
 		return PersistedSession{}, false, nil
 	}
 	session.Title = strings.TrimSpace(title)
+	session.UpdatedAtUnixMS = time.Now().UnixMilli()
+	f.sessions[key] = session
+	return session, true, nil
+}
+
+func (f *fakeSessionReader) UpdateSessionSettings(_ context.Context, workspaceID string, agentSessionID string, settings ComposerSettings) (PersistedSession, bool, error) {
+	key := workspaceID + ":" + agentSessionID
+	session, ok := f.sessions[key]
+	if !ok {
+		return PersistedSession{}, false, nil
+	}
+	session.Settings = settings
+	session.UpdatedAtUnixMS = time.Now().UnixMilli()
+	f.sessions[key] = session
+	return session, true, nil
+}
+
+func (f *fakeSessionReader) UpdateSessionPinned(_ context.Context, workspaceID string, agentSessionID string, pinned bool) (PersistedSession, bool, error) {
+	key := workspaceID + ":" + agentSessionID
+	session, ok := f.sessions[key]
+	if !ok {
+		return PersistedSession{}, false, nil
+	}
+	session.PinnedAtUnixMS = 0
+	if pinned {
+		session.PinnedAtUnixMS = time.Now().UnixMilli()
+	}
 	session.UpdatedAtUnixMS = time.Now().UnixMilli()
 	f.sessions[key] = session
 	return session, true, nil
