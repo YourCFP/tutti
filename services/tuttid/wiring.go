@@ -401,14 +401,16 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	agentSessionService.AvailabilityChecker = agentservice.AgentStatusProviderAvailabilityChecker{
 		Service: &agentStatusService,
 	}
+	agentHost := agentservice.NewApplicationHost(agentSessionService)
+	agentSessionService.SetApplicationHost(agentHost)
 	// Host fixes startup order: durable runtime operations first, then goal
 	// operations and reconcile inbox work, and only then stale turns.
-	if err := agentSessionService.Recover(ctx); err != nil {
+	if err := agentHost.Recover(ctx); err != nil {
 		return tuttiapi.DaemonAPI{}, nil, nil, nil, fmt.Errorf("recover agent host: %w", err)
 	}
-	go agentSessionService.RunRuntimeOperationWorker(ctx)
-	go agentSessionService.RunGoalOperationWorker(ctx)
-	go agentSessionService.RunGoalReconcileInboxWorker(ctx)
+	go agentHost.RunRuntimeOperationWorker(ctx)
+	go agentHost.RunGoalOperationWorker(ctx)
+	go agentHost.RunGoalReconcileInboxWorker(ctx)
 
 	workspaceService := workspaceservice.CatalogService{
 		Store:            store,

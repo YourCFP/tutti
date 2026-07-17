@@ -15,7 +15,7 @@ import (
 	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
 )
 
-func TestLegacyServiceAgentHostConformance(t *testing.T) {
+func TestServiceAdapterAgentHostConformance(t *testing.T) {
 	for _, scenario := range hostconformance.Scenarios() {
 		scenario := scenario
 		t.Run(scenario.Name, func(t *testing.T) {
@@ -42,7 +42,7 @@ func TestDirectHostApplicationCoreConformance(t *testing.T) {
 	}
 }
 
-func TestLegacyServiceResumePolicyConformance(t *testing.T) {
+func TestServiceAdapterResumePolicyConformance(t *testing.T) {
 	scenarios := append(hostconformance.ResumePolicyScenarios(), hostconformance.SubmissionFenceScenarios()...)
 	for _, scenario := range scenarios {
 		scenario := scenario
@@ -57,7 +57,7 @@ func TestLegacyServiceResumePolicyConformance(t *testing.T) {
 
 func TestHostCoordinatorConformance(t *testing.T) {
 	for _, directHost := range []bool{false, true} {
-		name := "legacy_delegate"
+		name := "service_adapter"
 		if directHost {
 			name = "direct_host"
 		}
@@ -77,7 +77,7 @@ func TestHostCoordinatorConformance(t *testing.T) {
 
 func TestHostGoalConformance(t *testing.T) {
 	for _, directHost := range []bool{false, true} {
-		name := "legacy_delegate"
+		name := "service_adapter"
 		if directHost {
 			name = "direct_host"
 		}
@@ -97,7 +97,7 @@ func TestHostGoalConformance(t *testing.T) {
 
 func TestHostCommitObserverConformance(t *testing.T) {
 	for _, directHost := range []bool{false, true} {
-		name := "legacy_delegate"
+		name := "service_adapter"
 		if directHost {
 			name = "direct_host"
 		}
@@ -129,7 +129,7 @@ func TestHostCancelAcceptanceDoesNotImplyCanonicalSettlement(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := driver.service.applicationHost(serviceHostPreparation{service: driver.service}).CancelTurn(context.Background(), agenthost.CancelTurnInput{
+	result, err := driver.service.ApplicationHost().CancelTurn(context.Background(), agenthost.CancelTurnInput{
 		WorkspaceID: "workspace-1", AgentSessionID: "session-cancel-semantics", TurnID: "turn-cancel-semantics",
 	})
 	if err != nil {
@@ -161,7 +161,7 @@ func TestHostCancelDoesNotUseLiveRuntimeAsMissingCanonicalSession(t *testing.T) 
 	delete(driver.sessions.sessions, "workspace-1:session-orphan")
 	delete(driver.turns.sessions, "session-orphan")
 
-	_, err := driver.service.applicationHost(serviceHostPreparation{service: driver.service}).CancelTurn(context.Background(), agenthost.CancelTurnInput{
+	_, err := driver.service.ApplicationHost().CancelTurn(context.Background(), agenthost.CancelTurnInput{
 		WorkspaceID: "workspace-1", AgentSessionID: "session-orphan", TurnID: "turn-orphan",
 	})
 	if !errors.Is(err, agenthost.ErrSessionNotFound) {
@@ -179,7 +179,7 @@ func TestHostFindTurnByClientSubmitIDUsesPublicCanonicalPort(t *testing.T) {
 	}
 	driver.operations.confirmedTurnID = "turn-confirmed"
 
-	turnID, found, err := driver.service.applicationHost(serviceHostPreparation{service: driver.service}).FindTurnByClientSubmitID(
+	turnID, found, err := driver.service.ApplicationHost().FindTurnByClientSubmitID(
 		context.Background(),
 		agenthost.SessionRef{WorkspaceID: "workspace-1", AgentSessionID: "session-1"},
 		"submit-1",
@@ -370,7 +370,8 @@ func (d *legacyHostConformanceDriver) Create(
 	if d.directHost {
 		input.AgentTargetID = agentTargetID
 		prepared := preparedRuntime{Cwd: "/workspace"}
-		result, err := d.service.applicationHost(serviceHostPreparation{service: d.service, prepared: &prepared}).CreateSession(ctx, workspaceID, input)
+		ctx = withServicePreparedRuntime(ctx, d.service, prepared)
+		result, err := d.service.ApplicationHost().CreateSession(ctx, workspaceID, input)
 		if err != nil {
 			return hostconformance.SessionObservation{}, "", err
 		}
@@ -402,7 +403,7 @@ func (d *legacyHostConformanceDriver) Create(
 
 func (d *legacyHostConformanceDriver) EnsureSession(ctx context.Context, ref agenthost.SessionRef) (hostconformance.SessionObservation, error) {
 	if d.directHost {
-		if _, err := d.service.applicationHost(serviceHostPreparation{service: d.service}).EnsureRuntimeSession(ctx, ref); err != nil {
+		if _, err := d.service.ApplicationHost().EnsureRuntimeSession(ctx, ref); err != nil {
 			return hostconformance.SessionObservation{}, err
 		}
 		session, err := d.service.Get(ctx, ref.WorkspaceID, ref.AgentSessionID)
@@ -421,7 +422,7 @@ func (d *legacyHostConformanceDriver) SendInput(
 	input agenthost.SendInput,
 ) (hostconformance.SendObservation, error) {
 	if d.directHost {
-		result, err := d.service.applicationHost(serviceHostPreparation{service: d.service}).SendInput(ctx, ref, input)
+		result, err := d.service.ApplicationHost().SendInput(ctx, ref, input)
 		if err != nil {
 			return hostconformance.SendObservation{}, err
 		}
@@ -458,7 +459,7 @@ func (d *legacyHostConformanceDriver) SendInput(
 
 func (d *legacyHostConformanceDriver) CancelTurn(ctx context.Context, input agenthost.CancelTurnInput) (hostconformance.CancelObservation, error) {
 	if d.directHost {
-		result, err := d.service.applicationHost(serviceHostPreparation{service: d.service}).CancelTurn(ctx, input)
+		result, err := d.service.ApplicationHost().CancelTurn(ctx, input)
 		if err != nil {
 			return hostconformance.CancelObservation{}, err
 		}
@@ -494,7 +495,7 @@ func (d *legacyHostConformanceDriver) SubmitInteractive(
 	input agenthost.SubmitInteractiveInput,
 ) (hostconformance.SessionObservation, error) {
 	if d.directHost {
-		_, err := d.service.applicationHost(serviceHostPreparation{service: d.service}).SubmitInteractive(ctx, ref, requestID, input)
+		_, err := d.service.ApplicationHost().SubmitInteractive(ctx, ref, requestID, input)
 		if err != nil {
 			return hostconformance.SessionObservation{}, err
 		}
@@ -515,7 +516,7 @@ func (d *legacyHostConformanceDriver) SubmitPlanDecision(
 	var operation agentactivitybiz.RuntimeOperation
 	var err error
 	if d.directHost {
-		operation, err = d.service.applicationHost(serviceHostPreparation{service: d.service}).SubmitPlanDecision(ctx, ref, turnID, requestID, input)
+		operation, err = d.service.ApplicationHost().SubmitPlanDecision(ctx, ref, turnID, requestID, input)
 	} else {
 		operation, err = d.service.SubmitPlanDecision(ctx, ref.WorkspaceID, ref.AgentSessionID, turnID, requestID, input)
 	}
@@ -526,7 +527,7 @@ func (d *legacyHostConformanceDriver) SubmitPlanDecision(
 
 func (d *legacyHostConformanceDriver) UpdateTitle(ctx context.Context, input agenthost.UpdateTitleInput) (hostconformance.SessionObservation, error) {
 	if d.directHost {
-		result, err := d.service.applicationHost(serviceHostPreparation{service: d.service}).UpdateTitle(ctx, input)
+		result, err := d.service.ApplicationHost().UpdateTitle(ctx, input)
 		if err != nil {
 			return hostconformance.SessionObservation{}, err
 		}
@@ -542,7 +543,7 @@ func (d *legacyHostConformanceDriver) UpdateTitle(ctx context.Context, input age
 
 func (d *legacyHostConformanceDriver) GoalControl(ctx context.Context, input agenthost.GoalControlInput) (hostconformance.GoalObservation, error) {
 	if d.directHost {
-		result, err := d.service.applicationHost(serviceHostPreparation{service: d.service}).GoalControl(ctx, input)
+		result, err := d.service.ApplicationHost().GoalControl(ctx, input)
 		return hostGoalControlObservation(result), err
 	}
 	result, err := d.service.goalControl(ctx, input.WorkspaceID, input.AgentSessionID, input.Action, input.Objective, input.SubmissionMetadata)
@@ -560,7 +561,7 @@ func (d *legacyHostConformanceDriver) GoalControl(ctx context.Context, input age
 
 func (d *legacyHostConformanceDriver) GetGoalState(ctx context.Context, ref agenthost.SessionRef) (hostconformance.GoalObservation, error) {
 	if d.directHost {
-		result, err := d.service.applicationHost(serviceHostPreparation{service: d.service}).GetGoalState(ctx, ref)
+		result, err := d.service.ApplicationHost().GetGoalState(ctx, ref)
 		return hostGoalStateObservation(result), err
 	}
 	result, err := d.service.GetGoalState(ctx, ref.WorkspaceID, ref.AgentSessionID)
@@ -572,7 +573,7 @@ func (d *legacyHostConformanceDriver) GetGoalState(ctx context.Context, ref agen
 
 func (d *legacyHostConformanceDriver) ReconcileGoal(ctx context.Context, ref agenthost.SessionRef) (hostconformance.GoalObservation, error) {
 	if d.directHost {
-		result, err := d.service.applicationHost(serviceHostPreparation{service: d.service}).ReconcileGoal(ctx, ref)
+		result, err := d.service.ApplicationHost().ReconcileGoal(ctx, ref)
 		return hostGoalStateObservation(result), err
 	}
 	result, err := d.service.ReconcileGoal(ctx, ref.WorkspaceID, ref.AgentSessionID)
@@ -660,9 +661,9 @@ func (o *conformanceCommitObserver) snapshot() []agenthost.CommittedDelta {
 
 func (d *legacyHostConformanceDriver) Recover(ctx context.Context) error {
 	if d.directHost {
-		return d.service.applicationHost(serviceHostPreparation{service: d.service}).Recover(ctx)
+		return d.service.ApplicationHost().Recover(ctx)
 	}
-	return d.service.Recover(ctx)
+	return d.service.ApplicationHost().Recover(ctx)
 }
 
 type conformanceRuntimeOperationStore struct {

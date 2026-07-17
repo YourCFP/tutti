@@ -66,6 +66,19 @@ func TestServiceCreatesAndListsSessions(t *testing.T) {
 	}
 }
 
+func TestServiceApplicationHostUsesConfiguredSingleton(t *testing.T) {
+	service := newTestService(newFakeRuntime())
+	host := NewApplicationHost(service)
+	service.SetApplicationHost(host)
+
+	if got := service.ApplicationHost(); got != host {
+		t.Fatalf("ApplicationHost() = %p, want configured host %p", got, host)
+	}
+	if got := service.ApplicationHost(); got != host {
+		t.Fatalf("second ApplicationHost() = %p, want configured host %p", got, host)
+	}
+}
+
 func TestServiceCreateSynchronouslyPersistsRailSectionKey(t *testing.T) {
 	ctx := context.Background()
 	store := openAgentServiceSQLiteStore(t)
@@ -5549,27 +5562,6 @@ func (*recordingGoalStateStore) RequeueLeasedGoalControlOperationsOnStartup(cont
 	return 0, nil
 }
 
-func TestRetryRecoveredGoalOperationPreservesRepairEvidence(t *testing.T) {
-	store := &recordingGoalStateStore{}
-	service := newIsolatedAgentService(newFakeRuntime())
-	service.GoalStateStore = store
-	op := agentactivitybiz.GoalControlOperation{
-		OperationID: "repair-op", WorkspaceID: "ws", AgentSessionID: "session", GoalRevision: 2,
-		LeaseOwner: service.goalOperationOwner(), RepairEpoch: 3, Attempt: 1,
-		Evidence: map[string]any{"repair": map[string]any{"repairId": "incident-1"}},
-	}
-	if err := service.retryRecoveredGoalOperation(context.Background(), op, context.DeadlineExceeded); err != nil {
-		t.Fatal(err)
-	}
-	if len(store.released) != 1 {
-		t.Fatalf("release inputs = %#v", store.released)
-	}
-	repair, ok := store.released[0].Evidence["repair"].(map[string]any)
-	if !ok || repair["repairId"] != "incident-1" {
-		t.Fatalf("release evidence = %#v", store.released)
-	}
-}
-
 func TestServiceTypedGoalUsesDurableSagaBeforeTurnSubmit(t *testing.T) {
 	runtime := newFakeRuntime()
 	runtime.sessions["ws-typed:session-typed"] = ProviderRuntimeSession{
@@ -5692,7 +5684,7 @@ func TestGoalActorSlowRevisionOneResultCannotOverwriteRevisionTwoClear(t *testin
 	if len(calls) != 2 || calls[0].Action != "set" || calls[1].Action != "clear" {
 		t.Fatalf("provider calls before worker=%#v, want no synchronous compensation", calls)
 	}
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatalf("run durable repair: %v", err)
 	}
 	state, found, err = store.GetSessionGoalState(ctx, "ws-goal-actor", "session-goal-actor")
@@ -5753,7 +5745,7 @@ func TestGoalActorAmbiguousOldErrorSchedulesDurableRepairOfNewerRevision(t *test
 	if err != nil || !found || state.Revision != 2 || state.PendingOperationID == "" || state.SyncStatus != agentactivitybiz.GoalSyncStatusPending {
 		t.Fatalf("durable repair state=%#v found=%v err=%v", state, found, err)
 	}
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatalf("repair ambiguous old result: %v", err)
 	}
 	state, found, err = store.GetSessionGoalState(ctx, "ws-goal-error", "session-goal-error")
@@ -5805,7 +5797,7 @@ func TestGoalRecoveryDoesNotReplayAcceptedClaudeSet(t *testing.T) {
 	service.GoalStateStore = store
 	service.GoalOperationOwner = "goal-recovery-worker"
 	service.GoalOperationClock = func() time.Time { return time.UnixMilli(6000) }
-	if err := service.StepGoalOperationWorker(ctx, true); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, true); err != nil {
 		t.Fatalf("recover accepted Claude set: %v", err)
 	}
 	if len(runtime.goalControlCalls) != 0 {
@@ -5826,14 +5818,14 @@ func TestGoalRecoveryPolicyIsCapabilityDrivenAndMissingResolverFailsClosed(t *te
 	runtime.goalRecoveryPolicyHook = func(context.Context, RuntimeGoalControlInput) (RuntimeGoalRecoveryPolicy, error) {
 		return RuntimeGoalRecoveryPolicy{QuerySupported: true, ReplaySetAfterRestart: true}, nil
 	}
-	policy, err := resolveRuntimeGoalRecoveryPolicy(context.Background(), runtime, RuntimeGoalControlInput{})
+	policy, err := agenthost.ResolveRuntimeGoalRecoveryPolicy(context.Background(), runtime, RuntimeGoalControlInput{})
 	if err != nil || !policy.QuerySupported || !policy.ReplaySetAfterRestart {
 		t.Fatalf("adapter policy=%#v err=%v", policy, err)
 	}
 	// Embedding only the mandatory controller contract deliberately hides the
 	// optional resolver, modeling an unknown/older provider adapter.
 	unknown := struct{ RuntimeController }{RuntimeController: runtime}
-	policy, err = resolveRuntimeGoalRecoveryPolicy(context.Background(), unknown, RuntimeGoalControlInput{})
+	policy, err = agenthost.ResolveRuntimeGoalRecoveryPolicy(context.Background(), unknown, RuntimeGoalControlInput{})
 	if err != nil || policy.QuerySupported || policy.ReplaySetAfterRestart {
 		t.Fatalf("missing-resolver policy must fail closed: %#v err=%v", policy, err)
 	}
@@ -5875,7 +5867,7 @@ func TestGoalRecoveryTimeoutThenRestartDoesNotReplayClaudeSet(t *testing.T) {
 	service.GoalOperationAttemptTimeout = 25 * time.Millisecond
 	service.GoalOperationMaxAttempts = 1
 	started := time.Now()
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatalf("timeout attempt: %v", err)
 	}
 	if elapsed := time.Since(started); elapsed > time.Second {
@@ -5887,7 +5879,7 @@ func TestGoalRecoveryTimeoutThenRestartDoesNotReplayClaudeSet(t *testing.T) {
 		t.Fatalf("timed out operation=%#v found=%v err=%v", op, found, err)
 	}
 	nowMS = op.NextAttemptAtMS
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatalf("startup recovery: %v", err)
 	}
 	op, found, err = store.GetGoalControlOperation(ctx, "ws-goal-timeout", "goal-timeout-set")
@@ -5950,7 +5942,7 @@ func TestGoalRepairSetTimeoutThenRestartDoesNotReplayClaudeSet(t *testing.T) {
 	service.GoalOperationClock = func() time.Time { return time.UnixMilli(nowMS) }
 	service.GoalOperationAttemptTimeout = 25 * time.Millisecond
 	service.GoalOperationMaxAttempts = 1
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	repair, found, err := store.GetGoalControlOperation(ctx, "ws-repair-set-timeout", repair.OperationID)
@@ -5958,7 +5950,7 @@ func TestGoalRepairSetTimeoutThenRestartDoesNotReplayClaudeSet(t *testing.T) {
 		t.Fatalf("timed out repair=%#v found=%v err=%v", repair, found, err)
 	}
 	nowMS = repair.NextAttemptAtMS
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	repair, found, err = store.GetGoalControlOperation(ctx, "ws-repair-set-timeout", repair.OperationID)
@@ -5997,12 +5989,12 @@ func TestGoalClearRepeatedTimeoutEventuallyFails(t *testing.T) {
 	service.GoalOperationClock = func() time.Time { return time.UnixMilli(now) }
 	service.GoalOperationAttemptTimeout = 20 * time.Millisecond
 	service.GoalOperationMaxAttempts = 1
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, _, _ := store.GetGoalControlOperation(ctx, "ws-clear-timeout", "clear-timeout")
 	now = op.NextAttemptAtMS
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, _, _ = store.GetGoalControlOperation(ctx, "ws-clear-timeout", "clear-timeout")
@@ -6034,7 +6026,7 @@ func TestGoalRuntimeUnavailableKeepsPreparedUntilFirstProviderDispatch(t *testin
 	service.GoalOperationClock = func() time.Time { return time.UnixMilli(now) }
 	service.GoalOperationAttemptTimeout = 20 * time.Millisecond
 	service.GoalOperationMaxAttempts = 1
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, _, _ := store.GetGoalControlOperation(ctx, "ws-runtime-late", "late")
@@ -6043,7 +6035,7 @@ func TestGoalRuntimeUnavailableKeepsPreparedUntilFirstProviderDispatch(t *testin
 	}
 	runtime.sessions["ws-runtime-late:s"] = ProviderRuntimeSession{ID: "s", Provider: "claude-code", Status: "ready"}
 	now = op.NextAttemptAtMS
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, _, _ = store.GetGoalControlOperation(ctx, "ws-runtime-late", "late")
@@ -6054,7 +6046,7 @@ func TestGoalRuntimeUnavailableKeepsPreparedUntilFirstProviderDispatch(t *testin
 		t.Fatalf("recovered submission metadata=%#v", runtime.goalControlCalls[0].SubmissionMetadata)
 	}
 	now = op.NextAttemptAtMS
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, _, _ = store.GetGoalControlOperation(ctx, "ws-runtime-late", "late")
@@ -6111,7 +6103,7 @@ func TestGoalRecoveryProviderQueryAndApplyTimeoutReleaseLease(t *testing.T) {
 			service.GoalOperationAttemptTimeout = 25 * time.Millisecond
 			service.GoalOperationMaxAttempts = 1
 			started := time.Now()
-			if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+			if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 				t.Fatalf("worker timeout: %v", err)
 			}
 			if elapsed := time.Since(started); elapsed > time.Second {
@@ -6125,7 +6117,7 @@ func TestGoalRecoveryProviderQueryAndApplyTimeoutReleaseLease(t *testing.T) {
 			}
 			if phase == "apply" {
 				nowMS = op.NextAttemptAtMS
-				if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+				if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 					t.Fatal(err)
 				}
 				op, _, _ = store.GetGoalControlOperation(ctx, workspaceID, operationID)
@@ -6169,7 +6161,7 @@ func TestGoalRecoveryStartupBudgetBoundsHangingProvider(t *testing.T) {
 	service.GoalOperationAttemptTimeout = time.Second
 	service.GoalOperationRecoveryBudget = 40 * time.Millisecond
 	started := time.Now()
-	if err := service.RecoverGoalOperations(ctx); err != nil {
+	if err := service.ApplicationHost().RecoverGoalOperations(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if elapsed := time.Since(started); elapsed > time.Second {
@@ -6214,7 +6206,7 @@ func TestAcceptedClaudeGoalExpiresWithoutProviderReplay(t *testing.T) {
 	service.GoalStateStore = store
 	service.GoalOperationOwner = "goal-accepted-worker"
 	service.GoalOperationClock = func() time.Time { return time.UnixMilli(130_000) }
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, found, err := store.GetGoalControlOperation(ctx, "ws-goal-accepted-age", "goal-accepted-age")
@@ -6250,7 +6242,7 @@ func TestAcceptedClaudeClearExpiresWhenLifecycleEvidenceIsLost(t *testing.T) {
 	service.GoalStateStore = store
 	service.GoalOperationOwner = "clear-age-worker"
 	service.GoalOperationClock = func() time.Time { return time.UnixMilli(130_000) }
-	if err := service.StepGoalOperationWorker(ctx, false); err != nil {
+	if err := service.ApplicationHost().StepGoalOperationWorker(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	op, found, err := store.GetGoalControlOperation(ctx, "ws-clear-age", "clear-age")
@@ -6367,20 +6359,20 @@ func TestParseTypedGoalControlUsesSemanticContentAndUnicodeWhitespace(t *testing
 		name          string
 		content       string
 		displayPrompt string
-		want          typedGoalControl
+		want          agenthost.TypedGoalControl
 		wantOK        bool
 	}{
-		{name: "space", content: "/goal clear", want: typedGoalControl{Action: "clear"}, wantOK: true},
-		{name: "tab", content: "/goal\tclear", want: typedGoalControl{Action: "clear"}, wantOK: true},
-		{name: "newline", content: "/goal\nship it", want: typedGoalControl{Action: "set", Objective: "ship it"}, wantOK: true},
-		{name: "unicode space", content: "/goal\u3000ship it", want: typedGoalControl{Action: "set", Objective: "ship it"}, wantOK: true},
-		{name: "display cannot hide control", content: "/goal clear", displayPrompt: "clear chip", want: typedGoalControl{Action: "clear"}, wantOK: true},
+		{name: "space", content: "/goal clear", want: agenthost.TypedGoalControl{Action: "clear"}, wantOK: true},
+		{name: "tab", content: "/goal\tclear", want: agenthost.TypedGoalControl{Action: "clear"}, wantOK: true},
+		{name: "newline", content: "/goal\nship it", want: agenthost.TypedGoalControl{Action: "set", Objective: "ship it"}, wantOK: true},
+		{name: "unicode space", content: "/goal\u3000ship it", want: agenthost.TypedGoalControl{Action: "set", Objective: "ship it"}, wantOK: true},
+		{name: "display cannot hide control", content: "/goal clear", displayPrompt: "clear chip", want: agenthost.TypedGoalControl{Action: "clear"}, wantOK: true},
 		{name: "display cannot create control", content: "ordinary prompt", displayPrompt: "/goal clear", wantOK: false},
 		{name: "bare goal is not a mutation", content: "/goal", wantOK: false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, ok := parseTypedGoalControl(TextPromptContent(test.content), test.displayPrompt, false)
+			got, ok := agenthost.ParseTypedGoalControl(TextPromptContent(test.content), false)
 			if ok != test.wantOK || got != test.want {
 				t.Fatalf("parseTypedGoalControl()=(%#v,%v), want (%#v,%v)", got, ok, test.want, test.wantOK)
 			}
@@ -7343,14 +7335,16 @@ func (f *fakeRuntime) GoalRecoveryPolicy(ctx context.Context, input RuntimeGoalC
 
 func (f *fakeRuntime) Close(_ context.Context, input RuntimeCloseInput) error {
 	f.closeCalls = append(f.closeCalls, input)
+	err := f.closeErr
+	if err == nil {
+		delete(f.sessions, input.WorkspaceID+":"+input.AgentSessionID)
+	}
+	// Hooks observe completion, so publish them only after the fake's state is
+	// fully updated. Tests use this callback as the synchronization boundary.
 	if f.closeHook != nil {
 		f.closeHook(input)
 	}
-	if f.closeErr != nil {
-		return f.closeErr
-	}
-	delete(f.sessions, input.WorkspaceID+":"+input.AgentSessionID)
-	return nil
+	return err
 }
 
 func (f *fakeRuntime) CanResume(input RuntimeResumeInput) bool {

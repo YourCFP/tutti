@@ -116,6 +116,7 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 	}
 	s.reportAgentServiceNodeSuccess(ctx, input.AgentSessionID, "session_create", "runtime_prepared", provider, nodeStartedAt)
 	logAgentSubmitTrace("service.create.runtime_prepared", workspaceID, input.AgentSessionID, input.Metadata, map[string]any{"cwd": prepared.Cwd, "env_count": len(prepared.Env)})
+	ctx = withServicePreparedRuntime(ctx, s, prepared)
 	runtimeSettings := ComposerSettings{
 		Model:            clampComposerModelForLaunch(provider, input.ProviderTargetRef, value(input.Model)),
 		PermissionModeID: value(input.PermissionModeID),
@@ -140,7 +141,7 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateSe
 		ConversationDetailMode: input.ConversationDetailMode, Visible: input.Visible,
 	}
 	logAgentSubmitTrace("service.create.runtime_start_requested", workspaceID, input.AgentSessionID, input.Metadata, nil)
-	hostResult, err := s.applicationHost(serviceHostPreparation{service: s, prepared: &prepared}).CreateSession(ctx, workspaceID, hostInput)
+	hostResult, err := s.ApplicationHost().CreateSession(ctx, workspaceID, hostInput)
 	if err != nil {
 		return Session{}, err
 	}
@@ -549,7 +550,7 @@ func (s *Service) cleanupRuntime(ctx context.Context, workspaceID string, agentS
 }
 
 func (s *Service) SubmitInteractive(ctx context.Context, workspaceID string, agentSessionID string, requestID string, input SubmitInteractiveInput) (Session, error) {
-	_, err := s.applicationHost(serviceHostPreparation{service: s}).SubmitInteractive(
+	_, err := s.ApplicationHost().SubmitInteractive(
 		ctx,
 		agenthost.SessionRef{WorkspaceID: workspaceID, AgentSessionID: agentSessionID},
 		requestID,

@@ -39,6 +39,14 @@ selection, desktop APIs, attachment ingress, and cloud inbox/outbox behavior.
 Adapter-only create fields such as transcript source paths and materialized
 skill bundles intentionally remain outside the Host contract.
 
+`tuttid` production wiring constructs one long-lived `Host`, installs it on the
+agent service adapter, invokes `Host.Recover` before serving traffic, and starts
+the Host-owned runtime and goal workers. The service package translates
+HTTP/query/composer/analytics concerns and provider-specific preparation only;
+session, turn, runtime-operation, and goal lifecycle decisions remain in Host.
+Isolated service tests may lazily compose the same adapter set, but production
+startup never creates a Host per request or per session.
+
 Canonical commits have two distinct extension points. A store-sqlite
 `TransactionParticipant` may append a caller-owned durable marker inside the
 same transaction as runtime/goal intent and canonical facts; it receives a

@@ -67,8 +67,8 @@ type Service struct {
 	liveModelDiscoveryGroup        singleflight.Group
 	sessionSettingsMu              sync.Mutex
 	sessionSettingsLocks           map[string]*serviceSessionSettingsLock
-	goalActorOnce                  sync.Once
-	goalActor                      *agenthost.GoalActor
+	applicationHostMu              sync.Mutex
+	applicationHost                *agenthost.Host
 	generatedFilesCacheMu          sync.Mutex
 	generatedFilesCache            map[string]generatedFilesCacheEntry
 	// liveModelPersistedScanMissAtUnixMS memoizes, per live-model cache key,
