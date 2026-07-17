@@ -95,16 +95,35 @@ export function createRichTextMentionService(
   const registry = createRichTextTriggerRegistry(input.providers);
   const now = input.now ?? Date.now;
   const entries = new Map<string, MentionCacheEntry>();
-  const listeners = new Set<() => void>();
+  const subscriptions = new Set<{
+    key?: string;
+    listener: () => void;
+  }>();
   let disposed = false;
 
   const emit = (event: RichTextMentionDiagnosticEvent): void => {
-    input.diagnostics?.(event);
+    try {
+      input.diagnostics?.(event);
+    } catch {
+      // Diagnostics are observational and must never change mention behavior.
+    }
   };
 
-  const notify = (): void => {
+  const notify = (changedKeys?: ReadonlySet<string>): void => {
     if (disposed) return;
-    for (const listener of [...listeners]) listener();
+    for (const subscription of [...subscriptions]) {
+      if (
+        !subscription.key ||
+        !changedKeys ||
+        changedKeys.has(subscription.key)
+      ) {
+        try {
+          subscription.listener();
+        } catch {
+          // One observer must not interrupt cache transitions or other observers.
+        }
+      }
+    }
   };
 
   const evictIfNeeded = (): void => {
@@ -157,11 +176,6 @@ export function createRichTextMentionService(
     const requestRevision = entry.revision;
     const previousReady =
       entry.snapshot.state === "ready" ? entry.snapshot : undefined;
-    if (!previousReady) {
-      entry.snapshot = Object.freeze({ state: "loading" });
-      notify();
-    }
-
     const promise = Promise.resolve()
       .then(async () => {
         const provider = registry.getProvider(entry.identity.providerId);
@@ -199,7 +213,7 @@ export function createRichTextMentionService(
             durationMs: Math.max(0, completedAt - startedAt)
           });
         }
-        notify();
+        notify(new Set([entry.key]));
         return entry.snapshot;
       })
       .catch(() => {
@@ -221,7 +235,7 @@ export function createRichTextMentionService(
           cacheStatus: previousReady ? "stale" : "miss",
           durationMs: Math.max(0, completedAt - startedAt)
         });
-        notify();
+        notify(new Set([entry.key]));
         return entry.snapshot;
       })
       .finally(() => {
@@ -234,8 +248,13 @@ export function createRichTextMentionService(
         if (needsTrailingResolve) {
           void startResolve(entry);
         }
+        evictIfNeeded();
       });
     entry.inFlight = promise;
+    if (!previousReady) {
+      entry.snapshot = Object.freeze({ state: "loading" });
+      notify(new Set([entry.key]));
+    }
     return promise;
   };
 
@@ -311,6 +330,7 @@ export function createRichTextMentionService(
       const normalizedProviderId = selector?.providerId?.trim();
       const normalizedEntityId = selector?.entityId?.trim();
       const entriesToRefresh: MentionCacheEntry[] = [];
+      const invalidatedKeys = new Set<string>();
       let invalidated = 0;
       for (const entry of entries.values()) {
         if (
@@ -337,6 +357,7 @@ export function createRichTextMentionService(
         if (entry.subscriberCount > 0 && !entry.inFlight) {
           entriesToRefresh.push(entry);
         }
+        invalidatedKeys.add(entry.key);
         invalidated += 1;
       }
       emit({
@@ -346,16 +367,24 @@ export function createRichTextMentionService(
         cacheStatus: "invalidated",
         durationMs: 0
       });
-      if (invalidated > 0) notify();
+      if (invalidated > 0) notify(invalidatedKeys);
       for (const entry of entriesToRefresh) void startResolve(entry);
     },
     subscribe(listener, identity) {
       if (disposed) return () => {};
-      listeners.add(listener);
       const entry = identity ? getOrCreateEntry(identity) : undefined;
-      if (entry) entry.subscriberCount += 1;
+      const subscription = { listener, key: entry?.key };
+      subscriptions.add(subscription);
+      if (entry) {
+        entry.subscriberCount += 1;
+        if (!entries.has(entry.key)) entries.set(entry.key, entry);
+        evictIfNeeded();
+      }
+      let subscribed = true;
       return () => {
-        listeners.delete(listener);
+        if (!subscribed) return;
+        subscribed = false;
+        subscriptions.delete(subscription);
         if (entry) {
           entry.subscriberCount = Math.max(0, entry.subscriberCount - 1);
           evictIfNeeded();
@@ -365,7 +394,7 @@ export function createRichTextMentionService(
     dispose() {
       if (disposed) return;
       disposed = true;
-      listeners.clear();
+      subscriptions.clear();
       entries.clear();
     }
   };

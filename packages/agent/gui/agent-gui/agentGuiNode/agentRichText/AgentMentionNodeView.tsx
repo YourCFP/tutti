@@ -450,10 +450,16 @@ export function AgentMentionNodeView(props: NodeViewProps): JSX.Element {
         <MentionPill
           aria-label={mention.ariaLabel}
           className="top-0 h-6 max-w-[min(100%,var(--agent-mention-max-width,16rem))] py-0 align-middle leading-6"
-          data-agent-mention-app-icon="true"
           data-agent-mention-kind={mention.kind}
-          data-workspace-app-icon="true"
           iconUrl={mention.iconUrl}
+          iconContainerProps={{
+            "data-agent-mention-app-icon":
+              mention.kind === "agent-target" ? undefined : "true",
+            "data-agent-mention-session-icon":
+              mention.kind === "agent-target" ? "true" : undefined,
+            "data-workspace-app-icon":
+              mention.kind === "agent-target" ? undefined : "true"
+          }}
           kind={mention.kind === "agent-target" ? "session" : "app"}
           label={mention.label}
           removable={isEditable}

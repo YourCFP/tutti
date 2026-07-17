@@ -252,12 +252,54 @@ test("falls back to an exact identity and scope match on old hosts", async () =>
     scope: { workspaceId: "workspace-1" }
   });
   assert.deepEqual(calls, [
-    { keyword: "", maxResults: 100, providers: ["workspace-app"] }
+    { keyword: "Old canvas", maxResults: 50, providers: ["workspace-app"] }
   ]);
   assert.deepEqual(resolved, {
     label: "Canvas",
     presentation: { iconUrl: "canvas.png" }
   });
+});
+
+test("old host resolution retries with an empty keyword after a label miss", async () => {
+  const calls: TuttiExternalAtQueryInput[] = [];
+  const provider = createTuttiExternalAtRichTextTriggerProvider({
+    providerId: "workspace-app",
+    bridge: {
+      at: {
+        query(input) {
+          calls.push(input);
+          return input.keyword
+            ? []
+            : [
+                createQueryResult("workspace-app", "canvas", "Renamed", {
+                  insert: {
+                    kind: "mention",
+                    mention: {
+                      entityId: "canvas",
+                      label: "Renamed",
+                      scope: { workspaceId: "workspace-1" }
+                    }
+                  }
+                })
+              ];
+        }
+      }
+    }
+  });
+
+  assert.deepEqual(
+    await provider.resolveMention?.({
+      providerId: "workspace-app",
+      entityId: "canvas",
+      label: "Old canvas",
+      scope: { workspaceId: "workspace-1" }
+    }),
+    { label: "Renamed", presentation: undefined }
+  );
+  assert.deepEqual(calls, [
+    { keyword: "Old canvas", maxResults: 50, providers: ["workspace-app"] },
+    { keyword: "", maxResults: 50, providers: ["workspace-app"] }
+  ]);
 });
 
 test("external service invalidates from bridge events and unsubscribes", async () => {

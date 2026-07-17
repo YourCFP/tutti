@@ -16,6 +16,25 @@ import {
   MANAGED_AGENT_ICON_ROUNDED_URLS,
   managedAgentRoundedIconUrl
 } from "./managedAgentIcons";
+import { RichTextMentionReadonly } from "@tutti-os/ui-rich-text/editor";
+
+describe("RichTextMentionReadonly compatibility", () => {
+  it("keeps the persisted @ prefix while using MentionPill", () => {
+    render(
+      <RichTextMentionReadonly
+        mention={{
+          trigger: "@",
+          providerId: "workspace-app",
+          entityId: "canvas",
+          label: "Canvas"
+        }}
+      />
+    );
+
+    expect(screen.getByText("@Canvas")).toBeInTheDocument();
+    expect(document.querySelector('[data-slot="mention-pill"]')).not.toBeNull();
+  });
+});
 
 describe("AgentMessageMarkdown", () => {
   afterEach(() => {

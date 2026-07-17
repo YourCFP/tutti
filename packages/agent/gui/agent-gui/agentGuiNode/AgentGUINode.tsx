@@ -1,6 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, type ReactNode } from "react";
-import { RichTextMentionServiceProvider } from "@tutti-os/ui-rich-text/editor";
-import type { RichTextMentionService } from "@tutti-os/ui-rich-text/service";
+import { memo, useCallback, useEffect, useMemo } from "react";
 import { createWorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
 import { createWorkspaceFileManagerI18nRuntime } from "@tutti-os/workspace-file-manager";
 import { useReferenceProvenanceFilterCatalog } from "@tutti-os/workspace-file-reference/react";
@@ -41,6 +39,7 @@ import {
 import { resolveAgentGUIReferenceProvenanceFilterCatalog } from "./model/agentReferenceProvenanceCatalog";
 import type { AgentGUINodeProps } from "./AgentGUINode.types";
 import { areAgentGUINodePropsEqual } from "./AgentGUINode.types";
+import { AgentGUIMentionServiceBoundary } from "./AgentGUIMentionServiceBoundary";
 import {
   useAgentGUIViewLabels,
   useAgentGUIWorkspaceFileReferenceCopy
@@ -542,7 +541,10 @@ export const AgentGUINode = memo(function AgentGUINode({
   ]);
 
   return (
-    <AgentGUIMentionServiceBoundary service={mentionService}>
+    <AgentGUIMentionServiceBoundary
+      legacyProviders={contextMentionProviders}
+      service={mentionService}
+    >
       <WorkspaceNodeWindow
         nodeId={nodeId}
         kind="agentGui"
@@ -699,19 +701,3 @@ export const AgentGUINode = memo(function AgentGUINode({
     </AgentGUIMentionServiceBoundary>
   );
 }, areAgentGUINodePropsEqual);
-
-function AgentGUIMentionServiceBoundary({
-  children,
-  service
-}: {
-  children: ReactNode;
-  service?: RichTextMentionService;
-}): ReactNode {
-  return service ? (
-    <RichTextMentionServiceProvider service={service}>
-      {children}
-    </RichTextMentionServiceProvider>
-  ) : (
-    children
-  );
-}

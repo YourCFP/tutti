@@ -110,21 +110,29 @@ export function createTuttiExternalAtRichTextTriggerProvider(
           ...(identity.scope ? { scope: identity.scope } : {})
         });
       }
-      const matches = await queryTuttiExternalAtRichTextTriggerItems({
-        bridge: input.bridge,
-        getBridge: input.getBridge,
-        keyword: "",
-        maxResults: 100,
-        providerIds: [input.providerId]
-      });
-      const match = matches.find((item) =>
-        matchesExternalMentionIdentity(item, identity)
-      );
-      if (!match || match.insert.kind !== "mention") return null;
-      return {
-        label: match.insert.mention.label,
-        presentation: match.insert.mention.presentation
-      };
+      const fallbackKeywords = [
+        identity.label.trim().replace(/^@+/, "").trim(),
+        ""
+      ].filter((keyword, index, values) => values.indexOf(keyword) === index);
+      for (const keyword of fallbackKeywords) {
+        const matches = await queryTuttiExternalAtRichTextTriggerItems({
+          bridge: input.bridge,
+          getBridge: input.getBridge,
+          keyword,
+          maxResults: 50,
+          providerIds: [input.providerId]
+        });
+        const match = matches.find((item) =>
+          matchesExternalMentionIdentity(item, identity)
+        );
+        if (match?.insert.kind === "mention") {
+          return {
+            label: match.insert.mention.label,
+            presentation: match.insert.mention.presentation
+          };
+        }
+      }
+      return null;
     },
     getItemKey: (item) => item.itemId,
     getItemLabel: (item) => item.label,

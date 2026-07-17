@@ -276,36 +276,37 @@ export function RichTextTriggerEditor({
       return;
     }
 
-    const requestId = mentionHydrationRequestRef.current + 1;
-    mentionHydrationRequestRef.current = requestId;
-    const mentions = collectHydratableMentionNodes(editor);
-    if (mentions.length === 0) {
-      return;
-    }
+    const hydrateMentions = (): void => {
+      const requestId = mentionHydrationRequestRef.current + 1;
+      mentionHydrationRequestRef.current = requestId;
+      const mentions = collectHydratableMentionNodes(editor);
+      for (const mention of mentions) {
+        void registry
+          .resolve(mention.attrs)
+          .then((snapshot) => {
+            const resolved =
+              snapshot.state === "ready" ? snapshot.resolved : undefined;
+            if (
+              !resolved ||
+              mentionHydrationRequestRef.current !== requestId ||
+              editor.isDestroyed
+            ) {
+              return;
+            }
 
-    for (const mention of mentions) {
-      void registry
-        .resolve(mention.attrs)
-        .then((snapshot) => {
-          const resolved =
-            snapshot.state === "ready" ? snapshot.resolved : undefined;
-          if (
-            !resolved ||
-            mentionHydrationRequestRef.current !== requestId ||
-            editor.isDestroyed
-          ) {
-            return;
-          }
-
-          applyResolvedMentionAttrs(editor, mention.pos, mention.attrs, {
-            label: resolved.label,
-            presentation: resolved.presentation
+            applyResolvedMentionAttrs(editor, mention.pos, mention.attrs, {
+              label: resolved.label,
+              presentation: resolved.presentation
+            });
+          })
+          .catch(() => {
+            // Resolver failures keep the fallback label-only mention.
           });
-        })
-        .catch(() => {
-          // Resolver failures keep the fallback label-only mention.
-        });
-    }
+      }
+    };
+
+    hydrateMentions();
+    return registry.subscribe(hydrateMentions);
   }, [editor, registry, normalizedValue]);
 
   useEffect(() => {

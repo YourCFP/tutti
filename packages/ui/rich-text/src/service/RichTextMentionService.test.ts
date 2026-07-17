@@ -57,6 +57,39 @@ test("identity key normalizes identity and canonicalizes scope", () => {
     left,
     createRichTextMentionIdentityKey({ ...identity, entityId: "app-2" })
   );
+  assert.equal(
+    createRichTextMentionIdentityKey({
+      ...identity,
+      scope: { é: "composed", é: "decomposed" }
+    }),
+    createRichTextMentionIdentityKey({
+      ...identity,
+      scope: { é: "decomposed", é: "composed" }
+    })
+  );
+});
+
+test("diagnostic failures never change query or resolution results", async () => {
+  const service = createRichTextMentionService({
+    diagnostics() {
+      throw new Error("diagnostics offline");
+    },
+    providers: [
+      {
+        ...createProvider(() => ({ label: "resolved" })),
+        query: () => ["match"],
+        getItemKey: (item) => String(item),
+        getItemLabel: (item) => String(item),
+        toInsertResult: (item) => ({ kind: "text", text: String(item) })
+      }
+    ]
+  });
+
+  assert.equal((await service.resolve(identity)).state, "ready");
+  assert.equal(
+    (await service.query({ context: {}, keyword: "", trigger: "@" })).length,
+    1
+  );
 });
 
 test("ready, missing, and error snapshots honor fixed TTLs", async () => {
@@ -221,6 +254,131 @@ test("capacity eviction preserves subscribed and in-flight identities", async ()
   assert.equal(calls.get("in-flight"), 1);
   pending.resolve({ label: "completed" });
   await inFlight;
+  unsubscribe();
+});
+
+test("capacity is enforced after an in-flight burst settles", async () => {
+  const requests = Array.from(
+    { length: RICH_TEXT_MENTION_CACHE_CAPACITY + 1 },
+    () => deferred<RichTextMentionResolved | null>()
+  );
+  const calls = new Map<string, number>();
+  const service = createRichTextMentionService({
+    providers: [
+      createProvider((currentIdentity) => {
+        const index = Number(currentIdentity.entityId.slice("burst-".length));
+        calls.set(
+          currentIdentity.entityId,
+          (calls.get(currentIdentity.entityId) ?? 0) + 1
+        );
+        return requests[index]!.promise;
+      })
+    ]
+  });
+  const resolutions = requests
+    .slice(0, -1)
+    .map((_, index) =>
+      service.resolve({ ...identity, entityId: `burst-${index}` })
+    );
+  await Promise.resolve();
+  const lastIdentity = {
+    ...identity,
+    entityId: `burst-${RICH_TEXT_MENTION_CACHE_CAPACITY}`
+  };
+  const unsubscribe = service.subscribe(() => {}, lastIdentity);
+  resolutions.push(service.resolve(lastIdentity));
+  requests.forEach((request, index) =>
+    request.resolve({ label: `item-${index}` })
+  );
+  await Promise.all(resolutions);
+
+  const firstIdentity = { ...identity, entityId: "burst-0" };
+  const retry = service.resolve(firstIdentity);
+  await Promise.resolve();
+  assert.equal(calls.get("burst-0"), 2);
+  requests[0]!.resolve({ label: "retried" });
+  await retry;
+  unsubscribe();
+});
+
+test("duplicate listener subscriptions unsubscribe independently", async () => {
+  const service = createRichTextMentionService({
+    providers: [createProvider(() => ({ label: "resolved" }))]
+  });
+  let notifications = 0;
+  const listener = () => {
+    notifications += 1;
+  };
+  const firstUnsubscribe = service.subscribe(listener, identity);
+  const secondUnsubscribe = service.subscribe(listener, {
+    ...identity,
+    entityId: "app-2"
+  });
+  firstUnsubscribe();
+
+  await service.resolve({ ...identity, entityId: "app-2" });
+  assert.equal(notifications > 0, true);
+  const afterResolve = notifications;
+  secondUnsubscribe();
+  service.invalidate();
+  assert.equal(notifications, afterResolve);
+});
+
+test("identity subscriptions only receive matching entry updates", async () => {
+  const service = createRichTextMentionService({
+    providers: [createProvider(() => ({ label: "resolved" }))]
+  });
+  let firstNotifications = 0;
+  let secondNotifications = 0;
+  const firstIdentity = { ...identity, entityId: "first" };
+  const secondIdentity = { ...identity, entityId: "second" };
+  const unsubscribeFirst = service.subscribe(() => {
+    firstNotifications += 1;
+  }, firstIdentity);
+  const unsubscribeSecond = service.subscribe(() => {
+    secondNotifications += 1;
+  }, secondIdentity);
+
+  await service.resolve(firstIdentity);
+
+  assert.equal(firstNotifications > 0, true);
+  assert.equal(secondNotifications, 0);
+  unsubscribeFirst();
+  unsubscribeSecond();
+});
+
+test("loading notifications cannot start a duplicate resolver", async () => {
+  const pending = deferred<RichTextMentionResolved | null>();
+  let calls = 0;
+  const service = createRichTextMentionService({
+    providers: [
+      createProvider(() => {
+        calls += 1;
+        return pending.promise;
+      })
+    ]
+  });
+  const unsubscribe = service.subscribe(() => {
+    void service.resolve(identity);
+  }, identity);
+
+  const resolution = service.resolve(identity);
+  await Promise.resolve();
+  assert.equal(calls, 1);
+  pending.resolve({ label: "resolved" });
+  await resolution;
+  unsubscribe();
+});
+
+test("throwing listeners do not change resolution state", async () => {
+  const service = createRichTextMentionService({
+    providers: [createProvider(() => ({ label: "resolved" }))]
+  });
+  const unsubscribe = service.subscribe(() => {
+    throw new Error("broken observer");
+  }, identity);
+
+  assert.equal((await service.resolve(identity)).state, "ready");
   unsubscribe();
 });
 

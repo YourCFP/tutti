@@ -48,8 +48,9 @@ app root. App-local providers can be supplied once through
 
 The adapter feature-detects optional bridge methods. New hosts use exact
 `at.resolve()` and `at.subscribe()`. On an older query-only host, resolution
-falls back to a bounded empty-keyword query and exact provider/entity/scope
-match, while the service TTL supplies eventual refresh. The existing
+first queries by the persisted fallback label, then uses a bounded empty-keyword
+query and exact provider/entity/scope match. The service TTL supplies eventual
+refresh for hosts or provider sources without a real-time dirty event. The existing
 `createTuttiExternalAtRichTextTriggerProviders` factory remains available for
 older bundles.
 

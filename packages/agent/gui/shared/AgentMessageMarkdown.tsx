@@ -661,7 +661,7 @@ function MentionLink({
       }}
     >
       <MentionPill
-        className="max-w-full"
+        className="top-0 max-w-full"
         iconUrl={iconUrl}
         iconContainerProps={{
           className: "h-4 w-4",

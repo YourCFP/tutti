@@ -6,6 +6,10 @@ export interface NormalizedRichTextMentionIdentity extends RichTextMentionIdenti
   scope?: Readonly<Record<string, string>>;
 }
 
+function compareScopeKeys(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export function canonicalizeRichTextMentionScope(
   scope: RichTextMentionIdentity["scope"]
 ): string {
@@ -14,7 +18,9 @@ export function canonicalizeRichTextMentionScope(
   }
 
   const sortedScope = Object.fromEntries(
-    Object.entries(scope).sort(([left], [right]) => left.localeCompare(right))
+    Object.entries(scope).sort(([left], [right]) =>
+      compareScopeKeys(left, right)
+    )
   );
   return JSON.stringify(sortedScope);
 }
@@ -32,7 +38,7 @@ export function normalizeRichTextMentionIdentity(
   }
 
   const scopeEntries = Object.entries(identity.scope ?? {}).sort(
-    ([left], [right]) => left.localeCompare(right)
+    ([left], [right]) => compareScopeKeys(left, right)
   );
   return {
     providerId,
