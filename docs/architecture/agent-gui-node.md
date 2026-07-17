@@ -397,6 +397,16 @@ remembered session was deleted or belongs to another target, the click enters
 that agent's empty home composer. A remembered bounded-history session may be
 activated before its rail row is loaded, then reconciled through the normal
 session-authoritative detail path.
+The provider rail tab selection indicator has exactly one owner:
+`conversationFilter`. `All` is selected only for the `all` scope, and an Agent
+tile is selected only when the filter's `agentTargetId` exactly matches that
+tile's trimmed canonical `agentTargetId`. Availability, `disabled`, the home
+composer's `selectedAgentTarget`, and active or historical conversation detail
+must not override that selection. They continue to own readiness, send/create
+gates, unavailable detail, and historical presentation independently. Rail
+scope actions fail closed when a compatibility target lacks a canonical
+`agentTargetId`; `targetId` and provider identity are not rail selection
+fallbacks.
 Empty-home rail clicks may also sync the home composer launch target.
 The conversation rail keeps one in-memory view scope for each exact target and
 the all-target view. Returning to a visited scope restores its scroll offset,

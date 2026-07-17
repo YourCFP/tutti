@@ -418,7 +418,7 @@ export interface AgentGUINodeViewProps {
     ) => void;
     selectConversationFilterTarget: (input: {
       provider: AgentGUIProvider;
-      agentTargetId?: string | null;
+      agentTargetId: string;
     }) => void;
     createConversation: (options?: {
       projectPath?: string | null;
