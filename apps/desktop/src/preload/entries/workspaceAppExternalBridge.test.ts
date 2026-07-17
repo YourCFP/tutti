@@ -1143,14 +1143,29 @@ test("workspace app external bridge invokes user project list without activation
     async invoke<TResult>(channel: string, payload?: unknown) {
       calls.push({ channel, payload });
       return {
-        projects: [{ id: "repo", label: "repo", path: "/workspace/repo" }]
+        projects: [
+          {
+            id: "repo",
+            label: "repo",
+            path: "/workspace/repo",
+            pinnedAtUnixMs: 0
+          }
+        ]
       } as TResult;
     }
   });
 
   assert.deepEqual(await bridge.userProjects.list(), {
-    projects: [{ id: "repo", label: "repo", path: "/workspace/repo" }]
+    projects: [
+      {
+        id: "repo",
+        label: "repo",
+        path: "/workspace/repo",
+        pinnedAtUnixMs: 0
+      }
+    ]
   });
+  assert.equal("pin" in bridge.userProjects, false);
   assert.deepEqual(calls, [
     {
       channel: workspaceAppExternalChannels.userProjectsList,
@@ -1196,7 +1211,14 @@ test("workspace app external bridge invokes user project snapshot reads without 
     error: null,
     initialized: true,
     isLoading: false,
-    projects: [{ id: "repo", label: "repo", path: "/workspace/repo" }],
+    projects: [
+      {
+        id: "repo",
+        label: "repo",
+        path: "/workspace/repo",
+        pinnedAtUnixMs: 0
+      }
+    ],
     revision: 3
   };
   const bridge = createWorkspaceAppExternalBridge({
@@ -1235,7 +1257,14 @@ test("workspace app external bridge subscribes to user project snapshots", () =>
     error: null,
     initialized: true,
     isLoading: false,
-    projects: [{ id: "repo", label: "repo", path: "/workspace/repo" }],
+    projects: [
+      {
+        id: "repo",
+        label: "repo",
+        path: "/workspace/repo",
+        pinnedAtUnixMs: 0
+      }
+    ],
     revision: 3
   };
   const snapshots: unknown[] = [];

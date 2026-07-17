@@ -6,6 +6,7 @@ import type {
   AgentHostAgentTargetSetupSnapshot,
   AgentHostInputApi,
   AgentHostAgentTargetSetupWatch,
+  AgentHostUserProject,
   AgentHostApplyWorkspaceGitPatchInput,
   AgentHostSelectFilesInput,
   AgentProviderProbeListInput,
@@ -39,16 +40,6 @@ interface CreateDesktopAgentHostApiInput {
   workspaceAgentActivityService: IWorkspaceAgentActivityService;
   workspaceUserProjectService?: IWorkspaceUserProjectService;
   workspaceId: string;
-}
-
-interface AgentHostUserProjectCompat {
-  createdAtUnixMs?: number;
-  id: string;
-  label: string;
-  lastUsedAtUnixMs?: number;
-  path: string;
-  sectionKey?: string;
-  updatedAtUnixMs?: number;
 }
 
 // workspaceId and action timestamps remain daemon transport/audit metadata;
@@ -97,7 +88,6 @@ export function projectDesktopAgentTargetSetupSnapshot(
       : null
   };
 }
-
 export function createDesktopAgentHostApi({
   hostFilesApi,
   tuttidClient,
@@ -257,6 +247,8 @@ export function createDesktopAgentHostApi({
       },
       move: (payload: { beforeProjectId: string | null; projectId: string }) =>
         userProjectService.moveProject(payload),
+      pin: (payload: { pinned: boolean; projectId: string }) =>
+        userProjectService.pinProject(payload),
       prepareSelection: async (payload: {
         projectLocked: boolean;
         selectedPath: string | null;
@@ -414,7 +406,7 @@ function logAgentGitPatchDiagnostic(
 
 function toAgentHostUserProject(
   project: WorkspaceUserProject
-): AgentHostUserProjectCompat {
+): AgentHostUserProject {
   const { lastUsedAtUnixMs, ...rest } = project;
   return lastUsedAtUnixMs == null ? rest : { ...rest, lastUsedAtUnixMs };
 }

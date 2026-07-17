@@ -373,6 +373,12 @@ export function useAgentGUIViewLabels(input: {
         "agentHost.agentGui.projectSectionMoreActions"
       ),
       projectSectionViewFiles: t("agentHost.agentGui.projectSectionViewFiles"),
+      pinProject: t("agentHost.agentGui.pinProject"),
+      unpinProject: t("agentHost.agentGui.unpinProject"),
+      pinnedProjectAccessibleName: (projectLabel: string) =>
+        t("agentHost.agentGui.pinnedProjectAccessibleName", {
+          project: projectLabel
+        }),
       projectRailCreateProject: t(
         "agentHost.agentGui.projectRailCreateProject"
       ),

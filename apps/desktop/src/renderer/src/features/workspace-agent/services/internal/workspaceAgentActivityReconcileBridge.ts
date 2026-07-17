@@ -22,7 +22,10 @@ import {
   agentActivitySessionFromTuttidSession,
   agentActivityTurnFromTuttidTurn
 } from "../desktopAgentActivityAdapter.ts";
-import { reconcileAgentSessionMessagePages } from "./workspaceAgentActivityReconcileMessages.ts";
+import {
+  analyzeInlineMessageVersionContinuity,
+  reconcileAgentSessionMessagePages
+} from "./workspaceAgentActivityReconcileMessages.ts";
 import type {
   AgentActivitySessionDetail,
   WorkspaceAgentActivityBridgeEvent,
@@ -55,6 +58,8 @@ export abstract class WorkspaceAgentActivityReconcileBridge {
   private readonly eventStreamDisposables: Array<() => void> = [];
   private disposed = false;
   private eventStreamStarted = false;
+  private eventStreamConnectionState: "connected" | "disconnected" | null =
+    null;
 
   protected constructor(
     dependencies: WorkspaceAgentActivityReconcileDependencies
@@ -408,12 +413,19 @@ export abstract class WorkspaceAgentActivityReconcileBridge {
       ...this.composerOptionsInvalidation.subscribe(eventStreamClient),
       eventStreamClient.subscribeConnectionState((state) => {
         if (state !== "connected" && state !== "disconnected") return;
+        const recoveredFromDisconnect =
+          this.eventStreamConnectionState === "disconnected" &&
+          state === "connected";
+        this.eventStreamConnectionState = state;
         for (const [workspaceId, entry] of this.entries) {
           entry.engine.dispatch({
             status: state,
             type: "engine/connectionChanged",
             workspaceId
           });
+          if (recoveredFromDisconnect) {
+            this.reconcileCachedSessionMessagesAfterReconnect(workspaceId);
+          }
         }
       })
     );
@@ -424,6 +436,25 @@ export abstract class WorkspaceAgentActivityReconcileBridge {
         level: "warn"
       });
     });
+  }
+
+  private reconcileCachedSessionMessagesAfterReconnect(
+    workspaceId: string
+  ): void {
+    const messagesBySessionId =
+      this.activitySnapshot(workspaceId).sessionMessagesById;
+    for (const [agentSessionId, messages] of Object.entries(
+      messagesBySessionId
+    )) {
+      if (messages.length === 0) continue;
+      this.entry(workspaceId).engine.dispatch({
+        agentSessionId,
+        needsMessages: true,
+        needsState: false,
+        type: "session/reconcileRequested",
+        workspaceId
+      });
+    }
   }
 
   private async reconcileAgentActivityUpdate(
@@ -474,7 +505,16 @@ export abstract class WorkspaceAgentActivityReconcileBridge {
     }
     const hasCachedSession = this.hasCachedSession(workspaceId, agentSessionId);
     const messages = parseInlineActivityMessages(input);
-    if (messages.length > 0) {
+    const cachedMessages =
+      this.activitySnapshot(workspaceId).sessionMessagesById[agentSessionId] ??
+      [];
+    const inlineContinuity = analyzeInlineMessageVersionContinuity(
+      cachedMessages,
+      messages
+    );
+    const canApplyInlineMessages =
+      messages.length > 0 && inlineContinuity.continuous;
+    if (canApplyInlineMessages) {
       this.entry(workspaceId).engine.dispatch(
         {
           messages,
@@ -486,6 +526,13 @@ export abstract class WorkspaceAgentActivityReconcileBridge {
       for (const message of messages) {
         this.emitSessionEvent(workspaceId, hostMessageEventFromCore(message));
       }
+    } else if (messages.length > 0) {
+      this.reportReconcileTrace({
+        agentSessionId,
+        traceEvent: "realtime.message_version_gap_detected",
+        workspaceId,
+        fields: { ...inlineContinuity }
+      });
     }
     if (
       input.eventType === "turn_update" ||
@@ -493,7 +540,7 @@ export abstract class WorkspaceAgentActivityReconcileBridge {
     ) {
       this.markNextReconcileLive(workspaceId, agentSessionId);
     }
-    const inlineApplied = hasCachedSession && messages.length > 0;
+    const inlineApplied = hasCachedSession && canApplyInlineMessages;
     this.entry(workspaceId).engine.dispatch({
       agentSessionId,
       eventType: input.eventType,

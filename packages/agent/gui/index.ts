@@ -131,6 +131,7 @@ export type {
   AgentHostInputApi,
   AgentHostSelectFilesInput,
   AgentHostRuntimeApi,
+  AgentHostUserProject,
   AgentProviderProbeListInput,
   AgentProviderProbeListResult
 } from "./host/agentHostApi";

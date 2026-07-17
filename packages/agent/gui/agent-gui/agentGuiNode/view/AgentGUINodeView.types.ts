@@ -191,6 +191,9 @@ export interface AgentGUIViewLabels {
   projectSectionEdit: string;
   projectSectionMoreActions: string;
   projectSectionViewFiles: string;
+  pinProject: string;
+  unpinProject: string;
+  pinnedProjectAccessibleName: (projectLabel: string) => string;
   projectRailCreateProject: string;
   projectRailLinkExistingProject: string;
   removeProject: string;
@@ -481,6 +484,7 @@ export interface AgentGUINodeViewProps {
       projectId: string,
       beforeProjectId: string | null
     ) => Promise<void>;
+    toggleProjectPinned: (projectId: string, pinned: boolean) => Promise<void>;
     confirmDeleteProjectConversations: (
       sectionKey?: string,
       agentTargetId?: string | null

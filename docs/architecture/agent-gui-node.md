@@ -141,12 +141,21 @@ ID.
 Historical pull and realtime push are distinct engine inputs. Workspace/session
 list pulls dispatch `session/snapshotReceived`; these hydrate history without
 creating unread completion attention. Realtime `message_update` events may fold
-their normalized append-only messages inline. Realtime turn, interaction, and
-legacy state invalidations perform an authoritative session pull, then dispatch
-`session/upserted` followed by `turn/upserted` for the realtime turn. The desktop
-bridge keeps the one-shot realtime provenance outside reducer state while that
-pull is in flight. `AgentActivitySnapshot` is a memoized projection of the
-engine state, not a separately mutable controller snapshot.
+their normalized versioned mutable message snapshots inline only when the unseen
+event versions continue from the cached high-water mark. A gap at that boundary
+means a mutable message snapshot may have been missed: the bridge must leave the
+cache at its pre-gap cursor and request an authoritative incremental pull. A
+recovered event-stream connection must also incrementally reconcile every
+session whose messages are already hydrated, so a missed final mutation does not
+depend on a later event to expose the gap. Do not require the rows already
+present in a current snapshot to be internally contiguous, because updating one
+`messageId` replaces its earlier version. Realtime turn,
+interaction, and legacy state invalidations perform an authoritative session
+pull, then dispatch `session/upserted` followed by `turn/upserted` for the
+realtime turn. The desktop bridge keeps the one-shot realtime provenance outside
+reducer state while that pull is in flight. `AgentActivitySnapshot` is a
+memoized projection of the engine state, not a separately mutable controller
+snapshot.
 
 The workspace list is root-only. After a successful workspace reconcile, the
 engine requests a state detail reconcile for every active root session. Session
@@ -1730,22 +1739,35 @@ sections come from current `userProjects` and use the stable
 `project:/canonical/path` `sectionKey`; the Chats section uses
 `conversations`. This inventory is the durable registered-project list; rail
 loading must not probe project paths or implicitly remove unavailable folders.
-The daemon-owned `user_projects.sort_order` is the single global project order.
-New projects enter at the front, repeated use updates compatibility timestamps
-without moving them, and delete/move transactions rewrite a continuous order.
+The daemon-owned `user_projects.sort_order` is the single global project order,
+partitioned by the required public `pinnedAtUnixMs` field: pinned projects come
+first, followed by ordinary projects. `sort_order` never crosses the daemon
+contract. Pin moves a project to the front of the pinned partition and updates
+`pinnedAtUnixMs` plus `updatedAtUnixMs`; unpin clears `pinnedAtUnixMs` and moves
+the project to the front of the ordinary partition. Same-state pin requests are
+strictly idempotent and publish no event. New or re-added projects enter at the
+front of the ordinary partition, repeated use updates compatibility timestamps
+without moving or changing pin state, and delete/move transactions rewrite one
+continuous order. Move is valid only within the source project's partition;
+`beforeProjectId=null` means that partition's end.
 Every renderer window mirrors the complete ordered snapshot in its one
 workspace-user-project service store. A drop updates that store optimistically,
 then `user.project.updated` broadcasts the committed complete snapshot to every
 window; project selectors, file-manager locations, AgentGUI, and workspace-app
 bridges consume that same store rather than keeping another persistent order.
-An event received while a move is in flight is held until the move response is
-reconciled, and a conflicting held snapshot triggers one authoritative refresh.
-The same renderer service snapshot owns `isMutationPending` for move and
-project removal. Every AgentGUI rail in that renderer subscribes to this flag
-and disables new project drags for the full mutation lifetime; per-Rail drag
-state is only transient interaction state, not the shared mutation lock.
-Move failures deliberately retain the current window's optimistic order until a
-later reload and produce diagnostics without user-visible error UI.
+The required pin field makes this the version 2 event contract; publishers and
+consumers must use that version rather than accepting a missing-field fallback.
+Pin/unpin uses the same optimistic snapshot and response reconciliation flow.
+An event received while a move or pin mutation is in flight is held until the
+response is reconciled, and a conflicting held snapshot triggers one
+authoritative refresh. The same renderer service snapshot owns
+`isMutationPending` for pin, move, project removal, creation, and association.
+Every AgentGUI rail in that renderer subscribes to this flag and disables those
+project mutations for the full mutation lifetime; per-Rail drag state is only
+transient interaction state, not the shared mutation lock. Pin and move failures
+deliberately retain the current window's optimistic order until a later
+authoritative event or reload and produce diagnostics without user-visible
+error UI.
 Path availability and explicit removal belong to the user-project domain. The
 daemon pages sessions by `rail_section_key`, so AgentGUI
 must render returned section props and use backend `hasMore`/`nextCursor`
@@ -1800,9 +1822,15 @@ conversation-summary cache. An initial backend-search failure renders a
 localized retry action; retry reissues the current target-scoped query instead
 of presenting the failure as an empty result. Search and agent-target filtering
 retain every registered user-project title even when its filtered session items
-are empty, so the durable project order remains visible and draggable. Pinned
-stays above all projects and Chats stays after them. Hosts without
-`listSessionsPage`, including
+are empty, so the durable project order remains visible and draggable. Rail
+composition is always pinned sessions, pinned project sections, ordinary
+project sections, then Chats. Pinned projects remain ordinary project-section
+models and keep their existing empty state. A conversation pinned independently
+appears only in the pinned-session region and is excluded from its project body;
+pinned-session Show more stays before pinned projects. The single pinned title
+is visible when either kind of pinned content exists, while the Projects title
+and add-project entry remain visible even when every project is pinned. Hosts
+without `listSessionsPage`, including
 preview-only hosts, may fall back to local title filtering of loaded rows.
 Ordinary section pages and backend search pages share one deterministic order:
 `latestTurn.startedAtUnixMs DESC`, falling back to
@@ -2332,7 +2360,8 @@ contract from the ACP path.
 
 ```text
 agent.activity.updated
-  -> message_update parses and batches append-only messages inline
+  -> continuous message_update versions batch mutable snapshots inline
+  -> a version gap or recovered connection triggers authoritative message reconcile
   -> turn_update / interaction_update triggers authoritative session reconcile
   -> legacy state_patch triggers authoritative state reconcile
   -> live reconcile dispatches session/upserted then turn/upserted
@@ -2344,8 +2373,8 @@ agent.activity.updated
   -> AgentGUINodeView renders the new view model
 ```
 
-Only append-only `message_update` payloads use the inline fast path. Turn,
-interaction, and state changes reconcile through the authoritative session
+Only continuous versioned `message_update` payloads use the inline fast path.
+Turn, interaction, and state changes reconcile through the authoritative session
 endpoint so `activeTurnId`, pending interactions, and turn provenance stay
 consistent. UI code should debug both the event payload and the reconcile fetch
 before treating a missing transcript row as a rendering-only bug.

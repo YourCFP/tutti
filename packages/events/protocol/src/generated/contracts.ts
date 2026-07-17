@@ -150,6 +150,7 @@ export interface UserUserProjectV1 {
   createdAtUnixMs: number;
   updatedAtUnixMs: number;
   lastUsedAtUnixMs: number;
+  pinnedAtUnixMs: number;
 }
 
 export interface WorkspaceWorkspaceAppFactoryJobV1 {
@@ -479,7 +480,7 @@ export type PreferencesDesktopUpdatedEventV1 = BusinessEventEnvelopeV1<
 export type UserProjectUpdatedEventV1 = BusinessEventEnvelopeV1<
   "user.project.updated",
   UserProjectUpdatedPayloadV1,
-  1
+  2
 >;
 
 export type WorkspaceAppUpdatedEventV1 = BusinessEventEnvelopeV1<

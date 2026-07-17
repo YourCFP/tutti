@@ -5890,6 +5890,15 @@ aside.workspace-agents-status-panel
   max-width: 100%;
 }
 
+.agent-gui-node__pinned-project-rail-header {
+  min-width: 0;
+  padding: 4px 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
 .agent-gui-node__conversation-section[data-project-dragging="true"] {
   opacity: 0.42;
 }
