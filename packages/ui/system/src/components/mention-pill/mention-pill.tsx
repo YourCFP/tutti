@@ -72,7 +72,10 @@ function MentionPill({
   const dataKind = mentionPillDataKindByKind[kind];
   const normalizedIconUrl = iconUrl?.trim() ?? "";
   const iconSizeClassName = "size-4";
-  const iconShellClassName = isFile ? "size-4" : "size-[18px]";
+  // session mentions align their icon shell with the @agent (agent-target)
+  // mention, which uses a 16px (size-4) shell; other non-file kinds keep 18px.
+  const iconShellClassName =
+    isFile || kind === "session" ? "size-4" : "size-[18px]";
 
   // 超出最大展示宽度时,标签截断为省略号;溢出时 hover 弹设计系统 Tooltip 看完整文本。
   const tooltipText = [label, summary]
