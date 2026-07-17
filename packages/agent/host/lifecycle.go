@@ -125,7 +125,11 @@ func (h *Host) CreateSession(ctx context.Context, workspaceID string, input Crea
 			SubmissionMetadata: goalMetadata,
 		})
 		if goalErr != nil {
-			return CreateSessionResult{}, cleanup(goalErr, true, true)
+			// A typed goal starts from a non-provisional, already published
+			// session. Preserve that canonical session on command failure just as
+			// the legacy Service did; rolling it back would leave subscribers with
+			// an unpaired session-created event.
+			return CreateSessionResult{}, cleanup(goalErr, true, false)
 		}
 		if refreshed, ok := h.runtime.Session(workspaceID, session.ID); ok {
 			session = refreshed
