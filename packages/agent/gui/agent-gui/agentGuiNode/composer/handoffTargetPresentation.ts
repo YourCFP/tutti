@@ -5,18 +5,16 @@ export interface HandoffTargetOwnershipLabels {
   shared: string;
 }
 
-/**
- * Directory entries with owner presentation belong to another user's shared
- * runtime. Entries without owner presentation are local to the current user.
- */
 export function resolveHandoffTargetOwnershipLabel(
-  target: Pick<AgentGUIAgentTarget, "badge" | "ownerLabel">,
+  target: Pick<AgentGUIAgentTarget, "ownerLabel" | "ownership">,
   labels: HandoffTargetOwnershipLabels
-): string {
+): string | null {
   const ownerLabel = target.ownerLabel?.trim() ?? "";
-  const isShared = ownerLabel.length > 0 || target.badge != null;
-  if (!isShared) {
+  if (target.ownership === "self") {
     return labels.self;
   }
-  return ownerLabel ? `${ownerLabel} · ${labels.shared}` : labels.shared;
+  if (target.ownership === "shared") {
+    return ownerLabel ? `${ownerLabel} · ${labels.shared}` : labels.shared;
+  }
+  return null;
 }

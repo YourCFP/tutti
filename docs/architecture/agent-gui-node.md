@@ -492,10 +492,12 @@ handoff catalog must not change rail contents, session queries, or empty-home
 provider selection, and it must not synthesize a provider catalog or infer
 runnable agents from provider metadata. Handoff row presentation keeps the
 directory-owned Agent name unchanged and renders ownership as separate metadata:
-targets without owner presentation are current-user Agents, while targets with
-`owner.name` or `owner.avatarUrl` are shared Agents and expose the available
-owner identity. Duplicate Agent names must therefore remain distinguishable
-without mutating launch identity or display names.
+the host projects authoritative `ownership: "self" | "shared"` from its Agent
+directory or launch reference. Owner name, avatar, badge, and other presentation
+fields must never determine ownership. Targets without explicit ownership remain
+unclassified. Shared targets expose the available owner identity without
+mutating launch identity or display names, so duplicate Agent names remain
+distinguishable.
 When provider selection happens from the empty-home composer or title control
 while the rail is already scoped to a provider target in multi-provider scope,
 it must update the rail conversation filter to the matching agent target so the
