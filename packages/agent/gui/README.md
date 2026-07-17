@@ -227,6 +227,11 @@ use `renderAgentsEmpty` for a host-specific loaded-empty state. Use
 `renderAgentReadinessState` for host-specific availability presentation, and
 handle install/login/refresh requests through `onAgentAvailabilityAction`.
 
+Hosts that launch handoffs across session-runtime boundaries may also pass
+`handoffAgentDirectory`. Its ready entries populate only the active-conversation
+Handoff menu; the conversation rail, session queries, and empty composer remain
+owned by `agentDirectory`. When omitted, Handoff uses `agentDirectory`.
+
 The old public `providerTargets`, `providerRailMode`, provider-target renderers,
 and `defaultProviderTargetId` contract is intentionally unsupported. Workbench
 state hydration performs a one-time read of legacy `providerTargetId` into

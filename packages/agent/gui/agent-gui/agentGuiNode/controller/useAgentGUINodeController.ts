@@ -118,6 +118,8 @@ interface UseAgentGUINodeControllerInput {
   data: AgentGUINodeData;
   agentTargets?: readonly AgentGUIAgentTarget[];
   agentTargetsLoading?: boolean;
+  handoffAgentTargets?: readonly AgentGUIAgentTarget[];
+  handoffAgentTargetsLoading?: boolean;
   providerRailMode?: AgentGUIProviderRailMode;
   comingSoonProviders?: readonly AgentGUIProvider[];
   providerReadinessGates?: Partial<
@@ -152,6 +154,8 @@ export function useAgentGUINodeController({
   data,
   agentTargets,
   agentTargetsLoading = false,
+  handoffAgentTargets,
+  handoffAgentTargetsLoading = false,
   providerRailMode = "catalog",
   comingSoonProviders,
   providerReadinessGates = null,
@@ -189,7 +193,9 @@ export function useAgentGUINodeController({
     providerRailMode,
     providerReadinessGates,
     agentTargets,
-    agentTargetsLoading
+    agentTargetsLoading,
+    handoffAgentTargets,
+    handoffAgentTargetsLoading
   });
   const {
     effectiveSelectedProviderTarget,

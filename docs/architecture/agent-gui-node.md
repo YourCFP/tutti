@@ -483,8 +483,14 @@ also embeds Issue Manager, it registers the workspace-scoped Issue Manager
 launch coordinator locally and translates issue links into the standard
 `open-workspace-issue` activation for its Tasks sidebar.
 The handoff menu is a launch surface, so its options must come from ready entries
-in the host-provided `agents` array. It must not synthesize a provider catalog
-or infer runnable agents from provider metadata.
+in the host-provided handoff Agent directory. `AgentGUI.handoffAgentDirectory`
+is independent from the runtime-owned `agentDirectory`: a host that separates
+local and shared session runtimes can keep the current rail bound to one runtime
+while offering both runtimes as launch targets. Omitting the handoff directory
+uses the runtime directory, preserving the single-runtime host contract. The
+handoff catalog must not change rail contents, session queries, or empty-home
+provider selection, and it must not synthesize a provider catalog or infer
+runnable agents from provider metadata.
 When provider selection happens from the empty-home composer or title control
 while the rail is already scoped to a provider target in multi-provider scope,
 it must update the rail conversation filter to the matching agent target so the
