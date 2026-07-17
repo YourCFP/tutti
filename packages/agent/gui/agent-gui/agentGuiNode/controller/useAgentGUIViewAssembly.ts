@@ -206,6 +206,7 @@ export function useAgentGUIViewAssembly(input: UseAgentGUIViewAssemblyInput) {
       goalClearNoticeSequence: input.goalClearNoticeSequence,
       isDeletingConversation: input.isDeletingConversation,
       isDeletingProjectConversations: input.isDeletingProjectConversations,
+      isUserProjectMutationPending: input.isUserProjectMutationPending,
       pendingDeleteConversation: input.pendingDeleteConversation,
       pendingDeleteProjectConversations: input.pendingDeleteProjectConversations
     }

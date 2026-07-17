@@ -386,6 +386,7 @@ export interface AgentGUIOperationsViewModel {
   goalClearNoticeSequence: number;
   isDeletingConversation: boolean;
   isDeletingProjectConversations: boolean;
+  isUserProjectMutationPending: boolean;
   pendingDeleteConversation: AgentGUIConversationSummary | null;
   pendingDeleteProjectConversations: AgentGUIProjectConversationDeleteTarget | null;
 }

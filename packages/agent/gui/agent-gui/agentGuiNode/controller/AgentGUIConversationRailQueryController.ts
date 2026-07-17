@@ -43,6 +43,7 @@ import {
   type AgentGUIConversationRailQuerySnapshot
 } from "./agentGuiConversationRailQuerySnapshot";
 import { AgentGUIConversationRailTargetedPageRefresher } from "./AgentGUIConversationRailTargetedPageRefresher";
+import { userProjectCollectionKey } from "./agentGuiConversationRailQueryScope";
 
 export type { AgentGUIConversationRailQuerySnapshot } from "./agentGuiConversationRailQuerySnapshot";
 
@@ -186,7 +187,6 @@ export class AgentGUIConversationRailQueryController {
     if (this.searchQuery) this.requestSearch();
     return () => this.detach();
   }
-
   configure(scope: ConversationRailQueryScope): void {
     const previousScopeKey = this.railSectionQueryKey;
     const previousAgentTargetId = this.sectionAgentTargetId;
@@ -194,11 +194,7 @@ export class AgentGUIConversationRailQueryController {
       scope.conversationFilter.kind === "agentTarget"
         ? scope.conversationFilter.agentTargetId.trim()
         : (scope.sectionAgentTargetFallbackId?.trim() ?? "");
-    const userProjectPathKey = JSON.stringify(
-      scope.userProjects
-        .map((project) => project.path.trim())
-        .filter((path) => path.length > 0)
-    );
+    const projectCollectionKey = userProjectCollectionKey(scope.userProjects);
     const nextScopeKey = JSON.stringify([
       this.workspaceId,
       scope.conversationFilter.kind === "agentTarget"
@@ -206,7 +202,7 @@ export class AgentGUIConversationRailQueryController {
         : "all",
       scope.previewMode,
       sectionAgentTargetId,
-      userProjectPathKey
+      projectCollectionKey
     ]);
     const scopeChanged = nextScopeKey !== this.railSectionQueryKey;
     this.providerSwitchDiagnostics.configure({
