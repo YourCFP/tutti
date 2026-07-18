@@ -288,14 +288,16 @@ emitted before this method can be called`, especially after HMR, navigation,
   Keep one active panel id for tools that share the same region. Pass that
   active state into every mounted Browser Node through its `hidden` prop, while
   retaining the mounted component when session preservation is required. Keep
-  the App Center catalog and every previously opened inline workspace app as
-  mounted sibling layers: clearing `openAppId` reveals the catalog but must not
-  remove an app's Browser Node, and selecting another app must not replace the
-  previous app's keyed Browser Node. Give each inline app a stable app-specific
-  node id so Browser Node controllers and Electron guests cannot be rebound to
-  a different app. Prune those retained app layers only after a ready catalog
-  snapshot confirms removal; loading or reconnecting snapshots are not proof
-  that an app disappeared. Inactive app layers need both non-interactive DOM
+  the App Center catalog and every workspace app listed in the persisted
+  `openAppIds` tab state as mounted sibling layers: selecting the permanent
+  catalog tab clears `openAppId` but must not remove an app's Browser Node, and
+  selecting another app tab must not replace the previous app's keyed Browser
+  Node. Closing a tab removes its id from `openAppIds` and intentionally releases
+  that guest. Give each inline app a stable app-specific node id so Browser Node
+  controllers and Electron guests cannot be rebound to a different app. A ready
+  catalog snapshot may also close tabs for apps confirmed unavailable; loading
+  or reconnecting snapshots are not proof that an app disappeared. Inactive app
+  layers need both non-interactive DOM
   visibility and `hidden={true}` on `BrowserNode`, because ancestor visibility
   alone is insufficient for Electron guest compositing. Do not add an explicit
   `visibility: visible` utility to the active child layer: CSS descendants can
@@ -318,9 +320,11 @@ emitted before this method can be called`, especially after HMR, navigation,
   Cover every switch among panels in the shared region, verify the inactive
   Browser Node receives `hidden={true}`, and verify an independently placed
   terminal remains open throughout the same switches. For App Center, open two
-  apps, return to the catalog after each, and reopen both; page state and any
-  running in-page Agent must continue while both inactive Browser Nodes stay
-  hidden. Also open the Browser Node overflow menu, its submenus, settings
+  apps, switch through their tabs and the permanent catalog tab, and reopen both;
+  page state and any running in-page Agent must continue while inactive Browser
+  Nodes stay hidden. Close the active and inactive app tabs in turn and verify
+  the adjacent/catalog fallback plus guest release. Also open the Browser Node
+  overflow menu, its submenus, settings
   dialog, and clear-data confirmation above a loaded guest page; verify the
   webview returns after each overlay closes. Renderer-only visibility changes
   can use HMR; preload or Electron-main changes still require a process restart.

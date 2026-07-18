@@ -386,7 +386,12 @@ export const zhCN = {
     },
     appCenter: {
       backToApps: "返回应用",
-      dockLabel: "应用"
+      dockLabel: "应用",
+      tabs: {
+        close: "关闭应用标签页",
+        label: "已打开的应用",
+        new: "打开其他应用"
+      }
     },
     info: {
       idDescription: "用于 preload 和 daemon 协调的稳定标识。",

@@ -401,7 +401,12 @@ export const en = {
     },
     appCenter: {
       backToApps: "Back to apps",
-      dockLabel: "Apps"
+      dockLabel: "Apps",
+      tabs: {
+        close: "Close app tab",
+        label: "Open apps",
+        new: "Open another app"
+      }
     },
     info: {
       idDescription: "Stable identifier for preload and daemon coordination.",

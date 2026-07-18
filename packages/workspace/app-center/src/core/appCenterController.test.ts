@@ -14,22 +14,39 @@ import {
 } from "./appCenterControllerHelpers.ts";
 import { createWorkspaceAppCenterController } from "./index.ts";
 
-test("app-center view state preserves the inline app selection", () => {
+test("app-center view state preserves normalized inline app tabs", () => {
   const selected = normalizeWorkspaceAppCenterViewState({
     activeAppTab: "community",
-    openAppId: "  group-chat  "
+    openAppId: "  group-chat  ",
+    openAppIds: [" ai-slide ", "group-chat", "ai-slide", " "]
   });
 
   assert.deepEqual(selected, {
     activeAppTab: "community",
-    openAppId: "group-chat"
+    openAppId: "group-chat",
+    openAppIds: ["ai-slide", "group-chat"]
   });
   assert.equal(
     areWorkspaceAppCenterViewStatesEqual(selected, {
       activeAppTab: "community",
-      openAppId: "group-chat"
+      openAppId: "group-chat",
+      openAppIds: ["ai-slide", "group-chat"]
     }),
     true
+  );
+});
+
+test("app-center view state restores a legacy inline app as its only tab", () => {
+  assert.deepEqual(
+    normalizeWorkspaceAppCenterViewState({
+      activeAppTab: "recommended",
+      openAppId: "ai-doc"
+    }),
+    {
+      activeAppTab: "recommended",
+      openAppId: "ai-doc",
+      openAppIds: ["ai-doc"]
+    }
   );
 });
 
