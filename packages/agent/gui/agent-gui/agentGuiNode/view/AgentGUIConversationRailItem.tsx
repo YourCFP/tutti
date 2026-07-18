@@ -34,7 +34,7 @@ import {
 import { createAgentSessionMarkdownLink } from "../agentRichText/agentFileMentionExtension";
 import type { AgentGUINodeViewModel } from "../model/agentGuiNodeTypes";
 import type { UiLanguage } from "../../../contexts/settings/domain/agentSettings";
-import type { AgentGUIViewLabels } from "../AgentGUINodeView";
+import type { AgentGUIConversationRailLabels } from "./agentGUIConversationRailLabels";
 import styles from "../AgentGUINode.styles";
 import { conversationPlainTitle } from "./agentGUIViewUtils";
 import { AgentGUIConversationRailRelativeTime } from "./AgentGUIConversationRailClock";
@@ -60,7 +60,7 @@ function agentGUIConversationIconUrl(
 
 function agentGUIConversationRailTitle(
   item: AgentGUINodeViewModel["rail"]["conversations"][number],
-  labels: AgentGUIViewLabels,
+  labels: AgentGUIConversationRailLabels,
   uiLanguage: UiLanguage
 ): string {
   const title = conversationPlainTitle(item, labels, uiLanguage);
@@ -77,7 +77,7 @@ interface AgentGUIConversationRailItemProps {
   isPendingDeleteConversation: boolean;
   isDeletingConversation: boolean;
   isRailInteractionLocked: () => boolean;
-  labels: AgentGUIViewLabels;
+  labels: AgentGUIConversationRailLabels;
   previewMode: boolean;
   uiLanguage: UiLanguage;
   workspaceId: string;
@@ -470,7 +470,7 @@ export function AgentGUIProjectRailHeader({
 }: {
   disabled?: boolean;
   labels: Pick<
-    AgentGUIViewLabels,
+    AgentGUIConversationRailLabels,
     "projectRailCreateProject" | "projectRailLinkExistingProject"
   >;
   selectProjectDirectory?: () => Promise<{ path: string } | null>;

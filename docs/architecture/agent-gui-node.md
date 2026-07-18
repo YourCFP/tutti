@@ -244,6 +244,8 @@ When runtime sections are enabled, projection unions IDs from the current sectio
 
 Scroll, section collapse, visible limits, and search query belong to mounted view scope. Non-search state is isolated by `workspaceId + agentTargetId/all`; search creates a temporary navigation scope. `activeConversationId` expresses selection only. Scrolling requires an explicit reveal intent.
 
+Contain selection and presentation identity at the Rail boundary. Each section receives the active ID only when it owns the canonical or overlay row; unrelated sections receive `null` so their memoized props remain equal. Rail pane, section, and row receive a dedicated Rail-label projection whose identity changes for locale changes, not provider-specific detail copy. Event handlers shared by every section keep stable identities and read the current scope and lock state when invoked.
+
 Relative time uses one renderer-realm minute clock. Timestamp leaves subscribe directly; do not thread a tick prop through Rail pane/section/row and rerender the interactive subtree every minute.
 
 ### 4.6 Detail and transcript

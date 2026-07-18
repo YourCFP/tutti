@@ -19,7 +19,7 @@ import {
 import type { UiLanguage } from "../../../contexts/settings/domain/agentSettings";
 import type { WorkspaceLinkAction } from "../../../actions/workspaceLinkActions";
 import type { ConversationSection } from "../agentGuiNodeViewConversation";
-import type { AgentGUIViewLabels } from "../AgentGUINodeView";
+import type { AgentGUIConversationRailLabels } from "./agentGUIConversationRailLabels";
 import type { AgentGUIProjectActionDialog } from "./AgentGUIConversationRailPane";
 import { AgentGUIConversationRailItem } from "./AgentGUIConversationRailItem";
 import { insertConversationRailSectionOverlay } from "../model/agentGuiConversationRail";
@@ -50,7 +50,7 @@ interface AgentGUIConversationRailSectionProps {
   sectionTotalCount: number;
   visibleItemLimit: number;
   createConversationDisabled: boolean;
-  labels: AgentGUIViewLabels;
+  labels: AgentGUIConversationRailLabels;
   uiLanguage: UiLanguage;
   workspaceId: string;
   registerItemElement: (itemId: string, element: HTMLDivElement | null) => void;

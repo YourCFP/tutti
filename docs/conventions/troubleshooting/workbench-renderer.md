@@ -504,6 +504,12 @@
   `engine -> selector -> projection -> controller -> section` chain. Separate
   real summary-field changes from reference-only array, object, or callback
   changes; a memoized leaf cannot contain churn created at the selector boundary.
+  On a Rail click, count updated sections and rows, then inspect whether a global
+  active ID, the full provider-dependent label object, or scope-dependent action
+  callbacks changed on every section. Thousands of Tooltip, Popper, Dropdown,
+  or ContextMenu component renders usually amplify that upstream fan-out rather
+  than identify its owner. React DevTools component tracks add profiling cost,
+  so use them to locate the chain but recapture without the profiler for timing.
   When the stack starts in `setRef`, inspect Radix `asChild` composition before
   changing business state. In particular, check whether Tooltip and Dropdown
   triggers both clone the same DOM child and merge callback refs, or whether a
@@ -521,7 +527,12 @@
   that injects an already-stable view model bypasses this production chain and
   cannot detect that regression. A container-owned relative-time interval can
   cause the same fan-out when its timestamp is passed through every section and
-  row instead of being consumed at the timestamp leaf.
+  row instead of being consumed at the timestamp leaf. A globally threaded
+  selection ID, a provider-dependent full label object passed into Rail, or
+  callbacks rebuilt for each target scope can likewise invalidate every
+  section even though only one or two rows changed visually. A measurement
+  effect that includes the state it writes in its dependencies can repeat the
+  resulting layout read once more.
 - Fix:
   Stabilize the value at the ownership boundary, or remove derived presentation
   values from bidirectional state. For external/workbench state, only sync
@@ -536,6 +547,12 @@
   share unchanged summary items. Let time-label consumers subscribe directly
   to a shared renderer-realm relative-time external store. The store starts one
   timer for its first subscriber and clears it after its last unsubscribe.
+  Project selection into the section that owns the active canonical or overlay
+  row, passing `null` to unrelated sections. Give Rail a dedicated locale-bound
+  label projection instead of the provider-dependent full view labels. Keep
+  shared section actions referentially stable and read the latest scope at event
+  time. Remove a measured state value from an effect dependency when the effect
+  only writes, but never reads, that value.
   During Rail reconciliation, expose a stable lock reader so
   portaled menu actions can check current state without passing a changing
   boolean through every section. For composed menu actions, attach the Tooltip
@@ -556,6 +573,10 @@
   that reuses the Rail reference by construction. For relative-time clocks,
   assert multiple time-label consumers share one interval, the last unmount
   clears it, and a tick updates labels without rerendering the parent rows. Add
+  identity tests for locale-bound Rail labels and scope-bound actions, including
+  invoking a callback retained before a scope switch. Assert active selection
+  projects only into its owning section. Then recapture the same interaction
+  without React Profiler instrumentation before claiming timing improvement. Add
   a composition regression
   test for shared Tooltip/Dropdown actions and manually create a new
   conversation, since an empty-to-populated Rail transition can be the first
@@ -567,6 +588,8 @@
   [useAgentGUIConversationRailQuery.search.spec.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUIConversationRailQuery.search.spec.tsx)
   [agentGuiConversationRailQuerySnapshot.spec.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/agentGuiConversationRailQuerySnapshot.spec.ts)
   [AgentGUIConversationRailClock.spec.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIConversationRailClock.spec.tsx)
+  [agentGUIConversationRailLabels.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/view/agentGUIConversationRailLabels.ts)
+  [useAgentGUIConversationRailViewState.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/view/useAgentGUIConversationRailViewState.ts)
   [AgentGUIConversationRailSection.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIConversationRailSection.tsx)
   [AgentSessionChrome.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/AgentSessionChrome.tsx)
 

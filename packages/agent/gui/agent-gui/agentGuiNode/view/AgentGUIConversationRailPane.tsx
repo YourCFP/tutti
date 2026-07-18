@@ -1,12 +1,4 @@
-import {
-  Fragment,
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from "react";
+import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
 import { Button as SystemButton } from "@tutti-os/ui-system";
 import { ScrollArea } from "@tutti-os/ui-system/components";
 import { CreateChatIcon } from "@tutti-os/ui-system/icons";
@@ -18,10 +10,7 @@ import { TaskSearchField } from "../../RoomIssueNode/TaskSearchField";
 import { AgentConversationListSkeleton } from "../AgentConversationListSkeleton";
 import type { AgentGUINodeViewModel } from "../model/agentGuiNodeTypes";
 import { matchesAgentGUIConversationSummaryFilter } from "../model/agentGuiConversationFilter";
-import type {
-  AgentGUINodeViewProps,
-  AgentGUIViewLabels
-} from "../AgentGUINodeView";
+import type { AgentGUINodeViewProps } from "../AgentGUINodeView";
 import type { ConversationSection } from "../agentGuiNodeViewConversation";
 import {
   isConversationRailInitialLoadPending,
@@ -30,6 +19,7 @@ import {
   projectConversationRailSearchSections,
   projectConversationRailSectionsWithActiveConversation,
   projectConversationRailSectionsWithTransientConversations,
+  conversationRailSectionActiveConversationId,
   conversationRailSectionHeaderVisibility,
   isConversationRailProjectPinned,
   resolveConversationRailActiveConversation,
@@ -46,8 +36,10 @@ import { AgentGUIProjectRailHeader } from "./AgentGUIConversationRailItem";
 import {
   agentGuiPerfNowMs,
   conversationPlainTitle,
-  roundAgentGuiPerfMs
+  roundAgentGuiPerfMs,
+  useStableEventCallback
 } from "./agentGUIViewUtils";
+import type { AgentGUIConversationRailLabels } from "./agentGUIConversationRailLabels";
 import styles from "../AgentGUINode.styles";
 import { useAgentGUIConversationRailViewState } from "./useAgentGUIConversationRailViewState";
 import { useAgentGUIProjectMenuState } from "./useAgentGUIProjectMenuState";
@@ -79,7 +71,7 @@ export interface AgentGUIConversationRailControllerProps {
   isDeletingConversation: boolean;
   isDeletingProjectConversations: boolean;
   isUserProjectMutationPending?: boolean;
-  labels: AgentGUIViewLabels;
+  labels: AgentGUIConversationRailLabels;
   workspaceUserProjectI18n: WorkspaceUserProjectI18nRuntime;
   uiLanguage: UiLanguage;
   previewMode: boolean;
@@ -440,7 +432,7 @@ export const AgentGUIConversationRailPane = memo(
       conversationFilter.kind === "agentTarget"
         ? conversationFilter.agentTargetId.trim()
         : (sectionAgentTargetFallbackId?.trim() ?? "");
-    const requestSectionBatchDeletion = useCallback(
+    const requestSectionBatchDeletion = useStableEventCallback(
       (section: ConversationSection) => {
         if (
           isInteractionLocked() ||
@@ -469,14 +461,7 @@ export const AgentGUIConversationRailPane = memo(
             });
           })
           .finally(() => setIsRequestingBatchDeletion(false));
-      },
-      [
-        isDeletingProjectConversations,
-        isRequestingBatchDeletion,
-        isInteractionLocked,
-        onConfirmDeleteProjectConversations,
-        sectionAgentTargetId
-      ]
+      }
     );
     const isRuntimeRailLoading = isConversationRailInitialLoadPending({
       pending: runtimeRailSectionsPending,
@@ -674,7 +659,13 @@ export const AgentGUIConversationRailPane = memo(
                       activeConversationCountsTowardTotal={
                         activeOverlayCountsTowardTotal
                       }
-                      activeConversationId={activeConversationId}
+                      activeConversationId={conversationRailSectionActiveConversationId(
+                        {
+                          activeConversation: activeOverlayConversation,
+                          activeConversationId,
+                          section
+                        }
+                      )}
                       createConversationDisabled={createConversationDisabled}
                       isDeletingConversation={isDeletingConversation}
                       isDeletingProjectConversations={

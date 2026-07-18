@@ -372,6 +372,61 @@ export interface AgentGUIViewLabels {
   reviewPicker: AgentComposerProps["labels"]["reviewPicker"];
 }
 
+export type AgentGUIConversationRailLabels = Pick<
+  AgentGUIViewLabels,
+  | "batchDeleteConversations"
+  | "batchDeleteConversationsBody"
+  | "batchDeleteConversationsConfirm"
+  | "batchDeleteConversationsTitle"
+  | "batchDeleteProjectSessions"
+  | "batchDeleteProjectSessionsBody"
+  | "batchDeleteProjectSessionsConfirm"
+  | "batchDeleteProjectSessionsTitle"
+  | "cancel"
+  | "conversationUnavailable"
+  | "conversationsSectionMoreActions"
+  | "copySessionLink"
+  | "deleteSession"
+  | "deleteSessionConfirm"
+  | "emptyProjectConversations"
+  | "loadingConversations"
+  | "markSessionUnread"
+  | "newConversation"
+  | "noConversations"
+  | "openConversationWindow"
+  | "pinProject"
+  | "pinSession"
+  | "pinnedProjectAccessibleName"
+  | "projectRailCreateProject"
+  | "projectRailLinkExistingProject"
+  | "projectSectionEdit"
+  | "projectSectionMoreActions"
+  | "projectSectionViewFiles"
+  | "relativeTimeDays"
+  | "relativeTimeHours"
+  | "relativeTimeJustNow"
+  | "relativeTimeMinutes"
+  | "relativeTimeMonths"
+  | "relativeTimeYears"
+  | "removeProject"
+  | "removeProjectConfirmDescription"
+  | "removeProjectConfirmTitle"
+  | "renameSession"
+  | "retrySearch"
+  | "searchFailed"
+  | "searchNoConversations"
+  | "searchPlaceholder"
+  | "sectionConversations"
+  | "sectionPinned"
+  | "selectConversation"
+  | "showLessConversations"
+  | "showMoreConversations"
+  | "startConversation"
+  | "unpinProject"
+  | "unpinSession"
+  | "untitledConversationTitle"
+>;
+
 export interface AgentGUINodeViewProps {
   viewModel: AgentGUINodeViewModel;
   referenceProvenanceFilter?: AgentComposerReferenceProvenanceFilter | null;
@@ -510,6 +565,7 @@ export interface AgentGUINodeViewProps {
   resolveDroppedFileReferences?: AgentComposerProps["resolveDroppedFileReferences"];
   onConversationRailWidthChanged: (widthPx: number) => void;
   labels: AgentGUIViewLabels;
+  conversationRailLabels: AgentGUIConversationRailLabels;
   workspaceUserProjectI18n: WorkspaceUserProjectI18nRuntime;
   workspaceFileManagerCopy?: WorkspaceFileManagerI18nRuntime | null;
   workspaceFileReferenceAdapter?: WorkspaceFileReferenceAdapter | null;
