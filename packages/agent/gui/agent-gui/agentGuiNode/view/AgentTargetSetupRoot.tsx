@@ -1,6 +1,9 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import { resolveAgentGUIProviderCatalogIdentity } from "../../../providerIdentityCatalog.ts";
-import { openAgentEnvPanel } from "../../../shared/agentEnv/agentEnvPanelStore.ts";
+import {
+  AgentEnvPanelActionProvider,
+  type OpenAgentEnvPanelAction
+} from "../../../shared/agentEnv";
 import {
   AgentTargetSetupControllerProvider,
   type AgentTargetSetupController,
@@ -18,6 +21,7 @@ export function useAgentTargetSetupRoot(input: {
   activeConversationId: string | null;
   agentTargets: readonly AgentGUIAgentTarget[];
   environmentProvider: string | null | undefined;
+  openEnvironmentSetup?: OpenAgentEnvPanelAction;
   selectedAgentTarget: AgentGUIAgentTarget;
 }): {
   controller: AgentTargetSetupController;
@@ -52,8 +56,16 @@ export function useAgentTargetSetupRoot(input: {
       controller.setDialogOpen(true);
       return;
     }
-    openAgentEnvPanel({ provider: input.environmentProvider, focus: null });
-  }, [controller, input.environmentProvider, targetRuntimeSetupVisible]);
+    input.openEnvironmentSetup?.({
+      provider: input.environmentProvider,
+      focus: null
+    });
+  }, [
+    controller,
+    input.environmentProvider,
+    input.openEnvironmentSetup,
+    targetRuntimeSetupVisible
+  ]);
   return {
     controller,
     environmentSetupVisible,
@@ -64,19 +76,23 @@ export function useAgentTargetSetupRoot(input: {
 
 export function AgentTargetSetupRoot({
   children,
-  controller
+  controller,
+  openEnvironmentSetup
 }: {
   children: ReactNode;
   controller: AgentTargetSetupController;
+  openEnvironmentSetup?: OpenAgentEnvPanelAction;
 }): React.JSX.Element {
   return (
-    <AgentTargetSetupControllerProvider controller={controller}>
-      {children}
-      <AgentTargetSetupGate
-        carouselMountedExternally={false}
-        dialogOwner
-        gateVisible={false}
-      />
-    </AgentTargetSetupControllerProvider>
+    <AgentEnvPanelActionProvider openPanel={openEnvironmentSetup}>
+      <AgentTargetSetupControllerProvider controller={controller}>
+        {children}
+        <AgentTargetSetupGate
+          carouselMountedExternally={false}
+          dialogOwner
+          gateVisible={false}
+        />
+      </AgentTargetSetupControllerProvider>
+    </AgentEnvPanelActionProvider>
   );
 }

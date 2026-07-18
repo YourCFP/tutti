@@ -149,6 +149,7 @@ export const AgentGUINode = memo(function AgentGUINode({
     onHandoffConversation,
     onCapabilitySettingsRequest,
     onAgentProviderLogin,
+    onAgentEnvPanelOpen,
     onOpenConversationWindow,
     onClose,
     onResize,
@@ -654,6 +655,7 @@ export const AgentGUINode = memo(function AgentGUINode({
               onAgentProviderLogin={
                 onAgentProviderLogin ? handleAgentProviderLogin : undefined
               }
+              onAgentEnvPanelOpen={onAgentEnvPanelOpen}
               accountMenuState={accountMenuState}
               conversationRailCollapsed={isRenderedConversationRailCollapsed}
               conversationRailWidthPx={clampAgentGUIConversationRailWidthPx(

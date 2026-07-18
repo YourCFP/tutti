@@ -35,6 +35,7 @@ import type {
   AgentGUINodeViewModel
 } from "../model/agentGuiNodeTypes";
 import type { AgentGUIEngagementEventSink } from "../engagement/agentGUIEngagement.types";
+import type { OpenAgentEnvPanelInput } from "../../../shared/agentEnv";
 
 export type AgentMentionReferenceTargetResolver = (
   item: AgentContextMentionItem
@@ -419,6 +420,7 @@ export interface AgentGUINodeViewProps {
   accountMenuState?: AgentGUIAccountMenuState | null;
   previewMode?: boolean;
   onAgentProviderLogin?: (provider?: string | null) => void;
+  onAgentEnvPanelOpen?: (input?: OpenAgentEnvPanelInput) => void;
   actions: {
     updateConversationFilter: (
       filter: AgentGUINodeViewModel["rail"]["conversationFilter"]

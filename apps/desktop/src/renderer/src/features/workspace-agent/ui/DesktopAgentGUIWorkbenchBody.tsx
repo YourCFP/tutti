@@ -9,6 +9,7 @@ import {
 } from "react";
 import { AgentGUI } from "@tutti-os/agent-gui/agent-gui";
 import type { AgentGUIProps, AgentHostInputApi } from "@tutti-os/agent-gui";
+import { useService } from "@tutti-os/infra/di";
 import { requestWorkspaceAgentGuiLaunch } from "../services/workspaceAgentGuiLaunchCoordinator.ts";
 import { registerWorkspaceAgentGuiOpenSession } from "../../workspace-workbench/services/workspaceAgentGuiOpenSessionCoordinator.ts";
 import { workbenchFocusInputActivationType } from "@tutti-os/workbench-surface";
@@ -62,6 +63,7 @@ import { useDesktopAgentGUIReadiness } from "./useDesktopAgentGUIReadiness.ts";
 import { useDesktopAgentGUIOpenConversationWindow } from "./useDesktopAgentGUIOpenConversationWindow.ts";
 import { useDesktopAgentGUIWorkbenchEvents } from "./useDesktopAgentGUIWorkbenchEvents.ts";
 import { useStableDesktopAgentGUIHostProps } from "./useStableDesktopAgentGUIHostProps.ts";
+import { IAgentEnvService } from "../services/agentEnvService.interface.ts";
 import { preloadDesktopAgentGuiMentionBrowse } from "../services/preloadDesktopAgentGuiMentionBrowse.ts";
 import { DESKTOP_AGENT_GUI_CURRENT_USER_ID } from "../services/desktopAgentGuiIdentity.ts";
 import {
@@ -118,6 +120,7 @@ function DesktopAgentGUISurfaceImpl({
   const readinessProvider =
     agents.find((agent) => agent.agentTargetId === requestedAgentTargetId)
       ?.provider ?? null;
+  const agentEnvService = useService(IAgentEnvService);
   const {
     computerUseStatus,
     handleAgentProviderLogin,
@@ -572,6 +575,9 @@ function DesktopAgentGUISurfaceImpl({
     }),
     [computerUseStatus, desktopPreferencesState.browserUseConnectionMode]
   );
+  const handleAgentEnvPanelOpen = useCallback<
+    NonNullable<AgentGUIProps["hostActions"]["onAgentEnvPanelOpen"]>
+  >((input) => agentEnvService.open(input), [agentEnvService]);
   const referenceProvenanceFilterEnabled =
     !previewMode &&
     isFeatureEnabled(
@@ -660,6 +666,7 @@ function DesktopAgentGUISurfaceImpl({
       workspaceAppIcons
     },
     hostActions: {
+      onAgentEnvPanelOpen: previewMode ? undefined : handleAgentEnvPanelOpen,
       onAgentProviderLogin:
         !previewMode && agentProviderStatusService
           ? handleAgentProviderLogin

@@ -32,6 +32,7 @@ import { DesktopAgentProviderManageDialog } from "@renderer/features/workspace-a
 import { IAgentProviderStatusService } from "@renderer/features/workspace-agent/services/agentProviderStatusService.interface.ts";
 import { IAgentsService } from "@renderer/features/workspace-agent/services/agentsService.interface.ts";
 import { IWorkspaceAgentActivityService } from "@renderer/features/workspace-agent/services/workspaceAgentActivityService.interface.ts";
+import { IAgentEnvService } from "@renderer/features/workspace-agent/services/agentEnvService.interface.ts";
 import {
   registerWorkspaceAgentGuiLaunchHandler,
   requestWorkspaceAgentGuiLaunch
@@ -273,6 +274,7 @@ function ReadyWorkspaceWorkbenchWithSession({
     ]
   );
   useEffect(() => () => mentionService.dispose(), [mentionService]);
+  const agentEnvService = useService(IAgentEnvService);
   const agentProviderStatusService = useService(IAgentProviderStatusService);
   const runtime = useWorkspaceWorkbenchShellRuntime({
     enableWindowCloseGuard,
@@ -303,6 +305,7 @@ function ReadyWorkspaceWorkbenchWithSession({
   const unregisterIssueManagerLaunchRef = useRef<(() => void) | null>(null);
   const unregisterGroupChatLaunchRef = useRef<(() => void) | null>(null);
   const unregisterWorkbenchNodeLaunchRef = useRef<(() => void) | null>(null);
+  const releaseAgentEnvHostRef = useRef<(() => void) | null>(null);
   const closeLaunchpad = useCallback(() => {
     setLaunchpadOpen(false);
   }, []);
@@ -412,10 +415,14 @@ function ReadyWorkspaceWorkbenchWithSession({
       unregisterGroupChatLaunchRef.current = null;
       unregisterWorkbenchNodeLaunchRef.current?.();
       unregisterWorkbenchNodeLaunchRef.current = null;
+      releaseAgentEnvHostRef.current?.();
+      releaseAgentEnvHostRef.current = null;
 
       if (!host) {
         return;
       }
+
+      releaseAgentEnvHostRef.current = agentEnvService.bindWorkbenchHost(host);
 
       unregisterAgentGuiLaunchRef.current =
         registerWorkspaceAgentGuiLaunchHandler(
@@ -518,7 +525,13 @@ function ReadyWorkspaceWorkbenchWithSession({
           }
         );
     },
-    [appCenterService, runtime, state.workspace.id, workspaceAppExternalApi]
+    [
+      agentEnvService,
+      appCenterService,
+      runtime,
+      state.workspace.id,
+      workspaceAppExternalApi
+    ]
   );
   const windowManagement = useMemo<WorkbenchWindowManagementConfig>(
     () => ({
@@ -539,6 +552,8 @@ function ReadyWorkspaceWorkbenchWithSession({
       unregisterFilesLaunchRef.current?.();
       unregisterFilesLaunchRef.current = null;
       unregisterIssueManagerLaunchRef.current?.();
+      releaseAgentEnvHostRef.current?.();
+      releaseAgentEnvHostRef.current = null;
       unregisterIssueManagerLaunchRef.current = null;
       unregisterGroupChatLaunchRef.current?.();
       unregisterGroupChatLaunchRef.current = null;
@@ -615,8 +630,8 @@ function ReadyWorkspaceWorkbenchWithSession({
               preferred,
               intent.actionId,
               {
-                workbenchHost,
-                workspaceId
+                context: { workbenchHost, workspaceId },
+                origin: "user"
               }
             );
           }
@@ -646,8 +661,8 @@ function ReadyWorkspaceWorkbenchWithSession({
         if (intent.kind === "action" && targetStatus) {
           void agentProviderStatusService
             .runAction(targetStatus.provider, intent.actionId, {
-              workbenchHost,
-              workspaceId
+              context: { workbenchHost, workspaceId },
+              origin: "user"
             })
             .catch(() => {});
         }
@@ -875,11 +890,7 @@ function ReadyWorkspaceWorkbenchWithSession({
           onCancel={runtime.closeDialog.onCancel}
           onConfirm={runtime.closeDialog.onConfirm}
         />
-        <AgentEnvPanel
-          agentProviderStatusService={agentProviderStatusService}
-          workspaceId={state.workspace.id}
-          workbenchHost={workbenchHost ?? undefined}
-        />
+        <AgentEnvPanel />
       </main>
     </RichTextMentionServiceProvider>
   );

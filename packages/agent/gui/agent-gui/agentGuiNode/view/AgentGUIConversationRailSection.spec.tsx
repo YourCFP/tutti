@@ -76,7 +76,6 @@ function renderProjectSection(input: {
         activeConversationCountsTowardTotal={false}
         activeConversationId={null}
         createConversationDisabled={false}
-        currentTimeMs={1}
         isConversationSearchActive={input.searchActive ?? false}
         isDeletingConversation={false}
         isDeletingProjectConversations={false}

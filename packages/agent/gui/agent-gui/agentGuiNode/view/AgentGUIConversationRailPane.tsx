@@ -201,7 +201,6 @@ export const AgentGUIConversationRailPane = memo(
     onConversationQueryChange
   }: AgentGUIConversationRailPaneProps): React.JSX.Element {
     "use memo";
-    const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
     const [pendingProjectAction, setPendingProjectAction] =
       useState<AgentGUIProjectActionDialog | null>(null);
     const [isRequestingBatchDeletion, setIsRequestingBatchDeletion] =
@@ -527,15 +526,7 @@ export const AgentGUIConversationRailPane = memo(
     const projectDragLocked = projectDragBaseLocked || isProjectMovePending;
 
     useEffect(() => {
-      const cleanupProjectDrag = installProjectDragGlobalListeners();
-      // timing: refresh relative timestamps in the rail once a minute
-      const timer = window.setInterval(() => {
-        setCurrentTimeMs(Date.now());
-      }, 60_000);
-      return () => {
-        window.clearInterval(timer);
-        cleanupProjectDrag();
-      };
+      return installProjectDragGlobalListeners();
     }, [installProjectDragGlobalListeners]);
 
     return (
@@ -685,7 +676,6 @@ export const AgentGUIConversationRailPane = memo(
                       }
                       activeConversationId={activeConversationId}
                       createConversationDisabled={createConversationDisabled}
-                      currentTimeMs={currentTimeMs}
                       isDeletingConversation={isDeletingConversation}
                       isDeletingProjectConversations={
                         isDeletingProjectConversations

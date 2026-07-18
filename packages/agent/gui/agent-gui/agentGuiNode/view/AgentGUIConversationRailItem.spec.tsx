@@ -188,7 +188,6 @@ function renderRailItem(overrides: {
   const item = (
     <AgentGUIConversationRailItem
       active={false}
-      currentTimeMs={1}
       isDeletingConversation={false}
       isPendingDeleteConversation={false}
       isRailInteractionLocked={overrides.isRailInteractionLocked}
@@ -236,6 +235,12 @@ const RAIL_ITEM_LABELS = {
   markSessionUnread: "Mark unread",
   openConversationWindow: "Open in window",
   pinSession: "Pin",
+  relativeTimeDays: (value: number) => `${value} days`,
+  relativeTimeHours: (value: number) => `${value} hours`,
+  relativeTimeJustNow: "just now",
+  relativeTimeMinutes: (value: number) => `${value} minutes`,
+  relativeTimeMonths: (value: number) => `${value} months`,
+  relativeTimeYears: (value: number) => `${value} years`,
   renameSession: "Rename",
   unpinSession: "Unpin"
 } as AgentGUIViewLabels;
