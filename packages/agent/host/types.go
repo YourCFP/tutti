@@ -235,12 +235,15 @@ type PromptAttachment struct {
 // import paths, workspace resolution, identity, and transport state are not
 // part of this type.
 type CreateSessionInput struct {
-	AgentSessionID         string
-	AgentTargetID          string
-	Provider               string
-	InitialContent         []PromptContentBlock
-	InitialDisplayPrompt   string
-	Metadata               map[string]any
+	AgentSessionID       string
+	AgentTargetID        string
+	Provider             string
+	InitialContent       []PromptContentBlock
+	InitialDisplayPrompt string
+	Metadata             map[string]any
+	// ClientSubmitID is the caller-owned idempotency identity for the optional
+	// initial turn and overrides legacy Metadata["clientSubmitId"].
+	ClientSubmitID         string
 	Title                  *string
 	Cwd                    *string
 	PermissionModeID       *string
@@ -260,7 +263,10 @@ type SendInput struct {
 	Content       []PromptContentBlock
 	DisplayPrompt string
 	Metadata      map[string]any
-	Guidance      bool
+	// ClientSubmitID is the caller-owned idempotency identity. When present it
+	// overrides any legacy clientSubmitId value carried in Metadata.
+	ClientSubmitID string
+	Guidance       bool
 }
 
 type SubmitInteractiveInput struct {

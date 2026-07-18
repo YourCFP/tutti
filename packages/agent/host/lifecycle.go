@@ -23,8 +23,9 @@ func (h *Host) CreateSession(ctx context.Context, workspaceID string, input Crea
 		return CreateSessionResult{}, err
 	}
 	typedGoal, isTypedGoal := ParseTypedGoalControl(normalized, false)
-	goalMetadata := clonePayload(input.Metadata)
-	claimMetadata := input.Metadata
+	metadata := submissionMetadata(input.Metadata, input.ClientSubmitID)
+	goalMetadata := clonePayload(metadata)
+	claimMetadata := metadata
 	if isTypedGoal {
 		normalized = nil
 		claimMetadata = nil
@@ -160,7 +161,7 @@ func (h *Host) CreateSession(ctx context.Context, workspaceID string, input Crea
 	execResult, err := h.runtime.Exec(ctx, RuntimeExecInput{
 		WorkspaceID: workspaceID, AgentSessionID: session.ID, Content: content,
 		DisplayPrompt: displayPrompt, InitialTitle: initialTitle, InitialTitleBase: session.Title,
-		Metadata: cloneMap(input.Metadata),
+		Metadata: cloneMap(metadata),
 	})
 	if err != nil {
 		h.observeStep(ctx, "session_create", "runtime_exec", session.ID, session.Provider, startedAt, err)
@@ -267,11 +268,12 @@ func (h *Host) SendInput(ctx context.Context, ref SessionRef, input SendInput) (
 	if err != nil {
 		return SendInputResult{}, err
 	}
+	metadata := submissionMetadata(input.Metadata, input.ClientSubmitID)
 	if typedGoal, ok := ParseTypedGoalControl(normalized, input.Guidance); ok {
 		goalResult, goalErr := h.goalControl(ctx, GoalControlInput{
 			WorkspaceID: ref.WorkspaceID, AgentSessionID: ref.AgentSessionID,
 			Action: typedGoal.Action, Objective: typedGoal.Objective,
-			SubmissionMetadata: input.Metadata,
+			SubmissionMetadata: metadata,
 		})
 		if goalErr != nil {
 			return SendInputResult{}, goalErr
@@ -282,7 +284,7 @@ func (h *Host) SendInput(ctx context.Context, ref SessionRef, input SendInput) (
 			Kind: "goalControl", GoalControl: &goalResult,
 		}, nil
 	}
-	claim, claimPending, err := h.prepareSubmitClaim(ctx, ref, input.Metadata)
+	claim, claimPending, err := h.prepareSubmitClaim(ctx, ref, metadata)
 	if err != nil {
 		return SendInputResult{}, err
 	}
@@ -337,7 +339,7 @@ func (h *Host) SendInput(ctx context.Context, ref SessionRef, input SendInput) (
 		return h.runtime.Exec(ctx, RuntimeExecInput{
 			WorkspaceID: ref.WorkspaceID, AgentSessionID: ref.AgentSessionID, Content: content,
 			DisplayPrompt: displayPrompt, InitialTitle: initialTitle, InitialTitleBase: session.Title,
-			Guidance: input.Guidance, Metadata: cloneMap(input.Metadata),
+			Guidance: input.Guidance, Metadata: cloneMap(metadata),
 		})
 	}()
 	if err != nil {
