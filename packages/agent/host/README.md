@@ -97,6 +97,12 @@ Coordinator, goal, and commit-observer scenario groups extend the same driver
 with recovery ordering through the worktree sweep, recovery failure
 propagation, and post-commit failure semantics.
 
+The conformance package keeps its shared fixture and driver contract in
+`conformance.go`, explicit scenario membership in `scenarios.go`, and scenario
+runners in capability-named files. A scenario shared by multiple catalogs must
+reuse the same package-level scenario value; catalog ownership must not be
+inferred by matching its display name.
+
 The Host release module depends on `store-sqlite` and
 `store-sqlite/canonical`, but not on `daemon`, sidecars, or `tuttid`. Canonical
 activity snapshots, report observer types, provider identities, capability

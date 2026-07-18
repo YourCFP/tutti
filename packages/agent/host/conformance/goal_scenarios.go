@@ -7,8 +7,39 @@ import (
 
 	agenthost "github.com/tutti-os/tutti/packages/agent/host"
 	storesqlite "github.com/tutti-os/tutti/packages/agent/store-sqlite"
-	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
+
+func runDirectAndTypedGoalEquivalence(ctx context.Context, driver Driver) error {
+	fixture := liveSessionFixture("session-goal-direct", "")
+	if err := driver.Reset(ctx, fixture); err != nil {
+		return err
+	}
+	direct, err := driver.GoalControl(ctx, agenthost.GoalControlInput{
+		WorkspaceID: "workspace-1", AgentSessionID: "session-goal-direct", Action: "set", Objective: "ship it",
+		SubmissionMetadata: map[string]any{"clientSubmitId": "goal-direct"},
+	})
+	if err != nil {
+		return fmt.Errorf("direct goal control: %w", err)
+	}
+	fixture = liveSessionFixture("session-goal-typed", "")
+	if err := driver.Reset(ctx, fixture); err != nil {
+		return err
+	}
+	typed, err := driver.SendInput(ctx, agenthost.SessionRef{WorkspaceID: "workspace-1", AgentSessionID: "session-goal-typed"}, agenthost.SendInput{
+		Content:  []agenthost.PromptContentBlock{{Type: "text", Text: "/goal ship it"}},
+		Metadata: map[string]any{"clientSubmitId": "goal-typed"},
+	})
+	if err != nil {
+		return fmt.Errorf("typed goal control: %w", err)
+	}
+	if typed.Kind != "goalControl" || typed.TurnID != "" || driver.Metrics().ExecCalls != 0 {
+		return fmt.Errorf("typed goal opened a turn: result=%#v metrics=%#v", typed, driver.Metrics())
+	}
+	if metadataString(direct.Goal, "objective") != "ship it" || metadataString(typed.Goal, "objective") != "ship it" || direct.Revision != typed.Revision {
+		return fmt.Errorf("direct=%#v typed=%#v", direct, typed)
+	}
+	return nil
+}
 
 func runGoalActionLifecycle(ctx context.Context, driver Driver) error {
 	if err := driver.Reset(ctx, liveSessionFixture("session-goal-actions", "")); err != nil {
@@ -105,58 +136,7 @@ func runGoalInboxConsumerPreflight(ctx context.Context, driver Driver) error {
 	return nil
 }
 
-func runRuntimeCommitObserverFailure(ctx context.Context, driver Driver) error {
-	fixture := liveSessionFixture("session-observer-runtime", "turn-observer-runtime")
-	fixture.Turn = &TurnSeed{TurnID: "turn-observer-runtime", Phase: canonical.TurnPhaseWaiting}
-	fixture.Interaction = &InteractionSeed{
-		RequestID: "request-observer-runtime", TurnID: "turn-observer-runtime",
-		Kind: canonical.InteractionKindQuestion, Status: canonical.InteractionStatusPending,
-	}
-	fixture.FailCommitObserver = true
-	if err := driver.Reset(ctx, fixture); err != nil {
-		return err
-	}
-	optionID := "approve"
-	if _, err := driver.SubmitInteractive(ctx,
-		agenthost.SessionRef{WorkspaceID: "workspace-1", AgentSessionID: "session-observer-runtime"},
-		"request-observer-runtime", agenthost.SubmitInteractiveInput{TurnID: "turn-observer-runtime", OptionID: &optionID},
-	); err != nil {
-		return fmt.Errorf("observer failure escaped committed runtime command: %w", err)
-	}
-	if commits := driver.Metrics().RuntimeOperationCommits; commits < 2 {
-		return fmt.Errorf("runtime committed deltas=%d, want prepare and completion", commits)
-	}
-	return nil
-}
-
-func runGoalOperationCommittedDeltas(ctx context.Context, driver Driver) error {
-	fixture := liveSessionFixture("session-observer-goal", "")
-	if err := driver.Reset(ctx, fixture); err != nil {
-		return err
-	}
-	result, err := driver.GoalControl(ctx, agenthost.GoalControlInput{
-		WorkspaceID: "workspace-1", AgentSessionID: "session-observer-goal",
-		Action: "set", Objective: "observe durable goal",
-	})
-	if err != nil {
-		return fmt.Errorf("goal control: %w", err)
-	}
-	metrics := driver.Metrics()
-	if result.SyncStatus != storesqlite.GoalSyncStatusSynced || metrics.GoalOperationCommits < 3 {
-		return fmt.Errorf("goal result=%#v committed deltas=%d, want prepare/dispatch/complete", result, metrics.GoalOperationCommits)
-	}
-	return nil
-}
-
 func metadataString(value map[string]any, key string) string {
 	text, _ := value[key].(string)
 	return text
-}
-
-func liveSessionFixture(sessionID, activeTurnID string) Fixture {
-	return Fixture{Session: &SessionSeed{
-		WorkspaceID: "workspace-1", AgentSessionID: sessionID, Provider: "codex",
-		ProviderSessionID: "provider-" + sessionID, Cwd: "/workspace", Title: "Session title",
-		ActiveTurnID: activeTurnID, InitialTitleEstablished: true, Live: true,
-	}}
 }
