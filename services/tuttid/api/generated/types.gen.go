@@ -2666,6 +2666,7 @@ type AgentTarget struct {
 	LaunchRef       AgentTargetLaunchRef       `json:"launchRef"`
 	Name            string                     `json:"name"`
 	Provider        AgentTargetProvider        `json:"provider"`
+	SidebarIconUrl  *string                    `json:"sidebarIconUrl,omitempty"`
 	SortOrder       int                        `json:"sortOrder"`
 	Source          AgentTargetSource          `json:"source"`
 	UpdatedAtUnixMs int64                      `json:"updatedAtUnixMs"`

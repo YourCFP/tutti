@@ -221,6 +221,7 @@ export function mapAgentTargetsToPresentations(
         provider: target.provider
       }) ??
         ""),
+    sidebarIconUrl: target.sidebarIconUrl?.trim() || null,
     heroImageUrl: target.heroImageUrl?.trim() || null,
     availability: {
       status:
@@ -251,6 +252,9 @@ export function mapAgentTargetPresentationsToAgents(
       agentTargetId: target.agentTargetId,
       name: target.name,
       iconUrl: target.iconUrl,
+      ...(target.sidebarIconUrl
+        ? { sidebarIconUrl: target.sidebarIconUrl }
+        : {}),
       ...(target.heroImageUrl ? { heroImageUrl: target.heroImageUrl } : {}),
       availability: target.availability,
       provider: target.provider as AgentGUIProvider,

@@ -68,7 +68,8 @@ export function resolveAgentGUIHeroIconUrl(
 
 export function agentGUIProviderRailIconPresentation(
   provider: string | undefined,
-  iconUrl?: string | null
+  iconUrl?: string | null,
+  sidebarIconUrl?: string | null
 ): AgentGUIProviderIconPresentation {
   const normalizedProvider = normalizeManagedAgentProvider(provider);
   const providerRailIconUrl =
@@ -77,6 +78,7 @@ export function agentGUIProviderRailIconPresentation(
     provider: normalizedProvider,
     iconUrl:
       (normalizedProvider === "cursor" ? providerRailIconUrl : null) ||
+      sidebarIconUrl?.trim() ||
       iconUrl?.trim() ||
       providerRailIconUrl ||
       resolveAgentGUIHeroIconUrl(normalizedProvider)
@@ -660,7 +662,8 @@ function EmptyHeroTitle({
                     src={
                       agentGUIProviderRailIconPresentation(
                         target.provider,
-                        target.iconUrl
+                        target.iconUrl,
+                        target.sidebarIconUrl
                       ).iconUrl
                     }
                   />

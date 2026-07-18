@@ -125,6 +125,7 @@ test("desktop agents service maps enabled daemon targets into the AgentGUI agent
       createAgentTarget({
         id: "local:codex",
         heroImageUrl: "data:image/jpeg;base64,hero",
+        sidebarIconUrl: "data:image/svg+xml;base64,sidebar",
         iconKey: "codex-descriptor",
         name: "Codex",
         provider: "codex",
@@ -142,6 +143,7 @@ test("desktop agents service maps enabled daemon targets into the AgentGUI agent
       agentTargetId: target.agentTargetId,
       iconUrl: target.iconUrl,
       heroImageUrl: target.heroImageUrl,
+      sidebarIconUrl: target.sidebarIconUrl,
       launchRefType: target.launchRefType,
       provider: target.provider
     })),
@@ -150,6 +152,7 @@ test("desktop agents service maps enabled daemon targets into the AgentGUI agent
         agentTargetId: "local:codex",
         iconUrl: "tutti-asset://agent/codex-descriptor.png",
         heroImageUrl: "data:image/jpeg;base64,hero",
+        sidebarIconUrl: "data:image/svg+xml;base64,sidebar",
         launchRefType: "builtin_local",
         provider: "codex"
       },
@@ -157,6 +160,7 @@ test("desktop agents service maps enabled daemon targets into the AgentGUI agent
         agentTargetId: "local:claude-code",
         iconUrl: "tutti-asset://agent/claude-code.png",
         heroImageUrl: null,
+        sidebarIconUrl: null,
         launchRefType: "builtin_local",
         provider: "claude-code"
       }
@@ -169,6 +173,7 @@ test("desktop agents service maps enabled daemon targets into the AgentGUI agent
       availability: { status: "ready" },
       iconUrl: "tutti-asset://agent/codex-descriptor.png",
       heroImageUrl: "data:image/jpeg;base64,hero",
+      sidebarIconUrl: "data:image/svg+xml;base64,sidebar",
       name: "Codex",
       provider: "codex"
     }
@@ -180,6 +185,7 @@ function createAgentTarget(input: {
   id: string;
   iconKey?: string | null;
   heroImageUrl?: string | null;
+  sidebarIconUrl?: string | null;
   name: string;
   provider: "claude-code" | "codex";
   sortOrder: number;
@@ -189,6 +195,7 @@ function createAgentTarget(input: {
     enabled: input.enabled ?? true,
     iconKey: input.iconKey ?? null,
     heroImageUrl: input.heroImageUrl ?? null,
+    sidebarIconUrl: input.sidebarIconUrl ?? null,
     id: input.id,
     launchRef: {
       provider: input.provider,

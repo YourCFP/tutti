@@ -33,6 +33,10 @@ type Manifest struct {
 		Type string `json:"type"`
 		Src  string `json:"src"`
 	} `json:"icon"`
+	SidebarIcon struct {
+		Type string `json:"type"`
+		Src  string `json:"src"`
+	} `json:"sidebarIcon,omitempty"`
 	HeroImage struct {
 		Type string `json:"type"`
 		Src  string `json:"src"`

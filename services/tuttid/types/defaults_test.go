@@ -64,7 +64,13 @@ func TestResolveAgentExtensionSourcesIgnoresRemovedEnabledOverride(t *testing.T)
 	if !ok || codebuddy.Enabled {
 		t.Fatalf("codebuddy source must stay disabled without override: %#v", sources)
 	}
-	for _, source := range []AgentExtensionSource{gemini, codebuddy} {
+	copilot := agentExtensionSourceByKey(t, sources, "copilot")
+	kilo := agentExtensionSourceByKey(t, sources, "kilo")
+	qwen := agentExtensionSourceByKey(t, sources, "qwen")
+	for _, source := range []AgentExtensionSource{gemini, codebuddy, copilot, kilo, qwen} {
+		if source.Enabled {
+			t.Fatalf("agent extension source must stay disabled without override: %#v", source)
+		}
 		if source.SigningKeyID == "" || source.SigningPublicKey == "" {
 			t.Fatalf("agent extension trust configuration is incomplete: %#v", source)
 		}

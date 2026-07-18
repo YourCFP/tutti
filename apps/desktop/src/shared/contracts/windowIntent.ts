@@ -356,6 +356,8 @@ function normalizeAgentWindowAgent(value: unknown): AgentGUIAgent[] {
   const name = readTrimmedString(agent.name);
   const description = readTrimmedString(agent.description);
   const iconUrl = readTrimmedString(agent.iconUrl);
+  const sidebarIconUrl = readTrimmedString(agent.sidebarIconUrl);
+  const heroImageUrl = readTrimmedString(agent.heroImageUrl);
   const provider = readTrimmedString(agent.provider) as AgentGUIProvider | null;
   const availability = normalizeAgentWindowAvailability(agent.availability);
   if (!agentTargetId || !name || !iconUrl || !provider || !availability) {
@@ -373,6 +375,8 @@ function normalizeAgentWindowAgent(value: unknown): AgentGUIAgent[] {
       provider,
       availability,
       ...(description ? { description } : {}),
+      ...(sidebarIconUrl ? { sidebarIconUrl } : {}),
+      ...(heroImageUrl ? { heroImageUrl } : {}),
       ...(ownerName || ownerAvatarUrl
         ? {
             owner: {

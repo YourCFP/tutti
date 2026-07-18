@@ -183,6 +183,7 @@ describe("agent gui provider targets", () => {
         },
         ownerLabel: " Alice ",
         iconUrl: " app://alice.png ",
+        sidebarIconUrl: " app://alice-sidebar.png ",
         unavailableReason: " owner_offline ",
         disabled: true,
         ref: {
@@ -206,6 +207,7 @@ describe("agent gui provider targets", () => {
       },
       ownerLabel: "Alice",
       iconUrl: "app://alice.png",
+      sidebarIconUrl: "app://alice-sidebar.png",
       unavailableReason: "owner_offline",
       disabled: true
     });
@@ -230,6 +232,7 @@ describe("agent gui provider targets", () => {
           description: " ",
           ownerLabel: " ",
           iconUrl: " ",
+          sidebarIconUrl: " ",
           unavailableReason: " "
         }
       ],

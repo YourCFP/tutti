@@ -91,13 +91,16 @@ func validateInstalledPackage(root, key, version string) (Manifest, error) {
 	if manifest.HeroImage.Src != "" && (manifest.HeroImage.Type != "asset" || !safeRelativePath(manifest.HeroImage.Src)) {
 		return Manifest{}, errors.New("installed extension hero image is invalid")
 	}
+	if manifest.SidebarIcon.Src != "" && (manifest.SidebarIcon.Type != "asset" || !safeRelativePath(manifest.SidebarIcon.Src)) {
+		return Manifest{}, errors.New("installed extension sidebar icon is invalid")
+	}
 	if err := validateRuntimeContract(manifest); err != nil {
 		return Manifest{}, err
 	}
 	if !safeRelativePath(manifest.LocalizationInfo.DefaultFile) {
 		return Manifest{}, errors.New("installed extension default locale is invalid")
 	}
-	for _, referenced := range []string{manifest.Icon.Src, manifest.HeroImage.Src, manifest.LocalizationInfo.DefaultFile, manifest.Profiles.Discovery, manifest.Profiles.Tools, manifest.Profiles.Capabilities, manifest.Profiles.Composer, manifest.Profiles.Events} {
+	for _, referenced := range []string{manifest.Icon.Src, manifest.SidebarIcon.Src, manifest.HeroImage.Src, manifest.LocalizationInfo.DefaultFile, manifest.Profiles.Discovery, manifest.Profiles.Tools, manifest.Profiles.Capabilities, manifest.Profiles.Composer, manifest.Profiles.Events} {
 		if referenced == "" {
 			continue
 		}

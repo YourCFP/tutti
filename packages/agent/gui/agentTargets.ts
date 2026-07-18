@@ -61,6 +61,7 @@ export function createSharedAgentGUIAgentTarget(input: {
   badge?: AgentGUIAgentTargetBadge | null;
   ownerLabel?: string | null;
   iconUrl?: string | null;
+  sidebarIconUrl?: string | null;
   unavailableReason?: string | null;
   disabled?: boolean;
   ref?: Record<string, unknown> | null;
@@ -86,6 +87,9 @@ export function createSharedAgentGUIAgentTarget(input: {
       ? { ownerLabel: input.ownerLabel.trim() }
       : {}),
     ...(input.iconUrl?.trim() ? { iconUrl: input.iconUrl.trim() } : {}),
+    ...(input.sidebarIconUrl?.trim()
+      ? { sidebarIconUrl: input.sidebarIconUrl.trim() }
+      : {}),
     ...(input.unavailableReason?.trim()
       ? { unavailableReason: input.unavailableReason.trim() }
       : {}),
@@ -242,6 +246,7 @@ function normalizeAgentGUIAgentTarget(
     badge,
     description,
     iconUrl,
+    sidebarIconUrl,
     heroImageUrl,
     ownerLabel,
     unavailableReason,
@@ -270,6 +275,9 @@ function normalizeAgentGUIAgentTarget(
     ...(normalizedBadge ? { badge: normalizedBadge } : {}),
     ...(description?.trim() ? { description: description.trim() } : {}),
     ...(iconUrl?.trim() ? { iconUrl: iconUrl.trim() } : {}),
+    ...(sidebarIconUrl?.trim()
+      ? { sidebarIconUrl: sidebarIconUrl.trim() }
+      : {}),
     ...(heroImageUrl?.trim() ? { heroImageUrl: heroImageUrl.trim() } : {}),
     ...(ownerLabel?.trim() ? { ownerLabel: ownerLabel.trim() } : {}),
     ...(unavailableReason?.trim()

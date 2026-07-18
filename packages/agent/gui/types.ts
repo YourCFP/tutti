@@ -115,6 +115,7 @@ export interface AgentGUIAgent {
   agentTargetId: string;
   name: string;
   iconUrl: string;
+  sidebarIconUrl?: string | null;
   heroImageUrl?: string | null;
   description?: string | null;
   owner?: AgentGUIAgentOwner | null;
@@ -165,6 +166,7 @@ export interface AgentGUIAgentTarget {
   label: string;
   description?: string;
   iconUrl?: string | null;
+  sidebarIconUrl?: string | null;
   heroImageUrl?: string | null;
   badge?: AgentGUIAgentTargetBadge | null;
   ownerLabel?: string;
