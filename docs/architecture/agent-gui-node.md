@@ -3303,8 +3303,8 @@ The public directory entry owns its presentation and availability:
   name suffix
 - render `agents[].iconUrl` as the primary identity and `owner.avatarUrl`
   separately as an ownership badge, including on the selected center item in
-  the new-session carousel; `agents[].sidebarIconUrl` is optional rail-specific
-  presentation and must not replace the canonical icon on other surfaces
+  the new-session carousel; `agents[].maskIconUrl` is optional conversation-row
+  presentation, while `agents[].sidebarIconUrl` may tailor Provider Rail chrome
 - preserve host array order; normalization keeps the first valid occurrence of
   each `agentTargetId`
 - use `availability.status` for ready, checking, coming-soon, install, login,
@@ -3350,18 +3350,18 @@ The package-internal normalized target vocabulary is
 `AgentGUIAgentTarget` / `agentTargets`. Do not reintroduce
 `AgentGUIProviderTarget` or `providerTargets`: provider is execution metadata,
 while `agentTargetId` is selection and launch identity. Agent avatar chrome is
-projected from an agent target containing the canonical icon, optional sidebar
-icon, label, and optional owner badge. The DOM rail and its management surfaces
-prefer the sidebar icon; the single-agent empty state, conversation identity,
-and WebGL empty-home carousel retain the canonical icon. Renderer adapters must
-not create provider-specific catalogs for extension assets or silently discard
-badge or identity fields.
+projected from an agent target containing the canonical icon, optional
+conversation-mask icon, optional sidebar icon, label, and optional owner badge.
+The DOM rail and its management surfaces prefer the sidebar icon; the
+single-agent empty state, conversation identity, and WebGL empty-home carousel
+retain the canonical icon. Renderer adapters must not create provider-specific
+catalogs for extension assets or silently discard badge or identity fields.
 Conversation rail rows render a monochrome CSS mask. Built-in providers prefer
 their mask-safe flat catalog artwork; open extensions resolve the signed Target
-`iconUrl` through the conversation's `agentTargetId`. Extension canonical
-icons must therefore remain transparent, mask-safe glyphs. Colorful provider
-switcher artwork belongs in optional `sidebarIconUrl`; open providers must not
-require a renderer icon catalog entry.
+`maskIconUrl` through the conversation's `agentTargetId`. Extension package
+`icon` assets therefore remain transparent, mask-safe glyphs. Their colored
+`sidebarIcon` asset is projected as both the primary identity and provider-rail
+artwork; open providers must not require a renderer icon catalog entry.
 One carousel image-load owner fetches and decodes icon, vinyl-cover, and badge
 images for a complete item generation. Remote badge images must be requested
 with anonymous CORS before assigning `src`, and the asset host must return an
