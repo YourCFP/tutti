@@ -8,6 +8,34 @@ The bundled CLI is a thin client. It discovers command capabilities from
 `InputSchema`, invokes the daemon command endpoint, and renders the returned
 `CommandOutput`.
 
+## Error Output
+
+`--json` applies to failure output as well as successful command output.
+Expected invocation, transport, and domain failures write one JSON object to
+stdout and do not fall back to free-form stderr text:
+
+```json
+{
+  "error": {
+    "reasonCode": "workspace_agent_session_not_found",
+    "message": "agent session was not found"
+  }
+}
+```
+
+The CLI preserves the daemon protocol `reason` as `reasonCode`, falling back to
+the daemon error `code` when no narrower reason exists. Optional daemon
+`retryable` and `correlationId` fields are preserved. Errors detected before a
+daemon invocation use stable CLI-owned reason codes such as `invalid_input`,
+`command_not_found`, and `daemon_unavailable`.
+
+Exit codes stay intentionally small and stable: `0` means success, `2` means
+the command invocation or input was invalid, and `1` means authentication,
+transport, domain, or runtime failure. A daemon HTTP 400 response is invalid
+input and therefore exits with `2`; other daemon failures exit with `1`.
+Without `--json`, ordinary human-facing failures continue to write concise
+text to stderr.
+
 ## Boundaries
 
 The daemon has two CLI command surfaces:
