@@ -50,4 +50,21 @@ describe("renderAgentConversationCopyHtml", () => {
     expect(html).not.toContain("javascript:");
     expect(html).not.toContain("data:text/html");
   });
+
+  it("strips data:image/svg+xml even though it starts with data:image/", () => {
+    const html = renderAgentConversationCopyHtml(
+      "![x](<data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+>)"
+    );
+
+    expect(html).not.toContain("data:image/svg+xml");
+  });
+
+  it("keeps common raster data-URI subtypes", () => {
+    for (const mime of ["image/jpeg", "image/jpg", "image/gif", "image/webp"]) {
+      const html = renderAgentConversationCopyHtml(
+        `![x](<data:${mime};base64,QUFB>)`
+      );
+      expect(html).toContain(`data:${mime};base64,QUFB`);
+    }
+  });
 });

@@ -8,8 +8,18 @@ import remarkGfm from "remark-gfm";
 // serializer produces for attachments. Allow exactly those data images and
 // defer everything else to the default sanitization. Raw HTML embedded in
 // message text stays inert because react-markdown ignores html nodes.
+//
+// The allow-list is raster subtypes only, not a bare `data:image/` prefix:
+// an image block's mimeType comes from unvalidated message content (tool
+// output, a collaborator's message), so a `data:image/svg+xml` source could
+// otherwise reach the text/html clipboard flavor verbatim — SVG is an XML
+// document that can carry <script> and event handlers, unlike a raster
+// image.
+const SAFE_DATA_IMAGE_URL_PATTERN =
+  /^data:image\/(?:png|jpe?g|gif|webp|bmp|avif|x-icon|vnd\.microsoft\.icon);/i;
+
 function conversationCopyUrlTransform(url: string): string {
-  return url.startsWith("data:image/") ? url : defaultUrlTransform(url);
+  return SAFE_DATA_IMAGE_URL_PATTERN.test(url) ? url : defaultUrlTransform(url);
 }
 
 /**
