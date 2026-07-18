@@ -263,7 +263,7 @@ func runCreateWithInitialContent(ctx context.Context, driver Driver) error {
 	session, turnID, err := driver.Create(ctx, "workspace-1", agenthost.CreateSessionInput{
 		AgentSessionID: "session-initial", AgentTargetID: "target-1", Provider: "codex",
 		InitialContent: []agenthost.PromptContentBlock{{Type: "text", Text: "build the feature"}},
-		Metadata:       map[string]any{"clientSubmitId": "create-submit-1"},
+		Metadata:       map[string]any{"clientSubmitId": "caller-controlled"}, ClientSubmitID: "create-submit-1",
 	})
 	if err != nil {
 		return fmt.Errorf("create with initial content: %w", err)
@@ -379,14 +379,17 @@ func runDuplicateClientSubmitID(ctx context.Context, driver Driver) error {
 	}
 	ref := agenthost.SessionRef{WorkspaceID: "workspace-1", AgentSessionID: "session-duplicate"}
 	input := agenthost.SendInput{
-		Content:  []agenthost.PromptContentBlock{{Type: "text", Text: "only once"}},
-		Metadata: map[string]any{"clientSubmitId": "submit-duplicate-1"},
+		Content:        []agenthost.PromptContentBlock{{Type: "text", Text: "only once"}},
+		Metadata:       map[string]any{"clientSubmitId": "caller-controlled"},
+		ClientSubmitID: "submit-duplicate-1",
 	}
 	first, err := driver.SendInput(ctx, ref, input)
 	if err != nil {
 		return fmt.Errorf("first idempotent send: %w", err)
 	}
-	duplicate, err := driver.SendInput(ctx, ref, input)
+	duplicateInput := input
+	duplicateInput.Metadata = map[string]any{"clientSubmitId": "different-caller-controlled"}
+	duplicate, err := driver.SendInput(ctx, ref, duplicateInput)
 	if err != nil {
 		return fmt.Errorf("duplicate idempotent send: %w", err)
 	}

@@ -388,7 +388,7 @@ func (d *legacyHostConformanceDriver) Create(
 	session, err := d.service.Create(ctx, workspaceID, CreateSessionInput{
 		AgentSessionID: input.AgentSessionID, AgentTargetID: agentTargetID, Provider: input.Provider,
 		InitialContent: input.InitialContent, InitialDisplayPrompt: input.InitialDisplayPrompt,
-		Metadata: input.Metadata, Title: input.Title, Cwd: input.Cwd,
+		Metadata: input.Metadata, ClientSubmitID: input.ClientSubmitID, Title: input.Title, Cwd: input.Cwd,
 		PermissionModeID: input.PermissionModeID, Model: input.Model, PlanMode: input.PlanMode,
 		BrowserUse: input.BrowserUse, ComputerUse: input.ComputerUse,
 		ProviderTargetRef: input.ProviderTargetRef, ReasoningEffort: input.ReasoningEffort,

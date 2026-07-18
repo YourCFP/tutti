@@ -444,6 +444,7 @@ type CreateSessionInput struct {
 	InitialContent         []PromptContentBlock
 	InitialDisplayPrompt   string
 	Metadata               map[string]any
+	ClientSubmitID         string
 	Title                  *string
 	Cwd                    *string
 	PermissionModeID       *string

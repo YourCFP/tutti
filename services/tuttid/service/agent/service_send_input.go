@@ -23,7 +23,10 @@ func (s *Service) SendInput(ctx context.Context, workspaceID string, agentSessio
 	})
 	hostResult, err := s.ApplicationHost().SendInput(ctx,
 		agenthost.SessionRef{WorkspaceID: workspaceID, AgentSessionID: agentSessionID},
-		agenthost.SendInput{Content: normalizedContent, DisplayPrompt: input.DisplayPrompt, Metadata: input.Metadata, Guidance: input.Guidance},
+		agenthost.SendInput{
+			Content: normalizedContent, DisplayPrompt: input.DisplayPrompt,
+			Metadata: input.Metadata, ClientSubmitID: input.ClientSubmitID, Guidance: input.Guidance,
+		},
 	)
 	if err != nil {
 		return SendInputResult{}, err
