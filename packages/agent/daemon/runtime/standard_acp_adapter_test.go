@@ -2197,6 +2197,258 @@ func TestStandardACPSpawnCommandUnchangedForOtherProviders(t *testing.T) {
 	}
 }
 
+func TestStandardACPLaunchPermissionBuildsExactArgvAndDoesNotSetWorkflowMode(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		semantic string
+		want     string
+	}{
+		{name: "default", want: "ask"},
+		{name: "ask", semantic: "ask-before-write", want: "ask"},
+		{name: "auto", semantic: "auto", want: "auto"},
+		{name: "full access", semantic: "full-access", want: "always-approve"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			transport := newStandardACPTransport("Spawn ACP", "spawn-session-1")
+			adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+				Provider:        "acp:spawn",
+				Name:            "spawn-acp",
+				DisplayName:     "Spawn ACP",
+				Command:         []string{"grok", "--no-auto-update", "agent", "--permission-mode", "${permissionMode}", "stdio"},
+				PermissionModes: map[string]string{"ask-before-write": "ask", "auto": "auto", "full-access": "always-approve"},
+				LaunchPermission: &StandardACPLaunchPermissionSetting{
+					Placeholder: "${permissionMode}",
+					Values:      map[string]string{"ask-before-write": "ask", "auto": "auto", "full-access": "always-approve"},
+				},
+			}, transport, LegacyHostMetadata())
+			if err != nil {
+				t.Fatalf("NewStandardACPAdapter: %v", err)
+			}
+			adapter := adapterRaw.(*standardACPAdapter)
+			session := standardTestSession("acp:spawn")
+			session.PermissionModeID = tt.semantic
+			if _, err := adapter.Start(context.Background(), session); err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+			transport.mu.Lock()
+			specs := append([]ProcessSpec(nil), transport.specs...)
+			transport.mu.Unlock()
+			want := []string{"grok", "--no-auto-update", "agent", "--permission-mode", tt.want, "stdio"}
+			if len(specs) != 1 || !reflect.DeepEqual(specs[0].Command, want) {
+				t.Fatalf("spawn command = %#v, want %#v", specs, want)
+			}
+			if got := transport.conn.lastSetModeParams(); got != nil {
+				t.Fatalf("session/set_mode params = %#v, want none for spawn-time permission", got)
+			}
+		})
+	}
+}
+
+func TestStandardACPLaunchPermissionKeepsPlanAsIndependentWorkflowMode(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Spawn ACP", "spawn-plan-session")
+	transport.conn.modes = map[string]any{
+		"currentModeId": "default",
+		"availableModes": []any{
+			map[string]any{"id": "default", "name": "Default"},
+			map[string]any{"id": "plan", "name": "Plan"},
+		},
+	}
+	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider:                  "acp:spawn-plan",
+		Name:                      "spawn-plan-acp",
+		DisplayName:               "Spawn Plan ACP",
+		Command:                   []string{"grok", "--no-auto-update", "agent", "--permission-mode", "${permissionMode}", "stdio"},
+		PermissionModes:           map[string]string{"ask-before-write": "ask", "auto": "auto", "full-access": "always-approve"},
+		PlanModeRuntimeID:         "plan",
+		PlanModeDisabledRuntimeID: "default",
+		LaunchPermission: &StandardACPLaunchPermissionSetting{
+			Placeholder: "${permissionMode}",
+			Values:      map[string]string{"ask-before-write": "ask", "auto": "auto", "full-access": "always-approve"},
+		},
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	adapter := adapterRaw.(*standardACPAdapter)
+	session := standardTestSession("acp:spawn-plan")
+	session.PermissionModeID = "full-access"
+	session.Settings = &SessionSettings{PermissionModeID: "full-access"}
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if got := transport.conn.lastSetModeParams(); got != nil {
+		t.Fatalf("startup session/set_mode = %#v, want none", got)
+	}
+	for _, enabled := range []bool{true, false} {
+		session.Settings.PlanMode = enabled
+		if err := adapter.ValidateSessionSettings(session, SessionSettingsPatch{PlanMode: &enabled}); err != nil {
+			t.Fatalf("ValidateSessionSettings(%v): %v", enabled, err)
+		}
+		if err := adapter.ApplySessionSettings(context.Background(), session, SessionSettingsPatch{PlanMode: &enabled}); err != nil {
+			t.Fatalf("ApplySessionSettings(%v): %v", enabled, err)
+		}
+		want := "default"
+		if enabled {
+			want = "plan"
+		}
+		if got := transport.conn.lastModeID(); got != want {
+			t.Fatalf("plan=%v mode = %q, want %q", enabled, got, want)
+		}
+	}
+	changed := "auto"
+	if !adapter.RequiresNewSessionForSettings(session, SessionSettingsPatch{PermissionModeID: &changed}) {
+		t.Fatal("spawn-time permission update must require a new session")
+	}
+	if err := adapter.ApplySessionSettings(context.Background(), session, SessionSettingsPatch{PermissionModeID: &changed}); !errors.Is(err, ErrSessionSettingsRequireNewSession) {
+		t.Fatalf("ApplySessionSettings permission error = %v, want ErrSessionSettingsRequireNewSession", err)
+	}
+}
+
+func TestStandardACPLaunchPermissionRejectsUnknownSessionSemantic(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Spawn ACP", "spawn-invalid-session")
+	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider:        "acp:spawn-invalid",
+		Name:            "spawn-invalid-acp",
+		DisplayName:     "Spawn Invalid ACP",
+		Command:         []string{"spawn-acp", "${permissionMode}", "stdio"},
+		PermissionModes: map[string]string{"ask-before-write": "ask", "auto": "auto", "full-access": "always-approve"},
+		LaunchPermission: &StandardACPLaunchPermissionSetting{
+			Placeholder: "${permissionMode}",
+			Values:      map[string]string{"ask-before-write": "ask", "auto": "auto", "full-access": "always-approve"},
+		},
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	session := standardTestSession("acp:spawn-invalid")
+	session.PermissionModeID = "unknown"
+	if _, err := adapterRaw.Start(context.Background(), session); err == nil {
+		t.Fatal("Start unknown permission semantic error = nil")
+	}
+	transport.mu.Lock()
+	defer transport.mu.Unlock()
+	if len(transport.specs) != 0 {
+		t.Fatalf("spawn specs = %#v, want fail before process start", transport.specs)
+	}
+}
+
+func TestStandardACPSessionNewAndLoadPassStandardClientMCPConfig(t *testing.T) {
+	t.Parallel()
+
+	newTransport := newStandardACPTransport("MCP ACP", "mcp-new-session")
+	newAdapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider: "acp:mcp-new", Name: "mcp-new-acp", DisplayName: "MCP ACP", Command: []string{"mcp-acp", "stdio"},
+	}, newTransport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter new: %v", err)
+	}
+	if _, err := newAdapterRaw.Start(context.Background(), standardTestSession("acp:mcp-new")); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if servers, ok := newTransport.conn.lastNewSessionParams["mcpServers"].([]any); !ok || len(servers) != 0 {
+		t.Fatalf("session/new mcpServers = %#v, want standard empty client config", newTransport.conn.lastNewSessionParams["mcpServers"])
+	}
+
+	loadTransport := newStandardACPTransport("MCP ACP", "mcp-load-session")
+	loadTransport.conn.supportsLoadSession = true
+	loadAdapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider: "acp:mcp-load", Name: "mcp-load-acp", DisplayName: "MCP ACP", Command: []string{"mcp-acp", "stdio"},
+	}, loadTransport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter load: %v", err)
+	}
+	loadSession := standardTestSession("acp:mcp-load")
+	loadSession.ProviderSessionID = "mcp-load-session"
+	if err := loadAdapterRaw.Resume(context.Background(), loadSession); err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+	if servers, ok := loadTransport.conn.lastLoadSessionParams["mcpServers"].([]any); !ok || len(servers) != 0 {
+		t.Fatalf("session/load mcpServers = %#v, want standard empty client config", loadTransport.conn.lastLoadSessionParams["mcpServers"])
+	}
+}
+
+func TestStandardACPSetModelCarriesAdvertisedPerModelReasoningMetadata(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Model ACP", "model-session")
+	transport.conn.models = map[string]any{
+		"currentModelId": "reasoning-model",
+		"availableModels": []any{
+			map[string]any{
+				"modelId": "reasoning-model", "name": "Reasoning Model",
+				"supportsReasoningEffort": true, "reasoningEffort": "deep",
+				"reasoningEfforts": []any{
+					map[string]any{"value": "brief", "label": "Brief"},
+					map[string]any{"value": "deep", "label": "Deep", "default": true},
+				},
+			},
+			map[string]any{"modelId": "plain-model", "name": "Plain Model", "supportsReasoningEffort": false, "reasoningEfforts": []any{}},
+		},
+	}
+	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider:                    "acp:model-meta",
+		Name:                        "model-meta-acp",
+		DisplayName:                 "Model ACP",
+		Command:                     []string{"model-acp", "stdio"},
+		SetModelReasoningEffortMeta: true,
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	adapter := adapterRaw.(*standardACPAdapter)
+	session := standardTestSession("acp:model-meta")
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	session.Settings = &SessionSettings{Model: "reasoning-model", ReasoningEffort: "brief"}
+	brief := "brief"
+	if err := adapter.ValidateSessionSettings(session, SessionSettingsPatch{ReasoningEffort: &brief}); err != nil {
+		t.Fatalf("ValidateSessionSettings reasoning: %v", err)
+	}
+	if err := adapter.ApplySessionSettings(context.Background(), session, SessionSettingsPatch{ReasoningEffort: &brief}); err != nil {
+		t.Fatalf("ApplySessionSettings reasoning: %v", err)
+	}
+	calls := transport.conn.setModelCalls()
+	if len(calls) != 1 || calls[0]["modelId"] != "reasoning-model" {
+		t.Fatalf("set_model calls = %#v, want reasoning-model", calls)
+	}
+	if meta := payloadObject(calls[0]["_meta"]); meta["reasoningEffort"] != "brief" {
+		t.Fatalf("set_model _meta = %#v, want brief", meta)
+	}
+
+	plain := "plain-model"
+	session.Settings = &SessionSettings{Model: plain, ReasoningEffort: "brief"}
+	if err := adapter.ValidateSessionSettings(session, SessionSettingsPatch{Model: &plain}); err != nil {
+		t.Fatalf("ValidateSessionSettings plain model: %v", err)
+	}
+	if err := adapter.ApplySessionSettings(context.Background(), session, SessionSettingsPatch{Model: &plain}); err != nil {
+		t.Fatalf("ApplySessionSettings plain model: %v", err)
+	}
+	calls = transport.conn.setModelCalls()
+	if len(calls) != 2 || calls[1]["modelId"] != plain {
+		t.Fatalf("set_model calls = %#v, want plain-model second", calls)
+	}
+	if _, exists := calls[1]["_meta"]; exists {
+		t.Fatalf("plain model set_model = %#v, want no reasoning metadata", calls[1])
+	}
+	unsupported := "brief"
+	if err := adapter.ValidateSessionSettings(session, SessionSettingsPatch{ReasoningEffort: &unsupported}); err == nil {
+		t.Fatal("unsupported model reasoning validation error = nil")
+	}
+	if calls := transport.conn.setConfigOptionCalls(); len(calls) != 0 {
+		t.Fatalf("config option calls = %#v, want standard session/set_model only", calls)
+	}
+}
+
 func TestStandardACPTransportFallbackTextProjectsAssistantNotice(t *testing.T) {
 	t.Parallel()
 
@@ -3024,7 +3276,10 @@ type standardACPConnection struct {
 	// normal prompt results, emulating a tool-calls-only turn.
 	omitAssistantTextInPromptResults bool
 	setConfigOptionSnapshots         []map[string]any
+	setModelSnapshots                []map[string]any
 	configOptions                    []map[string]any
+	models                           map[string]any
+	modes                            map[string]any
 	authMethods                      []map[string]any
 	authenticateResult               map[string]any
 	authenticateError                *acpError
@@ -3124,13 +3379,20 @@ func (c *standardACPConnection) Send(data []byte) error {
 			if c.commandUpdateOnNewSession {
 				c.sendAvailableCommandsUpdate()
 			}
+			result := map[string]any{
+				"sessionId":     c.sessionID,
+				"configOptions": c.defaultConfigOptions(),
+			}
+			if c.models != nil {
+				result["models"] = clonePayload(c.models)
+			}
+			if c.modes != nil {
+				result["modes"] = clonePayload(c.modes)
+			}
 			c.sendJSON(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      message.ID,
-				"result": map[string]any{
-					"sessionId":     c.sessionID,
-					"configOptions": c.defaultConfigOptions(),
-				},
+				"result":  result,
 			})
 		case acpMethodLoadSession, acpMethodResume:
 			var request struct {
@@ -3153,12 +3415,17 @@ func (c *standardACPConnection) Send(data []byte) error {
 				})
 				return nil
 			}
+			result := map[string]any{"configOptions": c.defaultConfigOptions()}
+			if c.models != nil {
+				result["models"] = clonePayload(c.models)
+			}
+			if c.modes != nil {
+				result["modes"] = clonePayload(c.modes)
+			}
 			c.sendJSON(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      message.ID,
-				"result": map[string]any{
-					"configOptions": c.defaultConfigOptions(),
-				},
+				"result":  result,
 			})
 		case acpMethodCloseSession:
 			var request struct {
@@ -3214,6 +3481,25 @@ func (c *standardACPConnection) Send(data []byte) error {
 				"jsonrpc": "2.0",
 				"id":      message.ID,
 				"result":  map[string]any{},
+			})
+		case acpMethodSetModel:
+			var request struct {
+				Params map[string]any `json:"params"`
+			}
+			_ = json.Unmarshal([]byte(line), &request)
+			c.mu.Lock()
+			if request.Params != nil {
+				c.setModelSnapshots = append(c.setModelSnapshots, clonePayload(request.Params))
+			}
+			result := map[string]any{}
+			if c.models != nil {
+				result["models"] = clonePayload(c.models)
+			}
+			c.mu.Unlock()
+			c.sendJSON(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      message.ID,
+				"result":  result,
 			})
 		case "session/set_config_option":
 			var request struct {
@@ -3653,6 +3939,19 @@ func (c *standardACPConnection) setConfigOptionCalls() []map[string]any {
 	out := make([]map[string]any, 0, len(c.setConfigOptionSnapshots))
 	for _, snapshot := range c.setConfigOptionSnapshots {
 		out = append(out, maps.Clone(snapshot))
+	}
+	return out
+}
+
+func (c *standardACPConnection) setModelCalls() []map[string]any {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.setModelSnapshots) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(c.setModelSnapshots))
+	for _, snapshot := range c.setModelSnapshots {
+		out = append(out, clonePayload(snapshot))
 	}
 	return out
 }

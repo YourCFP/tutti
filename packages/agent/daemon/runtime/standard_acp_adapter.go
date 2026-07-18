@@ -70,6 +70,8 @@ type standardACPConfig struct {
 	permissionConfigOptionID       string
 	reasoningConfigOptionID        string
 	restrictConfigOptions          bool
+	launchPermission               *StandardACPLaunchPermissionSetting
+	setModelReasoningEffortMeta    bool
 	messageDiagnostics             *standardACPMessageDiagnostics
 	capabilities                   []string
 	agentTargetID                  string

@@ -87,6 +87,53 @@ scope. When no project is selected, it uses the daemon-owned discovery directory
 under `<state>/agent/discovery/<provider>`, because standard ACP session creation
 requires a concrete working directory.
 
+### Spawn Settings And ACP Workflow Modes
+
+Composer profile v1 has an optional, closed `launchSettings.permission`
+declaration for agents whose permission tier is fixed when the process starts.
+It accepts only the `${permissionMode}` placeholder as one complete discovery
+`launchArgs` element, requires exactly one occurrence, and requires exactly one
+unique runtime value for each Tutti semantic: `ask-before-write`, `auto`, and
+`full-access`. The default semantic is fixed to `ask-before-write`. Empty
+values, unknown or combined placeholders, unknown semantics, duplicate or
+ambiguous values, and shell syntax fail installation validation. Expansion is
+an argv-element replacement; it never invokes a shell or weakens the existing
+runtime command validation.
+
+Spawn-time permission is not an ACP workflow mode. The selected permission is
+captured by conversation creation and changing it requires a new session. The
+adapter does not send `session/set_mode` for that permission. An extension may
+separately declare `workflowModes.plan.enabledRuntimeId` and
+`disabledRuntimeId`; the shared Plan switch and `/plan` then send those two
+validated values through standard `session/set_mode`. Profiles without these
+optional declarations retain their existing ACP session-mode/config-option
+behavior.
+
+Composer profile v1 may also opt in to
+`setModel.reasoningEffortMeta`. For that profile, the standard ACP
+`SessionModelState.models.availableModels` entries are the only model and
+reasoning catalog. Tutti preserves `supportsReasoningEffort`,
+`reasoningEffort`, `reasoningEfforts` (including runtime labels and
+descriptions), and `supportsImageInput`, whether supplied as supported model
+fields or in model `_meta`. The daemon projects those facts through typed
+composer options and `reasoningOptionsByModel`; AgentGUI therefore changes the
+reasoning selector when the selected model changes. Unsupported models carry
+an authoritative empty profile. A model or reasoning update uses standard
+`session/set_model`; the validated current effort is added as
+`_meta.reasoningEffort` only for a model that advertises reasoning support.
+The established standard ACP config-option reasoning path remains unchanged
+for profiles that do not opt in.
+
+Slash-command narrowing remains declarative. A future extension can mark its
+signed command catalog authoritative and allow only shared commands such as
+`compact`, `status`, and `plan`; runtime-private commands are then removed
+before composer projection. Image blocks, tool calls, permission requests,
+cancel, resume/load, skills roots, and the client-provided standard ACP MCP
+array continue through the generic adapter. The current Tutti session-create
+contract supplies an empty MCP array and does not manage an agent's private MCP
+configuration; adding a non-empty product-level MCP input is a separate Host
+contract change.
+
 Extension composer controls stay runtime-owned after the model list is
 discovered. `tuttid` selects the newest context only within the exact workspace,
 normalized project, Agent Target, fixed installation, and request-settings
@@ -303,3 +350,28 @@ discovery is not setup state and does not infer
 installation or authentication readiness. Extensions use either a compatible
 local runtime or an explicitly confirmed Target-managed runtime; `tuttid`
 never installs into a user project.
+
+## Opt-in Real Grok ACP Smoke
+
+The generic adapter has an explicit local smoke for an already installed and
+authenticated official Grok CLI:
+
+```sh
+TUTTI_REAL_GROK_ACP_SMOKE=1 \
+TUTTI_GROK_BIN=/absolute/path/to/grok \
+go test ./packages/agent/daemon/runtime -run TestRealGrokACPInitializeSmoke -count=1
+```
+
+It is skipped by default, reads no user authentication state in CI, creates no
+ACP session, and sends no prompt. When explicitly enabled it verifies the
+executable/version, performs standard ACP `initialize`, checks that the
+initialize model state has an available and current model, then closes the
+process. The fake ACP tests separately verify the exact declared spawn argv and
+all permission tiers; keeping those checks separate lets the smoke remain
+non-billable even when a CLI release makes `session/new` contact the service.
+
+This support does not add a Grok provider, Agent key, icon, catalog source,
+managed install wrapper, credential persistence, setup/authentication
+orchestration, headless/TSH integration, automatic CLI updates, or private
+`x.ai/*` operations. End-to-end AgentGUI visibility remains the responsibility
+of a separately published and signed external extension.

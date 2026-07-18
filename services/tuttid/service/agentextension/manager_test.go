@@ -378,6 +378,30 @@ func TestValidateComposerProfileRejectsInvalidSignedCommandDeclarations(t *testi
 			name: "unsupported effect",
 			raw:  `{"schemaVersion":"tutti.agent.composer.v1","slashCommands":{"commands":[{"name":"status","effect":"runArbitraryCode"}]}}`,
 		},
+		{
+			name: "unknown launch placeholder",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","launchSettings":{"permission":{"placeholder":"${unknown}"}},"permissionModes":[{"runtimeId":"ask","semantic":"ask-before-write"},{"runtimeId":"auto","semantic":"auto"},{"runtimeId":"all","semantic":"full-access"}]}`,
+		},
+		{
+			name: "unknown launch semantic",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","launchSettings":{"permission":{"placeholder":"${permissionMode}"}},"permissionModes":[{"runtimeId":"ask","semantic":"ask-before-write"},{"runtimeId":"auto","semantic":"auto"},{"runtimeId":"all","semantic":"full-access"},{"runtimeId":"maybe","semantic":"maybe"}]}`,
+		},
+		{
+			name: "duplicate launch runtime value",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","launchSettings":{"permission":{"placeholder":"${permissionMode}"}},"permissionModes":[{"runtimeId":"ask","semantic":"ask-before-write"},{"runtimeId":"ask","semantic":"auto"},{"runtimeId":"all","semantic":"full-access"}]}`,
+		},
+		{
+			name: "shell launch runtime value",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","launchSettings":{"permission":{"placeholder":"${permissionMode}"}},"permissionModes":[{"runtimeId":"ask","semantic":"ask-before-write"},{"runtimeId":"auto;run","semantic":"auto"},{"runtimeId":"all","semantic":"full-access"}]}`,
+		},
+		{
+			name: "non ask launch default",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","launchSettings":{"permission":{"placeholder":"${permissionMode}","defaultSemantic":"auto"}},"permissionModes":[{"runtimeId":"ask","semantic":"ask-before-write"},{"runtimeId":"auto","semantic":"auto"},{"runtimeId":"all","semantic":"full-access"}]}`,
+		},
+		{
+			name: "ambiguous plan workflow",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","workflowModes":{"plan":{"enabledRuntimeId":"plan","disabledRuntimeId":"plan"}}}`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -387,6 +411,120 @@ func TestValidateComposerProfileRejectsInvalidSignedCommandDeclarations(t *testi
 			}
 			if err := validateComposerProfile(profile); err == nil {
 				t.Fatal("validateComposerProfile() error = nil, want signed profile rejection")
+			}
+		})
+	}
+}
+
+func TestValidateComposerProfileAcceptsClosedSpawnPermissionAndWorkflowDeclarations(t *testing.T) {
+	var profile ComposerProfile
+	if err := json.Unmarshal([]byte(`{
+		"schemaVersion":"tutti.agent.composer.v1",
+		"launchSettings":{"permission":{"placeholder":"${permissionMode}"}},
+		"permissionModes":[
+			{"runtimeId":"ask","semantic":"ask-before-write"},
+			{"runtimeId":"auto","semantic":"auto"},
+			{"runtimeId":"always-approve","semantic":"full-access"}
+		],
+		"workflowModes":{"plan":{"enabledRuntimeId":"plan","disabledRuntimeId":"default"}},
+		"setModel":{"reasoningEffortMeta":true}
+	}`), &profile); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateComposerProfile(profile); err != nil {
+		t.Fatalf("validateComposerProfile: %v", err)
+	}
+	setting := profile.LaunchPermissionSetting()
+	if setting == nil || setting.Values["ask-before-write"] != "ask" || setting.Values["full-access"] != "always-approve" {
+		t.Fatalf("launch permission setting = %#v", setting)
+	}
+	if enabled, disabled := profile.PlanRuntimeIDs(); enabled != "plan" || disabled != "default" {
+		t.Fatalf("plan workflow = %q/%q, want plan/default", enabled, disabled)
+	}
+	if !profile.SetModelReasoningEffortMeta() {
+		t.Fatal("setModel.reasoningEffortMeta = false, want true")
+	}
+}
+
+func TestValidateDiscoveryLaunchPlaceholdersFailsClosed(t *testing.T) {
+	var composer ComposerProfile
+	if err := json.Unmarshal([]byte(`{
+		"schemaVersion":"tutti.agent.composer.v1",
+		"launchSettings":{"permission":{"placeholder":"${permissionMode}"}},
+		"permissionModes":[
+			{"runtimeId":"ask","semantic":"ask-before-write"},
+			{"runtimeId":"auto","semantic":"auto"},
+			{"runtimeId":"always-approve","semantic":"full-access"}
+		]
+	}`), &composer); err != nil {
+		t.Fatal(err)
+	}
+	profile := func(args ...string) DiscoveryProfile {
+		value := DiscoveryProfile{}
+		value.Candidates = append(value.Candidates, struct {
+			BinaryNames []string `json:"binaryNames"`
+			Version     struct {
+				Args       []string `json:"args"`
+				Constraint string   `json:"constraint"`
+			} `json:"version"`
+			LaunchArgs []string `json:"launchArgs"`
+			Probe      struct {
+				Kind      string `json:"kind"`
+				TimeoutMS int    `json:"timeoutMs"`
+			} `json:"probe,omitempty"`
+		}{LaunchArgs: args})
+		return value
+	}
+	if err := validateDiscoveryLaunchPlaceholders(profile("--no-auto-update", "agent", "--permission-mode", "${permissionMode}", "stdio"), composer); err != nil {
+		t.Fatalf("valid launch placeholders: %v", err)
+	}
+	for name, candidate := range map[string]DiscoveryProfile{
+		"missing":          profile("agent", "stdio"),
+		"unknown":          profile("agent", "${unknown}", "stdio"),
+		"combined":         profile("agent", "mode=${permissionMode}", "stdio"),
+		"duplicate":        profile("agent", "${permissionMode}", "${permissionMode}", "stdio"),
+		"malformed dollar": profile("agent", "$permissionMode", "stdio"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateDiscoveryLaunchPlaceholders(candidate, composer); err == nil {
+				t.Fatal("validateDiscoveryLaunchPlaceholders error = nil, want rejection")
+			}
+		})
+	}
+}
+
+func TestValidateManifestLaunchPermissionPlaceholderFailsClosed(t *testing.T) {
+	var composer ComposerProfile
+	if err := json.Unmarshal([]byte(`{
+		"schemaVersion":"tutti.agent.composer.v1",
+		"launchSettings":{"permission":{"placeholder":"${permissionMode}"}},
+		"permissionModes":[
+			{"runtimeId":"ask","semantic":"ask-before-write"},
+			{"runtimeId":"auto","semantic":"auto"},
+			{"runtimeId":"always-approve","semantic":"full-access"}
+		]
+	}`), &composer); err != nil {
+		t.Fatal(err)
+	}
+	manifest := testManifest()
+	manifest.Runtime.Launch.Args = []string{"--no-auto-update", "agent", "--permission-mode", "${permissionMode}", "stdio"}
+	if err := validateRuntimeContract(manifest); err != nil {
+		t.Fatalf("validateRuntimeContract: %v", err)
+	}
+	if err := validateManifestLaunchPlaceholders(manifest, composer); err != nil {
+		t.Fatalf("validateManifestLaunchPlaceholders: %v", err)
+	}
+	for name, args := range map[string][]string{
+		"missing":   {"agent", "stdio"},
+		"combined":  {"agent", "mode=${permissionMode}", "stdio"},
+		"duplicate": {"agent", "${permissionMode}", "${permissionMode}", "stdio"},
+		"unknown":   {"agent", "${unknown}", "stdio"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := manifest
+			candidate.Runtime.Launch.Args = args
+			if err := validateManifestLaunchPlaceholders(candidate, composer); err == nil {
+				t.Fatal("validateManifestLaunchPlaceholders error = nil, want rejection")
 			}
 		})
 	}

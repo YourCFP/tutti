@@ -17,6 +17,7 @@ import (
 
 	"golang.org/x/mod/semver"
 
+	agentruntime "github.com/tutti-os/tutti/packages/agent/daemon/runtime"
 	agentextensionbiz "github.com/tutti-os/tutti/services/tuttid/biz/agentextension"
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
 	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
@@ -213,11 +214,26 @@ func (m *Manager) runtimeBinding(installation Installation, command []string, ve
 		return RuntimeBinding{}, err
 	}
 	modelConfigOptionID, permissionConfigOptionID, reasoningConfigOptionID := composerProfile.ACPConfigOptionIDs()
+	planModeDisabledRuntimeID := ""
+	if enabled, disabled := composerProfile.PlanRuntimeIDs(); enabled != "" {
+		planModeRuntimeID = enabled
+		planModeDisabledRuntimeID = disabled
+	}
+	var launchPermission *agentruntime.StandardACPLaunchPermissionSetting
+	if setting := composerProfile.LaunchPermissionSetting(); setting != nil {
+		launchPermission = &agentruntime.StandardACPLaunchPermissionSetting{
+			Placeholder:     setting.Placeholder,
+			DefaultSemantic: setting.DefaultSemantic,
+			Values:          setting.Values,
+		}
+	}
 	return RuntimeBinding{
 		Installation: installation, Command: command, Version: version, Source: source,
 		ToolAliases: aliases, ModelConfigOptionID: modelConfigOptionID,
 		PermissionConfigOptionID: permissionConfigOptionID, ReasoningConfigOptionID: reasoningConfigOptionID,
-		PermissionModes: permissionModes, PlanModeRuntimeID: planModeRuntimeID, Capabilities: capabilities,
+		PermissionModes: permissionModes, PlanModeRuntimeID: planModeRuntimeID,
+		PlanModeDisabledRuntimeID: planModeDisabledRuntimeID, LaunchPermission: launchPermission,
+		SetModelReasoningEffortMeta: composerProfile.SetModelReasoningEffortMeta(), Capabilities: capabilities,
 	}, nil
 }
 

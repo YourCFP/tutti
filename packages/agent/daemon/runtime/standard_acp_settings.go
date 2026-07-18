@@ -128,6 +128,7 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 	// not abort the whole session. The session stays usable on the agent's
 	// default, and the user can pick a supported value from the live list.
 	modelConfigID := a.effectiveModelConfigOptionID()
+	modelSet := false
 	if model := strings.TrimSpace(settings.Model); model != "" && modelConfigID != "" &&
 		(supported[modelConfigID] || (modelConfigID == "model" && modelsAPI)) {
 		var err error
@@ -139,12 +140,23 @@ func (a *standardACPAdapter) applySessionConfigOptions(
 		if err != nil {
 			a.logStartupConfigOptionRejected(session, modelConfigID, model, err)
 		} else {
+			modelSet = modelsAPI && modelConfigID == "model"
 			a.updateSessionConfigOption(session.AgentSessionID, modelConfigID, model)
 		}
 	}
 	if reasoning := strings.TrimSpace(settings.ReasoningEffort); reasoning != "" {
-		reasoningConfigID := a.effectiveReasoningConfigOptionID(supported)
-		if reasoningConfigID == "" {
+		if a.config.setModelReasoningEffortMeta {
+			model := strings.TrimSpace(settings.Model)
+			if model == "" {
+				model = a.sessionCurrentModelID(session.AgentSessionID)
+			}
+			effort, advertised := a.sessionModelReasoningEffort(session.AgentSessionID, model, reasoning)
+			if !modelSet && advertised && effort != "" {
+				if err := a.setSessionModel(ctx, client, session, model); err != nil {
+					a.logStartupConfigOptionRejected(session, "model._meta.reasoningEffort", reasoning, err)
+				}
+			}
+		} else if reasoningConfigID := a.effectiveReasoningConfigOptionID(supported); reasoningConfigID == "" {
 			a.logHermesStartupDiagnostics("config_options.reasoning.skipped", map[string]any{
 				"room_id":              session.RoomID,
 				"agent_session_id":     session.AgentSessionID,
@@ -203,10 +215,17 @@ func (a *standardACPAdapter) setSessionModel(
 	session Session,
 	modelID string,
 ) error {
-	result, err := client.CallWithTimeout(ctx, acpStartCallTimeout, acpMethodSetModel, map[string]any{
+	params := map[string]any{
 		"sessionId": session.ProviderSessionID,
 		"modelId":   strings.TrimSpace(modelID),
-	}, func(ctx context.Context, message acpMessage) error {
+	}
+	if a.config.setModelReasoningEffortMeta {
+		requested := strings.TrimSpace(session.SettingsValue().ReasoningEffort)
+		if effort, advertised := a.sessionModelReasoningEffort(session.AgentSessionID, modelID, requested); advertised && effort != "" {
+			params["_meta"] = map[string]any{"reasoningEffort": effort}
+		}
+	}
+	result, err := client.CallWithTimeout(ctx, acpStartCallTimeout, acpMethodSetModel, params, func(ctx context.Context, message acpMessage) error {
 		_, err := a.handleACPMessage(ctx, client, session, "", message, nil, nil, nil)
 		return err
 	})
@@ -357,6 +376,10 @@ func (a *standardACPAdapter) effectiveReasoningConfigOptionID(supported map[stri
 // RequiresNewSessionForSettings implements NewSessionSettingsAdapter for
 // providers whose config declares spawn-time-only settings (currently Nexight).
 func (a *standardACPAdapter) RequiresNewSessionForSettings(session Session, patch SessionSettingsPatch) bool {
+	if a != nil && a.config.launchPermission != nil && patch.PermissionModeID != nil &&
+		strings.TrimSpace(*patch.PermissionModeID) != strings.TrimSpace(session.PermissionModeID) {
+		return true
+	}
 	if a == nil || a.config.requiresNewSessionForSettings == nil {
 		return false
 	}
@@ -384,16 +407,33 @@ func (a *standardACPAdapter) ValidateSessionSettings(session Session, patch Sess
 		if a.config.permissionModeID != nil {
 			runtimeID = strings.TrimSpace(a.config.permissionModeID(semanticID))
 		}
-		permissionConfigID := a.effectivePermissionConfigOptionID()
-		if runtimeID == "" || permissionConfigID == "" || !a.sessionConfigOptionAdvertisesValue(session.AgentSessionID, permissionConfigID, runtimeID) {
-			return fmt.Errorf("agent session ACP permission mode %q is not advertised", semanticID)
+		if a.config.launchPermission != nil {
+			if runtimeID == "" {
+				return fmt.Errorf("agent session ACP permission mode %q is not declared", semanticID)
+			}
+		} else {
+			permissionConfigID := a.effectivePermissionConfigOptionID()
+			if runtimeID == "" || permissionConfigID == "" || !a.sessionConfigOptionAdvertisesValue(session.AgentSessionID, permissionConfigID, runtimeID) {
+				return fmt.Errorf("agent session ACP permission mode %q is not advertised", semanticID)
+			}
 		}
 	}
 	if patch.ReasoningEffort != nil {
 		reasoning := strings.TrimSpace(*patch.ReasoningEffort)
-		runtimeID := a.sessionReasoningConfigOptionID(session.AgentSessionID)
-		if reasoning == "" || runtimeID == "" || !a.sessionConfigOptionAdvertisesValue(session.AgentSessionID, runtimeID, reasoning) {
-			return fmt.Errorf("agent session ACP reasoning value %q is not advertised", reasoning)
+		if a.config.setModelReasoningEffortMeta {
+			model := strings.TrimSpace(session.SettingsValue().Model)
+			if patch.Model != nil {
+				model = strings.TrimSpace(*patch.Model)
+			}
+			selected, advertised := a.sessionModelReasoningEffort(session.AgentSessionID, model, reasoning)
+			if reasoning == "" || !advertised || selected != reasoning {
+				return fmt.Errorf("agent session ACP reasoning value %q is not advertised for model %q", reasoning, model)
+			}
+		} else {
+			runtimeID := a.sessionReasoningConfigOptionID(session.AgentSessionID)
+			if reasoning == "" || runtimeID == "" || !a.sessionConfigOptionAdvertisesValue(session.AgentSessionID, runtimeID, reasoning) {
+				return fmt.Errorf("agent session ACP reasoning value %q is not advertised", reasoning)
+			}
 		}
 	}
 	if patch.PlanMode != nil {
@@ -402,7 +442,7 @@ func (a *standardACPAdapter) ValidateSessionSettings(session Session, patch Sess
 		settings.PlanMode = *patch.PlanMode
 		candidate.Settings = &settings
 		runtimeID := a.effectiveModeID(candidate)
-		permissionConfigID := a.effectivePermissionConfigOptionID()
+		permissionConfigID := a.effectiveWorkflowModeConfigOptionID()
 		if runtimeID == "" || permissionConfigID == "" || !a.sessionConfigOptionAdvertisesValue(session.AgentSessionID, permissionConfigID, runtimeID) {
 			return fmt.Errorf("agent session ACP plan mode target %q is not advertised", runtimeID)
 		}
@@ -432,6 +472,7 @@ func (a *standardACPAdapter) ApplySessionSettings(
 		}
 	}
 
+	modelSet := false
 	if patch.Model != nil {
 		model := strings.TrimSpace(*patch.Model)
 		// A model the live agent advertises as a selectable option can be
@@ -445,6 +486,7 @@ func (a *standardACPAdapter) ApplySessionSettings(
 				var err error
 				if modelConfigID == "model" && a.sessionUsesACPModelsAPI(session.AgentSessionID) {
 					err = a.setSessionModel(ctx, acpSession.client, session, model)
+					modelSet = err == nil
 				} else {
 					err = a.setSessionConfigOption(ctx, acpSession.client, session, modelConfigID, model)
 				}
@@ -459,18 +501,27 @@ func (a *standardACPAdapter) ApplySessionSettings(
 	if patch.ReasoningEffort != nil {
 		reasoning := strings.TrimSpace(*patch.ReasoningEffort)
 		if reasoning != "" {
-			reasoningConfigID := a.sessionReasoningConfigOptionID(session.AgentSessionID)
-			if reasoningConfigID == "" {
-				reasoningConfigID = "effort"
-			}
-			if !a.sessionConfigOptionAdvertisesValue(session.AgentSessionID, reasoningConfigID, reasoning) {
-				return fmt.Errorf("agent session ACP %s %q is not advertised for the current model", reasoningConfigID, reasoning)
-			}
-			if !a.sessionConfigOptionMatches(session.AgentSessionID, reasoningConfigID, reasoning) {
-				if err := a.setSessionConfigOption(ctx, acpSession.client, session, reasoningConfigID, reasoning); err != nil {
-					return fmt.Errorf("agent session ACP %s configuration failed: %w", reasoningConfigID, err)
+			if a.config.setModelReasoningEffortMeta {
+				if !modelSet {
+					model := strings.TrimSpace(session.SettingsValue().Model)
+					if err := a.setSessionModel(ctx, acpSession.client, session, model); err != nil {
+						return fmt.Errorf("agent session ACP reasoning model metadata update failed: %w", err)
+					}
 				}
-				a.updateSessionConfigOption(session.AgentSessionID, reasoningConfigID, reasoning)
+			} else {
+				reasoningConfigID := a.sessionReasoningConfigOptionID(session.AgentSessionID)
+				if reasoningConfigID == "" {
+					reasoningConfigID = "effort"
+				}
+				if !a.sessionConfigOptionAdvertisesValue(session.AgentSessionID, reasoningConfigID, reasoning) {
+					return fmt.Errorf("agent session ACP %s %q is not advertised for the current model", reasoningConfigID, reasoning)
+				}
+				if !a.sessionConfigOptionMatches(session.AgentSessionID, reasoningConfigID, reasoning) {
+					if err := a.setSessionConfigOption(ctx, acpSession.client, session, reasoningConfigID, reasoning); err != nil {
+						return fmt.Errorf("agent session ACP %s configuration failed: %w", reasoningConfigID, err)
+					}
+					a.updateSessionConfigOption(session.AgentSessionID, reasoningConfigID, reasoning)
+				}
 			}
 		}
 	}
@@ -501,6 +552,9 @@ func (a *standardACPAdapter) sessionUsesACPModelsAPI(agentSessionID string) bool
 }
 
 func (a *standardACPAdapter) ApplyPermissionMode(ctx context.Context, session Session) error {
+	if a != nil && a.config.launchPermission != nil {
+		return nil
+	}
 	acpSession := a.getSession(session.AgentSessionID)
 	if acpSession == nil || acpSession.client == nil {
 		return nil
@@ -515,6 +569,16 @@ func (a *standardACPAdapter) ApplyPermissionMode(ctx context.Context, session Se
 		return nil
 	}
 	return a.applyACPMode(ctx, acpSession.client, session, a.effectiveModeID(session))
+}
+
+func (a *standardACPAdapter) effectiveWorkflowModeConfigOptionID() string {
+	if a == nil {
+		return ""
+	}
+	if a.config.planModeRuntimeID != "" && a.config.planModeDisabledRuntimeID != "" {
+		return "mode"
+	}
+	return a.effectivePermissionConfigOptionID()
 }
 
 func (a *standardACPAdapter) setSessionPermissionModeID(agentSessionID string, permissionModeID string) {

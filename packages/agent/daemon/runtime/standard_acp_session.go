@@ -119,7 +119,7 @@ func (a *standardACPAdapter) Start(ctx context.Context, session Session) ([]acti
 		})
 		return nil, err
 	}
-	if err := a.applyACPMode(ctx, client, session, a.effectiveModeID(session)); err != nil {
+	if err := a.applyACPMode(ctx, client, session, a.startupModeID(session)); err != nil {
 		a.logHermesStartupDiagnostics("session_mode.failed", map[string]any{
 			"room_id":             session.RoomID,
 			"agent_session_id":    session.AgentSessionID,
@@ -211,7 +211,7 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 	if err := a.applySessionConfigOptions(ctx, client, session, loadSessionResult); err != nil {
 		return err
 	}
-	if err := a.applyACPMode(ctx, client, session, a.effectiveModeID(session)); err != nil {
+	if err := a.applyACPMode(ctx, client, session, a.startupModeID(session)); err != nil {
 		return err
 	}
 	started = true
@@ -343,6 +343,10 @@ func (a *standardACPAdapter) startInitializedClient(
 	}
 	if a.config.commandWithSettings != nil {
 		command = a.config.commandWithSettings(command, session)
+	}
+	command, err := applyStandardACPLaunchPermission(command, a.config.launchPermission, session.PermissionModeID)
+	if err != nil {
+		return nil, nil, err
 	}
 	spec, cleanup, err := prepareProviderLaunch(ctx, a.preparer, session, ProcessSpec{
 		Provider:       a.config.provider,
