@@ -258,34 +258,50 @@ func (p Provider) runOpen(ctx context.Context, invoke framework.InvokeContext, i
 }
 
 func (p Provider) newGetCommand() cliservice.Command {
-	return framework.Register(framework.CommandSpec[sessionIDInput]{
+	return framework.Register(framework.CommandSpec[getSessionInput]{
 		ID:          appID + ".agent.get",
 		Path:        []string{"agent", "get"},
 		Summary:     "Get an agent session",
-		Description: "Get compact agent session context in the current workspace.",
+		Description: "Get compact agent session context and optionally include its most recent messages.",
 		Kind:        framework.KindGet,
 		Workspace:   framework.WorkspaceRequired,
 		Workspaces:  p.workspaces,
-		Inputs:      framework.FromStruct[sessionIDInput](),
+		Inputs:      framework.FromStruct[getSessionInput](),
 		Output: framework.OutputSpec{
 			DefaultMode: cliservice.OutputModeJSON,
 			DefaultView: framework.ViewDetail,
 			JSON:        true,
-			JSONViews: map[framework.OutputView]func(any) map[string]any{
-				framework.ViewDetail: func(result any) map[string]any {
-					return map[string]any{"session": sessionInspectValue(result.(agentservice.Session))}
-				},
-			},
+			JSONViews:   map[framework.OutputView]func(any) map[string]any{framework.ViewDetail: sessionGetJSONValue},
 		},
 		Run: p.runGet,
 	})
 }
 
-func (p Provider) runGet(ctx context.Context, invoke framework.InvokeContext, input sessionIDInput) (any, error) {
+func (p Provider) runGet(ctx context.Context, invoke framework.InvokeContext, input getSessionInput) (any, error) {
 	if err := p.requireSessions(); err != nil {
 		return nil, err
 	}
-	return p.sessions.Get(ctx, invoke.WorkspaceID, input.SessionID)
+	session, err := p.sessions.Get(ctx, invoke.WorkspaceID, input.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	result := sessionGetResult{Session: session}
+	if input.Messages == nil {
+		return result, nil
+	}
+	page, err := p.sessions.ListMessages(ctx, invoke.WorkspaceID, input.SessionID, agentservice.ListMessagesInput{
+		Limit: int(*input.Messages),
+		Order: agentactivitybiz.MessageOrderDesc,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for left, right := 0, len(page.Messages)-1; left < right; left, right = left+1, right-1 {
+		page.Messages[left], page.Messages[right] = page.Messages[right], page.Messages[left]
+	}
+	result.ImageLocalPath = p.imageLocalPathResolver(ctx, invoke.WorkspaceID)
+	result.Page = &page
+	return result, nil
 }
 
 func (p Provider) newSendCommand() cliservice.Command {

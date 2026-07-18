@@ -29,6 +29,11 @@ type sessionSummaryInput struct {
 	Order         string `cli:"order" description:"Message order: asc or desc."`
 }
 
+type getSessionInput struct {
+	SessionID string `cli:"session-id" validate:"required" description:"Agent session id to inspect."`
+	Messages  *int64 `cli:"messages" validate:"min=1,max=100" description:"Include the most recent N messages in chronological order."`
+}
+
 type waitInput struct {
 	SessionID    string `cli:"session-id" validate:"required" description:"Agent session id to await."`
 	AfterVersion *int64 `cli:"after-version" validate:"min=0" description:"Wait for a stop point after this message version."`
@@ -44,6 +49,13 @@ type turnResourcesInput struct {
 type sessionSummaryResult struct {
 	ImageLocalPath imageLocalPathResolver
 	Page           agentservice.SessionMessagesPage
+	Session        agentservice.Session
+	Warnings       []cliservice.CommandWarning
+}
+
+type sessionGetResult struct {
+	ImageLocalPath imageLocalPathResolver
+	Page           *agentservice.SessionMessagesPage
 	Session        agentservice.Session
 }
 
@@ -99,9 +111,10 @@ func (p Provider) newSessionSummaryCommand() cliservice.Command {
 	return framework.Register(framework.CommandSpec[sessionSummaryInput]{
 		ID:          appID + ".agent.session-summary",
 		Path:        []string{"agent", "session-summary"},
-		Summary:     "Get agent session summary",
-		Description: "Get compact session context and recent messages for agent-session mentions.",
+		Summary:     "Get agent session summary (deprecated)",
+		Description: "Deprecated compatibility alias. Use agent get --messages instead.",
 		Kind:        framework.KindAction,
+		Visibility:  cliservice.CapabilityVisibilityIntegration,
 		Workspace:   framework.WorkspaceRequired,
 		Workspaces:  p.workspaces,
 		Inputs:      framework.FromStruct[sessionSummaryInput](),
@@ -110,6 +123,9 @@ func (p Provider) newSessionSummaryCommand() cliservice.Command {
 			DefaultView: framework.ViewSummary,
 			JSON:        true,
 			JSONViews:   map[framework.OutputView]func(any) map[string]any{framework.ViewSummary: sessionSummaryJSONValue},
+			Warnings: func(result any) []cliservice.CommandWarning {
+				return append([]cliservice.CommandWarning(nil), result.(sessionSummaryResult).Warnings...)
+			},
 		},
 		Run: p.runSessionSummary,
 	})
@@ -180,6 +196,10 @@ func (p Provider) runSessionSummary(ctx context.Context, invoke framework.Invoke
 		ImageLocalPath: p.imageLocalPathResolver(ctx, invoke.WorkspaceID),
 		Page:           page,
 		Session:        session,
+		Warnings: []cliservice.CommandWarning{{
+			Code:    "deprecated_agent_session_summary",
+			Message: "agent session-summary is deprecated; use agent get --session-id <id> --messages <1-100>",
+		}},
 	}, nil
 }
 
@@ -248,6 +268,19 @@ func sessionSummaryJSONValue(result any) map[string]any {
 		"latestVersion":  summary.Page.LatestVersion,
 		"hasMore":        summary.Page.HasMore,
 	}
+}
+
+func sessionGetJSONValue(result any) map[string]any {
+	got := result.(sessionGetResult)
+	value := map[string]any{"session": sessionInspectValue(got.Session)}
+	if got.Page == nil {
+		return value
+	}
+	value["agentSessionId"] = got.Page.AgentSessionID
+	value["messages"] = messageCompactValues(got.Page.Messages, got.ImageLocalPath)
+	value["latestVersion"] = got.Page.LatestVersion
+	value["hasMore"] = got.Page.HasMore
+	return value
 }
 
 func turnResourcesJSONValue(result any) map[string]any {

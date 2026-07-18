@@ -12,7 +12,7 @@ func TestTuttiHandoffSkillUsesCurrentAgentCatalog(t *testing.T) {
 	for _, want := range []string{
 		"tutti-dev agent list --json",
 		"tutti-dev agent start --agent-id <agent-id>",
-		"tutti-dev agent session-summary --session-id <caller-session-id> --json",
+		"tutti-dev agent get --session-id <caller-session-id> --messages 100 --json",
 		"tutti-dev agent turn-resources --session-id <caller-session-id> --turn-id <turnId> --json",
 		"--image <localPath>",
 		"selected agent id and failure reason",
@@ -109,7 +109,7 @@ func TestTuttiCLIPolicyUsesPreparedCLICommandForAgentCatalogHandoff(t *testing.T
 		"agents[].id",
 		"tutti-dev agent start --agent-id <agent-id> --prompt <task> --show --json",
 		"tutti-dev agent wait",
-		"tutti-dev agent session-summary",
+		"tutti-dev agent get --session-id <session-id> --messages 100 --json",
 		"does not fetch execution messages",
 		"full compact context helper or turn discovery",
 		"tutti-dev agent turn-resources",

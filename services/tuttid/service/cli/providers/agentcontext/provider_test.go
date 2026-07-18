@@ -1824,6 +1824,58 @@ func TestGetCommandReturnsSession(t *testing.T) {
 	if _, ok := session["permissionConfig"]; ok {
 		t.Fatalf("compact session should not include permissionConfig: %#v", session)
 	}
+	if len(sessions.messageCallIDs) != 0 {
+		t.Fatalf("ListMessages calls = %#v, want none", sessions.messageCallIDs)
+	}
+}
+
+func TestGetCommandReturnsRecentMessagesInChronologicalOrder(t *testing.T) {
+	sessions := &fakeAgentSessions{messages: []agentservice.SessionMessage{
+		{
+			AgentSessionID: "SESSION-1", MessageID: "newest", Role: "assistant",
+			Payload: map[string]any{"content": "Second"}, Version: 2,
+		},
+		{
+			AgentSessionID: "SESSION-1", MessageID: "oldest", Role: "user",
+			Payload: map[string]any{"content": "First"}, Version: 1,
+		},
+	}}
+	command := newTestProvider(
+		fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, sessions,
+	).newGetCommand()
+
+	output, err := command.Handler(context.Background(), cliservice.InvokeRequest{
+		Input:      map[string]any{"session-id": "SESSION-1", "messages": "2"},
+		OutputMode: cliservice.OutputModeJSON,
+	})
+	if err != nil {
+		t.Fatalf("Handler: %v", err)
+	}
+	if sessions.limit != 2 || sessions.order != agentactivitybiz.MessageOrderDesc {
+		t.Fatalf("message query = limit %d order %q", sessions.limit, sessions.order)
+	}
+	messages := output.Value["messages"].([]any)
+	if len(messages) != 2 || messages[0].(map[string]any)["messageId"] != "oldest" ||
+		messages[1].(map[string]any)["messageId"] != "newest" {
+		t.Fatalf("messages = %#v", messages)
+	}
+	if output.Value["agentSessionId"] != "SESSION-1" || output.Value["latestVersion"] != uint64(2) {
+		t.Fatalf("output = %#v", output.Value)
+	}
+}
+
+func TestGetCommandValidatesMessageCount(t *testing.T) {
+	command := newTestProvider(
+		fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, &fakeAgentSessions{},
+	).newGetCommand()
+	for _, messages := range []string{"0", "101"} {
+		_, err := command.Handler(context.Background(), cliservice.InvokeRequest{
+			Input: map[string]any{"session-id": "SESSION-1", "messages": messages},
+		})
+		if !errors.Is(err, cliservice.ErrInvalidInput) {
+			t.Fatalf("messages %s error = %v, want invalid input", messages, err)
+		}
+	}
 }
 
 func TestSendCommandConvertsImageFilesToPromptContentBlocks(t *testing.T) {
@@ -2046,6 +2098,10 @@ func TestSessionSummaryIncludesCompactSession(t *testing.T) {
 	session, ok := output.Value["session"].(map[string]any)
 	if !ok || session["agentSessionId"] != "SESSION-1" {
 		t.Fatalf("output = %#v", output.Value)
+	}
+	if command.Capability.Visibility != cliservice.CapabilityVisibilityIntegration ||
+		len(output.Warnings) != 1 || output.Warnings[0].Code != "deprecated_agent_session_summary" {
+		t.Fatalf("capability = %#v warnings = %#v", command.Capability, output.Warnings)
 	}
 }
 

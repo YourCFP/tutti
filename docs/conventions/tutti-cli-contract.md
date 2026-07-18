@@ -194,14 +194,17 @@ Use `issue task create-batch` for multiple new child tasks. Its `tasks-json`
 input is a JSON array of task objects, and the daemon appends tasks in array
 order with contiguous issue-local `sortIndex` values.
 
-`agent session-summary --json` returns compact message records for agent-session
-mentions. Its session record includes exact `agentTargetId` alongside provider
-runtime metadata so callers can safely validate attach/resume identity. When a
-compact message contains image prompt content, include an
+`agent get --json` returns compact session context. Adding `--messages <N>`
+includes the most recent 1 to 100 compact message records in chronological
+order for context recovery and agent-session mentions. Its session record
+includes exact `agentTargetId` alongside provider runtime metadata so callers
+can safely validate attach/resume identity. When a compact message contains
+image prompt content, include an
 `images` array with `attachmentId`, `mimeType`, `name`, and a daemon-local
 `localPath` when the attachment file is available on disk. Keep `payload`
 omitted from this compact shape; expose only fields useful for agent context
-recovery.
+recovery. The deprecated integration-only `agent session-summary` path remains
+temporarily available for compatibility with its existing pagination flags.
 
 `agent wait --json` is the blocking progress helper for launched or continued
 agent sessions. It should wait for the next meaningful stop point such as turn
@@ -215,10 +218,10 @@ approval or input stop additionally returns the pending `interactions` with
 self-described actions and a JSON input summary of at most 2 KiB. It must not
 reuse a historical settled Turn for an idle timeout: timeout carries a
 `turnId` only while a Turn is active. It must not return execution-message
-pagination or a full transcript; callers that need
-broader context should follow with `agent session-summary`. Keep message window
-controls such as `limit` out of the public wait command shape, and keep timeout
-output free of result or interaction detail.
+pagination or a full transcript; callers that need broader context should
+follow with `agent get --messages <N>`. Keep message window controls out of the
+public wait command shape, and keep timeout output free of result or
+interaction detail.
 The wait implementation skips transcript pagination and performs result
 enrichment separately. New settled turns carry a durable final-assistant
 resolution marker and, when present at settlement, the exact message anchor.
@@ -325,7 +328,7 @@ Command path segments and input names use lowercase kebab-case.
 Examples:
 
 - `issue list`
-- `agent session-summary`
+- `agent get`
 - `agent respond`
 - `topic-id`
 - `wait`
