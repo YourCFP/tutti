@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { RichTextTriggerQueryMatch } from "@tutti-os/ui-rich-text/types";
 import { serializeWorkspaceAppExternalAtMatch } from "./workspaceAppExternalAtSerialization.ts";
+import { workspaceAppExternalAgentIconDataUrlsByIconKey } from "./workspaceAppExternalAgentIconDataUrls.ts";
 
 type TestMentionInsert = Extract<
   RichTextTriggerQueryMatch["insertResult"],
@@ -84,7 +85,7 @@ test("serializes mention insert results", () => {
   );
 });
 
-test("serializes mention icon presentation as external thumbnail metadata", () => {
+test("serializes mention presentation with one canonical nested icon field", () => {
   assert.deepEqual(
     serializeInsert(
       mentionInsert({
@@ -111,8 +112,7 @@ test("serializes mention icon presentation as external thumbnail metadata", () =
         presentation: {
           description: "Start a Codex session",
           iconUrl: "tutti-asset://agent/codex.png",
-          subtitle: "Start a Codex session",
-          thumbnailUrl: "tutti-asset://agent/codex.png"
+          subtitle: "Start a Codex session"
         }
       }
     }
@@ -230,8 +230,7 @@ test("serializes mention item id from insert identity for external restore", () 
         entityId: "agent-codex",
         label: "Codex",
         presentation: {
-          iconUrl: "tutti-asset://agent/codex.png",
-          thumbnailUrl: "tutti-asset://agent/codex.png"
+          iconUrl: "tutti-asset://agent/codex.png"
         }
       }
     }
@@ -259,11 +258,13 @@ test("replaces managed Agent file icons with guest-loadable asset urls", () => {
     }
   };
 
+  const cursorIconDataUrl =
+    workspaceAppExternalAgentIconDataUrlsByIconKey.cursor;
   assert.deepEqual(serializeWorkspaceAppExternalAtMatch(match), {
     providerId: "agent-target",
     itemId: "local:cursor",
     label: "Cursor",
-    thumbnailUrl: "tutti-asset://agent/cursor.png",
+    thumbnailUrl: cursorIconDataUrl,
     insert: {
       kind: "mention",
       mention: {
@@ -271,12 +272,25 @@ test("replaces managed Agent file icons with guest-loadable asset urls", () => {
         label: "Cursor",
         presentation: {
           agentProviderId: "cursor",
-          iconUrl: "tutti-asset://agent/cursor.png",
-          thumbnailUrl: "tutti-asset://agent/cursor.png"
+          iconUrl: cursorIconDataUrl
         }
       }
     }
   });
+});
+
+test("keeps every managed Agent external icon within the 64px data-url budget", () => {
+  for (const [iconKey, dataUrl] of Object.entries(
+    workspaceAppExternalAgentIconDataUrlsByIconKey
+  )) {
+    assert.match(dataUrl, /^data:image\/webp;base64,/);
+    const bytes = Buffer.from(dataUrl.split(",", 2)[1] ?? "", "base64");
+    assert.ok(bytes.byteLength <= 2_048, `${iconKey} exceeds 2 KiB`);
+    assert.deepEqual(readLossyWebpDimensions(bytes), {
+      width: 64,
+      height: 64
+    });
+  }
 });
 
 test("preserves remote and data Agent icons for external apps", () => {
@@ -337,4 +351,16 @@ function serializeInsert(
       insertResult
     })
   )?.insert;
+}
+
+function readLossyWebpDimensions(bytes: Buffer): {
+  width: number;
+  height: number;
+} {
+  const frameHeaderOffset = bytes.indexOf(Buffer.from([0x9d, 0x01, 0x2a]));
+  assert.notEqual(frameHeaderOffset, -1, "missing lossy WebP frame header");
+  return {
+    width: bytes.readUInt16LE(frameHeaderOffset + 3) & 0x3fff,
+    height: bytes.readUInt16LE(frameHeaderOffset + 5) & 0x3fff
+  };
 }

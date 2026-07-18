@@ -303,6 +303,12 @@ empty-home carousel and Provider Rail. `maskIconUrl` may supply the monochrome
 conversation-row glyph. Host projections preserve these roles independently
 and do not create provider-specific renderer catalogs.
 
+When the Desktop host projects built-in Agent mentions into a workspace app,
+it replaces host-local file URLs with bounded 64px WebP data URLs. The external
+bridge is the serialization owner: workspace apps must not read host paths,
+register an Electron-only asset protocol, or re-encode the icon. Remote and
+already-inline extension icons retain their authoritative URL.
+
 For a signed Agent Extension, package `icon` is the primary identity and
 optional package `maskIcon` is the conversation-row glyph. All assets remain
 pinned to the verified active installation.
