@@ -114,6 +114,13 @@ export const enAgentGui = {
     cancel: "Cancel",
     confirm: "Enable full access"
   },
+  fullAccessRestoredWarning: {
+    title: "Full access is on",
+    description:
+      "Codex can run commands, use the internet, and create, modify, upload, or delete files anywhere on this computer without asking. This can cause data loss and expose you to prompt-injection attacks.",
+    dontShowAgain: "Don't show again",
+    dismissLabel: "Dismiss full access warning"
+  },
   permissionSemantics: {
     "ask-before-write": {
       label: "Ask for approval",

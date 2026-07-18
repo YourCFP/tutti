@@ -22,6 +22,7 @@ import {
   AgentProjectMissingStatusProbe
 } from "../AgentComposerSettingsMenus";
 import { AgentChromeNotice } from "../AgentSessionChrome";
+import { AgentFullAccessRestoredWarning } from "../AgentFullAccessRestoredWarning";
 import {
   AgentRichTextEditor,
   type AgentRichTextEditorHandle
@@ -297,6 +298,16 @@ export function AgentComposerView(input: Props): React.JSX.Element {
           onProjectMissingChange={input.setIsSelectedProjectMissing}
         />
       ) : null}
+      <AgentFullAccessRestoredWarning
+        isSettingsLoading={composerSettings.isSettingsLoading}
+        permissionModeId={
+          composerSettings.selectedPermissionModeValue ??
+          composerSettings.draftSettings.permissionModeId
+        }
+        previewMode={previewMode}
+        provider={provider}
+        visibleOnHome={isHeroLayout}
+      />
       <div
         className={cn(
           styles.composerInputGroup,

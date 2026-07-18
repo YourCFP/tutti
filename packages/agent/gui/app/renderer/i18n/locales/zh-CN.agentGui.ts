@@ -105,6 +105,13 @@ export const zhCNAgentGui = {
     cancel: "取消",
     confirm: "启用完全访问权限"
   },
+  fullAccessRestoredWarning: {
+    title: "完全访问权限已开启",
+    description:
+      "Codex 可以在未经你同意的情况下运行命令、使用互联网，以及在这台电脑的任意位置创建、修改、上传或删除文件。这可能导致数据丢失，也会带来提示词注入风险。",
+    dontShowAgain: "不再显示",
+    dismissLabel: "关闭完全访问权限警告"
+  },
   permissionSemantics: {
     "ask-before-write": {
       label: "请求批准",
