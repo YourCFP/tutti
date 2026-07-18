@@ -10,6 +10,7 @@ var (
 	_ = (*agenthost.Host).UpdateSettings
 	_ = (*agenthost.Host).UpdatePin
 	_ = (*agenthost.Host).DeleteSession
+	_ = (*agenthost.Host).GetTurn
 	_ = (*agenthost.Host).FindTurnByClientSubmitID
 	_ = (*agenthost.Host).CancelTurn
 	_ = (*agenthost.Host).SubmitInteractive

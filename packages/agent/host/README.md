@@ -35,8 +35,13 @@ and only then settles unrecoverable stale turns. Configuring a goal store
 without its runtime or inbox consumer fails recovery with
 `ErrGoalConsumerUnavailable` instead of silently accumulating work.
 
-`GetSession` reads canonical truth plus an optional live runtime observation
-without starting a provider. `UpdateSettings` serializes with runtime resume:
+`GetSession` reads canonical session truth plus an optional live runtime
+observation without starting a provider. `GetTurn` and
+`FindTurnByClientSubmitID` expose canonical turn queries without leaking an
+adapter's concrete store. `CreateSessionInput.ClientSubmitID` and
+`SendInput.ClientSubmitID` are the typed idempotency identities and override
+the legacy metadata value when both are present.
+`UpdateSettings` serializes with runtime resume:
 historical sessions persist settings only, while live sessions update the
 runtime. Provider-specific model, reasoning, and speed normalization stays
 behind `SettingsPolicy`. `UpdatePin` mutates canonical metadata only.
