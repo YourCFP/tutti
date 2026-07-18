@@ -498,35 +498,6 @@ export function reportAgentSubmitTraceDiagnostic(input: {
   }
 }
 
-export function reportAgentGUIQueueSendNowDiagnostic(input: {
-  event: string;
-  runtime: AgentActivityRuntime;
-  workspaceId: string;
-  details: Record<string, unknown>;
-}): void {
-  const reportDiagnostic = input.runtime.reportDiagnostic;
-  if (!reportDiagnostic) {
-    return;
-  }
-  try {
-    void Promise.resolve(
-      reportDiagnostic.call(input.runtime, {
-        details: input.details,
-        event: input.event,
-        level: "info",
-        source: "agent-gui",
-        workspaceId: input.workspaceId
-      })
-    ).catch(() => {});
-  } catch (reportError) {
-    // Diagnostic logging must never affect the Agent GUI queue action path.
-    console.error(
-      "[agent-gui] reportAgentGUIQueueSendNowDiagnostic failed",
-      reportError
-    );
-  }
-}
-
 export function scheduleAgentSubmitTracePaint(input: {
   event?: string;
   runtime: AgentActivityRuntime;

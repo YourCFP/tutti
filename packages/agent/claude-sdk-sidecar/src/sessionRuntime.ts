@@ -338,21 +338,12 @@ export class SessionRuntime {
       });
   }
 
-  guide(prompt: string, content?: unknown, clientSubmitId?: string): void {
-    this.logAuthRefresh("guide.begin", {
-      clientSubmitId,
-      hasDriver: Boolean(this.driver),
-      sessionClosed: this.sessionClosed
-    });
+  guide(prompt: string, content?: unknown): void {
     if (this.driver) {
       this.driver.guide(prompt);
       return;
     }
     if (this.sessionClosed) {
-      this.logAuthRefresh("guide.dropped", {
-        clientSubmitId,
-        reason: "session_closed"
-      });
       emit({
         type: "error",
         payload: {
@@ -371,21 +362,6 @@ export class SessionRuntime {
           !this.isQueryGenerationActive(generation) ||
           executionEpoch !== this.executionEpoch
         ) {
-          // Silent by design until now: nothing downstream (daemon ack,
-          // GUI queue) learns this steer never reached the SDK's prompt
-          // queue. Logged so a repro under
-          // TUTTI_CLAUDE_AUTH_REFRESH_DEBUG=1 can distinguish this from a
-          // genuinely delivered guide.
-          this.logAuthRefresh("guide.dropped", {
-            clientSubmitId,
-            reason: !generation
-              ? "no_generation"
-              : !this.isQueryGenerationActive(generation)
-                ? "generation_inactive"
-                : "execution_epoch_mismatch",
-            currentExecutionEpoch: this.executionEpoch,
-            capturedExecutionEpoch: executionEpoch
-          });
           return;
         }
         const sdkContent = sdkContentFromPromptBlocks(
@@ -402,10 +378,6 @@ export class SessionRuntime {
             content: sdkContent
           }
         } as SDKUserMessage);
-        this.logAuthRefresh("guide.pushed", {
-          clientSubmitId,
-          activeTurnId: this.turns.activeId
-        });
         this.consume(generation);
       })
       .catch((error) => {
@@ -413,7 +385,6 @@ export class SessionRuntime {
           return;
         }
         this.logAuthRefresh("guide.ensure_query_failed", {
-          clientSubmitId,
           error: errorPayload(error)
         });
         emit({

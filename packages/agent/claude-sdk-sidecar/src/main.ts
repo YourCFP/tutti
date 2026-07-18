@@ -75,8 +75,7 @@ export async function handleRequest(
         session.guide(
           // Prefer structured content; prompt is the legacy text fallback.
           stringValue(payload.prompt),
-          payload.content,
-          stringValue(payload.clientSubmitId)
+          payload.content
         );
         emit({ id, type: "ok" });
         return;

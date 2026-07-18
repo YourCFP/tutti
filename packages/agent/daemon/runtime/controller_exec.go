@@ -124,12 +124,10 @@ func (c *Controller) guideActiveTurn(
 ) (ExecResult, error) {
 	guidanceAdapter, ok := adapter.(ActiveTurnGuidanceAdapter)
 	if !ok {
-		logAgentSubmitTrace("runtime.exec.guidance_unsupported", session, "", metadata, nil)
 		return ExecResult{}, ErrActiveTurnGuidanceUnsupported
 	}
 	turnID, ok := c.activeTurnID(session.RoomID, session.AgentSessionID)
 	if !ok {
-		logAgentSubmitTrace("runtime.exec.guidance_no_active_turn", session, "", metadata, nil)
 		return ExecResult{}, ErrSessionNoActiveTurn
 	}
 	runCtx := ctx
