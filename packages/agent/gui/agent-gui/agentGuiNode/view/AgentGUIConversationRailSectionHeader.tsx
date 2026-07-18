@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react";
+import { forwardRef, memo, useCallback, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import {
   DropdownMenu,
@@ -9,7 +9,10 @@ import {
   TooltipContent,
   TooltipTrigger
 } from "@tutti-os/ui-system";
-import { BareIconButton } from "@tutti-os/ui-system/components";
+import {
+  BareIconButton,
+  type BareIconButtonProps
+} from "@tutti-os/ui-system/components";
 import {
   CreateChatIcon,
   FolderIcon,
@@ -37,12 +40,7 @@ interface AgentGUIConversationRailSectionHeaderProps {
   onCreateConversation: () => void;
   onOpenProjectFiles?: (() => void) | null;
   onProjectDragEnd: () => void;
-  onProjectDragOver: (
-    edge: "before" | "after",
-    event: React.DragEvent<HTMLElement>
-  ) => void;
   onProjectDragStart: (event: React.DragEvent<HTMLElement>) => void;
-  onProjectDrop: (event: React.DragEvent<HTMLElement>) => void;
   onProjectMenuOpenChange: (open: boolean) => void;
   onRemoveProject: () => void;
   onRequestBatchDeletion: () => void;
@@ -57,21 +55,14 @@ interface HeaderFrameProps {
   children: React.ReactNode;
   isProjectSection: boolean;
   onProjectDragEnd: () => void;
-  onProjectDragOver: (
-    edge: "before" | "after",
-    event: React.DragEvent<HTMLElement>
-  ) => void;
   onProjectDragStart: (event: React.DragEvent<HTMLElement>) => void;
-  onProjectDrop: (event: React.DragEvent<HTMLElement>) => void;
 }
 
 function HeaderFrame({
   children,
   isProjectSection,
   onProjectDragEnd,
-  onProjectDragOver,
-  onProjectDragStart,
-  onProjectDrop
+  onProjectDragStart
 }: HeaderFrameProps): React.JSX.Element {
   const projectDragDisabled =
     useAgentGUIConversationRailSectionProjectDragDisabled();
@@ -82,15 +73,6 @@ function HeaderFrame({
       draggable={isProjectSection && !projectDragDisabled}
       onDragStart={onProjectDragStart}
       onDragEnd={onProjectDragEnd}
-      onDragOver={(event) => {
-        if (!isProjectSection) return;
-        const rect = event.currentTarget.getBoundingClientRect();
-        onProjectDragOver(
-          event.clientY < rect.top + rect.height / 2 ? "before" : "after",
-          event
-        );
-      }}
-      onDrop={isProjectSection ? onProjectDrop : undefined}
     >
       {children}
     </div>
@@ -218,26 +200,48 @@ interface ProjectMenuTriggerProps {
   previewMode: boolean;
 }
 
+type ProjectMenuButtonProps = Omit<
+  BareIconButtonProps,
+  "aria-label" | "children" | "size"
+> & {
+  accessibleName: string;
+};
+
+const ProjectMenuButton = forwardRef<HTMLButtonElement, ProjectMenuButtonProps>(
+  function ProjectMenuButton(
+    { accessibleName, disabled, ...props },
+    ref
+  ): React.JSX.Element {
+    const projectActionLocked =
+      useAgentGUIConversationRailSectionProjectActionLocked();
+
+    return (
+      <BareIconButton
+        {...props}
+        ref={ref}
+        className={styles.conversationSectionMoreButton}
+        aria-label={accessibleName}
+        size="sm"
+        disabled={projectActionLocked || disabled}
+      >
+        <MoreHorizontalIcon aria-hidden="true" />
+      </BareIconButton>
+    );
+  }
+);
+ProjectMenuButton.displayName = "ProjectMenuButton";
+
 function ProjectMenuTrigger({
   labels,
   previewMode
 }: ProjectMenuTriggerProps): React.JSX.Element {
-  const projectActionLocked =
-    useAgentGUIConversationRailSectionProjectActionLocked();
   const accessibleName = labels.projectSectionMoreActions;
 
   if (previewMode) {
     return (
       <DropdownMenuTrigger asChild>
         <span className={styles.conversationSectionActionTooltipWrap}>
-          <BareIconButton
-            className={styles.conversationSectionMoreButton}
-            aria-label={accessibleName}
-            size="sm"
-            disabled={projectActionLocked}
-          >
-            <MoreHorizontalIcon aria-hidden="true" />
-          </BareIconButton>
+          <ProjectMenuButton accessibleName={accessibleName} />
         </span>
       </DropdownMenuTrigger>
     );
@@ -248,14 +252,7 @@ function ProjectMenuTrigger({
       <TooltipTrigger asChild>
         <span className={styles.conversationSectionActionTooltipWrap}>
           <DropdownMenuTrigger asChild>
-            <BareIconButton
-              className={styles.conversationSectionMoreButton}
-              aria-label={accessibleName}
-              size="sm"
-              disabled={projectActionLocked}
-            >
-              <MoreHorizontalIcon aria-hidden="true" />
-            </BareIconButton>
+            <ProjectMenuButton accessibleName={accessibleName} />
           </DropdownMenuTrigger>
         </span>
       </TooltipTrigger>
@@ -490,9 +487,7 @@ export const AgentGUIConversationRailSectionHeader = memo(
     onCreateConversation,
     onOpenProjectFiles,
     onProjectDragEnd,
-    onProjectDragOver,
     onProjectDragStart,
-    onProjectDrop,
     onProjectMenuOpenChange,
     onRemoveProject,
     onRequestBatchDeletion,
@@ -518,9 +513,7 @@ export const AgentGUIConversationRailSectionHeader = memo(
       <HeaderFrame
         isProjectSection={isProjectSection}
         onProjectDragEnd={onProjectDragEnd}
-        onProjectDragOver={onProjectDragOver}
         onProjectDragStart={onProjectDragStart}
-        onProjectDrop={onProjectDrop}
       >
         <HeaderIdentity
           isProjectSection={isProjectSection}

@@ -537,8 +537,13 @@
   header has the same effect: React must execute the whole header and its
   mounted Radix trigger tree even when only one native attribute or one open
   menu item changes. A combined Context object merely moves that fan-out from
-  props to every Context consumer. A measurement effect that includes the state
-  it writes in its dependencies can repeat the resulting layout read once more.
+  props to every Context consumer. Keeping those Context providers inside the
+  memoized section also executes item projection before the update reaches the
+  narrow consumer. A project reorder can appear draggable but never update or
+  commit when only its short header accepts `dragover` and `drop`: moving over
+  the expanded item list leaves the valid drop zone. A measurement effect that
+  includes the state it writes in its dependencies can repeat the resulting
+  layout read once more.
 - Fix:
   Stabilize the value at the ownership boundary, or remove derived presentation
   values from bidirectional state. For external/workbench state, only sync
@@ -564,12 +569,15 @@
   controller/store or copy Session/project semantics to obtain this isolation.
   Split large headers into stable identity, create-action, menu, and frame
   render islands. Project frequently changing derived booleans through
-  separate primitive view Contexts so project drag state reaches only the
-  native draggable frame, project action lock reaches only its trigger and open
-  project menu, and batch deletion state reaches only open menu content. Keep
-  event-time lock readers as the action-delivery guard; Context is only the
-  current presentation projection. Closed menus should have no batch-state
-  consumer.
+  separate primitive view Contexts owned outside the memoized Section so
+  project drag state reaches only the native draggable frame, project action
+  lock reaches only the forwarded-ref button leaf and open project menu, and
+  batch deletion state reaches only open menu content. Keep event-time lock
+  readers as the action-delivery guard; Context is only the current
+  presentation projection. Closed menus should have no batch-state consumer.
+  Keep the project header as the drag source, but accept `dragover` and `drop`
+  across the whole project section and resolve its edge from the header
+  midpoint. This preserves a usable drop target when the section is expanded.
   Remove a measured state value from an effect dependency when the effect only
   writes, but never reads, that value.
   During Rail reconciliation, expose a stable lock reader so

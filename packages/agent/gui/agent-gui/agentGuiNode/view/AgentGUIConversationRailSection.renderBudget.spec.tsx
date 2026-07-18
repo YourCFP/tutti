@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConversationSection } from "../agentGuiNodeViewConversation";
 import type { AgentGUIViewLabels } from "./AgentGUINodeView.types";
 import { AgentGUIConversationRailSection } from "./AgentGUIConversationRailSection";
+import { AgentGUIConversationRailSectionPresentationProvider } from "./agentGUIConversationRailSectionPresentationContext";
 
 const { headerRenderSpy } = vi.hoisted(() => ({
   headerRenderSpy: vi.fn()
@@ -54,63 +55,89 @@ describe("AgentGUIConversationRailSection render budget", () => {
 
     expect(headerRenderSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("does not execute item projection when presentation locks change", () => {
+    const section = createSection("session-1", "First");
+    const filterSpy = vi.spyOn(section.items, "filter");
+    const { rerender } = renderSection(section);
+    const initialFilterCalls = filterSpy.mock.calls.length;
+
+    rerender(
+      renderSectionElement(section, {
+        batchDeletionDisabled: true,
+        projectActionLocked: true,
+        projectDragDisabled: true
+      })
+    );
+
+    expect(filterSpy).toHaveBeenCalledTimes(initialFilterCalls);
+  });
 });
 
 function renderSection(section: ConversationSection) {
   return render(renderSectionElement(section));
 }
 
-function renderSectionElement(section: ConversationSection) {
+function renderSectionElement(
+  section: ConversationSection,
+  presentation: {
+    batchDeletionDisabled?: boolean;
+    projectActionLocked?: boolean;
+    projectDragDisabled?: boolean;
+  } = {}
+) {
   return (
-    <AgentGUIConversationRailSection
-      activeConversation={null}
-      activeConversationCountsTowardTotal={false}
-      activeConversationId={section.items[0]?.id ?? null}
-      createConversationDisabled={false}
-      isConversationSearchActive={false}
-      isDeletingConversation={false}
-      isDeletingProjectConversations={false}
-      isLoadingMoreConversations={false}
-      isProjectActionLocked={isUnlocked}
-      isRailInteractionLocked={isUnlocked}
-      isRequestingBatchDeletion={false}
-      isSectionCollapsed={false}
-      labels={LABELS}
-      pendingDeleteConversationId={null}
-      previewMode={false}
-      projectDragDisabled={false}
-      projectDragging={false}
-      projectDropIndicator={null}
-      projectLabel="Alpha"
-      projectPath="/alpha"
-      registerItemElement={noop}
-      section={section}
-      sectionHasMore={false}
-      sectionTotalCount={1}
-      uiLanguage="en"
-      visibleItemLimit={5}
-      workspaceId="workspace-1"
-      onCancelDeleteConversation={noop}
-      onConfirmDeleteConversation={noop}
-      onCreateConversation={noop}
-      onLoadMoreConversations={noop}
-      onMarkConversationUnread={noop}
-      onOpenProjectFiles={noop}
-      onProjectDragEnd={noop}
-      onProjectDragOver={noop}
-      onProjectDragStart={noop}
-      onProjectDrop={noop}
-      onProjectMenuOpenChange={noop}
-      onRequestDeleteConversation={noop}
-      onRequestRenameConversation={noop}
-      onRequestSectionBatchDeletion={requestSectionBatchDeletion}
-      onSelectConversation={noop}
-      onToggleConversationPinned={noop}
-      onToggleProjectPinned={toggleProjectPinned}
-      onToggleProjectSectionCollapsed={noop}
-      onVisibleItemLimitChange={noop}
-      setPendingProjectAction={noop}
-    />
+    <AgentGUIConversationRailSectionPresentationProvider
+      batchDeletionDisabled={presentation.batchDeletionDisabled ?? false}
+      projectActionLocked={presentation.projectActionLocked ?? false}
+      projectDragDisabled={presentation.projectDragDisabled ?? false}
+    >
+      <AgentGUIConversationRailSection
+        activeConversation={null}
+        activeConversationCountsTowardTotal={false}
+        activeConversationId={section.items[0]?.id ?? null}
+        createConversationDisabled={false}
+        isDeletingConversation={false}
+        isLoadingMoreConversations={false}
+        isProjectActionLocked={isUnlocked}
+        isRailInteractionLocked={isUnlocked}
+        isSectionCollapsed={false}
+        labels={LABELS}
+        pendingDeleteConversationId={null}
+        previewMode={false}
+        projectDragging={false}
+        projectDropIndicator={null}
+        projectLabel="Alpha"
+        projectPath="/alpha"
+        registerItemElement={noop}
+        section={section}
+        sectionHasMore={false}
+        sectionTotalCount={1}
+        uiLanguage="en"
+        visibleItemLimit={5}
+        workspaceId="workspace-1"
+        onCancelDeleteConversation={noop}
+        onConfirmDeleteConversation={noop}
+        onCreateConversation={noop}
+        onLoadMoreConversations={noop}
+        onMarkConversationUnread={noop}
+        onOpenProjectFiles={noop}
+        onProjectDragEnd={noop}
+        onProjectDragOver={noop}
+        onProjectDragStart={noop}
+        onProjectDrop={noop}
+        onProjectMenuOpenChange={noop}
+        onRequestDeleteConversation={noop}
+        onRequestRenameConversation={noop}
+        onRequestSectionBatchDeletion={requestSectionBatchDeletion}
+        onSelectConversation={noop}
+        onToggleConversationPinned={noop}
+        onToggleProjectPinned={toggleProjectPinned}
+        onToggleProjectSectionCollapsed={noop}
+        onVisibleItemLimitChange={noop}
+        setPendingProjectAction={noop}
+      />
+    </AgentGUIConversationRailSectionPresentationProvider>
   );
 }
 
