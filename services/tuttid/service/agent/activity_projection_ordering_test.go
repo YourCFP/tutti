@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
 )
@@ -20,7 +21,7 @@ func TestActivityProjectionReportPersistsMessagesBeforeSettledState(t *testing.T
 	activeTurnID := "turn-1"
 	if err := projection.Report(ctx, agentsessionstore.ReportActivityInput{
 		WorkspaceID: "ws-ordering",
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			AgentID: "session-1", Provider: "codex",
 			SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 		},
@@ -38,7 +39,7 @@ func TestActivityProjectionReportPersistsMessagesBeforeSettledState(t *testing.T
 
 	if err := projection.Report(ctx, agentsessionstore.ReportActivityInput{
 		WorkspaceID: "ws-ordering",
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			AgentID: "session-1", Provider: "codex",
 			SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 		},
@@ -89,7 +90,7 @@ func TestActivityProjectionReportCreatesProviderInitiatedTurnBeforeMessages(t *t
 			activeTurnID := "turn-provider"
 			report := agentsessionstore.ReportActivityInput{
 				WorkspaceID: workspaceID,
-				Source: agentsessionstore.EventSource{
+				Source: canonical.EventSource{
 					AgentID: "session-provider", Provider: "codex",
 					SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 				},
@@ -105,7 +106,7 @@ func TestActivityProjectionReportCreatesProviderInitiatedTurnBeforeMessages(t *t
 						TurnID: "turn-provider", Origin: agentactivitybiz.TurnOriginProviderInitiated,
 						ActiveTurnID: &activeTurnID, Phase: agentactivitybiz.TurnPhaseWaiting,
 					},
-					InteractionTransition: &agentsessionstore.WorkspaceAgentInteractionTransition{
+					InteractionTransition: &canonical.WorkspaceAgentInteractionTransition{
 						RequestID: "request-1", TurnID: "turn-provider", Kind: agentactivitybiz.InteractionKindApproval,
 						Status: agentactivitybiz.InteractionStatusPending, ToolName: "shell",
 						Input: map[string]any{"command": "git status"},
@@ -155,7 +156,7 @@ func TestActivityProjectionRootProviderCompletionFlushesTurnMessagesBeforeSettle
 	activeTurnID := "root-turn"
 	if err := projection.Report(ctx, agentsessionstore.ReportActivityInput{
 		WorkspaceID: "ws-root-provider",
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			AgentID: "root-session", Provider: "codex",
 			SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 		},
@@ -166,7 +167,7 @@ func TestActivityProjectionRootProviderCompletionFlushesTurnMessagesBeforeSettle
 				TurnID: "root-turn", Origin: agentactivitybiz.TurnOriginUserPrompt,
 				ActiveTurnID: &activeTurnID, Phase: agentactivitybiz.TurnPhaseRunning,
 			},
-			RootProviderTurn: &agentsessionstore.WorkspaceAgentRootProviderTurnTransition{
+			RootProviderTurn: &canonical.WorkspaceAgentRootProviderTurnTransition{
 				RootTurnID: "root-turn", ProviderTurnID: "provider-turn",
 				Phase: agentsessionstore.RootProviderTurnPhaseRunning,
 			},
@@ -177,7 +178,7 @@ func TestActivityProjectionRootProviderCompletionFlushesTurnMessagesBeforeSettle
 
 	if err := projection.Report(ctx, agentsessionstore.ReportActivityInput{
 		WorkspaceID: "ws-root-provider",
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			AgentID: "root-session", Provider: "codex",
 			SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 		},
@@ -192,7 +193,7 @@ func TestActivityProjectionRootProviderCompletionFlushesTurnMessagesBeforeSettle
 		StatePatches: []agentsessionstore.WorkspaceAgentStatePatch{{
 			AgentSessionID: "root-session", Kind: agentactivitybiz.SessionKindRoot,
 			Provider: "codex", LifecycleStatus: "ready", CurrentPhase: "idle", OccurredAtUnixMS: 4,
-			RootProviderTurn: &agentsessionstore.WorkspaceAgentRootProviderTurnTransition{
+			RootProviderTurn: &canonical.WorkspaceAgentRootProviderTurnTransition{
 				RootTurnID: "root-turn", ProviderTurnID: "provider-turn",
 				Phase:   agentsessionstore.RootProviderTurnPhaseCompleted,
 				Outcome: agentactivitybiz.TurnOutcomeCompleted,
@@ -227,7 +228,7 @@ func TestActivityProjectionPreservesSettleThenStartPatchOrder(t *testing.T) {
 	turnA := "turn-a"
 	if err := projection.Report(ctx, agentsessionstore.ReportActivityInput{
 		WorkspaceID: "ws-causal",
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			AgentID: "session-causal", Provider: "codex",
 			SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 		},
@@ -246,7 +247,7 @@ func TestActivityProjectionPreservesSettleThenStartPatchOrder(t *testing.T) {
 	turnB := "turn-b"
 	if err := projection.Report(ctx, agentsessionstore.ReportActivityInput{
 		WorkspaceID: "ws-causal",
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			AgentID: "session-causal", Provider: "codex",
 			SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 		},

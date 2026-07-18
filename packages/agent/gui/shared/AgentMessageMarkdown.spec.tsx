@@ -334,6 +334,25 @@ describe("AgentMessageMarkdown", () => {
     );
   });
 
+  it("keeps JSON fields after a bare URL outside the link", () => {
+    const url = "https://github.com/tutti-os/tutti/pull/1355";
+    const content = JSON.stringify({
+      result: "mr_created",
+      prUrl: url,
+      branch: "feat/agent-worktree-isolation",
+      commit: "5f640250dc9565834ff4cec925104c05a02cd230",
+      checks: "focused Go tests/build"
+    });
+    render(<AgentMessageMarkdown content={content} />);
+
+    const link = screen.getByRole("link", { name: url });
+    expect(link).toHaveAttribute("data-agent-link-href", url);
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(link.parentElement).toHaveTextContent(
+      `"prUrl":"${url}","branch":"feat/agent-worktree-isolation"`
+    );
+  });
+
   it("renders unsafe markdown links as plain text", () => {
     const onLinkClick = vi.fn();
     render(

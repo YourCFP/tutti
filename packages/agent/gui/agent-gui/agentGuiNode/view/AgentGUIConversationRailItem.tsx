@@ -31,13 +31,13 @@ import {
   resolveAgentTargetPresentation,
   useAgentTargetPresentations
 } from "../../../shared/AgentTargetPresentationContext";
-import { ConversationMeta } from "../agentGuiNodeViewConversation";
 import { createAgentSessionMarkdownLink } from "../agentRichText/agentFileMentionExtension";
 import type { AgentGUINodeViewModel } from "../model/agentGuiNodeTypes";
 import type { UiLanguage } from "../../../contexts/settings/domain/agentSettings";
 import type { AgentGUIViewLabels } from "../AgentGUINodeView";
 import styles from "../AgentGUINode.styles";
 import { conversationPlainTitle } from "./agentGUIViewUtils";
+import { AgentGUIConversationRailRelativeTime } from "./AgentGUIConversationRailClock";
 
 function agentGUIConversationIconUrl(
   provider: string | undefined,
@@ -52,6 +52,7 @@ function agentGUIConversationIconUrl(
   });
   return (
     resolveAgentGuiSessionProviderFlatIconUrl(provider) ||
+    targetPresentation?.maskIconUrl?.trim() ||
     targetPresentation?.iconUrl?.trim() ||
     null
   );
@@ -76,7 +77,6 @@ interface AgentGUIConversationRailItemProps {
   isPendingDeleteConversation: boolean;
   isDeletingConversation: boolean;
   isRailInteractionLocked: () => boolean;
-  currentTimeMs: number;
   labels: AgentGUIViewLabels;
   previewMode: boolean;
   uiLanguage: UiLanguage;
@@ -101,7 +101,6 @@ export const AgentGUIConversationRailItem = memo(
     isPendingDeleteConversation,
     isDeletingConversation,
     isRailInteractionLocked,
-    currentTimeMs,
     labels,
     previewMode,
     uiLanguage,
@@ -313,7 +312,7 @@ export const AgentGUIConversationRailItem = memo(
               {agentGUIConversationRailTitle(item, labels, uiLanguage)}
             </span>
           </span>
-          <ConversationMeta item={item} nowMs={currentTimeMs} labels={labels} />
+          <AgentGUIConversationRailRelativeTime item={item} labels={labels} />
         </button>
         {previewMode ? null : (
           <div className={styles.conversationActions}>

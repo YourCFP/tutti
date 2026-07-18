@@ -9442,6 +9442,7 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   width: 32px;
   height: 32px;
   place-items: center;
+  overflow: visible;
   border: 2px solid transparent;
   border-radius: 8px;
   background: transparent;

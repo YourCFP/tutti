@@ -15,6 +15,10 @@ import {
   type AgentMessageMarkdownAgentTarget
 } from "../../shared/AgentTargetPresentationContext";
 import type { AgentGUINodeViewModel } from "./model/agentGuiNodeTypes";
+import {
+  agentTargetPresentationKey,
+  projectAgentTargetPresentations
+} from "./model/agentGuiTargetPresentation";
 import styles from "./AgentGUINode.styles";
 import {
   fallbackWorkspaceFileReferenceCopy,
@@ -101,6 +105,7 @@ export function AgentGUINodeView({
   accountMenuState = null,
   previewMode = false,
   onAgentProviderLogin,
+  onAgentEnvPanelOpen,
   actions,
   conversationRailCollapsed,
   conversationRailWidthPx,
@@ -457,6 +462,7 @@ export function AgentGUINodeView({
     activeConversationId: viewModel.rail.activeConversationId,
     agentTargets: viewModel.rail.agentTargets,
     environmentProvider: effectiveRailConfigProvider,
+    openEnvironmentSetup: onAgentEnvPanelOpen,
     selectedAgentTarget: viewModel.rail.selectedAgentTarget
   });
   const openAgentSettings = useCallback(() => {
@@ -554,37 +560,26 @@ export function AgentGUINodeView({
       workspaceUserProjectI18n
     ]
   );
-  const agentTargetPresentationKey = JSON.stringify(
-    viewModel.rail.agentTargets.map((target) => [
-      target.agentTargetId ?? null,
-      target.iconUrl ?? null,
-      target.label,
-      target.provider
-    ])
+  const targetPresentationKey = agentTargetPresentationKey(
+    viewModel.rail.agentTargets
   );
   const agentTargetPresentations = useMemo<
     readonly AgentMessageMarkdownAgentTarget[]
   >(
     () =>
-      viewModel.rail.agentTargets.flatMap((target) =>
-        target.agentTargetId
-          ? [
-              {
-                agentTargetId: target.agentTargetId,
-                iconUrl: target.iconUrl ?? null,
-                name: target.label,
-                provider: target.provider,
-                workspaceId: viewModel.shell.workspaceId
-              }
-            ]
-          : []
-      ),
-    [agentTargetPresentationKey, viewModel.shell.workspaceId]
+      projectAgentTargetPresentations({
+        agentTargets: viewModel.rail.agentTargets,
+        workspaceId: viewModel.shell.workspaceId
+      }),
+    [targetPresentationKey, viewModel.shell.workspaceId]
   );
 
   const content = (
     <AgentTargetPresentationProvider agentTargets={agentTargetPresentations}>
-      <AgentTargetSetupRoot controller={targetSetupController}>
+      <AgentTargetSetupRoot
+        controller={targetSetupController}
+        openEnvironmentSetup={onAgentEnvPanelOpen}
+      >
         <div
           ref={layoutElementRef}
           className={styles.layout}

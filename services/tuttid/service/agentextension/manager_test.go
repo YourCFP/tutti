@@ -102,6 +102,9 @@ func TestManagerReconcileInstallsVerifiedPackageAndFallsBackOffline(t *testing.T
 	if target.Provider != "acp:gemini" || !strings.HasPrefix(target.IconURL, "data:image/svg+xml") {
 		t.Fatalf("registered target = %#v", target)
 	}
+	if !strings.HasPrefix(target.SidebarIconURL, "data:image/svg+xml") {
+		t.Fatalf("registered target sidebar icon = %q", target.SidebarIconURL)
+	}
 	if !strings.HasPrefix(target.HeroImageURL, "data:image/jpeg;base64,") {
 		t.Fatalf("registered target hero image = %q", target.HeroImageURL)
 	}
@@ -503,6 +506,7 @@ func testPackageZIPFor(t *testing.T, manifest Manifest, discovery string) []byte
 	files := map[string][]byte{
 		"tutti.agent.json":        mustJSON(t, manifest),
 		"assets/icon.svg":         []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`),
+		"assets/sidebar-icon.svg": []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`),
 		"assets/hero-image.jpg":   []byte("hero-image"),
 		"profiles/discovery.json": []byte(discovery),
 		"profiles/tools.json":     []byte(`{"schemaVersion":"tutti.agent.tools.v1","tools":[{"match":{"ids":["replace"]},"canonicalId":"Edit","category":"file-change","presentation":{"renderer":"diff","titleKey":"tools.edit.title"},"fileEffect":{"source":"acp-content-diff"}}]}`),
@@ -535,6 +539,8 @@ func testManifest() Manifest {
 	value.Description = "Gemini through ACP"
 	value.Icon.Type = "asset"
 	value.Icon.Src = "assets/icon.svg"
+	value.SidebarIcon.Type = "asset"
+	value.SidebarIcon.Src = "assets/sidebar-icon.svg"
 	value.HeroImage.Type = "asset"
 	value.HeroImage.Src = "assets/hero-image.jpg"
 	value.Runtime.Kind = "standard-acp"

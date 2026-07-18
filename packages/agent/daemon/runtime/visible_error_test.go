@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
 
 func TestVisibleFailureCodeClassifiesDeadlineExceededAsRequestTimedOut(t *testing.T) {
@@ -276,6 +276,6 @@ func TestVisibleFailureTimelineItemCarriesTimeoutCodeForTurnFailures(t *testing.
 	}
 }
 
-func reportTestSource() agentsessionstore.EventSource {
-	return agentsessionstore.EventSource{Provider: ProviderClaudeCode}
+func reportTestSource() canonical.EventSource {
+	return canonical.EventSource{Provider: ProviderClaudeCode}
 }

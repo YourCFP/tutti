@@ -97,6 +97,7 @@ const (
 	StaticSpecResolverKindCursor      StaticSpecResolverKind = "cursor"
 )
 
+// Deprecated: use canonical.ProviderIdentity.
 type IdentityDescriptor = canonical.ProviderIdentity
 
 type RuntimeDescriptor struct {
@@ -369,6 +370,7 @@ type SlashCommandPolicyDescriptor struct {
 	CommandCatalogAuthoritative bool
 }
 
+// Deprecated: use canonical.PlanDecisionStrategy.
 type PlanDecisionStrategy = canonical.PlanDecisionStrategy
 
 const (

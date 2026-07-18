@@ -5,7 +5,10 @@ import type { DesktopFeatureFlags } from "@shared/preferences";
 import {
   AGENT_EXTENSION_ACTIVATION_FLAGS,
   AGENT_EXTENSION_CODEBUDDY_FLAG,
+  AGENT_EXTENSION_COPILOT_FLAG,
   AGENT_EXTENSION_GEMINI_FLAG,
+  AGENT_EXTENSION_KILO_FLAG,
+  AGENT_EXTENSION_QWEN_FLAG,
   type AgentExtensionActivationFlag,
   isFeatureEnabled
 } from "../../../../../shared/featureFlags/catalog.ts";
@@ -18,6 +21,18 @@ const settingByFlag = {
   [AGENT_EXTENSION_CODEBUDDY_FLAG]: {
     descriptionKey: "workspace.settings.developer.codebuddyAgentDescription",
     labelKey: "workspace.settings.developer.codebuddyAgentLabel"
+  },
+  [AGENT_EXTENSION_COPILOT_FLAG]: {
+    descriptionKey: "workspace.settings.developer.copilotAgentDescription",
+    labelKey: "workspace.settings.developer.copilotAgentLabel"
+  },
+  [AGENT_EXTENSION_KILO_FLAG]: {
+    descriptionKey: "workspace.settings.developer.kiloAgentDescription",
+    labelKey: "workspace.settings.developer.kiloAgentLabel"
+  },
+  [AGENT_EXTENSION_QWEN_FLAG]: {
+    descriptionKey: "workspace.settings.developer.qwenAgentDescription",
+    labelKey: "workspace.settings.developer.qwenAgentLabel"
   }
 } satisfies Record<
   AgentExtensionActivationFlag,

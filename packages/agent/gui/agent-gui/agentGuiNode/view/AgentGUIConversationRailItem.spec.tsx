@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { AgentGUIConversationSummary } from "../model/agentGuiConversationModel";
+import {
+  AgentTargetPresentationProvider,
+  type AgentMessageMarkdownAgentTarget
+} from "../../../shared/AgentTargetPresentationContext";
 import type { AgentGUIViewLabels } from "./AgentGUINodeView.types";
 import { AgentGUIConversationRailItem } from "./AgentGUIConversationRailItem";
 
@@ -107,6 +111,35 @@ describe("AgentGUIConversationRailItem interaction lock", () => {
     expect(container.textContent).toContain("Session 1");
   });
 
+  it("renders an open extension target icon through the monochrome mask", () => {
+    const iconUrl = "data:image/svg+xml;base64,kilo-colored";
+    const maskIconUrl = "data:image/svg+xml;base64,kilo-mask";
+    const { container } = renderRailItem({
+      agentTargets: [
+        {
+          agentTargetId: "extension:kilo",
+          iconUrl,
+          maskIconUrl,
+          provider: "acp:kilo",
+          workspaceId: "workspace-1"
+        }
+      ],
+      isRailInteractionLocked: () => false,
+      item: {
+        agentTargetId: "extension:kilo",
+        provider: "acp:kilo"
+      }
+    });
+
+    const icon = container.querySelector<HTMLElement>(
+      ".agent-gui-node__conversation-provider-icon"
+    );
+    expect(icon).not.toBeNull();
+    expect(
+      icon?.style.getPropertyValue("--agent-gui-conversation-provider-icon-url")
+    ).toBe(`url("${maskIconUrl}")`);
+  });
+
   it("blocks the div context-menu trigger while rail reconciliation is pending", () => {
     const onSelectConversation = vi.fn();
     renderRailItem({
@@ -144,6 +177,7 @@ describe("AgentGUIConversationRailItem interaction lock", () => {
 });
 
 function renderRailItem(overrides: {
+  agentTargets?: readonly AgentMessageMarkdownAgentTarget[];
   isRailInteractionLocked: () => boolean;
   item?: Partial<AgentGUIConversationSummary>;
   onRequestRenameConversation?: (
@@ -151,10 +185,9 @@ function renderRailItem(overrides: {
   ) => void;
   onSelectConversation?: (agentSessionId: string) => void;
 }) {
-  return render(
+  const item = (
     <AgentGUIConversationRailItem
       active={false}
-      currentTimeMs={1}
       isDeletingConversation={false}
       isPendingDeleteConversation={false}
       isRailInteractionLocked={overrides.isRailInteractionLocked}
@@ -183,6 +216,15 @@ function renderRailItem(overrides: {
       onToggleConversationPinned={() => {}}
     />
   );
+  return render(
+    overrides.agentTargets ? (
+      <AgentTargetPresentationProvider agentTargets={overrides.agentTargets}>
+        {item}
+      </AgentTargetPresentationProvider>
+    ) : (
+      item
+    )
+  );
 }
 
 const RAIL_ITEM_LABELS = {
@@ -193,6 +235,12 @@ const RAIL_ITEM_LABELS = {
   markSessionUnread: "Mark unread",
   openConversationWindow: "Open in window",
   pinSession: "Pin",
+  relativeTimeDays: (value: number) => `${value} days`,
+  relativeTimeHours: (value: number) => `${value} hours`,
+  relativeTimeJustNow: "just now",
+  relativeTimeMinutes: (value: number) => `${value} minutes`,
+  relativeTimeMonths: (value: number) => `${value} months`,
+  relativeTimeYears: (value: number) => `${value} years`,
   renameSession: "Rename",
   unpinSession: "Unpin"
 } as AgentGUIViewLabels;

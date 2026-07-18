@@ -30,6 +30,7 @@ export type DesktopAgentGUIHostProps = {
   >;
   hostActions: Pick<
     AgentGUIProps["hostActions"],
+    | "onAgentEnvPanelOpen"
     | "onAgentProviderLogin"
     | "onCapabilitySettingsRequest"
     | "onClose"
@@ -99,6 +100,7 @@ export function useStableDesktopAgentGUIHostProps({
       workspaceAppIcons: nextHostCapabilities.workspaceAppIcons
     },
     hostActions: {
+      onAgentEnvPanelOpen: nextHostActions.onAgentEnvPanelOpen,
       onAgentProviderLogin: nextHostActions.onAgentProviderLogin,
       onCapabilitySettingsRequest: nextHostActions.onCapabilitySettingsRequest,
       onClose: nextHostActions.onClose,

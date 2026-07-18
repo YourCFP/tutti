@@ -66,7 +66,7 @@ import {
   textFromReactNode
 } from "./AgentMessageMarkdownRenderers";
 import { MarkdownMedia } from "./AgentMessageMarkdownMedia";
-import { remarkCjkAutolinkBoundary } from "./remarkCjkAutolinkBoundary";
+import { remarkLiteralAutolinkBoundary } from "./remarkLiteralAutolinkBoundary";
 export { resetCachedMarkdownImagesForTests } from "./AgentMessageMarkdownMedia";
 export type { StreamingMarkdownBlock } from "./agentMessageMarkdownRuntime";
 export { splitStreamingMarkdownBlocks } from "./agentMessageMarkdownRuntime";
@@ -308,7 +308,7 @@ export function AgentMessageMarkdown({
           />
         ) : (
           <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkCjkAutolinkBoundary]}
+            remarkPlugins={[remarkGfm, remarkLiteralAutolinkBoundary]}
             rehypePlugins={[[rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA]]}
             urlTransform={markdownUrlTransform}
             components={markdownComponents}
@@ -363,7 +363,7 @@ const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({
 }): JSX.Element {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkCjkAutolinkBoundary]}
+      remarkPlugins={[remarkGfm, remarkLiteralAutolinkBoundary]}
       rehypePlugins={[[rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA]]}
       urlTransform={markdownUrlTransform}
       components={components}

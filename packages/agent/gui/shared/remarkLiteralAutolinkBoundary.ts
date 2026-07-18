@@ -22,14 +22,15 @@ interface SplitAutolink {
   trailing: MarkdownNode;
 }
 
-const CJK_SENTENCE_BOUNDARY = /[，。；：！？、…）】》」』〉〕］｝”’]/u;
+const LITERAL_AUTOLINK_BOUNDARY = /["，。；：！？、…）】》」』〉〕］｝”’]/u;
 
 /**
- * GFM literal autolinks only recognize ASCII trailing punctuation. Repair the
- * product-facing CJK sentence boundary without changing explicit Markdown
- * links, angle autolinks, code, or deliberately authored link destinations.
+ * GFM literal autolinks do not stop at every boundary that is invalid inside a
+ * raw URL. Repair product-facing CJK sentence boundaries and JSON string
+ * boundaries without changing explicit Markdown links, angle autolinks, code,
+ * or deliberately authored link destinations.
  */
-export function remarkCjkAutolinkBoundary() {
+export function remarkLiteralAutolinkBoundary() {
   return (tree: unknown, file: unknown): void => {
     if (!isMarkdownNode(tree)) {
       return;
@@ -89,7 +90,7 @@ function splitLiteralAutolink(
     return null;
   }
 
-  const boundaryIndex = display.search(CJK_SENTENCE_BOUNDARY);
+  const boundaryIndex = display.search(LITERAL_AUTOLINK_BOUNDARY);
   if (boundaryIndex < 0) {
     return null;
   }

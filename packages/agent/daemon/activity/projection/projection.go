@@ -5,10 +5,19 @@ package projection
 
 import canonical "github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 
+// Deprecated: use canonical.SessionSnapshot.
 type SessionSnapshot = canonical.SessionSnapshot
+
+// Deprecated: use canonical.SessionStateReport.
 type SessionStateReport = canonical.SessionStateReport
+
+// Deprecated: use canonical.SessionProjection.
 type SessionProjection = canonical.SessionProjection
+
+// Deprecated: use canonical.MessageSnapshot.
 type MessageSnapshot = canonical.MessageSnapshot
+
+// Deprecated: use canonical.MessageUpdate.
 type MessageUpdate = canonical.MessageUpdate
 
 func ProjectSessionState(existing SessionSnapshot, hasExisting bool, report SessionStateReport, nowUnixMS int64) SessionProjection {

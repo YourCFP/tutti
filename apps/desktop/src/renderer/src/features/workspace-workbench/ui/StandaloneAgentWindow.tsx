@@ -3,6 +3,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -34,6 +35,7 @@ import { createDesktopAgentGUIWorkbenchHostInput } from "@renderer/features/work
 import { IAgentsService } from "@renderer/features/workspace-agent/services/agentsService.interface.ts";
 import type { IAgentProviderStatusService as AgentProviderStatusService } from "@renderer/features/workspace-agent/services/agentProviderStatusService.interface.ts";
 import type { IWorkspaceAgentActivityService as WorkspaceAgentActivityService } from "@renderer/features/workspace-agent/services/workspaceAgentActivityService.interface.ts";
+import { IAgentEnvService } from "@renderer/features/workspace-agent/services/agentEnvService.interface.ts";
 import type { DesktopAgentGUIPrefillPromptRequest } from "@renderer/features/workspace-agent/services/desktopAgentGUIPrefillPromptActivation.ts";
 import {
   desktopAgentGUIOpenSessionActivationType,
@@ -156,6 +158,7 @@ export function StandaloneAgentWindow({
 }: StandaloneAgentWindowProps): ReactNode {
   const { i18n } = useTranslation();
   const agentsService = useService(IAgentsService);
+  const agentEnvService = useService(IAgentEnvService);
   const workspaceAppSurfaceHost = useService(IWorkspaceAppSurfaceHost);
   const workspaceFilePreviewSurfaceHost = useService(
     IWorkspaceFilePreviewSurfaceHost
@@ -529,6 +532,10 @@ export function StandaloneAgentWindow({
       }),
     []
   );
+  useLayoutEffect(
+    () => agentEnvService.bindWorkbenchHost(host),
+    [agentEnvService, host]
+  );
   const surface = useMemo<DesktopAgentGUISurfaceContext>(
     () => ({
       activation,
@@ -806,11 +813,7 @@ export function StandaloneAgentWindow({
         </StandaloneAgentToolSidebar>
         {panelHostsReady ? (
           <Suspense fallback={null}>
-            <LazyStandaloneAgentWindowPanelHosts
-              agentProviderStatusService={agentProviderStatusService}
-              host={host}
-              workspace={workspace}
-            />
+            <LazyStandaloneAgentWindowPanelHosts workspace={workspace} />
           </Suspense>
         ) : null}
         <WorkspaceAppExternalBridge

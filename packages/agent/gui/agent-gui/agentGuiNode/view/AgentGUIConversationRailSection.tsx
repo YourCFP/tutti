@@ -50,7 +50,6 @@ interface AgentGUIConversationRailSectionProps {
   sectionTotalCount: number;
   visibleItemLimit: number;
   createConversationDisabled: boolean;
-  currentTimeMs: number;
   labels: AgentGUIViewLabels;
   uiLanguage: UiLanguage;
   workspaceId: string;
@@ -115,7 +114,6 @@ export const AgentGUIConversationRailSection = memo(
     sectionTotalCount,
     visibleItemLimit,
     createConversationDisabled,
-    currentTimeMs,
     labels,
     uiLanguage,
     workspaceId,
@@ -566,7 +564,6 @@ export const AgentGUIConversationRailSection = memo(
               <AgentGUIConversationRailItem
                 key={item.id}
                 active={item.id === activeConversationId}
-                currentTimeMs={currentTimeMs}
                 isDeletingConversation={isDeletingConversation}
                 isPendingDeleteConversation={
                   pendingDeleteConversationId === item.id

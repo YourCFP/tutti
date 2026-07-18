@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 	workspacebiz "github.com/tutti-os/tutti/services/tuttid/biz/workspace"
 )
@@ -411,7 +412,7 @@ func TestWaitResolvedEmptyFinalMessageIgnoresLateAssistant(t *testing.T) {
 	turnID := "turn-empty"
 	if err := projection.Report(ctx, agentsessionstore.ReportActivityInput{
 		WorkspaceID: "ws-resolved-empty",
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			AgentID: "session-empty", Provider: "codex",
 			SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 		},
@@ -428,7 +429,7 @@ func TestWaitResolvedEmptyFinalMessageIgnoresLateAssistant(t *testing.T) {
 	}
 	if err := projection.Report(ctx, agentsessionstore.ReportActivityInput{
 		WorkspaceID: "ws-resolved-empty",
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			AgentID: "session-empty", Provider: "codex",
 			SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 		},
@@ -445,7 +446,7 @@ func TestWaitResolvedEmptyFinalMessageIgnoresLateAssistant(t *testing.T) {
 	}
 	if err := projection.Report(ctx, agentsessionstore.ReportActivityInput{
 		WorkspaceID: "ws-resolved-empty",
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			AgentID: "session-empty", Provider: "codex",
 			SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
 		},

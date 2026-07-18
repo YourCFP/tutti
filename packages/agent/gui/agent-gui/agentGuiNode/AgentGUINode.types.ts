@@ -50,6 +50,7 @@ import type { AgentMessageMarkdownWorkspaceAppIcon } from "../../shared/AgentMes
 import type { RichTextMentionService } from "@tutti-os/ui-rich-text/service";
 import type { AgentGUIEngagementEventSink } from "./engagement/agentGUIEngagement.types";
 import type { AgentGUIComposerAppendRequest } from "./controller/useAgentGUIComposerAppendRequest";
+import type { OpenAgentEnvPanelInput } from "../../shared/agentEnv";
 
 export interface AgentGUINodeIdentity {
   nodeId: string;
@@ -150,6 +151,7 @@ export interface AgentGUINodeHostActions {
     capability: AgentComposerCapabilitySettingsTarget
   ) => void;
   onAgentProviderLogin?: (provider: AgentGUIProvider) => void;
+  onAgentEnvPanelOpen?: (input?: OpenAgentEnvPanelInput) => void;
   onOpenConversationWindow?: (agentSessionId: string) => void;
   onClose: () => void;
   onResize: (frame: NodeFrame) => void;
@@ -369,6 +371,7 @@ export function areAgentGUINodePropsEqual(
     pa.onHandoffConversation === na.onHandoffConversation &&
     pa.onCapabilitySettingsRequest === na.onCapabilitySettingsRequest &&
     pa.onAgentProviderLogin === na.onAgentProviderLogin &&
+    pa.onAgentEnvPanelOpen === na.onAgentEnvPanelOpen &&
     pa.onOpenConversationWindow === na.onOpenConversationWindow &&
     pa.onClose === na.onClose &&
     pa.onResize === na.onResize &&

@@ -338,6 +338,13 @@ func (m *Manager) registerTarget(ctx context.Context, installation Installation)
 	if err != nil {
 		return err
 	}
+	sidebarIconURL := ""
+	if installation.Manifest.SidebarIcon.Src != "" {
+		sidebarIconURL, err = packageAssetDataURL(installation.PackageDir, installation.Manifest.SidebarIcon.Src)
+		if err != nil {
+			return err
+		}
+	}
 	heroImageURL := ""
 	if installation.Manifest.HeroImage.Src != "" {
 		heroImageURL, err = packageAssetDataURL(installation.PackageDir, installation.Manifest.HeroImage.Src)
@@ -348,7 +355,7 @@ func (m *Manager) registerTarget(ctx context.Context, installation Installation)
 	_, err = m.Store.PutAgentTarget(ctx, agenttargetbiz.Target{
 		ID: targetID(installation.AgentKey), Provider: installation.Provider, LaunchRefJSON: launchRef,
 		Name: installation.DisplayName, IconKey: "extension:" + installation.AgentKey,
-		IconURL: iconURL, HeroImageURL: heroImageURL, Enabled: true, Source: agenttargetbiz.SourceSystem, SortOrder: 700,
+		IconURL: iconURL, SidebarIconURL: sidebarIconURL, HeroImageURL: heroImageURL, Enabled: true, Source: agenttargetbiz.SourceSystem, SortOrder: 700,
 	})
 	return err
 }
@@ -400,7 +407,7 @@ func (m *Manager) validateInstallation(value Installation) (Installation, error)
 	if err != nil {
 		return Installation{}, err
 	}
-	if manifest.Name != value.Manifest.Name || manifest.Icon.Src != value.Manifest.Icon.Src || manifest.HeroImage.Src != value.Manifest.HeroImage.Src || manifest.Runtime.Kind != value.Manifest.Runtime.Kind {
+	if manifest.Name != value.Manifest.Name || manifest.Icon.Src != value.Manifest.Icon.Src || manifest.SidebarIcon.Src != value.Manifest.SidebarIcon.Src || manifest.HeroImage.Src != value.Manifest.HeroImage.Src || manifest.Runtime.Kind != value.Manifest.Runtime.Kind {
 		return Installation{}, errors.New("extension installation manifest does not match package")
 	}
 	value.PackageDir = expectedDir

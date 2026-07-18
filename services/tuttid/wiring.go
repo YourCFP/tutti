@@ -428,10 +428,11 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	if err := agentHost.Recover(ctx); err != nil {
 		return tuttiapi.DaemonAPI{}, nil, nil, nil, fmt.Errorf("recover agent host: %w", err)
 	}
-	go agentHost.RunRuntimeOperationWorker(ctx)
-	go agentHost.RunGoalOperationWorker(ctx)
-	go agentHost.RunGoalReconcileInboxWorker(ctx)
-	go agentHost.RunWorktreeGarbageCollectionWorker(ctx)
+	go func() {
+		if err := agentHost.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			slog.ErrorContext(ctx, "agent Host worker lifecycle stopped", "error", err)
+		}
+	}()
 
 	workspaceService := workspaceservice.CatalogService{
 		Store:            store,
