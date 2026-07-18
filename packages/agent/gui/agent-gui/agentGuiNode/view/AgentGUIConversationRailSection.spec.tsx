@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TooltipProvider } from "@tutti-os/ui-system";
 import { describe, expect, it, vi } from "vitest";
 import type { AgentGUIViewLabels } from "./AgentGUINodeView.types";
@@ -61,12 +61,36 @@ describe("AgentGUIConversationRailSection project pin presentation", () => {
       screen.getByRole("button", { name: "Project actions" })
     ).toBeDisabled();
   });
+
+  it("mounts project menu content only while open", async () => {
+    const onProjectMenuOpenChange = vi.fn();
+    renderProjectSection({
+      pinnedAtUnixMs: 0,
+      onProjectMenuOpenChange,
+      onToggleProjectPinned: vi.fn(() => Promise.resolve())
+    });
+
+    expect(screen.queryByRole("menuitem")).toBeNull();
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Project actions" }),
+      { button: 0, ctrlKey: false }
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: "Open folder" })
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("menuitem")).toBeNull());
+    expect(onProjectMenuOpenChange).toHaveBeenNthCalledWith(1, true);
+    expect(onProjectMenuOpenChange).toHaveBeenLastCalledWith(false);
+  });
 });
 
 function renderProjectSection(input: {
   pinnedAtUnixMs: number;
   searchActive?: boolean;
   projectActionLocked?: boolean;
+  onProjectMenuOpenChange?: (open: boolean) => void;
   onToggleProjectPinned: (projectId: string, pinned: boolean) => Promise<void>;
 }) {
   return render(
@@ -121,7 +145,9 @@ function renderProjectSection(input: {
         onProjectDragOver={() => {}}
         onProjectDragStart={() => {}}
         onProjectDrop={() => {}}
-        onProjectMenuOpenChange={() => {}}
+        onProjectMenuOpenChange={(_, open) =>
+          input.onProjectMenuOpenChange?.(open)
+        }
         onRequestDeleteConversation={() => {}}
         onRequestRenameConversation={() => {}}
         onRequestSectionBatchDeletion={() => {}}

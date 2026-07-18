@@ -530,9 +530,11 @@
   row instead of being consumed at the timestamp leaf. A globally threaded
   selection ID, a provider-dependent full label object passed into Rail, or
   callbacks rebuilt for each target scope can likewise invalidate every
-  section even though only one or two rows changed visually. A measurement
-  effect that includes the state it writes in its dependencies can repeat the
-  resulting layout read once more.
+  section even though only one or two rows changed visually. If every section
+  owns closed Tooltip/Popper/Dropdown/ContextMenu content, that upstream
+  invalidation also executes thousands of invisible primitive components. A
+  measurement effect that includes the state it writes in its dependencies can
+  repeat the resulting layout read once more.
 - Fix:
   Stabilize the value at the ownership boundary, or remove derived presentation
   values from bidirectional state. For external/workbench state, only sync
@@ -551,8 +553,13 @@
   row, passing `null` to unrelated sections. Give Rail a dedicated locale-bound
   label projection instead of the provider-dependent full view labels. Keep
   shared section actions referentially stable and read the latest scope at event
-  time. Remove a measured state value from an effect dependency when the effect
-  only writes, but never reads, that value.
+  time. Split stable section header/action chrome from changing item data: pass
+  scalar presentation fields and stable event-time actions, never the section
+  object. Keep menu root and trigger mounted, while rendering portaled menu
+  content only during its view-local open state. Do not move disclosure into a
+  controller/store or copy Session/project semantics to obtain this isolation.
+  Remove a measured state value from an effect dependency when the effect only
+  writes, but never reads, that value.
   During Rail reconciliation, expose a stable lock reader so
   portaled menu actions can check current state without passing a changing
   boolean through every section. For composed menu actions, attach the Tooltip
@@ -576,11 +583,13 @@
   identity tests for locale-bound Rail labels and scope-bound actions, including
   invoking a callback retained before a scope switch. Assert active selection
   projects only into its owning section. Then recapture the same interaction
-  without React Profiler instrumentation before claiming timing improvement. Add
-  a composition regression
-  test for shared Tooltip/Dropdown actions and manually create a new
-  conversation, since an empty-to-populated Rail transition can be the first
-  time the faulty trigger mounts.
+  without React Profiler instrumentation before claiming timing improvement.
+  Add a render-budget test proving item replacement does not rerender stable
+  section chrome. For lazy menu content, test pointer/context-menu opening,
+  keyboard-origin focus, Escape dismissal, action delivery, and event-time lock
+  rejection. Add a composition regression test for shared Tooltip/Dropdown
+  actions and manually create a new conversation, since an empty-to-populated
+  Rail transition can be the first time the faulty trigger mounts.
 - References:
   [main.tsx](../../../apps/desktop/src/renderer/src/main.tsx)
   [whyDidYouRender.ts](../../../apps/desktop/src/renderer/src/lib/whyDidYouRender.ts)
@@ -591,6 +600,8 @@
   [agentGUIConversationRailLabels.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/view/agentGUIConversationRailLabels.ts)
   [useAgentGUIConversationRailViewState.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/view/useAgentGUIConversationRailViewState.ts)
   [AgentGUIConversationRailSection.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIConversationRailSection.tsx)
+  [AgentGUIConversationRailSectionHeader.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIConversationRailSectionHeader.tsx)
+  [AgentGUIConversationRailItem.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIConversationRailItem.tsx)
   [AgentSessionChrome.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/AgentSessionChrome.tsx)
 
 ### Dense list panel stutters when mounted or resized

@@ -131,6 +131,7 @@ export const AgentGUIConversationRailItem = memo(
       [item.id, registerItemElement]
     );
     const [contextMenuResetKey, setContextMenuResetKey] = useState(0);
+    const [contextMenuOpen, setContextMenuOpen] = useState(false);
     const contextMenuRenameRequestedRef = useRef(false);
     const contextMenuOpenConversationWindowRequestedRef = useRef(false);
     const contextMenuCopySessionLinkRequestedRef = useRef(false);
@@ -188,6 +189,7 @@ export const AgentGUIConversationRailItem = memo(
         return;
       }
       contextMenuRenameRequestedRef.current = true;
+      setContextMenuOpen(false);
       setContextMenuResetKey((key) => key + 1);
       // timing: defer past the context menu's own close/dismiss handling
       window.setTimeout(() => {
@@ -207,6 +209,7 @@ export const AgentGUIConversationRailItem = memo(
         return;
       }
       contextMenuOpenConversationWindowRequestedRef.current = true;
+      setContextMenuOpen(false);
       setContextMenuResetKey((key) => key + 1);
       // timing: defer past the context menu's own close/dismiss handling
       window.setTimeout(() => {
@@ -226,6 +229,7 @@ export const AgentGUIConversationRailItem = memo(
         return;
       }
       contextMenuCopySessionLinkRequestedRef.current = true;
+      setContextMenuOpen(false);
       setContextMenuResetKey((key) => key + 1);
       // timing: defer past the context menu's own close/dismiss handling
       window.setTimeout(() => {
@@ -406,57 +410,59 @@ export const AgentGUIConversationRailItem = memo(
       return row;
     }
     return (
-      <ContextMenu key={contextMenuResetKey}>
+      <ContextMenu key={contextMenuResetKey} onOpenChange={setContextMenuOpen}>
         <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
-        <ContextMenuContent
-          className={`${styles.composerMenuContent} nodrag [-webkit-app-region:no-drag]`}
-        >
-          <ContextMenuItem
-            className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
-            onClick={handleContextMenuRename}
-            onPointerUp={(event) => {
-              if (event.button === 0) {
-                handleContextMenuRename();
-              }
-            }}
-            onSelect={handleContextMenuRename}
+        {contextMenuOpen ? (
+          <ContextMenuContent
+            className={`${styles.composerMenuContent} nodrag [-webkit-app-region:no-drag]`}
           >
-            <span>{labels.renameSession}</span>
-          </ContextMenuItem>
-          {onOpenConversationWindow ? (
             <ContextMenuItem
               className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
-              onClick={handleContextMenuOpenConversationWindow}
+              onClick={handleContextMenuRename}
               onPointerUp={(event) => {
                 if (event.button === 0) {
-                  handleContextMenuOpenConversationWindow();
+                  handleContextMenuRename();
                 }
               }}
-              onSelect={handleContextMenuOpenConversationWindow}
+              onSelect={handleContextMenuRename}
             >
-              <span>{labels.openConversationWindow}</span>
+              <span>{labels.renameSession}</span>
             </ContextMenuItem>
-          ) : null}
-          <ContextMenuItem
-            className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
-            onClick={handleContextMenuCopySessionLink}
-            onPointerUp={(event) => {
-              if (event.button === 0) {
-                handleContextMenuCopySessionLink();
-              }
-            }}
-            onSelect={handleContextMenuCopySessionLink}
-          >
-            <span>{labels.copySessionLink}</span>
-          </ContextMenuItem>
-          <ContextMenuItem
-            className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
-            disabled={!canMarkUnread}
-            onSelect={handleMarkUnread}
-          >
-            <span>{labels.markSessionUnread}</span>
-          </ContextMenuItem>
-        </ContextMenuContent>
+            {onOpenConversationWindow ? (
+              <ContextMenuItem
+                className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
+                onClick={handleContextMenuOpenConversationWindow}
+                onPointerUp={(event) => {
+                  if (event.button === 0) {
+                    handleContextMenuOpenConversationWindow();
+                  }
+                }}
+                onSelect={handleContextMenuOpenConversationWindow}
+              >
+                <span>{labels.openConversationWindow}</span>
+              </ContextMenuItem>
+            ) : null}
+            <ContextMenuItem
+              className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
+              onClick={handleContextMenuCopySessionLink}
+              onPointerUp={(event) => {
+                if (event.button === 0) {
+                  handleContextMenuCopySessionLink();
+                }
+              }}
+              onSelect={handleContextMenuCopySessionLink}
+            >
+              <span>{labels.copySessionLink}</span>
+            </ContextMenuItem>
+            <ContextMenuItem
+              className={`${styles.composerMenuItem} nodrag [-webkit-app-region:no-drag]`}
+              disabled={!canMarkUnread}
+              onSelect={handleMarkUnread}
+            >
+              <span>{labels.markSessionUnread}</span>
+            </ContextMenuItem>
+          </ContextMenuContent>
+        ) : null}
       </ContextMenu>
     );
   }
