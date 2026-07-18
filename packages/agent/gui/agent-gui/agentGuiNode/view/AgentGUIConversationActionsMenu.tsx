@@ -31,7 +31,10 @@ import { resolveWorkspaceImageMimeType } from "@tutti-os/workspace-file-manager/
 import { useOptionalAgentHostApi } from "../../../agentActivityHost";
 import { useOptionalAgentActivityRuntime } from "../../../agentActivityRuntime";
 import type { UiLanguage } from "../../../contexts/settings/domain/agentSettings";
-import type { AgentHostWorkspaceApi } from "../../../host/agentHostApi";
+import type {
+  AgentHostToastHandle,
+  AgentHostWorkspaceApi
+} from "../../../host/agentHostApi";
 import { blobToBase64 } from "../../../shared/agentConversation/lib/copyImageToClipboard";
 import { createAgentSessionMarkdownLink } from "../agentRichText/agentFileMentionExtension";
 import {
@@ -115,14 +118,19 @@ async function readWorkspaceImageAsAttachment(
 
 export function useAgentGUIClipboardWriter(
   labels: Pick<AgentGUIViewLabels, "copiedToClipboard" | "copyFailed">
-): (value: string | AgentGUIClipboardPayload) => void {
+): (
+  value: string | AgentGUIClipboardPayload,
+  toastHandle?: AgentHostToastHandle
+) => void {
   const agentHostApi = useOptionalAgentHostApi();
   return useCallback(
-    (value: string | AgentGUIClipboardPayload) => {
+    (value, toastHandle) => {
       const payload = typeof value === "string" ? { text: value } : value;
       const clipboard = agentHostApi?.clipboard;
       if (typeof clipboard?.writeText !== "function") {
-        agentHostApi?.toast?.error(labels.copyFailed);
+        (toastHandle?.reject ?? agentHostApi?.toast?.error)?.(
+          labels.copyFailed
+        );
         return;
       }
       // The write runs inside then() so a synchronous throw still lands in
@@ -138,17 +146,25 @@ export function useAgentGUIClipboardWriter(
           await clipboard.writeText(payload.text);
         })
         .then(() => {
-          const toast = agentHostApi?.toast;
           if (payload.successMessage) {
-            // Guidance-style success (e.g. omitted oversized images) prefers
-            // the host's info toast when present, falling back to success.
-            (toast?.info ?? toast?.success)?.(payload.successMessage);
+            // Guidance-style success (e.g. omitted oversized images) settles
+            // to the neutral/info tone instead of a plain success.
+            (
+              toastHandle?.info ??
+              agentHostApi?.toast?.info ??
+              toastHandle?.resolve ??
+              agentHostApi?.toast?.success
+            )?.(payload.successMessage);
           } else {
-            toast?.success?.(labels.copiedToClipboard);
+            (toastHandle?.resolve ?? agentHostApi?.toast?.success)?.(
+              labels.copiedToClipboard
+            );
           }
         })
         .catch(() => {
-          agentHostApi?.toast?.error(labels.copyFailed);
+          (toastHandle?.reject ?? agentHostApi?.toast?.error)?.(
+            labels.copyFailed
+          );
         });
     },
     [agentHostApi, labels.copiedToClipboard, labels.copyFailed]
@@ -202,8 +218,16 @@ export function useAgentGUIConversationCopyAction(
       const readSessionAttachment = agentActivityRuntime.readSessionAttachment;
       const readWorkspaceFile = agentHostApi?.workspace?.readFile;
       // History load + image hydration can take a noticeable moment on long
-      // conversations; signal that the copy is running before it lands.
-      agentHostApi?.toast?.info?.(labels.conversationCopyInProgress);
+      // conversations. One toast opens busy immediately and settles in
+      // place once the copy lands, instead of a separate toast per phase.
+      // Hosts without the loading capability get the plain info toast they
+      // always had, and the eventual result falls back to a second toast.
+      const toastHandle = agentHostApi?.toast?.loading?.(
+        labels.conversationCopyInProgress
+      );
+      if (!toastHandle) {
+        agentHostApi?.toast?.info?.(labels.conversationCopyInProgress);
+      }
       void (async () => {
         const messages = await loadCompleteAgentConversationMessages({
           agentSessionId: conversation.id,
@@ -257,13 +281,18 @@ export function useAgentGUIConversationCopyAction(
                 `${transcript.omittedImages}`
               )
             : undefined;
-        writeClipboardValue({
-          ...(html ? { html } : {}),
-          ...(successMessage ? { successMessage } : {}),
-          text: transcript.markdown
-        });
+        writeClipboardValue(
+          {
+            ...(html ? { html } : {}),
+            ...(successMessage ? { successMessage } : {}),
+            text: transcript.markdown
+          },
+          toastHandle
+        );
       })().catch(() => {
-        agentHostApi?.toast?.error(labels.copyFailed);
+        (toastHandle?.reject ?? agentHostApi?.toast?.error)?.(
+          labels.copyFailed
+        );
       });
     },
     [agentActivityRuntime, agentHostApi, labels, writeClipboardValue]

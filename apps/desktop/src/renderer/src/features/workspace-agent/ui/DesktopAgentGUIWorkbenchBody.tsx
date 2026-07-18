@@ -546,6 +546,7 @@ function DesktopAgentGUISurfaceImpl({
       toast: {
         error: Toast.Error,
         info: Toast.tips,
+        loading: Toast.Loading,
         success: Toast.Success
       }
     }),

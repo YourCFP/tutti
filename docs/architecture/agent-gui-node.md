@@ -460,9 +460,14 @@ docs) consume data URIs and re-upload them, but never fetch local paths or
 localhost URLs. Images over the per-image embed cap, or with failed reads,
 keep the lean reference and surface a toast that counts the omissions and
 points at per-image copy. Because history loading and image hydration take
-a noticeable moment on long conversations, selecting copy as Markdown fires
-an immediate info toast before the async work starts, so the action always
-gives feedback rather than appearing to do nothing until it lands.
+a noticeable moment on long conversations, selecting copy as Markdown opens
+one toast immediately (`AgentHostToastApi.loading`): it shows busy with a
+spinner and never auto-dismisses, and the handle it returns settles that
+same toast in place to success, the omitted-images info tone, or failure —
+at which point it starts auto-dismissing like any other toast. This is one
+continuous toast, not a loading toast followed by a separate result toast.
+Hosts without the `loading` capability get the prior plain info toast
+instead, and the result lands as an ordinary second toast.
 
 ## 8. Change routing
 

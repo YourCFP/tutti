@@ -57,17 +57,52 @@ function makeViewModel(input: {
   } as unknown as AgentGUINodeViewModel;
 }
 
+// Mirrors the desktop Toast.Loading contract: opens one toast and returns a
+// handle whose resolve/info/reject settle that SAME toast in place, so tests
+// can assert the loading toast and its eventual settlement are one thing.
 function installHostApi() {
   const writeText = vi.fn().mockResolvedValue(undefined);
   const toastError = vi.fn();
   const toastInfo = vi.fn();
   const toastSuccess = vi.fn();
+  const toastHandleInfo = vi.fn();
+  const toastHandleReject = vi.fn();
+  const toastHandleResolve = vi.fn();
+  const toastLoading = vi.fn(() => ({
+    info: toastHandleInfo,
+    reject: toastHandleReject,
+    resolve: toastHandleResolve
+  }));
   window.agentHostApi = {
     ...(window.agentHostApi ?? {}),
     clipboard: { writeText },
-    toast: { error: toastError, info: toastInfo, success: toastSuccess }
+    toast: {
+      error: toastError,
+      info: toastInfo,
+      loading: toastLoading,
+      success: toastSuccess
+    }
   } as unknown as typeof window.agentHostApi;
-  return { toastError, toastInfo, toastSuccess, writeText };
+  return {
+    toastError,
+    toastHandleInfo,
+    toastHandleReject,
+    toastHandleResolve,
+    toastInfo,
+    toastLoading,
+    toastSuccess,
+    writeText
+  };
+}
+
+// For the "host without the loading capability" fallback path.
+function installHostApiWithoutLoadingToast() {
+  const { toastLoading: _toastLoading, ...rest } = installHostApi();
+  const toast = (
+    window.agentHostApi as unknown as { toast: Record<string, unknown> }
+  ).toast;
+  delete toast.loading;
+  return rest;
 }
 
 function installRuntime(
@@ -293,8 +328,37 @@ describe("useAgentGUIExternalRequests session actions", () => {
     expect(toastError).toHaveBeenCalledWith(LABELS.sessionActionUnavailable);
   });
 
-  it("signals the copy is running before history finishes loading", async () => {
-    const { toastInfo } = installHostApi();
+  it("opens one loading toast immediately instead of a separate info toast", async () => {
+    const { toastInfo, toastLoading } = installHostApi();
+    installRuntime();
+    const active = makeConversation({ id: "session-1" });
+    const props = baseProps({
+      viewModel: makeViewModel({
+        activeConversation: active,
+        conversations: [active]
+      })
+    });
+    const { rerender } = renderHook(useAgentGUIExternalRequests, {
+      initialProps: props
+    });
+
+    rerender({
+      ...props,
+      sessionActionRequest: {
+        action: "copy-markdown",
+        agentSessionId: "session-1",
+        sequence: 1
+      }
+    });
+
+    expect(toastLoading).toHaveBeenCalledWith(
+      LABELS.conversationCopyInProgress
+    );
+    expect(toastInfo).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the plain info toast when the host has no loading toast", async () => {
+    const { toastInfo } = installHostApiWithoutLoadingToast();
     installRuntime();
     const active = makeConversation({ id: "session-1" });
     const props = baseProps({
@@ -319,8 +383,8 @@ describe("useAgentGUIExternalRequests session actions", () => {
     expect(toastInfo).toHaveBeenCalledWith(LABELS.conversationCopyInProgress);
   });
 
-  it("writes the copy value for the targeted conversation and reports success", async () => {
-    const { toastSuccess, writeText } = installHostApi();
+  it("settles the loading toast to success instead of firing a separate toast", async () => {
+    const { toastHandleResolve, toastSuccess, writeText } = installHostApi();
     installRuntime();
     const active = makeConversation({ id: "session-1" });
     const props = baseProps({
@@ -343,13 +407,14 @@ describe("useAgentGUIExternalRequests session actions", () => {
     });
 
     await waitFor(() => {
-      expect(toastSuccess).toHaveBeenCalledWith(LABELS.copiedToClipboard);
+      expect(toastHandleResolve).toHaveBeenCalledWith(LABELS.copiedToClipboard);
     });
+    expect(toastSuccess).not.toHaveBeenCalled();
     expect(writeText).toHaveBeenCalledWith("# Session 1\n\nFull answer");
   });
 
   it("writes text/plain markdown plus text/html with inline images when ClipboardItem is available", async () => {
-    const { toastSuccess, writeText } = installHostApi();
+    const { toastHandleResolve, toastSuccess, writeText } = installHostApi();
     const { write } = installWebClipboard();
     installRuntime({
       messages: [
@@ -397,8 +462,9 @@ describe("useAgentGUIExternalRequests session actions", () => {
     });
 
     await waitFor(() => {
-      expect(toastSuccess).toHaveBeenCalledWith(LABELS.copiedToClipboard);
+      expect(toastHandleResolve).toHaveBeenCalledWith(LABELS.copiedToClipboard);
     });
+    expect(toastSuccess).not.toHaveBeenCalled();
     expect(writeText).not.toHaveBeenCalled();
     expect(write).toHaveBeenCalledTimes(1);
     const [items] = write.mock.calls[0] as [ClipboardItemStub[]];
@@ -417,7 +483,7 @@ describe("useAgentGUIExternalRequests session actions", () => {
   });
 
   it("keeps attachment references in text/plain while text/html embeds the bytes", async () => {
-    const { toastSuccess, writeText } = installHostApi();
+    const { toastHandleResolve, toastSuccess, writeText } = installHostApi();
     const { write } = installWebClipboard();
     const readSessionAttachment = vi.fn().mockResolvedValue({
       data: "QkJC",
@@ -470,8 +536,9 @@ describe("useAgentGUIExternalRequests session actions", () => {
     });
 
     await waitFor(() => {
-      expect(toastSuccess).toHaveBeenCalledWith(LABELS.copiedToClipboard);
+      expect(toastHandleResolve).toHaveBeenCalledWith(LABELS.copiedToClipboard);
     });
+    expect(toastSuccess).not.toHaveBeenCalled();
     expect(readSessionAttachment).toHaveBeenCalledWith({
       agentSessionId: "session-1",
       attachmentId: "attachment-9",
@@ -487,7 +554,8 @@ describe("useAgentGUIExternalRequests session actions", () => {
   });
 
   it("reports omitted oversized images through the info toast instead of the plain copied toast", async () => {
-    const { toastInfo, toastSuccess, writeText } = installHostApi();
+    const { toastHandleInfo, toastInfo, toastSuccess, writeText } =
+      installHostApi();
     // Smallest unpadded base64 payload above the 2 MiB per-image embed cap.
     const oversized = "A".repeat(
       4 * Math.ceil((AGENT_CONVERSATION_COPY_MAX_EMBEDDED_IMAGE_BYTES + 1) / 3)
@@ -542,10 +610,11 @@ describe("useAgentGUIExternalRequests session actions", () => {
     });
 
     await waitFor(() => {
-      expect(toastInfo).toHaveBeenCalledWith(
+      expect(toastHandleInfo).toHaveBeenCalledWith(
         "1 image(s) omitted — copy them individually"
       );
     });
+    expect(toastInfo).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
     expect(writeText).toHaveBeenCalledWith(
       "# Session 1\n\n![Image](<attachment:attachment-9>)"
@@ -553,7 +622,8 @@ describe("useAgentGUIExternalRequests session actions", () => {
   });
 
   it("falls back to the host text clipboard when the dual-format write is denied", async () => {
-    const { toastError, toastSuccess, writeText } = installHostApi();
+    const { toastError, toastHandleResolve, toastSuccess, writeText } =
+      installHostApi();
     installWebClipboard({ reject: true });
     installRuntime();
     const active = makeConversation({ id: "session-1" });
@@ -577,8 +647,9 @@ describe("useAgentGUIExternalRequests session actions", () => {
     });
 
     await waitFor(() => {
-      expect(toastSuccess).toHaveBeenCalledWith(LABELS.copiedToClipboard);
+      expect(toastHandleResolve).toHaveBeenCalledWith(LABELS.copiedToClipboard);
     });
+    expect(toastSuccess).not.toHaveBeenCalled();
     expect(writeText).toHaveBeenCalledWith("# Session 1\n\nFull answer");
     expect(toastError).not.toHaveBeenCalled();
   });
@@ -616,7 +687,7 @@ describe("useAgentGUIExternalRequests session actions", () => {
   });
 
   it("reports copy failure instead of writing when history loading fails", async () => {
-    const { toastError, writeText } = installHostApi();
+    const { toastError, toastHandleReject, writeText } = installHostApi();
     installRuntime({ reject: true });
     const active = makeConversation();
     const props = baseProps({
@@ -639,8 +710,9 @@ describe("useAgentGUIExternalRequests session actions", () => {
     });
 
     await waitFor(() => {
-      expect(toastError).toHaveBeenCalledWith(LABELS.copyFailed);
+      expect(toastHandleReject).toHaveBeenCalledWith(LABELS.copyFailed);
     });
+    expect(toastError).not.toHaveBeenCalled();
     expect(writeText).not.toHaveBeenCalled();
   });
 
