@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 	tuttigenerated "github.com/tutti-os/tutti/services/tuttid/api/generated"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 )
@@ -21,7 +21,7 @@ import (
 // session/turn/interaction transaction has committed.
 func (p *ActivityProjection) publishPersistedTurnState(
 	ctx context.Context,
-	input agentsessionstore.ReportSessionStateInput,
+	input canonical.ReportSessionStateInput,
 	result agentactivitybiz.ActivityStateReportResult,
 ) {
 	if p == nil {
@@ -42,7 +42,7 @@ func (p *ActivityProjection) publishPersistedTurnState(
 }
 
 func rootProviderTurnTransitionFromStateInput(
-	input agentsessionstore.ReportSessionStateInput,
+	input canonical.ReportSessionStateInput,
 ) (agentactivitybiz.RootProviderTurnTransition, bool) {
 	root := input.State.RootProviderTurn
 	if root == nil || strings.TrimSpace(root.RootTurnID) == "" || strings.TrimSpace(root.ProviderTurnID) == "" {
@@ -67,7 +67,7 @@ func rootProviderTurnTransitionFromStateInput(
 }
 
 func interactionTransitionFromStateInput(
-	input agentsessionstore.ReportSessionStateInput,
+	input canonical.ReportSessionStateInput,
 ) (*agentactivitybiz.InteractionUpsert, error) {
 	transition := input.State.InteractionTransition
 	if transition == nil {
@@ -99,7 +99,7 @@ func interactionTransitionFromStateInput(
 // runtime/session snapshot for presentation and must not implicitly mutate a
 // WorkspaceAgentTurn.
 func turnTransitionFromStateInput(
-	input agentsessionstore.ReportSessionStateInput,
+	input canonical.ReportSessionStateInput,
 ) (agentactivitybiz.TurnTransition, bool) {
 	state := input.State
 	workspaceID := strings.TrimSpace(input.WorkspaceID)

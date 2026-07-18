@@ -9,6 +9,7 @@ import (
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
 	agenthost "github.com/tutti-os/tutti/packages/agent/host"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 	reporterservice "github.com/tutti-os/tutti/services/tuttid/service/reporter"
 	agentnoderesult "github.com/tutti-os/tutti/services/tuttid/service/reporter/events/agent/node_result"
@@ -46,11 +47,11 @@ type ActivityUpdatePublisher interface {
 }
 
 type SessionStateObserver interface {
-	ObserveAgentSessionState(context.Context, agentsessionstore.ReportSessionStateInput, agentsessionstore.ReportSessionStateReply)
+	ObserveAgentSessionState(context.Context, canonical.ReportSessionStateInput, canonical.ReportSessionStateReply)
 }
 
 type SessionMessageObserver interface {
-	ObserveAgentSessionMessages(context.Context, agentsessionstore.ReportSessionMessagesInput, agentsessionstore.ReportSessionMessagesReply)
+	ObserveAgentSessionMessages(context.Context, canonical.ReportSessionMessagesInput, canonical.ReportSessionMessagesReply)
 }
 
 type RootTurnObserver interface {
@@ -153,11 +154,11 @@ func activityGoalProvenanceBinding(binding agentactivitybiz.GoalProvenanceBindin
 
 func normalizeReportSessionOrigins(
 	sessionOrigin string,
-	source agentsessionstore.EventSource,
-) (string, agentsessionstore.EventSource, error) {
+	source canonical.EventSource,
+) (string, canonical.EventSource, error) {
 	normalizedSessionOrigin := agentsessionstore.NormalizeSessionOrigin(sessionOrigin)
 	if normalizedSessionOrigin == "" {
-		return "", agentsessionstore.EventSource{}, ErrInvalidArgument
+		return "", canonical.EventSource{}, ErrInvalidArgument
 	}
 	sourceOrigin := strings.TrimSpace(source.SessionOrigin)
 	if sourceOrigin == "" {
@@ -166,7 +167,7 @@ func normalizeReportSessionOrigins(
 	}
 	normalizedSourceOrigin := agentsessionstore.NormalizeSessionOrigin(sourceOrigin)
 	if normalizedSourceOrigin == "" {
-		return "", agentsessionstore.EventSource{}, ErrInvalidArgument
+		return "", canonical.EventSource{}, ErrInvalidArgument
 	}
 	source.SessionOrigin = normalizedSourceOrigin
 	return normalizedSessionOrigin, source, nil
@@ -187,22 +188,22 @@ func (p *ActivityProjection) Report(ctx context.Context, input agentsessionstore
 
 func (p *ActivityProjection) ReportSessionState(
 	ctx context.Context,
-	input agentsessionstore.ReportSessionStateInput,
-) (agentsessionstore.ReportSessionStateReply, error) {
+	input canonical.ReportSessionStateInput,
+) (canonical.ReportSessionStateReply, error) {
 	return p.reportSessionState(ctx, input, true)
 }
 
 func (p *ActivityProjection) reportSessionState(
 	ctx context.Context,
-	input agentsessionstore.ReportSessionStateInput,
+	input canonical.ReportSessionStateInput,
 	notify bool,
-) (agentsessionstore.ReportSessionStateReply, error) {
+) (canonical.ReportSessionStateReply, error) {
 	if p == nil || p.repo == nil {
-		return agentsessionstore.ReportSessionStateReply{}, nil
+		return canonical.ReportSessionStateReply{}, nil
 	}
 	sessionOrigin, source, err := normalizeReportSessionOrigins(input.SessionOrigin, input.Source)
 	if err != nil {
-		return agentsessionstore.ReportSessionStateReply{}, err
+		return canonical.ReportSessionStateReply{}, err
 	}
 	input.SessionOrigin = sessionOrigin
 	input.Source = source
@@ -249,15 +250,15 @@ func (p *ActivityProjection) reportSessionState(
 	}
 	interaction, err := interactionTransitionFromStateInput(input)
 	if err != nil {
-		return agentsessionstore.ReportSessionStateReply{}, err
+		return canonical.ReportSessionStateReply{}, err
 	}
 	activityReport.Interaction = interaction
 	activityResult, err := p.repo.ReportActivityState(ctx, activityReport)
 	if err != nil {
-		return agentsessionstore.ReportSessionStateReply{}, err
+		return canonical.ReportSessionStateReply{}, err
 	}
 	result := activityResult.State
-	reply := agentsessionstore.ReportSessionStateReply{
+	reply := canonical.ReportSessionStateReply{
 		Accepted:          result.Accepted,
 		StateApplied:      result.StateApplied,
 		LastEventAtUnixMS: result.LastEventUnixMS,
@@ -269,7 +270,7 @@ func (p *ActivityProjection) reportSessionState(
 	return reply, nil
 }
 
-func (p *ActivityProjection) reportFailedRuntimeNodeResult(ctx context.Context, input agentsessionstore.ReportSessionStateInput) {
+func (p *ActivityProjection) reportFailedRuntimeNodeResult(ctx context.Context, input canonical.ReportSessionStateInput) {
 	if p == nil || p.analyticsReporter == nil {
 		return
 	}
@@ -291,7 +292,7 @@ func (p *ActivityProjection) reportFailedRuntimeNodeResult(ctx context.Context, 
 	}))
 }
 
-func sessionStateTitle(state agentsessionstore.WorkspaceAgentSessionStateUpdate) string {
+func sessionStateTitle(state canonical.WorkspaceAgentSessionStateUpdate) string {
 	return firstNonEmptyString(
 		state.Title,
 		payloadString(state.RuntimeContext, "title"),
@@ -353,14 +354,14 @@ func classifyRuntimeNodeErrorCode(message string) string {
 
 func (p *ActivityProjection) ReportSessionMessages(
 	ctx context.Context,
-	input agentsessionstore.ReportSessionMessagesInput,
-) (agentsessionstore.ReportSessionMessagesReply, error) {
+	input canonical.ReportSessionMessagesInput,
+) (canonical.ReportSessionMessagesReply, error) {
 	if p == nil || p.repo == nil {
-		return agentsessionstore.ReportSessionMessagesReply{}, nil
+		return canonical.ReportSessionMessagesReply{}, nil
 	}
 	sessionOrigin, source, err := normalizeReportSessionOrigins(input.SessionOrigin, input.Source)
 	if err != nil {
-		return agentsessionstore.ReportSessionMessagesReply{}, err
+		return canonical.ReportSessionMessagesReply{}, err
 	}
 	input.SessionOrigin = sessionOrigin
 	input.Source = source
@@ -372,9 +373,9 @@ func (p *ActivityProjection) ReportSessionMessages(
 		Messages:       activityMessageUpdates(input.Updates),
 	})
 	if err != nil {
-		return agentsessionstore.ReportSessionMessagesReply{}, err
+		return canonical.ReportSessionMessagesReply{}, err
 	}
-	reply := agentsessionstore.ReportSessionMessagesReply{
+	reply := canonical.ReportSessionMessagesReply{
 		AcceptedCount:    result.AcceptedCount,
 		LatestVersion:    result.LatestVersion,
 		RequestBodyBytes: result.RequestBodyBytes,

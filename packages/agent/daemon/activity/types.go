@@ -67,8 +67,10 @@ type WorkspaceAgentGoalReconcileRequest struct {
 	QuiesceError        string `json:"quiesceError,omitempty"`
 }
 
+// Deprecated: use canonical.ReportSessionStateInput.
 type ReportSessionStateInput = canonical.ReportSessionStateInput
 
+// Deprecated: use canonical.ReportSessionStateReply.
 type ReportSessionStateReply = canonical.ReportSessionStateReply
 
 type ReportGoalReconcileRequiredInput struct {
@@ -122,12 +124,25 @@ type LookupGoalProvenanceReply struct {
 	Found   bool                  `json:"found"`
 }
 
+// Deprecated: use canonical.WorkspaceAgentSessionStateUpdate.
 type WorkspaceAgentSessionStateUpdate = canonical.WorkspaceAgentSessionStateUpdate
+
+// Deprecated: use canonical.WorkspaceAgentRootProviderTurnTransition.
 type WorkspaceAgentRootProviderTurnTransition = canonical.WorkspaceAgentRootProviderTurnTransition
+
+// Deprecated: use canonical.WorkspaceAgentTurnStateUpdate.
 type WorkspaceAgentTurnStateUpdate = canonical.WorkspaceAgentTurnStateUpdate
+
+// Deprecated: use canonical.WorkspaceAgentCompletedCommand.
 type WorkspaceAgentCompletedCommand = canonical.WorkspaceAgentCompletedCommand
+
+// Deprecated: use canonical.WorkspaceAgentSubmitAvailability.
 type WorkspaceAgentSubmitAvailability = canonical.WorkspaceAgentSubmitAvailability
+
+// Deprecated: use canonical.WorkspaceAgentTurnLifecycle.
 type WorkspaceAgentTurnLifecycle = canonical.WorkspaceAgentTurnLifecycle
+
+// Deprecated: use canonical.WorkspaceAgentInteractionTransition.
 type WorkspaceAgentInteractionTransition = canonical.WorkspaceAgentInteractionTransition
 
 const (
@@ -135,8 +150,13 @@ const (
 	RootProviderTurnPhaseCompleted = canonical.RootProviderTurnPhaseCompleted
 )
 
+// Deprecated: use canonical.ReportSessionMessagesInput.
 type ReportSessionMessagesInput = canonical.ReportSessionMessagesInput
+
+// Deprecated: use canonical.ReportSessionMessagesReply.
 type ReportSessionMessagesReply = canonical.ReportSessionMessagesReply
+
+// Deprecated: use canonical.WorkspaceAgentSessionMessageUpdate.
 type WorkspaceAgentSessionMessageUpdate = canonical.WorkspaceAgentSessionMessageUpdate
 
 // WorkspaceAgentSessionAuditUpdate is a first-class session-level activity.
@@ -272,7 +292,10 @@ func (m *WorkspaceAgentSessionMessage) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Deprecated: use canonical.ConnectorInfo.
 type ConnectorInfo = canonical.ConnectorInfo
+
+// Deprecated: use canonical.EventSource.
 type EventSource = canonical.EventSource
 
 type WorkspaceAgentStatePatch struct {
@@ -354,6 +377,7 @@ type WorkspaceAgentMessageUpdate struct {
 	CompletedAtUnixMS int64                           `json:"completedAtUnixMs,omitempty"`
 }
 
+// Deprecated: use canonical.WorkspaceAgentMessageSemantics.
 type WorkspaceAgentMessageSemantics = canonical.WorkspaceAgentMessageSemantics
 
 func (u *WorkspaceAgentMessageUpdate) UnmarshalJSON(data []byte) error {

@@ -18,6 +18,7 @@ import (
 	"github.com/tutti-os/tutti/packages/agent/daemon/titletext"
 	agenthost "github.com/tutti-os/tutti/packages/agent/host"
 	runtimeprep "github.com/tutti-os/tutti/packages/agent/runtimeprep"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
 	preferencesbiz "github.com/tutti-os/tutti/services/tuttid/biz/preferences"
@@ -4290,10 +4291,10 @@ func TestActivityProjectionPublishesSessionUpdateForUnappliedStatePatch(t *testi
 	projection := NewActivityProjection(repo)
 	projection.SetPublisher(publisher)
 
-	reply, err := projection.ReportSessionState(context.Background(), agentsessionstore.ReportSessionStateInput{
+	reply, err := projection.ReportSessionState(context.Background(), canonical.ReportSessionStateInput{
 		WorkspaceID:    "ws-1",
 		AgentSessionID: "session-1",
-		State: agentsessionstore.WorkspaceAgentSessionStateUpdate{
+		State: canonical.WorkspaceAgentSessionStateUpdate{
 			LifecycleStatus:  "active",
 			CurrentPhase:     "working",
 			OccurredAtUnixMS: 150,
@@ -4335,10 +4336,10 @@ func TestActivityProjectionUsesExplicitTitle(t *testing.T) {
 	projection := NewActivityProjection(repo)
 	projection.SetPublisher(publisher)
 
-	_, err := projection.ReportSessionState(context.Background(), agentsessionstore.ReportSessionStateInput{
+	_, err := projection.ReportSessionState(context.Background(), canonical.ReportSessionStateInput{
 		WorkspaceID:    "ws-1",
 		AgentSessionID: "session-1",
-		State: agentsessionstore.WorkspaceAgentSessionStateUpdate{
+		State: canonical.WorkspaceAgentSessionStateUpdate{
 			Title:            "Automation Review",
 			LifecycleStatus:  "failed",
 			CurrentPhase:     "failed",
@@ -4371,13 +4372,13 @@ func TestActivityProjectionReportsFailedRuntimeNodeResult(t *testing.T) {
 	projection := NewActivityProjection(repo)
 	projection.SetAnalyticsReporter(reporter)
 
-	_, err := projection.ReportSessionState(context.Background(), agentsessionstore.ReportSessionStateInput{
+	_, err := projection.ReportSessionState(context.Background(), canonical.ReportSessionStateInput{
 		WorkspaceID:    "ws-1",
 		AgentSessionID: "session-1",
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			Provider: "codex",
 		},
-		State: agentsessionstore.WorkspaceAgentSessionStateUpdate{
+		State: canonical.WorkspaceAgentSessionStateUpdate{
 			LifecycleStatus: "failed",
 			LastError:       "network connection disconnected",
 		},
@@ -4421,13 +4422,13 @@ func TestActivityProjectionSkipsFailedRuntimeNodeResultWhenStateNotApplied(t *te
 	projection := NewActivityProjection(repo)
 	projection.SetAnalyticsReporter(reporter)
 
-	_, err := projection.ReportSessionState(context.Background(), agentsessionstore.ReportSessionStateInput{
+	_, err := projection.ReportSessionState(context.Background(), canonical.ReportSessionStateInput{
 		WorkspaceID:    "ws-1",
 		AgentSessionID: "session-1",
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			Provider: "codex",
 		},
-		State: agentsessionstore.WorkspaceAgentSessionStateUpdate{
+		State: canonical.WorkspaceAgentSessionStateUpdate{
 			LifecycleStatus:  "failed",
 			LastError:        "network connection disconnected",
 			OccurredAtUnixMS: 150,
@@ -4462,15 +4463,15 @@ func TestActivityProjectionPublishesCanonicalSessionIDForMessageUpdates(t *testi
 	projection := NewActivityProjection(repo)
 	projection.SetPublisher(publisher)
 
-	reply, err := projection.ReportSessionMessages(context.Background(), agentsessionstore.ReportSessionMessagesInput{
+	reply, err := projection.ReportSessionMessages(context.Background(), canonical.ReportSessionMessagesInput{
 		WorkspaceID:    "ws-1",
 		AgentSessionID: "provider-session-1",
 		SessionOrigin:  agentsessionstore.WorkspaceAgentSessionOriginRuntime,
-		Source: agentsessionstore.EventSource{
+		Source: canonical.EventSource{
 			Provider:          "codex",
 			ProviderSessionID: "provider-session-1",
 		},
-		Updates: []agentsessionstore.WorkspaceAgentSessionMessageUpdate{{
+		Updates: []canonical.WorkspaceAgentSessionMessageUpdate{{
 			MessageID: "message-1",
 			Role:      "assistant",
 			Kind:      "text",
@@ -4509,10 +4510,10 @@ func TestActivityProjectionPublishesSessionAuditOutsideMessageUpdate(t *testing.
 	publisher := &activityUpdatePublisherStub{}
 	projection := NewActivityProjection(repo)
 	projection.SetPublisher(publisher)
-	reply, err := projection.ReportSessionMessages(context.Background(), agentsessionstore.ReportSessionMessagesInput{
+	reply, err := projection.ReportSessionMessages(context.Background(), canonical.ReportSessionMessagesInput{
 		WorkspaceID: "ws-audit", AgentSessionID: "session-audit", SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
-		Source:  agentsessionstore.EventSource{Provider: "codex"},
-		Updates: []agentsessionstore.WorkspaceAgentSessionMessageUpdate{{MessageID: "goal-control:op-1", Role: "user", Kind: "session_audit", OccurredAtUnixMS: 123}},
+		Source:  canonical.EventSource{Provider: "codex"},
+		Updates: []canonical.WorkspaceAgentSessionMessageUpdate{{MessageID: "goal-control:op-1", Role: "user", Kind: "session_audit", OccurredAtUnixMS: 123}},
 	})
 	if err != nil || reply.AcceptedCount != 1 {
 		t.Fatalf("ReportSessionMessages() reply=%#v error=%v", reply, err)
@@ -4537,10 +4538,10 @@ func TestActivityProjectionPreservesMixedMessageAuditOrder(t *testing.T) {
 	publisher := &activityUpdatePublisherStub{}
 	projection := NewActivityProjection(repo)
 	projection.SetPublisher(publisher)
-	_, err := projection.ReportSessionMessages(context.Background(), agentsessionstore.ReportSessionMessagesInput{
+	_, err := projection.ReportSessionMessages(context.Background(), canonical.ReportSessionMessagesInput{
 		WorkspaceID: "ws-order", AgentSessionID: "session-order", SessionOrigin: agentsessionstore.WorkspaceAgentSessionOriginRuntime,
-		Source:  agentsessionstore.EventSource{Provider: "codex"},
-		Updates: []agentsessionstore.WorkspaceAgentSessionMessageUpdate{{MessageID: "message-1", TurnID: "turn-1", Role: "assistant", Kind: "text"}},
+		Source:  canonical.EventSource{Provider: "codex"},
+		Updates: []canonical.WorkspaceAgentSessionMessageUpdate{{MessageID: "message-1", TurnID: "turn-1", Role: "assistant", Kind: "text"}},
 	})
 	if err != nil {
 		t.Fatal(err)

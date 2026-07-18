@@ -10,6 +10,7 @@ import (
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
 	activityshared "github.com/tutti-os/tutti/packages/agent/daemon/activity/events"
 	"github.com/tutti-os/tutti/packages/agent/daemon/providerregistry"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
 
 // IsAuthenticationRequired reports whether a runtime startup failure is an
@@ -36,7 +37,7 @@ var (
 
 func visibleFailureTimelineItem(
 	roomID string,
-	source agentsessionstore.EventSource,
+	source canonical.EventSource,
 	event activityshared.Event,
 	sessionID string,
 	timestamp int64,
@@ -88,7 +89,7 @@ func visibleFailureTimelineItem(
 }
 
 func visibleFailureMessageUpdate(
-	source agentsessionstore.EventSource,
+	source canonical.EventSource,
 	event activityshared.Event,
 	sessionID string,
 	timestamp int64,

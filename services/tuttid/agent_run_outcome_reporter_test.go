@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 )
 
 func TestMessageLooksLikeAuthFailureMatchesRealClaude401(t *testing.T) {
@@ -44,7 +45,7 @@ func TestMessageLooksLikeAuthFailureIgnoresNonFailedAndNonAuth(t *testing.T) {
 
 func TestReportRunOutcomeAuthFailureWinsOverCompletion(t *testing.T) {
 	input := agentsessionstore.ReportActivityInput{
-		Source: agentsessionstore.EventSource{Provider: "claude-code"},
+		Source: canonical.EventSource{Provider: "claude-code"},
 		MessageUpdates: []agentsessionstore.WorkspaceAgentMessageUpdate{
 			{Status: "completed", Payload: map[string]any{"text": "hi"}},
 			{Status: "failed", Payload: map[string]any{
@@ -59,7 +60,7 @@ func TestReportRunOutcomeAuthFailureWinsOverCompletion(t *testing.T) {
 
 func TestReportRunOutcomeSuccessClears(t *testing.T) {
 	input := agentsessionstore.ReportActivityInput{
-		Source: agentsessionstore.EventSource{Provider: "codex"},
+		Source: canonical.EventSource{Provider: "codex"},
 		MessageUpdates: []agentsessionstore.WorkspaceAgentMessageUpdate{
 			{Status: "completed", Payload: map[string]any{"text": "done"}},
 		},

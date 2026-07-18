@@ -7,6 +7,7 @@ import (
 
 	agentsessionstore "github.com/tutti-os/tutti/packages/agent/daemon/activity"
 	agenthost "github.com/tutti-os/tutti/packages/agent/host"
+	"github.com/tutti-os/tutti/packages/agent/store-sqlite/canonical"
 	agentactivitybiz "github.com/tutti-os/tutti/services/tuttid/biz/agentactivity"
 )
 
@@ -14,7 +15,7 @@ func TestPublishPersistedTurnStateObservesOnlyCanonicalSettlement(t *testing.T) 
 	t.Parallel()
 	observer := &rootTurnObserverStub{}
 	projection := &ActivityProjection{rootTurnObserver: observer}
-	input := agentsessionstore.ReportSessionStateInput{
+	input := canonical.ReportSessionStateInput{
 		WorkspaceID: "ws-1", AgentSessionID: "root",
 	}
 
@@ -53,15 +54,15 @@ func TestTurnTransitionFromStateInputRequiresExplicitTurnPatch(t *testing.T) {
 	t.Parallel()
 
 	activeTurnID := "root-turn-1"
-	input := agentsessionstore.ReportSessionStateInput{
+	input := canonical.ReportSessionStateInput{
 		WorkspaceID:    "ws-1",
 		AgentSessionID: "session-1",
-		State: agentsessionstore.WorkspaceAgentSessionStateUpdate{
-			TurnLifecycle: &agentsessionstore.WorkspaceAgentTurnLifecycle{
+		State: canonical.WorkspaceAgentSessionStateUpdate{
+			TurnLifecycle: &canonical.WorkspaceAgentTurnLifecycle{
 				ActiveTurnID: &activeTurnID,
 				Phase:        agentactivitybiz.TurnPhaseWaiting,
 			},
-			RootProviderTurn: &agentsessionstore.WorkspaceAgentRootProviderTurnTransition{
+			RootProviderTurn: &canonical.WorkspaceAgentRootProviderTurnTransition{
 				RootTurnID:     "root-turn-1",
 				ProviderTurnID: "provider-turn-1",
 				Phase:          agentsessionstore.RootProviderTurnPhaseCompleted,
