@@ -519,7 +519,9 @@
   list for every unrelated engine event, after which a container rebuilds command
   callbacks and fans one update out to every list section. A render-budget test
   that injects an already-stable view model bypasses this production chain and
-  cannot detect that regression.
+  cannot detect that regression. A container-owned relative-time interval can
+  cause the same fan-out when its timestamp is passed through every section and
+  row instead of being consumed at the timestamp leaf.
 - Fix:
   Stabilize the value at the ownership boundary, or remove derived presentation
   values from bidirectional state. For external/workbench state, only sync
@@ -529,7 +531,12 @@
   from active-session semantic equality. Stabilize usage, commands, prompt
   queue, quota, session-chrome, and host callback projections at their owning
   selector/controller boundary; do not clone canonical arrays while assembling
-  the view model. During Rail reconciliation, expose a stable lock reader so
+  the view model. For a paged Rail, project only canonical sessions referenced
+  by current section, search-result, or reconciliation ids, then structurally
+  share unchanged summary items. Let time-label consumers subscribe directly
+  to a shared renderer-realm relative-time external store. The store starts one
+  timer for its first subscriber and clears it after its last unsubscribe.
+  During Rail reconciliation, expose a stable lock reader so
   portaled menu actions can check current state without passing a changing
   boolean through every section. For composed menu actions, attach the Tooltip
   trigger to a stable wrapper and the Dropdown trigger to the actual
@@ -546,7 +553,10 @@
   and run the affected renderer tests plus desktop typecheck. AgentGUI budget
   tests must dispatch a real engine update and assert the unrelated Rail subtree
   stays at zero renders; do not replace this with a manual view-model rerender
-  that reuses the Rail reference by construction. Add a composition regression
+  that reuses the Rail reference by construction. For relative-time clocks,
+  assert multiple time-label consumers share one interval, the last unmount
+  clears it, and a tick updates labels without rerendering the parent rows. Add
+  a composition regression
   test for shared Tooltip/Dropdown actions and manually create a new
   conversation, since an empty-to-populated Rail transition can be the first
   time the faulty trigger mounts.
@@ -555,6 +565,8 @@
   [whyDidYouRender.ts](../../../apps/desktop/src/renderer/src/lib/whyDidYouRender.ts)
   [useAgentGUIConversationRailQuery.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUIConversationRailQuery.ts)
   [useAgentGUIConversationRailQuery.search.spec.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUIConversationRailQuery.search.spec.tsx)
+  [agentGuiConversationRailQuerySnapshot.spec.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/agentGuiConversationRailQuerySnapshot.spec.ts)
+  [AgentGUIConversationRailClock.spec.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIConversationRailClock.spec.tsx)
   [AgentGUIConversationRailSection.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/view/AgentGUIConversationRailSection.tsx)
   [AgentSessionChrome.tsx](../../../packages/agent/gui/agent-gui/agentGuiNode/AgentSessionChrome.tsx)
 
