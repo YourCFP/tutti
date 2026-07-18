@@ -202,6 +202,10 @@ func (s *SQLiteStore) ClearSessions(ctx context.Context, workspaceID string) (ag
 	return s.agentStore().ClearSessions(ctx, workspaceID)
 }
 
+func (s *SQLiteStore) PurgeDeletedSessions(ctx context.Context, input agentactivitybiz.PurgeDeletedSessionsInput) (agentactivitybiz.PurgeDeletedSessionsResult, error) {
+	return s.agentStore().PurgeDeletedSessions(ctx, input)
+}
+
 func (s *SQLiteStore) UpdateSessionPinned(ctx context.Context, workspaceID string, agentSessionID string, pinned bool) (agentactivitybiz.Session, bool, error) {
 	return s.agentStore().UpdateSessionPinned(ctx, workspaceID, agentSessionID, pinned)
 }

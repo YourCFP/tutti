@@ -26,6 +26,7 @@ type Service struct {
 	AgentTargetStore               AgentTargetStore
 	SessionInitializer             SessionInitializer
 	SessionReader                  SessionReader
+	SessionPurgeStore              agenthost.SessionPurgeStore
 	UserProjectReader              UserProjectReader
 	MessageReader                  MessageReader
 	ExternalImportStore            agentactivitybiz.Repository

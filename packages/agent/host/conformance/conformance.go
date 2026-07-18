@@ -21,7 +21,9 @@ type SessionSeed struct {
 	Live                    bool
 	Kind                    string
 	Origin                  string
+	ParentAgentSessionID    string
 	Deleted                 bool
+	DeletedAtUnixMS         int64
 	ExternalResumeSupported *bool
 	Settings                agenthost.ComposerSettings
 	Pinned                  bool
@@ -42,6 +44,7 @@ type InteractionSeed struct {
 
 type Fixture struct {
 	Session            *SessionSeed
+	AdditionalSessions []SessionSeed
 	Turn               *TurnSeed
 	Interaction        *InteractionSeed
 	PreparedSubmitID   string
@@ -132,6 +135,7 @@ type Driver interface {
 	UpdateSettings(context.Context, agenthost.UpdateSettingsInput) (SessionObservation, error)
 	UpdatePin(context.Context, agenthost.UpdatePinInput) (SessionObservation, error)
 	DeleteSession(context.Context, agenthost.SessionRef) (agenthost.DeleteSessionResult, error)
+	PurgeDeletedSessions(context.Context, agenthost.PurgeDeletedSessionsInput) (agenthost.PurgeDeletedSessionsResult, error)
 	GoalControl(context.Context, agenthost.GoalControlInput) (GoalObservation, error)
 	GetGoalState(context.Context, agenthost.SessionRef) (GoalObservation, error)
 	ReconcileGoal(context.Context, agenthost.SessionRef) (GoalObservation, error)

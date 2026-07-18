@@ -79,6 +79,30 @@ type DeleteSessionResult struct {
 	RemovedSessionIDs []string
 }
 
+// PurgeDeletedSessionsInput bounds one permanent-removal transaction. The
+// caller owns retention policy and supplies an absolute cutoff.
+type PurgeDeletedSessionsInput struct {
+	CutoffUnixMS    int64
+	MaxSessions     int
+	MaxPayloadBytes int64
+}
+
+// PurgedSession is the content-free descriptor returned after a successful
+// canonical commit for aggregate accounting and bounded maintenance progress.
+type PurgedSession struct {
+	WorkspaceID     string
+	AgentSessionID  string
+	DeletedAtUnixMS int64
+	PayloadBytes    int64
+}
+
+type PurgeDeletedSessionsResult struct {
+	Sessions        []PurgedSession
+	RemovedMessages int
+	PayloadBytes    int64
+	HasMore         bool
+}
+
 type MessageOrder string
 
 const (

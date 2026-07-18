@@ -16,8 +16,9 @@ var (
 		Name: "historical and live settings",
 		run:  runHistoricalAndLiveSettings,
 	}
-	pinSessionScenario    = Scenario{Name: "pin session", run: runPinSession}
-	deleteSessionScenario = Scenario{Name: "delete session", run: runDeleteSession}
+	pinSessionScenario           = Scenario{Name: "pin session", run: runPinSession}
+	deleteSessionScenario        = Scenario{Name: "delete session", run: runDeleteSession}
+	purgeDeletedSessionsScenario = Scenario{Name: "purge deleted sessions", run: runPurgeDeletedSessions}
 )
 
 // Scenarios returns the lifecycle surface that every host adapter must support.
@@ -37,6 +38,7 @@ func Scenarios() []Scenario {
 		historicalAndLiveSettingsScenario,
 		pinSessionScenario,
 		deleteSessionScenario,
+		purgeDeletedSessionsScenario,
 	}
 }
 
@@ -104,5 +106,6 @@ func ApplicationCoreScenarios() []Scenario {
 		historicalAndLiveSettingsScenario,
 		pinSessionScenario,
 		deleteSessionScenario,
+		purgeDeletedSessionsScenario,
 	}
 }

@@ -12,8 +12,8 @@ func TestPublishedScenarioCatalogsHaveUniqueNames(t *testing.T) {
 		scenarios []Scenario
 		wantCount int
 	}{
-		{name: "adapter lifecycle", scenarios: Scenarios(), wantCount: 14},
-		{name: "application core", scenarios: ApplicationCoreScenarios(), wantCount: 10},
+		{name: "adapter lifecycle", scenarios: Scenarios(), wantCount: 15},
+		{name: "application core", scenarios: ApplicationCoreScenarios(), wantCount: 11},
 		{name: "resume policy", scenarios: ResumePolicyScenarios(), wantCount: 4},
 		{name: "submission fence", scenarios: SubmissionFenceScenarios(), wantCount: 1},
 		{name: "title policy", scenarios: TitlePolicyScenarios(), wantCount: 1},
@@ -55,6 +55,7 @@ func TestScenarioOwnershipIsExplicit(t *testing.T) {
 		"historical and live settings",
 		"pin session",
 		"delete session",
+		"purge deleted sessions",
 	}
 	wantCoordinator := []string{
 		"exact turn cancel",

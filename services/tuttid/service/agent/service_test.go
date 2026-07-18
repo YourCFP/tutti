@@ -7193,9 +7193,11 @@ func (f *fakeProviderAvailabilityChecker) InvalidateProviderAvailability(provide
 }
 
 type fakeSessionReader struct {
-	sessions   map[string]PersistedSession
-	tombstoned map[string]bool
-	children   map[string][]PersistedSession
+	sessions    map[string]PersistedSession
+	tombstoned  map[string]bool
+	deletedAt   map[string]int64
+	parentByKey map[string]string
+	children    map[string][]PersistedSession
 }
 
 type fakeSessionInitializer struct {
@@ -7651,6 +7653,78 @@ func (f fakeSessionReader) ClearSessions(_ context.Context, workspaceID string) 
 		}
 	}
 	return ClearSessionsResult{RemovedSessions: removed, RemovedSessionIDs: removedIDs}, nil
+}
+
+func (f fakeSessionReader) PurgeDeletedSessions(_ context.Context, input agentactivitybiz.PurgeDeletedSessionsInput) (agentactivitybiz.PurgeDeletedSessionsResult, error) {
+	result := agentactivitybiz.PurgeDeletedSessionsResult{}
+	limit := input.MaxSessions
+	if limit <= 0 {
+		limit = 25
+	}
+	candidateKeys := make([]string, 0)
+	for key, deleted := range f.tombstoned {
+		if !deleted || input.CutoffUnixMS <= 0 {
+			continue
+		}
+		deletedAt := f.deletedAt[key]
+		if deletedAt <= 0 {
+			deletedAt = 1
+		}
+		if deletedAt > input.CutoffUnixMS {
+			continue
+		}
+		blocked := false
+		for childKey := range f.sessions {
+			if f.parentByKey[childKey] == key {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			continue
+		}
+		candidateKeys = append(candidateKeys, key)
+	}
+	slices.Sort(candidateKeys)
+	if len(candidateKeys) > limit {
+		candidateKeys = candidateKeys[:limit]
+	}
+	for _, key := range candidateKeys {
+		session := f.sessions[key]
+		deletedAt := f.deletedAt[key]
+		if deletedAt <= 0 {
+			deletedAt = 1
+		}
+		delete(f.sessions, key)
+		delete(f.tombstoned, key)
+		delete(f.deletedAt, key)
+		delete(f.parentByKey, key)
+		result.Sessions = append(result.Sessions, agentactivitybiz.PurgedSession{
+			WorkspaceID: session.WorkspaceID, AgentSessionID: session.ID,
+			DeletedAtUnixMS: deletedAt,
+		})
+	}
+	for key, deleted := range f.tombstoned {
+		deletedAt := f.deletedAt[key]
+		if deletedAt <= 0 {
+			deletedAt = 1
+		}
+		if !deleted || deletedAt > input.CutoffUnixMS {
+			continue
+		}
+		blocked := false
+		for childKey := range f.sessions {
+			if f.parentByKey[childKey] == key {
+				blocked = true
+				break
+			}
+		}
+		if !blocked {
+			result.HasMore = true
+			break
+		}
+	}
+	return result, nil
 }
 
 func (f *fakeRuntime) Start(_ context.Context, input RuntimeStartInput) (ProviderRuntimeSession, error) {

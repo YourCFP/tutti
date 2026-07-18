@@ -73,6 +73,30 @@ runtime mutation; provider normalization stays in an adapter policy. Pin and
 canonical delete are Host commands, while authorization, transport DTOs,
 shared bindings, and local view cleanup remain adapter-owned.
 
+Permanent deletion is intentionally distinct from the normal canonical delete
+command. `Host.PurgeDeletedSessions` accepts a cutoff and bounded batch limits,
+while `store-sqlite` selects tombstones globally by deletion time, fences every
+candidate with its exact `deleted_at` value, and removes session-scoped rows in
+one transaction. Candidate selection starts from current leaves, so large or
+deep trees cannot let blocked ancestors starve unrelated tombstones. Ancestors
+remain until every descendant has been safely removed, which preserves a
+concurrently restored child tree. Host does not choose retention periods or
+filesystem paths.
+The `tuttid` maintenance adapter owns the device-global 15/30-day preference,
+idle-aware scheduling, once-per-day durable eligibility marker, manual purge
+route, and optional database compaction. This retention flow performs no
+filesystem deletion.
+
+Automatic maintenance starts ten minutes after daemon readiness, checks at
+30-minute intervals, and records completion at most once per 24 hours. It runs
+only while no Agent turn is active and stops between short batches when Agent
+work begins. Manual cleanup uses the same serialized maintenance service but
+targets every current tombstone.
+Only an explicit manual sweep may request database compaction. The daemon
+attempts it after the final idle batch only when the database is small and at
+least one quarter of its pages are reclaimable; automatic maintenance never
+runs a full-database compaction.
+
 `store-sqlite` owns the transaction implementation. Its caller-owned
 `TransactionParticipant` seam lets an adapter append a durable outbox marker
 to the same transaction as runtime/goal operation intent, canonical facts, and
