@@ -2335,6 +2335,154 @@ func TestStandardACPLaunchPermissionKeepsPlanAsIndependentWorkflowMode(t *testin
 	}
 }
 
+func TestStandardACPDeclaredPlanModesDoNotRequireRuntimeModeCatalog(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Declared Plan ACP", "declared-plan-session")
+	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider:                  "acp:declared-plan",
+		Name:                      "declared-plan-acp",
+		DisplayName:               "Declared Plan ACP",
+		Command:                   []string{"declared-plan", "agent", "stdio"},
+		PermissionModes:           map[string]string{"ask-before-write": "default"},
+		PlanModeRuntimeID:         "plan",
+		PlanModeDisabledRuntimeID: "default",
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	adapter := adapterRaw.(*standardACPAdapter)
+	session := standardTestSession("acp:declared-plan")
+	session.Settings = &SessionSettings{PermissionModeID: "ask-before-write"}
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	for _, enabled := range []bool{true, false} {
+		if err := adapter.ValidateSessionSettings(session, SessionSettingsPatch{PlanMode: &enabled}); err != nil {
+			t.Fatalf("ValidateSessionSettings(%v): %v", enabled, err)
+		}
+		session.Settings.PlanMode = enabled
+		if err := adapter.ApplySessionSettings(context.Background(), session, SessionSettingsPatch{PlanMode: &enabled}); err != nil {
+			t.Fatalf("ApplySessionSettings(%v): %v", enabled, err)
+		}
+		want := "default"
+		if enabled {
+			want = "plan"
+		}
+		if got := transport.conn.lastModeID(); got != want {
+			t.Fatalf("plan=%v mode = %q, want %q", enabled, got, want)
+		}
+	}
+}
+
+func TestStandardACPDeclaredPlanModeSurfacesRuntimeRejection(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Rejected Plan ACP", "rejected-plan-session")
+	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider:                  "acp:rejected-plan",
+		Name:                      "rejected-plan-acp",
+		DisplayName:               "Rejected Plan ACP",
+		Command:                   []string{"rejected-plan", "agent", "stdio"},
+		PermissionModes:           map[string]string{"ask-before-write": "default"},
+		PlanModeRuntimeID:         "plan",
+		PlanModeDisabledRuntimeID: "default",
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	adapter := adapterRaw.(*standardACPAdapter)
+	session := standardTestSession("acp:rejected-plan")
+	session.Settings = &SessionSettings{PermissionModeID: "ask-before-write"}
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	transport.conn.setModeError = &acpError{Code: -32602, Message: "unsupported mode"}
+	enabled := true
+	session.Settings.PlanMode = enabled
+	if err := adapter.ApplySessionSettings(context.Background(), session, SessionSettingsPatch{PlanMode: &enabled}); err == nil {
+		t.Fatal("ApplySessionSettings error = nil, want runtime rejection")
+	}
+}
+
+func TestStandardACPLaunchPermissionPlanRestartsAndLoadsSameSession(t *testing.T) {
+	t.Parallel()
+
+	transport := &multiProcStandardACPTransport{
+		agentTitle:          "Grok Build",
+		sessionID:           "grok-provider-session",
+		supportsLoadSession: true,
+	}
+	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider:                     "acp:grok-launch-plan",
+		Name:                         "grok-launch-plan-acp",
+		DisplayName:                  "Grok Build",
+		Command:                      []string{"grok", "--permission-mode", "${permissionMode}", "agent", "stdio"},
+		PermissionModes:              map[string]string{"ask-before-write": "default", "auto": "auto", "full-access": "bypassPermissions"},
+		PlanModeRuntimeID:            "plan",
+		PlanModeDisabledRuntimeID:    "default",
+		PlanModeUsesLaunchPermission: true,
+		LaunchPermission: &StandardACPLaunchPermissionSetting{
+			Placeholder:     "${permissionMode}",
+			DefaultSemantic: "ask-before-write",
+			Values:          map[string]string{"ask-before-write": "default", "auto": "auto", "full-access": "bypassPermissions"},
+		},
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	adapter := adapterRaw.(*standardACPAdapter)
+	session := standardTestSession("acp:grok-launch-plan")
+	session.PermissionModeID = "auto"
+	session.Settings = &SessionSettings{PermissionModeID: "auto"}
+	events, err := adapter.Start(context.Background(), session)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	session.ProviderSessionID = events[0].ProviderSessionID
+
+	for _, enabled := range []bool{true, false} {
+		if err := adapter.ValidateSessionSettings(session, SessionSettingsPatch{PlanMode: &enabled}); err != nil {
+			t.Fatalf("ValidateSessionSettings(%v): %v", enabled, err)
+		}
+		session.Settings.PlanMode = enabled
+		if err := adapter.ApplySessionSettings(context.Background(), session, SessionSettingsPatch{PlanMode: &enabled}); err != nil {
+			t.Fatalf("ApplySessionSettings(%v): %v", enabled, err)
+		}
+		wantDecision := ""
+		if enabled {
+			wantDecision = "denied"
+		}
+		if got := adapter.automaticPermissionDecision(session.AgentSessionID); got != wantDecision {
+			t.Fatalf("plan=%v automatic permission decision = %q, want %q", enabled, got, wantDecision)
+		}
+	}
+
+	transport.mu.Lock()
+	specs := append([]ProcessSpec(nil), transport.specs...)
+	connections := append([]*standardACPConnection(nil), transport.conns...)
+	transport.mu.Unlock()
+	if len(specs) != 3 {
+		t.Fatalf("process starts = %d, want initial plus two Plan restarts", len(specs))
+	}
+	wantModes := []string{"auto", "plan", "auto"}
+	for index, want := range wantModes {
+		if got := specs[index].Command[2]; got != want {
+			t.Fatalf("process %d permission mode = %q, want %q", index, got, want)
+		}
+	}
+	for index := 1; index < len(connections); index++ {
+		if got := asString(connections[index].lastLoadSessionParams["sessionId"]); got != "grok-provider-session" {
+			t.Fatalf("restart %d loaded session = %q, want grok-provider-session", index, got)
+		}
+	}
+	spawned, live := transport.snapshot()
+	if spawned != 3 || len(live) != 1 {
+		t.Fatalf("spawned/live processes = %d/%d, want 3/1", spawned, len(live))
+	}
+}
+
 func TestStandardACPLaunchPermissionRejectsUnknownSessionSemantic(t *testing.T) {
 	t.Parallel()
 
@@ -3200,11 +3348,12 @@ type standardACPTransport struct {
 }
 
 type multiProcStandardACPTransport struct {
-	mu         sync.Mutex
-	agentTitle string
-	sessionID  string
-	specs      []ProcessSpec
-	conns      []*standardACPConnection
+	mu                  sync.Mutex
+	agentTitle          string
+	sessionID           string
+	supportsLoadSession bool
+	specs               []ProcessSpec
+	conns               []*standardACPConnection
 }
 
 func newStandardACPTransport(agentTitle string, sessionID string) *standardACPTransport {
@@ -3228,9 +3377,10 @@ func (t *multiProcStandardACPTransport) Start(_ context.Context, spec ProcessSpe
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	conn := &standardACPConnection{
-		recv:       make(chan ProcessFrame, 32),
-		agentTitle: t.agentTitle,
-		sessionID:  t.sessionID,
+		recv:                make(chan ProcessFrame, 32),
+		agentTitle:          t.agentTitle,
+		sessionID:           t.sessionID,
+		supportsLoadSession: t.supportsLoadSession,
 	}
 	t.specs = append(t.specs, spec)
 	t.conns = append(t.conns, conn)

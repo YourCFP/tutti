@@ -35,6 +35,7 @@ type ComposerProfile struct {
 		Plan *struct {
 			EnabledRuntimeID  string `json:"enabledRuntimeId"`
 			DisabledRuntimeID string `json:"disabledRuntimeId"`
+			UpdateStrategy    string `json:"updateStrategy,omitempty"`
 		} `json:"plan,omitempty"`
 	} `json:"workflowModes,omitempty"`
 	SetModel *struct {
@@ -86,6 +87,13 @@ func (profile ComposerProfile) PlanRuntimeIDs() (enabled string, disabled string
 	}
 	return strings.TrimSpace(profile.WorkflowModes.Plan.EnabledRuntimeID),
 		strings.TrimSpace(profile.WorkflowModes.Plan.DisabledRuntimeID)
+}
+
+func (profile ComposerProfile) PlanUpdateStrategy() string {
+	if profile.WorkflowModes == nil || profile.WorkflowModes.Plan == nil {
+		return ""
+	}
+	return strings.TrimSpace(profile.WorkflowModes.Plan.UpdateStrategy)
 }
 
 func (profile ComposerProfile) SetModelReasoningEffortMeta() bool {
@@ -366,10 +374,27 @@ func validateComposerLaunchSettings(profile ComposerProfile) error {
 func validateComposerWorkflowModes(profile ComposerProfile) error {
 	enabled, disabled := profile.PlanRuntimeIDs()
 	if enabled == "" && disabled == "" {
+		if profile.PlanUpdateStrategy() != "" {
+			return errors.New("composer plan workflow update strategy requires runtime ids")
+		}
 		return nil
 	}
 	if !composerLaunchSettingValue.MatchString(enabled) || !composerLaunchSettingValue.MatchString(disabled) || enabled == disabled {
 		return errors.New("composer plan workflow runtime ids are invalid")
+	}
+	strategy := profile.PlanUpdateStrategy()
+	if strategy != "" && strategy != "session-mode" && strategy != "restart-with-launch-permission" {
+		return errors.New("composer plan workflow update strategy is invalid")
+	}
+	if strategy == "restart-with-launch-permission" && profile.LaunchPermissionSetting() == nil {
+		return errors.New("composer plan workflow launch restart requires launch permission settings")
+	}
+	if strategy == "restart-with-launch-permission" {
+		for _, permissionMode := range profile.PermissionModes {
+			if enabled == strings.TrimSpace(permissionMode.RuntimeID) {
+				return errors.New("composer launch-restart Plan mode must use a distinct runtime value")
+			}
+		}
 	}
 	return nil
 }

@@ -108,7 +108,13 @@ captured by conversation creation and changing it requires a new session. The
 adapter does not send `session/set_mode` for that permission. An extension may
 separately declare `workflowModes.plan.enabledRuntimeId` and
 `disabledRuntimeId`; the shared Plan switch and `/plan` then send those two
-validated values through standard `session/set_mode`. Profiles without these
+validated values through standard `session/set_mode`. An agent whose Plan mode
+exists only as a launch-time permission may additionally declare
+`updateStrategy: "restart-with-launch-permission"`. For that strategy the
+adapter replaces only the ACP process, loads the same provider session, uses the
+enabled runtime ID while Plan is active, and restores the conversation's fixed
+permission runtime value when Plan is disabled. A failed restart leaves the
+previous live process and canonical settings unchanged. Profiles without these
 optional declarations retain their existing ACP session-mode/config-option
 behavior.
 
@@ -173,6 +179,9 @@ facts and host support also establish it. The closed, signed
 `workflowModes.plan` enabled/disabled ID pair is itself sufficient runtime
 contract evidence for `planMode`, including agents that implement
 `session/set_mode` without advertising a mode catalog from `session/new`.
+For the launch-restart strategy, the same evidence is combined with the closed
+spawn-permission declaration; the Plan runtime value must be distinct from all
+three permission values.
 Duplicates are removed, and unknown
 extension-local capability keys remain package metadata rather than entering
 the Agent Activity capability contract.

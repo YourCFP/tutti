@@ -103,11 +103,33 @@ func applyStandardACPLaunchPermission(
 	return nil, errors.New("validated standard ACP launch permission placeholder is missing")
 }
 
+func applyStandardACPLaunchPermissionValue(
+	command []string,
+	setting *StandardACPLaunchPermissionSetting,
+	runtimeValue string,
+) ([]string, error) {
+	if setting == nil {
+		return nil, errors.New("standard ACP launch permission setting is missing")
+	}
+	runtimeValue = strings.TrimSpace(runtimeValue)
+	if !standardACPLaunchSettingValuePattern.MatchString(runtimeValue) {
+		return nil, errors.New("standard ACP launch permission runtime value is invalid")
+	}
+	result := append([]string(nil), command...)
+	for index, argument := range result {
+		if argument == setting.Placeholder {
+			result[index] = runtimeValue
+			return result, nil
+		}
+	}
+	return nil, errors.New("validated standard ACP launch permission placeholder is missing")
+}
+
 func (a *standardACPAdapter) startupModeID(session Session) string {
 	if a == nil {
 		return ""
 	}
-	if a.config.launchPermission != nil && !session.SettingsValue().PlanMode {
+	if a.config.launchPermission != nil && (a.config.planModeUsesLaunchPermission || !session.SettingsValue().PlanMode) {
 		return ""
 	}
 	return a.effectiveModeID(session)

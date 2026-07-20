@@ -241,8 +241,10 @@ func (m *Manager) runtimeBinding(installation Installation, command []string, ve
 		ToolAliases: aliases, ModelConfigOptionID: modelConfigOptionID,
 		PermissionConfigOptionID: permissionConfigOptionID, ReasoningConfigOptionID: reasoningConfigOptionID,
 		PermissionModes: permissionModes, PlanModeRuntimeID: planModeRuntimeID,
-		PlanModeDisabledRuntimeID: planModeDisabledRuntimeID, LaunchPermission: launchPermission,
-		SetModelReasoningEffortMeta: composerProfile.SetModelReasoningEffortMeta(), Capabilities: capabilities,
+		PlanModeDisabledRuntimeID:    planModeDisabledRuntimeID,
+		PlanModeUsesLaunchPermission: composerProfile.PlanUpdateStrategy() == "restart-with-launch-permission",
+		LaunchPermission:             launchPermission,
+		SetModelReasoningEffortMeta:  composerProfile.SetModelReasoningEffortMeta(), Capabilities: capabilities,
 		ExecutableIdentity: executableIdentity,
 	}, nil
 }

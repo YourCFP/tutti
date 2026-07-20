@@ -112,13 +112,14 @@ func TestRealGrokACPPlanModeSmoke(t *testing.T) {
 		}
 	}
 	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
-		Provider:                  "acp:real-plan-smoke",
-		Name:                      "real-grok-plan-smoke",
-		DisplayName:               "Real Grok Plan Smoke",
-		Command:                   []string{binary, "--no-auto-update", "--permission-mode", "${permissionMode}", "agent", "stdio"},
-		PermissionModes:           map[string]string{"ask-before-write": "default", "auto": "auto", "full-access": "bypassPermissions"},
-		PlanModeRuntimeID:         "plan",
-		PlanModeDisabledRuntimeID: "default",
+		Provider:                     "acp:real-plan-smoke",
+		Name:                         "real-grok-plan-smoke",
+		DisplayName:                  "Real Grok Plan Smoke",
+		Command:                      []string{binary, "--no-auto-update", "--permission-mode", "${permissionMode}", "agent", "stdio"},
+		PermissionModes:              map[string]string{"ask-before-write": "default", "auto": "auto", "full-access": "bypassPermissions"},
+		PlanModeRuntimeID:            "plan",
+		PlanModeDisabledRuntimeID:    "default",
+		PlanModeUsesLaunchPermission: true,
 		LaunchPermission: &StandardACPLaunchPermissionSetting{
 			Placeholder:     "${permissionMode}",
 			DefaultSemantic: "ask-before-write",
@@ -134,12 +135,14 @@ func TestRealGrokACPPlanModeSmoke(t *testing.T) {
 	session.ProviderSessionID = ""
 	session.CWD = t.TempDir()
 	session.PermissionModeID = "ask-before-write"
-	session.Settings = &SessionSettings{PermissionModeID: "ask-before-write", PlanMode: true}
+	session.Settings = &SessionSettings{PermissionModeID: "ask-before-write"}
 	smokeCtx, cancelSmoke := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancelSmoke()
-	if _, err := adapter.Start(smokeCtx, session); err != nil {
+	events, err := adapter.Start(smokeCtx, session)
+	if err != nil {
 		t.Fatalf("start Grok ACP Plan session: %v", err)
 	}
+	session.ProviderSessionID = events[0].ProviderSessionID
 	defer func() {
 		if err := adapter.Close(context.Background(), session); err != nil {
 			t.Errorf("close Grok ACP Plan session: %v", err)
@@ -149,8 +152,13 @@ func TestRealGrokACPPlanModeSmoke(t *testing.T) {
 		t.Logf("Grok ACP session runtime context: %s", runtimeContext)
 	}
 
-	disabled := false
-	if err := adapter.ApplySessionSettings(smokeCtx, session, SessionSettingsPatch{PlanMode: &disabled}); err != nil {
-		t.Fatalf("disable Grok ACP Plan mode: %v", err)
+	for _, enabled := range []bool{true, false} {
+		if err := adapter.ValidateSessionSettings(session, SessionSettingsPatch{PlanMode: &enabled}); err != nil {
+			t.Fatalf("validate Grok ACP Plan mode %v: %v", enabled, err)
+		}
+		session.Settings.PlanMode = enabled
+		if err := adapter.ApplySessionSettings(smokeCtx, session, SessionSettingsPatch{PlanMode: &enabled}); err != nil {
+			t.Fatalf("apply Grok ACP Plan mode %v: %v", enabled, err)
+		}
 	}
 }

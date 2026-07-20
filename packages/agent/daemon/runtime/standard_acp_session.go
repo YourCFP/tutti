@@ -54,6 +54,7 @@ func (a *standardACPAdapter) Start(ctx context.Context, session Session) ([]acti
 		acpLiveState:     standardACPInitialLiveState(),
 		pendingApprovals: make(map[string]*pendingACPApproval),
 		permissionModeID: strings.TrimSpace(session.PermissionModeID),
+		planMode:         session.SettingsValue().PlanMode,
 	}
 	a.storeSession(session.AgentSessionID, acpSession)
 
@@ -180,6 +181,7 @@ func (a *standardACPAdapter) Resume(ctx context.Context, session Session) error 
 		acpLiveState:      standardACPInitialLiveState(),
 		pendingApprovals:  make(map[string]*pendingACPApproval),
 		permissionModeID:  strings.TrimSpace(session.PermissionModeID),
+		planMode:          session.SettingsValue().PlanMode,
 	}
 	if previousSession != nil {
 		acpSession.acpLiveState = cloneACPLiveState(previousSession.acpLiveState)
@@ -344,7 +346,12 @@ func (a *standardACPAdapter) startInitializedClient(
 	if a.config.commandWithSettings != nil {
 		command = a.config.commandWithSettings(command, session)
 	}
-	command, err := applyStandardACPLaunchPermission(command, a.config.launchPermission, session.PermissionModeID)
+	var err error
+	if a.config.planModeUsesLaunchPermission && session.SettingsValue().PlanMode {
+		command, err = applyStandardACPLaunchPermissionValue(command, a.config.launchPermission, a.config.planModeRuntimeID)
+	} else {
+		command, err = applyStandardACPLaunchPermission(command, a.config.launchPermission, session.PermissionModeID)
+	}
 	if err != nil {
 		return nil, nil, err
 	}

@@ -595,6 +595,14 @@ func TestValidateComposerProfileRejectsInvalidSignedCommandDeclarations(t *testi
 			name: "ambiguous plan workflow",
 			raw:  `{"schemaVersion":"tutti.agent.composer.v1","workflowModes":{"plan":{"enabledRuntimeId":"plan","disabledRuntimeId":"plan"}}}`,
 		},
+		{
+			name: "launch restart plan without launch permission",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","workflowModes":{"plan":{"enabledRuntimeId":"plan","disabledRuntimeId":"default","updateStrategy":"restart-with-launch-permission"}}}`,
+		},
+		{
+			name: "unknown plan update strategy",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","workflowModes":{"plan":{"enabledRuntimeId":"plan","disabledRuntimeId":"default","updateStrategy":"replace-everything"}}}`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -619,7 +627,7 @@ func TestValidateComposerProfileAcceptsClosedSpawnPermissionAndWorkflowDeclarati
 			{"runtimeId":"auto","semantic":"auto"},
 			{"runtimeId":"bypassPermissions","semantic":"full-access"}
 		],
-		"workflowModes":{"plan":{"enabledRuntimeId":"plan","disabledRuntimeId":"default"}},
+		"workflowModes":{"plan":{"enabledRuntimeId":"plan","disabledRuntimeId":"default","updateStrategy":"restart-with-launch-permission"}},
 		"setModel":{"reasoningEffortMeta":true}
 	}`), &profile); err != nil {
 		t.Fatal(err)
@@ -633,6 +641,9 @@ func TestValidateComposerProfileAcceptsClosedSpawnPermissionAndWorkflowDeclarati
 	}
 	if enabled, disabled := profile.PlanRuntimeIDs(); enabled != "plan" || disabled != "default" {
 		t.Fatalf("plan workflow = %q/%q, want plan/default", enabled, disabled)
+	}
+	if strategy := profile.PlanUpdateStrategy(); strategy != "restart-with-launch-permission" {
+		t.Fatalf("plan workflow update strategy = %q", strategy)
 	}
 	if !profile.SetModelReasoningEffortMeta() {
 		t.Fatal("setModel.reasoningEffortMeta = false, want true")

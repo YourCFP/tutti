@@ -63,6 +63,7 @@ type standardACPConfig struct {
 	applySessionMeta               func(map[string]any, Session, HostMetadata)
 	planModeRuntimeID              string
 	planModeDisabledRuntimeID      string
+	planModeUsesLaunchPermission   bool
 	projectCurrentMode             bool
 	startupDiagnostics             bool
 	toolAliases                    map[string]string
@@ -126,6 +127,9 @@ type standardACPSession struct {
 	// approval or denial applies immediately after a mid-session tier change,
 	// without a respawn.
 	permissionModeID string
+	// planMode denies permission-gated operations even when the provider emits
+	// a request while its planning workflow is active.
+	planMode bool
 }
 
 func (a *standardACPAdapter) stampTurnLifecycleSnapshots(acpSession *standardACPSession, events []activityshared.Event) []activityshared.Event {

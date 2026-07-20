@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -443,7 +444,11 @@ func (a *standardACPAdapter) ValidateSessionSettings(session Session, patch Sess
 		candidate.Settings = &settings
 		runtimeID := a.effectiveModeID(candidate)
 		permissionConfigID := a.effectiveWorkflowModeConfigOptionID()
-		if runtimeID == "" || permissionConfigID == "" || !a.sessionConfigOptionAdvertisesValue(session.AgentSessionID, permissionConfigID, runtimeID) {
+		advertised := permissionConfigID != "" && a.sessionConfigOptionAdvertisesValue(session.AgentSessionID, permissionConfigID, runtimeID)
+		declaredWorkflowMode := runtimeID != "" &&
+			(runtimeID == strings.TrimSpace(a.config.planModeRuntimeID) ||
+				runtimeID == strings.TrimSpace(a.config.planModeDisabledRuntimeID))
+		if runtimeID == "" || (!advertised && !declaredWorkflowMode) {
 			return fmt.Errorf("agent session ACP plan mode target %q is not advertised", runtimeID)
 		}
 	}
@@ -467,9 +472,19 @@ func (a *standardACPAdapter) ApplySessionSettings(
 	}
 
 	if patch.PlanMode != nil {
+		if a.config.planModeUsesLaunchPermission {
+			if strings.TrimSpace(session.ProviderSessionID) == "" {
+				return errors.New("agent session ACP Plan restart requires a provider session id")
+			}
+			if err := a.Resume(ctx, session); err != nil {
+				return fmt.Errorf("agent session ACP Plan restart failed: %w", err)
+			}
+			return nil
+		}
 		if err := a.applyACPMode(ctx, acpSession.client, session, a.effectiveModeID(session)); err != nil {
 			return err
 		}
+		a.setSessionPlanMode(session.AgentSessionID, *patch.PlanMode)
 	}
 
 	modelSet := false
@@ -592,19 +607,38 @@ func (a *standardACPAdapter) setSessionPermissionModeID(agentSessionID string, p
 	}
 }
 
+func (a *standardACPAdapter) setSessionPlanMode(agentSessionID string, enabled bool) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if session := a.sessions[strings.TrimSpace(agentSessionID)]; session != nil {
+		session.planMode = enabled
+	}
+}
+
 // automaticPermissionDecision resolves the decision the provider's live
 // permission tier applies to a permission request, or "" to prompt the user.
 func (a *standardACPAdapter) automaticPermissionDecision(agentSessionID string) string {
-	if a == nil || a.config.automaticPermissionDecision == nil {
+	if a == nil {
 		return ""
 	}
 	a.mu.Lock()
 	session := a.sessions[strings.TrimSpace(agentSessionID)]
 	permissionModeID := ""
+	planMode := false
 	if session != nil {
 		permissionModeID = session.permissionModeID
+		planMode = session.planMode
 	}
 	a.mu.Unlock()
+	if planMode {
+		return "denied"
+	}
+	if a.config.automaticPermissionDecision == nil {
+		return ""
+	}
 	return a.config.automaticPermissionDecision(permissionModeID)
 }
 
