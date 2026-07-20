@@ -2335,6 +2335,47 @@ func TestStandardACPLaunchPermissionKeepsPlanAsIndependentWorkflowMode(t *testin
 	}
 }
 
+func TestStandardACPLaunchPermissionWithoutPlanWorkflowNeverSendsPermissionAsMode(t *testing.T) {
+	t.Parallel()
+
+	transport := newStandardACPTransport("Spawn ACP", "spawn-without-plan-session")
+	transport.conn.modes = map[string]any{
+		"currentModeId": "default",
+		"availableModes": []any{
+			map[string]any{"id": "default", "name": "Default"},
+			map[string]any{"id": "plan", "name": "Plan"},
+		},
+	}
+	adapterRaw, err := NewStandardACPAdapter(StandardACPAdapterConfig{
+		Provider:        "acp:spawn-without-plan",
+		Name:            "spawn-without-plan-acp",
+		DisplayName:     "Spawn Without Plan ACP",
+		Command:         []string{"spawn-acp", "--permission-mode", "${permissionMode}", "agent", "stdio"},
+		PermissionModes: map[string]string{"ask-before-write": "default", "auto": "auto", "full-access": "bypassPermissions"},
+		LaunchPermission: &StandardACPLaunchPermissionSetting{
+			Placeholder: "${permissionMode}",
+			Values:      map[string]string{"ask-before-write": "default", "auto": "auto", "full-access": "bypassPermissions"},
+		},
+	}, transport, LegacyHostMetadata())
+	if err != nil {
+		t.Fatalf("NewStandardACPAdapter: %v", err)
+	}
+	adapter := adapterRaw.(*standardACPAdapter)
+	session := standardTestSession("acp:spawn-without-plan")
+	session.PermissionModeID = "ask-before-write"
+	session.Settings = &SessionSettings{PermissionModeID: "ask-before-write", PlanMode: true}
+	if _, err := adapter.Start(context.Background(), session); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if got := transport.conn.lastSetModeParams(); got != nil {
+		t.Fatalf("startup session/set_mode = %#v, want none", got)
+	}
+	enabled := true
+	if err := adapter.ValidateSessionSettings(session, SessionSettingsPatch{PlanMode: &enabled}); err == nil {
+		t.Fatal("ValidateSessionSettings error = nil, want missing signed Plan mapping")
+	}
+}
+
 func TestStandardACPDeclaredPlanModesDoNotRequireRuntimeModeCatalog(t *testing.T) {
 	t.Parallel()
 

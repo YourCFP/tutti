@@ -653,9 +653,15 @@ func (a *standardACPAdapter) effectiveModeID(session Session) string {
 		if modeID := a.config.permissionModeID("plan"); modeID != "" {
 			return modeID
 		}
+		if a.config.launchPermission != nil {
+			return ""
+		}
 	}
 	if a.config.planModeDisabledRuntimeID != "" {
 		return a.config.planModeDisabledRuntimeID
+	}
+	if a.config.launchPermission != nil {
+		return ""
 	}
 	return a.config.permissionModeID(session.PermissionModeID)
 }
