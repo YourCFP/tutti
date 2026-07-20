@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -108,11 +108,17 @@ async function checkPackage(packageConfig, destination) {
     const unpackedDirectory = join(destination, `${tarball}.unpacked`);
     await mkdir(unpackedDirectory, { recursive: true });
     execFileSync("tar", ["-xzf", tarballPath, "-C", unpackedDirectory]);
-    const missingAssets = await missingPackedModuleRelativeAssets(
-      join(unpackedDirectory, "package")
-    );
+    const packageRoot = join(unpackedDirectory, "package");
+    const missingAssets = await missingPackedModuleRelativeAssets(packageRoot);
     for (const missingAsset of missingAssets) {
       violations.push(`missing module-relative asset ${missingAsset}`);
+    }
+    const mainEntrySource = await readFile(
+      join(packageRoot, "dist/index.js"),
+      "utf8"
+    );
+    if (/data:image\/png(?:;|,)/i.test(mainEntrySource)) {
+      violations.push("PNG data URL embedded in dist/index.js");
     }
   }
 

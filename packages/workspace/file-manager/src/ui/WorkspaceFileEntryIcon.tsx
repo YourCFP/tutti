@@ -7,14 +7,16 @@ import {
 } from "@tutti-os/ui-system";
 import type { ReactElement } from "react";
 import { useEffect, useRef } from "react";
-import workspaceArchiveFallbackIconUrl from "../assets/workspace-archive-fallback.png";
-import workspaceFolderFallbackIconUrl from "../assets/workspace-folder-fallback.png";
-import workspaceImageFallbackIconUrl from "../assets/workspace-image-fallback.png";
 import {
   resolveWorkspaceFileExtension,
   resolveWorkspaceFileVisualKind
 } from "../services/workspaceFileManagerModel.ts";
 import type { WorkspaceFileEntry } from "../services/workspaceFileManagerTypes.ts";
+import {
+  workspaceArchiveFallbackIconUrl,
+  workspaceFolderFallbackIconUrl,
+  workspaceImageFallbackIconUrl
+} from "../workspaceFileFallbackAssets.ts";
 import {
   resolveWorkspaceFileEntryIconCacheKey,
   isWorkspaceApplicationBundle,

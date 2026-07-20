@@ -10,8 +10,5 @@ export default defineConfig({
   },
   external: ["react", "react-dom", "valtio"],
   format: ["esm"],
-  loader: {
-    ".png": "dataurl"
-  },
   sourcemap: true
 });

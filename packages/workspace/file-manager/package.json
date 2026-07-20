@@ -6,6 +6,18 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./assets/workspace-archive-fallback.png": {
+      "types": "./src/assets/workspace-archive-fallback.d.ts",
+      "default": "./src/assets/workspace-archive-fallback.png"
+    },
+    "./assets/workspace-folder-fallback.png": {
+      "types": "./src/assets/workspace-folder-fallback.d.ts",
+      "default": "./src/assets/workspace-folder-fallback.png"
+    },
+    "./assets/workspace-image-fallback.png": {
+      "types": "./src/assets/workspace-image-fallback.d.ts",
+      "default": "./src/assets/workspace-image-fallback.png"
+    },
     "./i18n": "./src/i18n/index.ts",
     "./services": "./src/services/index.ts"
   },
@@ -19,7 +31,7 @@
     "directory": "packages/workspace/file-manager"
   },
   "scripts": {
-    "build": "tsup --config tsup.config.ts",
+    "build": "tsup --config tsup.config.ts && node ../../../tools/scripts/copy-package-assets.mjs src/assets dist/assets",
     "test": "node --test --experimental-strip-types \"./src/**/*.test.ts\"",
     "typecheck": "node ../../../tools/scripts/run-tsgo-typecheck.mjs"
   },
@@ -52,6 +64,18 @@
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
+      },
+      "./assets/workspace-archive-fallback.png": {
+        "types": "./dist/assets/workspace-archive-fallback.d.ts",
+        "default": "./dist/assets/workspace-archive-fallback.png"
+      },
+      "./assets/workspace-folder-fallback.png": {
+        "types": "./dist/assets/workspace-folder-fallback.d.ts",
+        "default": "./dist/assets/workspace-folder-fallback.png"
+      },
+      "./assets/workspace-image-fallback.png": {
+        "types": "./dist/assets/workspace-image-fallback.d.ts",
+        "default": "./dist/assets/workspace-image-fallback.png"
       },
       "./i18n": {
         "types": "./dist/i18n/index.d.ts",
