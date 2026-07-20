@@ -112,9 +112,11 @@ export const en = {
       clearLogsTitle: "Clear Logs",
       clearServiceLogs: "Clear Service Logs...",
       edit: "Edit",
+      exportAllLogs: "All Logs",
       exportLogsFailed: "Unable to export logs",
       exportLogsTitle: "Export Logs",
-      exportServiceLogs: "Export Service Logs...",
+      exportRecentTenMinutesLogs: "Last 10 Minutes",
+      exportServiceLogs: "Export Service Logs",
       file: "File",
       help: "Help",
       openPerfMonitor: "Open Perf Monitor DevTools",
@@ -214,6 +216,7 @@ export const en = {
       detecting: "Checking your {{provider}} setup…",
       ready: "{{provider}} is ready to run.",
       busyInstalling: "Setting up {{provider}}…",
+      busyUpdating: "Updating {{provider}}…",
       busyVerifying: "Verifying {{provider}}…",
       actionDetect: "Re-check",
       redetectDisabledInstalling: "Can't re-check while setting up",
@@ -221,6 +224,8 @@ export const en = {
       actionInstall: "Set up",
       actionRepair: "Repair install",
       actionUpgrade: "Upgrade",
+      actionUpdate: "Update",
+      actionUpdating: "Updating…",
       actionRelogin: "Sign in again",
       actionLogin: "Sign in",
       actionRetry: "Retry",
@@ -470,6 +475,51 @@ export const en = {
     },
     settings: {
       close: "Close settings",
+      agent: {
+        agents: {
+          autoCheckUpdates: "Automatically check for updates",
+          autoCheckUpdatesFailed:
+            "Couldn't save the automatic update check setting.",
+          autoCheckUpdatesHint:
+            "Checks periodically. Updates are installed only when you choose Update.",
+          checkUpdates: "Check for updates",
+          checkUpdatesFailed: "Couldn't check for agent CLI updates.",
+          checkingUpdates: "Checking for updates…",
+          currentVersionSummary: "{{current}}",
+          disabled: "Disabled",
+          earlyAccessBadge: "Early Access",
+          earlyAccessDescription:
+            "Show agent integrations that Tutti is still testing and validating.",
+          earlyAccessHiddenHint:
+            "Turn on Early access agent integrations in Lab to manage {{agent}}.",
+          earlyAccessLabel: "Early access agent integrations",
+          empty: "No agents to show.",
+          enableAgent: "Enable {{agent}}",
+          enableChangeFailed: "Couldn't change whether {{agent}} is enabled.",
+          enabled: "Enabled",
+          enabledColumn: "Enabled",
+          environmentColumn: "Readiness",
+          extensionCodeBuddy: "CodeBuddy Code",
+          extensionEnableToSetUp: "Enable to set up",
+          extensionGemini: "Gemini CLI",
+          extensionGrok: "Grok Build",
+          extensionHermes: "Hermes Agent",
+          extensionGitHubCopilot: "GitHub Copilot CLI",
+          extensionKilo: "Kilo Code",
+          extensionKimiCode: "Kimi Code",
+          extensionPreparing: "Preparing integration…",
+          extensionQwen: "Qwen Code",
+          updateAvailableLatest: "Update available · {{latest}}",
+          updateAvailableSummary: "{{current}} → {{latest}}",
+          updateCheckFailed: "Update check unavailable",
+          updateCheckFailedSummary: "{{current}} · Check unavailable",
+          updateUpToDateSummary: "{{current}} · Up to date"
+        },
+        tabs: {
+          agents: "Agents",
+          general: "General Settings"
+        }
+      },
       appearance: {
         dockPlacementDescription:
           "Controls where the workspace dock is anchored",
@@ -849,6 +899,8 @@ export const en = {
         daemonLogLabel: "Daemon log",
         desktopLogLabel: "Desktop log",
         exportLogs: "Export logs",
+        exportAllLogs: "Export all logs",
+        exportRecentTenMinutesLogs: "Export last 10 minutes",
         exportLogsDialogTitle: "Export Logs",
         exportLogsFileType: "Zip Archive",
         exportingLogs: "Exporting...",
@@ -865,18 +917,6 @@ export const en = {
         fileDefaultOpenersDescription:
           "Choose what opens first when a workspace file is activated by extension.",
         fileDefaultOpenersLabel: "Default file openers",
-        codebuddyAgentDescription:
-          "Show CodeBuddy Code across Tutti. Disabled by default while Agent Extensions are in preview.",
-        codebuddyAgentLabel: "Enable CodeBuddy Code Agent",
-        copilotAgentDescription:
-          "Show GitHub Copilot CLI across Tutti. Disabled by default while Agent Extensions are in preview.",
-        copilotAgentLabel: "Enable GitHub Copilot CLI Agent",
-        geminiAgentDescription:
-          "Show Gemini CLI across Tutti. Disabled by default while Agent Extensions are in preview.",
-        geminiAgentLabel: "Enable Gemini CLI Agent",
-        kiloAgentDescription:
-          "Show Kilo Code across Tutti. Disabled by default while Agent Extensions are in preview.",
-        kiloAgentLabel: "Enable Kilo Code Agent",
         labVisibilityDescription:
           "Shows experimental controls in a separate Settings tab.",
         labVisibilityLabel: "Show Lab tab",
@@ -891,6 +931,9 @@ export const en = {
         qwenAgentDescription:
           "Show Qwen Code across Tutti. Disabled by default while Agent Extensions are in preview.",
         qwenAgentLabel: "Enable Qwen Code Agent",
+        grokAgentDescription:
+          "Load the signed Grok Build Agent Extension and expose it in AgentGUI.",
+        grokAgentLabel: "Enable Grok Build Agent",
         logsSizeLabel: "Log size",
         logsSummary: "{{count}} files, {{size}} total",
         logsTitle: "Logs",
@@ -905,6 +948,11 @@ export const en = {
         referenceProvenanceFilterDescription:
           "Enable Agent source filtering in Agent conversation reference pickers.",
         referenceProvenanceFilterLabel: "Agent source filter",
+        quickPromptLibraryDescription:
+          "Show a personal quick-prompt library in the Agent composer.",
+        quickPromptLibraryLabel: "Quick-prompt library",
+        quickPromptLibrarySaveFailed:
+          "We couldn't update quick-prompt library availability.",
         releaseChannelOptions: {
           rc: "Preview",
           stable: "Stable"
@@ -924,14 +972,30 @@ export const en = {
         visibilityLabel: "Show developer panel"
       },
       lab: {
+        backLabel: "Back",
+        automationRulesDescription:
+          "Shows Automation Rule configuration and session overrides.",
+        automationRulesLabel: "Automation Rules",
         clearShortcutLabel: "Clear {{label}}",
+        modelPlansDescription: "Shows Model settings for configuring plans.",
+        modelPlansLabel: "Model plans",
         newAgentConversationShortcutLabel: "New Agent conversation",
         newSameTypeWindowShortcutLabel: "New same-type window",
         preferencesSaveFailed: "We couldn't update Lab preferences.",
+        previewAgentsDescription:
+          "Show agent integrations that Tutti is still testing and validating.",
+        previewAgentsLabel: "Early access agent integrations",
         shortcutUnbound: "Unbound",
+        tuttiModeDescription:
+          "Enables Tutti Mode planning and orchestration controls in Agent conversations.",
+        tuttiModeLabel: "Tutti Mode",
         workbenchShortcutsDescription:
           "Enables configurable workbench shortcut actions.",
-        workbenchShortcutsLabel: "Workbench shortcuts"
+        workbenchShortcutsLabel: "Workbench shortcuts",
+        workbenchShortcutsManageLabel: "Configure keyboard shortcuts",
+        workspaceAgentsDescription:
+          "Shows Custom Agent creation and configuration.",
+        workspaceAgentsLabel: "Custom Agents"
       },
       title: "Settings",
       trigger: "Settings"
@@ -1001,6 +1065,10 @@ export const en = {
         installing: "Connecting",
         login: "Sign in",
         loginFailed: "Sign-in failed",
+        updateFailed: "Update failed",
+        updateFailedDescription:
+          "Unable to update the local agent right now. Try again in a moment.",
+        updateFailedTimedOut: "Update timed out. Try again in a moment.",
         loginRequired: "Sign in to the local CLI to use this agent",
         manageActionConnect: "Connect",
         manageActionLogin: "Sign in",
@@ -1016,7 +1084,6 @@ export const en = {
         manageProviderClaudeCode: "Claude Code",
         manageProviderCodex: "Codex",
         manageProviderCursor: "Cursor",
-        manageProviderHermes: "Hermes",
         manageProviderNexight: "Tutti Agent",
         manageProviderOpenClaw: "OpenClaw",
         manageProviderOpenCode: "Open Code",

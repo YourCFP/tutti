@@ -24,6 +24,7 @@ tags:
   - name: app-center
   - name: app-factory
   - name: user-project
+  - name: agent-quick-prompt
 paths:
   /v1/health:
     get:
@@ -367,6 +368,125 @@ paths:
           $ref: "#/components/responses/MethodNotAllowedError"
         "502":
           $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/agent-quick-prompts:
+    get:
+      operationId: listAgentQuickPrompts
+      tags:
+        - agent-quick-prompt
+      summary: List device-local Agent quick prompts
+      responses:
+        "200":
+          description: Agent quick prompt list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentQuickPromptListResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/AgentQuickPromptOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+    post:
+      operationId: createAgentQuickPrompt
+      tags:
+        - agent-quick-prompt
+      summary: Create a device-local Agent quick prompt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentQuickPromptRequest"
+      responses:
+        "201":
+          description: Agent quick prompt created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentQuickPromptResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "409":
+          $ref: "#/components/responses/AgentQuickPromptConflictError"
+        "502":
+          $ref: "#/components/responses/AgentQuickPromptOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/agent-quick-prompts/{promptId}:
+    parameters:
+      - name: promptId
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+    put:
+      operationId: updateAgentQuickPrompt
+      tags:
+        - agent-quick-prompt
+      summary: Update a device-local Agent quick prompt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgentQuickPromptRequest"
+      responses:
+        "200":
+          description: Agent quick prompt updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentQuickPromptResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/AgentQuickPromptNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "409":
+          $ref: "#/components/responses/AgentQuickPromptConflictError"
+        "502":
+          $ref: "#/components/responses/AgentQuickPromptOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+    delete:
+      operationId: deleteAgentQuickPrompt
+      tags:
+        - agent-quick-prompt
+      summary: Delete a device-local Agent quick prompt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteAgentQuickPromptRequest"
+      responses:
+        "204":
+          description: Agent quick prompt deleted
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/AgentQuickPromptNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "409":
+          $ref: "#/components/responses/AgentQuickPromptConflictError"
+        "502":
+          $ref: "#/components/responses/AgentQuickPromptOperationError"
         "503":
           $ref: "#/components/responses/ServiceUnavailableError"
   /v1/user-projects:
@@ -2536,10 +2656,31 @@ paths:
             wizard's network diagnostic sets this.
           schema:
             type: boolean
+        - name: includeUpdates
+          in: query
+          required: false
+          description: >-
+            Opt into cached remote update discovery for provider CLIs. Off by
+            default so ordinary readiness and status requests stay purely
+            local. Discovery failures are reported on each provider's update
+            status and do not fail the status request.
+          schema:
+            type: boolean
         - name: refresh
           in: query
           required: false
-          description: Bypass the daemon provider-readiness cache.
+          description: >-
+            Bypass only the daemon's local provider-readiness cache. This does
+            not opt into or refresh remote update discovery.
+          schema:
+            type: boolean
+        - name: refreshUpdates
+          in: query
+          required: false
+          description: >-
+            Bypass only the provider update-metadata cache when includeUpdates
+            is true. This does not bypass local readiness or network-diagnostic
+            caches and does not opt into discovery by itself.
           schema:
             type: boolean
       responses:
@@ -4313,6 +4454,24 @@ components:
                   code: preferences_operation_failed
                   reason: preferences_operation_failed
                   developerMessage: desktop preferences operation failed
+    AgentQuickPromptNotFoundError:
+      description: Agent quick prompt was not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+    AgentQuickPromptConflictError:
+      description: Agent quick prompt limit or expected version conflicts with current state
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+    AgentQuickPromptOperationError:
+      description: Agent quick prompt persistence operation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
   schemas:
     HealthStatusResponse:
       type: object
@@ -4625,6 +4784,19 @@ components:
           allOf:
             - $ref: "#/components/schemas/CliTableOutput"
           nullable: true
+    CliCommandExecutionMode:
+      type: string
+      enum:
+        - wait
+    CliCommandExecution:
+      type: object
+      description: Optional client-side execution behavior declared by a command. Wait commands remain active while handlers return a pending continuation.
+      additionalProperties: false
+      required:
+        - mode
+      properties:
+        mode:
+          $ref: "#/components/schemas/CliCommandExecutionMode"
     CliCapabilitySourceKind:
       type: string
       enum:
@@ -4709,6 +4881,16 @@ components:
           nullable: true
         output:
           $ref: "#/components/schemas/CliCapabilityOutput"
+        execution:
+          allOf:
+            - $ref: "#/components/schemas/CliCommandExecution"
+          nullable: true
+        handlerTimeoutMs:
+          type: integer
+          description: Per-invocation App handler timeout used by clients to budget the daemon request.
+          minimum: 1000
+          maximum: 600000
+          nullable: true
         source:
           $ref: "#/components/schemas/CliCapabilitySource"
     CliCapabilitiesResponse:
@@ -4790,6 +4972,29 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CliCommandWarning"
+        continuation:
+          allOf:
+            - $ref: "#/components/schemas/CliCommandContinuation"
+          nullable: true
+    CliCommandContinuationState:
+      type: string
+      enum:
+        - pending
+    CliCommandContinuation:
+      type: object
+      description: Internal continuation signal consumed by the CLI for wait commands and not rendered as a terminal result.
+      additionalProperties: false
+      required:
+        - state
+        - retryAfterMs
+      properties:
+        state:
+          $ref: "#/components/schemas/CliCommandContinuationState"
+        retryAfterMs:
+          type: integer
+          description: Delay before the CLI invokes the same command again.
+          minimum: 250
+          maximum: 60000
     CliCommandWarning:
       type: object
       additionalProperties: false
@@ -4926,6 +5131,9 @@ components:
             - workspace_issue_resource_not_found
             - workspace_operation_failed
             - preferences_operation_failed
+            - agent_quick_prompt_not_found
+            - agent_quick_prompt_conflict
+            - agent_quick_prompt_operation_failed
         reason:
           type: string
         params:
@@ -5040,6 +5248,7 @@ components:
       type: object
       additionalProperties: false
       required:
+        - agentCliUpdateCheckEnabled
         - agentComposerDefaultsByProvider
         - agentGuiConversationRailCollapsedByProvider
         - agentConversationDetailMode
@@ -5060,6 +5269,10 @@ components:
         - updateChannel
         - updatePolicy
       properties:
+        agentCliUpdateCheckEnabled:
+          type: boolean
+          default: true
+          description: Whether tuttid may periodically discover newer managed agent CLI releases on this device. This never authorizes automatic installation.
         agentComposerDefaultsByProvider:
           $ref: "#/components/schemas/DesktopAgentComposerDefaultsByProvider"
         agentComposerDefaultsByAgentTarget:
@@ -5189,8 +5402,6 @@ components:
           $ref: "#/components/schemas/DesktopAgentComposerDefaults"
         nexight:
           $ref: "#/components/schemas/DesktopAgentComposerDefaults"
-        hermes:
-          $ref: "#/components/schemas/DesktopAgentComposerDefaults"
         openclaw:
           $ref: "#/components/schemas/DesktopAgentComposerDefaults"
         opencode:
@@ -5212,8 +5423,6 @@ components:
         cursor:
           type: boolean
         nexight:
-          type: boolean
-        hermes:
           type: boolean
         openclaw:
           type: boolean
@@ -5427,6 +5636,7 @@ components:
             - npm
             - pnpm
             - uv
+            - binary
         packageName:
           type: string
           minLength: 1
@@ -7239,8 +7449,18 @@ components:
       type: string
       enum:
         - install
+        - update
         - login
         - refresh
+    AgentProviderUpdateCapability:
+      type: string
+      enum:
+        - supported
+        - unsupported
+    AgentProviderUpdateSource:
+      type: string
+      enum:
+        - npm
     AgentProviderProbeStatus:
       type: string
       enum:
@@ -7257,6 +7477,7 @@ components:
       enum:
         - detect
         - install
+        - update
         - repair
         - verify
         - done
@@ -7504,6 +7725,49 @@ components:
           type: string
           nullable: true
           description: The authentication method reported by the provider CLI (e.g. oauth, apiKey).
+    AgentProviderUpdateStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - capability
+        - source
+        - currentVersion
+        - latestVersion
+        - updateAvailable
+        - unsupportedReason
+        - lastCheckedAt
+        - reasonCode
+      properties:
+        capability:
+          $ref: "#/components/schemas/AgentProviderUpdateCapability"
+        source:
+          allOf:
+            - $ref: "#/components/schemas/AgentProviderUpdateSource"
+          nullable: true
+        currentVersion:
+          type: string
+          nullable: true
+        latestVersion:
+          type: string
+          nullable: true
+        updateAvailable:
+          type: boolean
+          nullable: true
+          description: >-
+            Null when discovery has not run, failed, or the current/latest
+            versions cannot be compared safely.
+        unsupportedReason:
+          type: string
+          nullable: true
+          description: Stable reason why this provider cannot be updated by tuttid.
+        lastCheckedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reasonCode:
+          type: string
+          nullable: true
+          description: Non-fatal discovery or version-comparison result code.
     AgentProviderStatus:
       type: object
       additionalProperties: false
@@ -7513,6 +7777,7 @@ components:
         - cli
         - adapter
         - auth
+        - update
         - actions
       properties:
         provider:
@@ -7525,6 +7790,8 @@ components:
           $ref: "#/components/schemas/AgentProviderAdapterStatus"
         auth:
           $ref: "#/components/schemas/AgentProviderAuthInfo"
+        update:
+          $ref: "#/components/schemas/AgentProviderUpdateStatus"
         actions:
           type: array
           items:
@@ -9226,6 +9493,101 @@ components:
           $ref: "#/components/schemas/WorkspaceGitPatchErrorCode"
         execOutput:
           $ref: "#/components/schemas/WorkspaceGitPatchExecOutput"
+    AgentQuickPrompt:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - content
+        - version
+        - createdAtUnixMs
+        - updatedAtUnixMs
+      properties:
+        id:
+          type: string
+          minLength: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 80
+        content:
+          type: string
+          minLength: 1
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        createdAtUnixMs:
+          type: integer
+          format: int64
+          minimum: 0
+        updatedAtUnixMs:
+          type: integer
+          format: int64
+          minimum: 0
+    AgentQuickPromptListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - prompts
+      properties:
+        prompts:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/AgentQuickPrompt"
+    AgentQuickPromptResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - prompt
+      properties:
+        prompt:
+          $ref: "#/components/schemas/AgentQuickPrompt"
+    CreateAgentQuickPromptRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - title
+        - content
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 80
+        content:
+          type: string
+          minLength: 1
+    UpdateAgentQuickPromptRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - title
+        - content
+        - expectedVersion
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 80
+        content:
+          type: string
+          minLength: 1
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 1
+    DeleteAgentQuickPromptRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - expectedVersion
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 1
     UserProject:
       type: object
       additionalProperties: false

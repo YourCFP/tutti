@@ -1,7 +1,9 @@
 export { registerWorkspaceAgentServices } from "./services/registerWorkspaceAgentServices";
+export { startDesktopAgentAvailabilitySnapshotAnalytics } from "./desktopAgentAvailabilitySnapshotAnalytics.ts";
 export { IAgentsService } from "./services/agentsService.interface";
 export { IAgentEnvService } from "./services/agentEnvService.interface";
 export { IAgentProviderStatusService } from "./services/agentProviderStatusService.interface";
+export { IAgentQuickPromptService } from "./services/agentQuickPromptService.interface";
 export { createDesktopAgentGUIWorkbenchHostInput } from "./services/createDesktopAgentGUIWorkbenchHostInput";
 export { preloadDesktopAgentGuiMentionBrowse } from "./services/preloadDesktopAgentGuiMentionBrowse";
 export { createDesktopAgentActivityRuntime } from "./services/createDesktopAgentActivityRuntime";
@@ -28,6 +30,7 @@ export {
   normalizeDesktopAgentGUIProvider,
   normalizeDesktopAgentGUIWorkbenchState
 } from "./desktopAgentGUINodeState";
+export type { IAgentQuickPromptService as AgentQuickPromptService } from "./services/agentQuickPromptService.interface";
 export type {
   AgentTargetPresentation,
   AgentsSnapshot,

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AgentHostInputApi } from "@tutti-os/agent-gui";
+import type {
+  AgentHostInputApi,
+  AgentHostQuickPromptsApi
+} from "@tutti-os/agent-gui";
 import type {
   AgentTargetSetupSnapshot,
   TuttidClient
@@ -23,6 +26,13 @@ import { WorkspaceAgentActivityService } from "./internal/workspaceAgentActivity
 import type { IWorkspaceUserProjectService } from "../../workspace-user-project/index.ts";
 
 const workspaceId = "workspace-1";
+
+test("desktop agent host api projects the optional quick prompts capability", () => {
+  const quickPrompts = {} as AgentHostQuickPromptsApi;
+  const api = createAgentHostApi({ agentQuickPromptService: quickPrompts });
+
+  assert.equal(api.quickPrompts, quickPrompts);
+});
 
 type DesktopAgentHostApiUnderTest = AgentHostInputApi & {
   persistence: NonNullable<AgentHostInputApi["persistence"]>;
@@ -166,15 +176,15 @@ test("desktop agent host api explicitly projects daemon target setup snapshots",
       extensionInstallationId: "gemini-installation",
       agentKey: "gemini",
       extensionVersion: "2.0.0",
-      runtimeKind: "npm",
+      runtimeKind: "standard-acp",
       platform: "darwin-arm64",
-      runner: "pnpm",
-      packageName: "@tutti-os/gemini-agent",
+      runner: "binary",
+      packageName: "grok-0.2.103-macos-aarch64",
       packageVersion: "1.2.3",
       installRoot: "/state/runtimes/gemini/1.2.3",
-      installCommand: ["pnpm", "add"],
-      executable: "gemini",
-      launchArgs: ["--acp"],
+      installCommand: ["download", "https://example.com/grok"],
+      executable: "grok",
+      launchArgs: ["agent", "stdio"],
       planDigest: "a".repeat(64)
     },
     action: {
@@ -210,9 +220,9 @@ test("desktop agent host api explicitly projects daemon target setup snapshots",
       organization: "Tutti"
     },
     plan: {
-      packageName: "@tutti-os/gemini-agent",
+      packageName: "grok-0.2.103-macos-aarch64",
       packageVersion: "1.2.3",
-      runner: "pnpm",
+      runner: "binary",
       planDigest: "a".repeat(64),
       installRoot: "/state/runtimes/gemini/1.2.3"
     },

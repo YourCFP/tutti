@@ -4116,6 +4116,7 @@ func TestServiceUpdateSettingsPreservesCodexModelCatalogReasoningEffort(t *testi
 		},
 	}
 	service := newIsolatedAgentService(runtime)
+	seedPersistedLiveSettingsSession(service, runtime.sessions["ws-1:session-1"])
 	reasoningEffort := "minimal"
 
 	session, err := service.UpdateSettings(context.Background(), "ws-1", "session-1", ComposerSettingsPatch{
@@ -4144,6 +4145,7 @@ func TestServiceUpdateSettingsPreservesAdvertisedReasoningEffort(t *testing.T) {
 				},
 			}
 			service := NewService(runtime)
+			seedPersistedLiveSettingsSession(service, runtime.sessions["ws-1:session-1"])
 			service.ModelCatalog = fakeModelCatalog{
 				result: AgentModelCatalogResult{
 					Provider: "codex",
@@ -4185,6 +4187,7 @@ func TestServiceUpdateSettingsDefersModelChangeReasoningClampToLiveRuntime(t *te
 		},
 	}
 	service := NewService(runtime)
+	seedPersistedLiveSettingsSession(service, runtime.sessions["ws-1:session-1"])
 	service.ModelCatalog = fakeModelCatalog{
 		result: AgentModelCatalogResult{
 			Provider: "codex",
@@ -4239,6 +4242,7 @@ func TestServiceUpdateSettingsNormalizesClaudeMinimalReasoningEffort(t *testing.
 		},
 	}
 	service := newIsolatedAgentService(runtime)
+	seedPersistedLiveSettingsSession(service, runtime.sessions["ws-1:session-1"])
 	reasoningEffort := "minimal"
 
 	session, err := service.UpdateSettings(context.Background(), "ws-1", "session-1", ComposerSettingsPatch{
@@ -5352,6 +5356,8 @@ func TestServiceListsActivePeersFromCanonicalSessionStatus(t *testing.T) {
 
 func TestServiceDeletesPersistedSession(t *testing.T) {
 	service := newIsolatedAgentService(newFakeRuntime())
+	releaser := &fakeAgentSessionResourceReleaser{}
+	service.AgentSessionResourceReleaser = releaser
 	service.SessionReader = fakeSessionReader{
 		sessions: map[string]PersistedSession{
 			"ws-1:session-1": {
@@ -5371,6 +5377,9 @@ func TestServiceDeletesPersistedSession(t *testing.T) {
 	}
 	if _, err := service.Get(context.Background(), "ws-1", "session-1"); err != ErrSessionNotFound {
 		t.Fatalf("Get after delete error = %v, want %v", err, ErrSessionNotFound)
+	}
+	if !slices.Equal(releaser.released, []string{"session-1"}) {
+		t.Fatalf("released Agent resources = %#v", releaser.released)
 	}
 }
 
@@ -6643,10 +6652,8 @@ func TestServiceDoesNotReconcileStalePersistedTurnWhenRuntimeSessionIsWorking(t 
 
 	if _, err := service.SubmitInteractive(
 		context.Background(),
-		"ws-1",
-		"session-1",
-		"permission-1",
-		SubmitInteractiveInput{OptionID: stringRef("approve")},
+		agenthost.InteractionRef{WorkspaceID: "ws-1", AgentSessionID: "session-1", TurnID: "turn-1", RequestID: "permission-1"},
+		agenthost.SubmitInteractiveInput{OptionID: stringRef("approve")},
 	); err != nil {
 		t.Fatalf("SubmitInteractive returned error: %v", err)
 	}
@@ -7161,6 +7168,21 @@ func newTestService(runtime RuntimeController) *Service {
 	return service
 }
 
+func seedPersistedLiveSettingsSession(service *Service, session ProviderRuntimeSession) {
+	settings := ComposerSettings{}
+	if session.Settings != nil {
+		settings = *session.Settings
+	}
+	service.SessionReader = &fakeSessionReader{sessions: map[string]PersistedSession{
+		session.WorkspaceID + ":" + session.ID: {
+			ID: session.ID, WorkspaceID: session.WorkspaceID, Provider: session.Provider,
+			ProviderSessionID: session.ProviderSessionID, Cwd: session.Cwd,
+			RailSectionKey: "conversations", Settings: settings,
+			CreatedAtUnixMS: 1, UpdatedAtUnixMS: 2, LastEventUnixMS: 2,
+		},
+	}}
+}
+
 func defaultTestAgentTargets() map[string]agenttargetbiz.Target {
 	targets := make(map[string]agenttargetbiz.Target)
 	for _, target := range agenttargetbiz.DefaultSystemTargets(0) {
@@ -7236,6 +7258,15 @@ func (f fakeSessionInitializer) InitializeRuntimeSession(
 		CreatedAtUnixMS:        session.CreatedAtUnixMS,
 		UpdatedAtUnixMS:        session.UpdatedAtUnixMS,
 	}, nil
+}
+
+type fakeAgentSessionResourceReleaser struct {
+	released []string
+}
+
+func (f *fakeAgentSessionResourceReleaser) ReleaseAgent(_ context.Context, agentSessionID string) error {
+	f.released = append(f.released, agentSessionID)
+	return nil
 }
 
 type fakeSectionReader struct {

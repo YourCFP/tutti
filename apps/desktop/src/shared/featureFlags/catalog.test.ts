@@ -5,12 +5,20 @@ import {
   AGENT_EXTENSION_CODEBUDDY_FLAG,
   AGENT_EXTENSION_COPILOT_FLAG,
   AGENT_EXTENSION_GEMINI_FLAG,
+  AGENT_EXTENSION_HERMES_FLAG,
+  AGENT_EXTENSION_KIMI_CODE_FLAG,
+  AGENT_EXTENSION_GROK_FLAG,
   AGENT_EXTENSION_KILO_FLAG,
   AGENT_EXTENSION_QWEN_FLAG,
   AGENT_REFERENCE_PROVENANCE_FILTER_FLAG,
+  AGENT_QUICK_PROMPT_LIBRARY_FLAG,
   isFeatureEnabled,
   labFeatureDefinitions,
   LAB_ENABLED_FLAG,
+  LAB_AUTOMATION_RULES_FLAG,
+  LAB_MODEL_PLANS_FLAG,
+  LAB_TUTTI_MODE_FLAG,
+  LAB_WORKSPACE_AGENTS_FLAG,
   resolveDesktopWorkspaceUiMode,
   withDesktopWorkspaceUiMode,
   WORKSPACE_STANDALONE_AGENT_MODE_FLAG
@@ -22,7 +30,10 @@ test("Agent Extension activation flags stay catalog-driven", () => {
     AGENT_EXTENSION_CODEBUDDY_FLAG,
     AGENT_EXTENSION_COPILOT_FLAG,
     AGENT_EXTENSION_KILO_FLAG,
-    AGENT_EXTENSION_QWEN_FLAG
+    AGENT_EXTENSION_QWEN_FLAG,
+    AGENT_EXTENSION_HERMES_FLAG,
+    AGENT_EXTENSION_KIMI_CODE_FLAG,
+    AGENT_EXTENSION_GROK_FLAG
   ]);
   for (const flag of AGENT_EXTENSION_ACTIVATION_FLAGS) {
     assert.equal(isFeatureEnabled({}, flag), false);
@@ -39,6 +50,21 @@ test("isFeatureEnabled falls back to catalog default when key absent", () => {
     isFeatureEnabled({}, AGENT_REFERENCE_PROVENANCE_FILTER_FLAG),
     false
   );
+  assert.equal(isFeatureEnabled({}, AGENT_QUICK_PROMPT_LIBRARY_FLAG), false);
+  assert.equal(
+    isFeatureEnabled(
+      { [AGENT_QUICK_PROMPT_LIBRARY_FLAG]: false },
+      AGENT_QUICK_PROMPT_LIBRARY_FLAG
+    ),
+    false
+  );
+  assert.equal(
+    isFeatureEnabled(
+      { [AGENT_QUICK_PROMPT_LIBRARY_FLAG]: true },
+      AGENT_QUICK_PROMPT_LIBRARY_FLAG
+    ),
+    true
+  );
 });
 
 test("isFeatureEnabled returns false for unknown keys", () => {
@@ -48,6 +74,20 @@ test("isFeatureEnabled returns false for unknown keys", () => {
 
 test("labFeatureDefinitions excludes the master switch", () => {
   assert.ok(labFeatureDefinitions().every((d) => d.group === "lab"));
+});
+
+test("experimental Agent features require independent Lab opt-ins", () => {
+  const flags = [
+    LAB_TUTTI_MODE_FLAG,
+    LAB_MODEL_PLANS_FLAG,
+    LAB_WORKSPACE_AGENTS_FLAG,
+    LAB_AUTOMATION_RULES_FLAG
+  ];
+
+  for (const flag of flags) {
+    assert.equal(isFeatureEnabled({}, flag), false);
+    assert.equal(isFeatureEnabled({ [flag]: true }, flag), true);
+  }
 });
 
 test("workspace UI mode defaults to OS and preserves explicit selections", () => {

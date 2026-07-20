@@ -317,6 +317,27 @@ func TestStoreReportAndListSessionLifecycle(t *testing.T) {
 	if err != nil || !ok || renamed.Title != "final" || renamed.UpdatedAtUnixMS < pinned.UpdatedAtUnixMS {
 		t.Fatalf("UpdateSessionTitle() = %#v ok=%v error=%v", renamed, ok, err)
 	}
+	if _, err := store.db.ExecContext(ctx, `
+UPDATE workspace_agent_sessions
+SET updated_at_unix_ms = 9999999999999
+WHERE workspace_id = 'ws-1' AND agent_session_id = 'session-1'
+`); err != nil {
+		t.Fatalf("force session updated_at_unix_ms error = %v", err)
+	}
+	monotonicRenamed, ok, err := store.UpdateSessionTitle(ctx, "ws-1", "session-1", " monotonic ")
+	if err != nil || !ok || monotonicRenamed.Title != "monotonic" || monotonicRenamed.UpdatedAtUnixMS != 10000000000000 {
+		t.Fatalf("UpdateSessionTitle(monotonic) = %#v ok=%v error=%v", monotonicRenamed, ok, err)
+	}
+	if _, err := store.ReportSessionState(ctx, SessionStateReport{
+		WorkspaceID: "ws-1", AgentSessionID: "session-1",
+		Provider: "codex", Title: "runtime title", OccurredAtUnixMS: monotonicRenamed.UpdatedAtUnixMS + 1,
+	}); err != nil {
+		t.Fatalf("ReportSessionState(runtime title) error = %v", err)
+	}
+	sessionAfterRuntimeTitle, ok, err := store.GetSession(ctx, "ws-1", "session-1")
+	if err != nil || !ok || sessionAfterRuntimeTitle.Title != "monotonic" {
+		t.Fatalf("GetSession() after runtime title = %#v ok=%v error=%v, want explicit title", sessionAfterRuntimeTitle, ok, err)
+	}
 
 	updatedSettings, ok, err := store.UpdateSessionSettings(ctx, "ws-1", "session-1", "gpt-5.4", map[string]any{
 		"model":            "gpt-5.4",
@@ -324,7 +345,7 @@ func TestStoreReportAndListSessionLifecycle(t *testing.T) {
 	})
 	if err != nil || !ok || updatedSettings.Model != "gpt-5.4" ||
 		updatedSettings.Settings["permissionModeId"] != "full-access" ||
-		updatedSettings.UpdatedAtUnixMS < renamed.UpdatedAtUnixMS {
+		updatedSettings.UpdatedAtUnixMS < monotonicRenamed.UpdatedAtUnixMS {
 		t.Fatalf("UpdateSessionSettings() = %#v ok=%v error=%v", updatedSettings, ok, err)
 	}
 
@@ -711,11 +732,11 @@ func seedRuntimeDeletionSaga(t *testing.T, store *Store, workspaceID string, ses
 		{operationID: "old-runtime-completed", status: RuntimeOperationStatusCompleted, turnID: "turn-completed", result: RuntimeOperationResultCanceled, completedAt: int64(30)},
 	} {
 		query := `INSERT INTO workspace_agent_runtime_operations (
-operation_id, workspace_id, agent_session_id, kind, status, result, subject_id, turn_id,
+operation_id, workspace_id, agent_session_id, kind, status, result, turn_id,
 payload_json, lease_owner, lease_expires_at_unix_ms, next_attempt_at_unix_ms,
 created_at_unix_ms, updated_at_unix_ms, completed_at_unix_ms
-) VALUES (?, ?, ?, 'cancel_turn', ?, ?, ?, ?, '{}', ?, ?, ?, 20, 20, ?)`
-		if _, err := store.db.Exec(query, row.operationID, workspaceID, sessionID, row.status, row.result, row.turnID, row.turnID,
+) VALUES (?, ?, ?, 'cancel_turn', ?, ?, ?, '{}', ?, ?, ?, 20, 20, ?)`
+		if _, err := store.db.Exec(query, row.operationID, workspaceID, sessionID, row.status, row.result, row.turnID,
 			row.leaseOwner, row.leaseExpiry, row.nextAttempt, row.completedAt); err != nil {
 			t.Fatalf("seed runtime operation %s: %v", row.status, err)
 		}
@@ -726,10 +747,10 @@ operation_id, workspace_id, agent_session_id, kind, payload_json, created_at_uni
 		t.Fatalf("seed runtime operation event: %v", err)
 	}
 	if _, err := store.db.Exec(`INSERT INTO workspace_agent_runtime_operations (
-operation_id, workspace_id, agent_session_id, kind, status, result, subject_id, turn_id,
+operation_id, workspace_id, agent_session_id, kind, status, result, turn_id,
 request_id, payload_json, created_at_unix_ms, updated_at_unix_ms, completed_at_unix_ms
 ) VALUES ('old-runtime-interactive', ?, ?, 'interactive_response', 'completed', 'answered',
-  'request-reused', 'turn-prepared', 'request-reused', '{}', 31, 31, 31)`, workspaceID, sessionID); err != nil {
+  'turn-prepared', 'request-reused', '{}', 31, 31, 31)`, workspaceID, sessionID); err != nil {
 		t.Fatalf("seed reused interactive runtime operation: %v", err)
 	}
 	if _, err := store.db.Exec(`INSERT INTO workspace_agent_runtime_operation_events (

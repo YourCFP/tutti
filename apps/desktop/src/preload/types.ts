@@ -23,6 +23,7 @@ import type {
   ClearDeveloperLogsResult,
   DesktopDeveloperLogKind,
   DesktopDeveloperLogsState,
+  ExportDeveloperLogsInput,
   DesktopReadDockPreviewInput,
   DesktopSetCustomWallpaperInput,
   DesktopWriteDockPreviewInput,
@@ -45,7 +46,10 @@ import type {
   DesktopWorkspaceAppOpenFileResolvedPayload,
   DesktopWorkspaceOpenFeatureRequest,
   DesktopArchiveAgentPromptFileInput,
-  DesktopArchiveAgentPromptFileResult
+  DesktopArchiveAgentPromptFileResult,
+  DesktopBrowserAutomationRequest,
+  DesktopBrowserAutomationHostReady,
+  DesktopBrowserAutomationResponse
 } from "../shared/contracts/ipc";
 import type { BrowserNodeHostApi } from "@tutti-os/browser-node";
 
@@ -62,7 +66,9 @@ export interface DesktopRuntimeApi {
 
 export interface DesktopDeveloperApi {
   clearLogs(): Promise<ClearDeveloperLogsResult>;
-  exportLogs(): Promise<ExportDeveloperLogsResult>;
+  exportLogs(
+    input: ExportDeveloperLogsInput
+  ): Promise<ExportDeveloperLogsResult>;
   getLogsState(): Promise<DesktopDeveloperLogsState>;
   openLogDirectory(): Promise<void>;
   openLogFile(kind: DesktopDeveloperLogKind): Promise<void>;
@@ -249,7 +255,14 @@ export type DesktopBrowserApi = Pick<
   | "showDevToolsContextMenu"
   | "stopFindInPage"
   | "unregisterGuest"
->;
+  | "updateAutomationTarget"
+> & {
+  announceAutomationHostReady?(input: DesktopBrowserAutomationHostReady): void;
+  onAutomationRequest(
+    listener: (request: DesktopBrowserAutomationRequest) => void
+  ): () => void;
+  respondAutomationRequest(response: DesktopBrowserAutomationResponse): void;
+};
 
 export interface DesktopUpdateApi {
   checkForUpdates(): Promise<AppUpdateState>;

@@ -24,11 +24,14 @@ The optional Chrome import capability is host-injected. The Browser package
 owns renderer-safe profile contracts, Profile selection and prompt UI,
 normalized non-partitioned Cookie writes, aggregate results, and refreshing
 every registered ordinary Browser Node that shares the target Electron
-`Session`. The package does not know Chrome paths, Keychain services, or a
-product preference key.
+`Session`. It also publishes a macOS Chrome source adapter through
+`@tutti-os/browser-node/chrome-cookie-import/macos`; hosts supply only their
+feature-toggle and logging policy, then inject the returned discovery and
+preparation callbacks into the Electron main registration. The package does
+not own a product preference key.
 
-The Tutti Desktop adapter currently supports only macOS Google Chrome Stable at
-the standard `~/Library/Application Support/Google/Chrome` location. It
+The macOS adapter currently supports only Google Chrome Stable at the standard
+`~/Library/Application Support/Google/Chrome` location. It
 discovers `Default` and `Profile N` entries from `Local State`, prepares a
 consistent SQLite snapshot, obtains Chrome Safe Storage from Keychain only
 after an explicit import, decrypts `v10` values, and validates the version 24+
@@ -48,6 +51,25 @@ the best-effort write phase starts, it runs to completion even if its window
 closes. Foreground imports report aggregate success, partial, zero-write, or
 failure feedback through the shared toast surface; a main-process notification
 remains the fallback after the originating window closes.
+
+```ts
+import { createMacosChromeCookieImportAdapter } from "@tutti-os/browser-node/chrome-cookie-import/macos";
+import { registerBrowserNodeElectronMain } from "@tutti-os/browser-node/electron-main";
+
+const chromeCookieImport = createMacosChromeCookieImportAdapter({
+  isEnabled: () => true,
+  logger
+});
+
+registerBrowserNodeElectronMain({
+  ...chromeCookieImport,
+  channels,
+  getOwnerWindow,
+  openExternal,
+  registerHandler,
+  resolveWebContents
+});
+```
 
 For manual verification on macOS:
 
@@ -71,3 +93,34 @@ dock label, matches Browser nodes back to the dock entry, and restores popup
 title, URL subtitle, and preview capture from the Browser runtime state.
 Hosts that want the package-owned default dock visual can import it explicitly
 from `@tutti-os/browser-node/assets/workspace-dock-website.png`.
+
+## Browser Home and Agent automation
+
+`BrowserNode` accepts an optional `renderHome` function for empty tabs. The
+function receives the tab node id and a `navigate(url)` callback, allowing a
+host to render live sandbox ports or other product-owned shortcuts without
+forking the Browser surface.
+
+Electron hosts may attach `automationTarget` metadata to User Browser and
+Agent Browser surfaces. The package registry then exposes the current
+workspace's User tabs and only the calling Agent session's Agent tabs, with
+stable page selection and per-tab leases. Website Apps remain excluded unless
+a host explicitly opts them in. `new_page` is created as `about:blank`; the
+package attaches request interception before navigating to the requested URL,
+so the initial document, redirects, and subresources all cross the same guard.
+Agent release is a lifecycle barrier: queued target work drains before guards
+are disabled and retained Agent pages are closed, and later calls fail closed.
+
+`createBrowserNodeAutomationServer` publishes the registry on authenticated
+loopback and writes a private listener-info file for an explicitly configured
+daemon. `createBrowserNodeAutomationNetworkAuthorizer` provides the standard
+public HTTP/HTTPS policy and blocks private, link-local, metadata, multicast,
+and local-network pages from inspect/control calls. Loopback fails closed by
+default; hosts may permit a loopback URL only through the
+`isLoopbackUrlRouted` capability after sandbox-owned preview routing has
+accepted that exact URL. For registered targets, authorization resolves host
+names through the target's Chromium session rather than an unrelated process
+resolver. Hosts should also install the authorizer as the registry's
+`authorizeRequest` callback so the initial navigation, redirects,
+subresources, and script-initiated requests remain guarded for the lifetime of
+an automation lease.

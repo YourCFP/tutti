@@ -41,6 +41,38 @@ Turn state, loading, cancel, restore, file-change undo, rail projection, event u
   [workspaceAgentTimelineCanonical.ts](../../../packages/agent/gui/shared/workspaceAgentTimelineCanonical.ts)
   [agent-gui-node.md](../../architecture/agent-gui-node.md)
 
+### Mid-turn provider failure renders a generic "request failed" card
+
+- Symptom:
+  A root-provider-lifecycle turn (Codex, Cursor, OpenCode) fails mid-turn —
+  for example quota exhaustion — but the conversation shows only a generic
+  "request failed" card with no detail and no classification code. The real
+  reason appears only in the durable Turn record and daemon logs.
+- Quick checks:
+  Confirm the canonical Turn settled with a non-empty `error.message`. If the
+  durable Turn carries the reason but the live card does not, inspect the
+  synthesized `daemonRootTurnSettlement` event metadata, not the provider
+  adapter — the adapter already reported the failure correctly.
+- Root cause:
+  Root-provider adapters do not emit `EventTurnFailed`; the daemon synthesizes
+  it in `ReconcileRootTurnSettlement` after the durable settle commits. The
+  settlement previously forwarded only `turnId` and `outcome`, so the
+  synthesized event had an empty detail and the visible-error projection
+  classified it as `unknown` instead of (for example) `quota_or_rate_limit`.
+- Fix:
+  Forward `Turn.ErrorMessage` through `RootTurnSettlement` and stamp it on the
+  synthesized event metadata under the `error` / `errorMessage` keys read by
+  `BestEffortErrorMessage`. Keep classification text-based in
+  `visibleFailureCode`; do not special-case providers at this layer.
+- Validation:
+  `TestReconcileRootTurnSettlementPublishesFailureDetail` settles a failed
+  root turn with a quota message and asserts the live stream emits a
+  `quota_or_rate_limit` visible error carrying the original detail.
+- References:
+  [controller_root_turn.go](../../../packages/agent/daemon/runtime/controller_root_turn.go)
+  [visible_error.go](../../../packages/agent/daemon/runtime/visible_error.go)
+  [agent_runtime_adapter.go](../../../services/tuttid/agent_runtime_adapter.go)
+
 ### Codex WebSocket reconnect rejects a long prompt metadata header
 
 - Symptom:
@@ -795,6 +827,47 @@ Turn state, loading, cancel, restore, file-change undo, rail projection, event u
   [composer_options.go](../../../services/tuttid/service/agent/composer_options.go)
   [desktopPreferencesService.ts](../../../apps/desktop/src/renderer/src/features/desktop-preferences/services/internal/desktopPreferencesService.ts)
   [useAgentGUIComposerSettingsActions.ts](../../../packages/agent/gui/agent-gui/agentGuiNode/controller/useAgentGUIComposerSettingsActions.ts)
+
+### Agent interaction remains waiting after the user already responded
+
+- Symptom:
+  An approval or question remains at an ask-user stop point after the user
+  submitted a response. The session may continue after Cancel or an app
+  restart, while retrying by request id alone can target an older Turn or be
+  rejected as ambiguous.
+- Quick checks:
+  Inspect the canonical Interaction identity without logging its prompt or
+  response payload. Compare `workspace_id`, `agent_session_id`, `turn_id`, and
+  `request_id` across the UI/CLI command, Interaction row, and durable runtime
+  operation. A provider request id reused by two Turns is valid. An operation
+  id whose stored tuple differs from the command tuple is an invariant failure.
+- Root cause:
+  Provider request ids are transport-local and are not session-wide durable
+  identities. Selecting an Interaction or deduplicating a runtime operation by
+  request id alone can bind a response to historical Turn state, leaving the
+  live Turn waiting.
+- Fix:
+  Carry the typed exact tuple
+  `(workspaceId, agentSessionId, turnId, requestId)` into Host and select the
+  Interaction atomically by that tuple. Scope runtime-operation idempotency to
+  the same tuple. Keep the provider request id unchanged. Do not scan, guess,
+  auto-deduplicate, or rewrite historical rows. The V4 runtime-operation
+  migration removes the lossy `subject_id`, creates partial unique indexes for
+  each operation kind, verifies copied row distributions and foreign keys, and
+  rolls the whole transaction back when a conflicting durable identity exists.
+- Recovery:
+  Existing affected sessions may be canceled and retried; restart settlement
+  may also interrupt a stale Turn. This forward fix deliberately does not
+  mutate historical Interaction rows.
+- Validation:
+  Cover the same provider request id in two Turns, exact CLI response routing,
+  same-answer idempotency, different-answer supersession, operation identity
+  mismatch failure, lossless V1-to-V4 migration, and V4 preflight rollback.
+- References:
+  [host README](../../../packages/agent/host/README.md)
+  [runtime_operations.go](../../../packages/agent/host/runtime_operations.go)
+  [migrations_runtime_operations_v4.go](../../../packages/agent/store-sqlite/migrations_runtime_operations_v4.go)
+  [tutti-cli-contract.md](../tutti-cli-contract.md)
 
 ### Historical AgentGUI permission changes time out or stop responding
 

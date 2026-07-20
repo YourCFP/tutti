@@ -52,8 +52,9 @@ cancellation and deadline failures unclassified because their delivery result
 is unknown and must remain recoverable.
 `UpdateSettings` serializes with runtime resume:
 historical sessions persist settings only, while live sessions update the
-runtime. Provider-specific model, reasoning, and speed normalization stays
-behind `SettingsPolicy`. `UpdatePin` mutates canonical metadata only.
+runtime first and persist the resulting settings only after the runtime
+accepts the change. Provider-specific model, reasoning, and speed normalization
+stays behind `SettingsPolicy`. `UpdatePin` mutates canonical metadata only.
 `DeleteSession` closes a live runtime before writing the canonical tombstone;
 authorization, shared bindings, transport DTOs, and local view cleanup remain
 adapter responsibilities.
@@ -82,6 +83,12 @@ in-progress errors to the responder. The Interaction's pre-delivery `answered`
 state is a durable claim marker, not the runtime's terminal result; completed
 operation and responder dispositions follow an authoritative runtime
 `superseded` result instead of being overwritten by that marker.
+Interactive identity is always the typed `InteractionRef` tuple
+`(workspaceId, agentSessionId, turnId, requestId)`. Provider request ids remain
+unchanged and are only unique within their owning Turn. The response payload
+contains no identity fields. Durable operation idempotency uses the same tuple;
+an operation id that disagrees with its structured identity is an invariant
+failure and must fail closed rather than guessing or rewriting stored data.
 
 Adapters retain authorization and identity, transport, runtime process or VM
 selection, desktop APIs, attachment ingress, and cloud inbox/outbox behavior.

@@ -124,6 +124,15 @@ export type CliCapabilityOutput = {
   table?: CliTableOutput | null;
 };
 
+export type CliCommandExecutionMode = "wait";
+
+/**
+ * Optional client-side execution behavior declared by a command. Wait commands remain active while handlers return a pending continuation.
+ */
+export type CliCommandExecution = {
+  mode: CliCommandExecutionMode;
+};
+
 export type CliCapabilitySourceKind = "builtin" | "app";
 
 export type CliCapabilitySource = {
@@ -182,6 +191,11 @@ export type CliCapability = {
     [key: string]: unknown;
   } | null;
   output: CliCapabilityOutput;
+  execution?: CliCommandExecution | null;
+  /**
+   * Per-invocation App handler timeout used by clients to budget the daemon request.
+   */
+  handlerTimeoutMs?: number | null;
   source: CliCapabilitySource;
 };
 
@@ -228,6 +242,20 @@ export type CliCommandOutput = {
   } | null;
   text?: string | null;
   warnings?: Array<CliCommandWarning>;
+  continuation?: CliCommandContinuation | null;
+};
+
+export type CliCommandContinuationState = "pending";
+
+/**
+ * Internal continuation signal consumed by the CLI for wait commands and not rendered as a terminal result.
+ */
+export type CliCommandContinuation = {
+  state: CliCommandContinuationState;
+  /**
+   * Delay before the CLI invokes the same command again.
+   */
+  retryAfterMs: number;
 };
 
 export type CliCommandWarning = {
@@ -282,7 +310,10 @@ export type ApiErrorDetails = {
     | "workspace_app_not_found"
     | "workspace_issue_resource_not_found"
     | "workspace_operation_failed"
-    | "preferences_operation_failed";
+    | "preferences_operation_failed"
+    | "agent_quick_prompt_not_found"
+    | "agent_quick_prompt_conflict"
+    | "agent_quick_prompt_operation_failed";
   reason?: string;
   params?: {
     [key: string]: unknown;
@@ -332,6 +363,10 @@ export type DeletedAgentConversationPurgeResult = {
 };
 
 export type DesktopPreferences = {
+  /**
+   * Whether tuttid may periodically discover newer managed agent CLI releases on this device. This never authorizes automatic installation.
+   */
+  agentCliUpdateCheckEnabled: boolean;
   agentComposerDefaultsByProvider: DesktopAgentComposerDefaultsByProvider;
   agentComposerDefaultsByAgentTarget?: DesktopAgentComposerDefaultsByAgentTarget;
   agentGuiConversationRailCollapsedByProvider: DesktopAgentGuiConversationRailCollapsedByProvider;
@@ -403,7 +438,6 @@ export type DesktopAgentComposerDefaultsByProvider = {
   "tutti-agent"?: DesktopAgentComposerDefaults;
   cursor?: DesktopAgentComposerDefaults;
   nexight?: DesktopAgentComposerDefaults;
-  hermes?: DesktopAgentComposerDefaults;
   openclaw?: DesktopAgentComposerDefaults;
   opencode?: DesktopAgentComposerDefaults;
 };
@@ -418,7 +452,6 @@ export type DesktopAgentGuiConversationRailCollapsedByProvider = {
   "tutti-agent"?: boolean;
   cursor?: boolean;
   nexight?: boolean;
-  hermes?: boolean;
   openclaw?: boolean;
   opencode?: boolean;
 };
@@ -502,7 +535,7 @@ export type AgentTargetInstallPlan = {
   extensionVersion: string;
   runtimeKind: string;
   platform: string;
-  runner: "npm" | "pnpm" | "uv";
+  runner: "npm" | "pnpm" | "uv" | "binary";
   packageName: string;
   packageVersion: string;
   installRoot: string;
@@ -1240,7 +1273,11 @@ export type AgentProviderActionKind =
   | "terminal_command"
   | "refresh";
 
-export type AgentProviderActionId = "install" | "login" | "refresh";
+export type AgentProviderActionId = "install" | "update" | "login" | "refresh";
+
+export type AgentProviderUpdateCapability = "supported" | "unsupported";
+
+export type AgentProviderUpdateSource = "npm";
 
 export type AgentProviderProbeStatus = "ready" | "failed" | "skipped";
 
@@ -1249,6 +1286,7 @@ export type AgentProviderActionRunStatus = "completed" | "failed";
 export type AgentProviderActiveActionPhase =
   | "detect"
   | "install"
+  | "update"
   | "repair"
   | "verify"
   | "done"
@@ -1355,12 +1393,33 @@ export type AgentProviderAuthInfo = {
   authMethod?: string | null;
 };
 
+export type AgentProviderUpdateStatus = {
+  capability: AgentProviderUpdateCapability;
+  source: AgentProviderUpdateSource | null;
+  currentVersion: string | null;
+  latestVersion: string | null;
+  /**
+   * Null when discovery has not run, failed, or the current/latest versions cannot be compared safely.
+   */
+  updateAvailable: boolean | null;
+  /**
+   * Stable reason why this provider cannot be updated by tuttid.
+   */
+  unsupportedReason: string | null;
+  lastCheckedAt: string | null;
+  /**
+   * Non-fatal discovery or version-comparison result code.
+   */
+  reasonCode: string | null;
+};
+
 export type AgentProviderStatus = {
   provider: WorkspaceAgentProvider;
   availability: AgentProviderAvailability;
   cli: AgentProviderCliStatus;
   adapter: AgentProviderAdapterStatus;
   auth: AgentProviderAuthInfo;
+  update: AgentProviderUpdateStatus;
   actions: Array<AgentProviderAction>;
   network?: AgentProviderNetworkStatus | null;
   activeAction?: AgentProviderActiveAction | null;
@@ -2088,6 +2147,38 @@ export type WorkspaceGitPatchResponse = {
   conflictedPaths: Array<string>;
   errorCode?: WorkspaceGitPatchErrorCode;
   execOutput?: WorkspaceGitPatchExecOutput;
+};
+
+export type AgentQuickPrompt = {
+  id: string;
+  title: string;
+  content: string;
+  version: number;
+  createdAtUnixMs: number;
+  updatedAtUnixMs: number;
+};
+
+export type AgentQuickPromptListResponse = {
+  prompts: Array<AgentQuickPrompt>;
+};
+
+export type AgentQuickPromptResponse = {
+  prompt: AgentQuickPrompt;
+};
+
+export type CreateAgentQuickPromptRequest = {
+  title: string;
+  content: string;
+};
+
+export type UpdateAgentQuickPromptRequest = {
+  title: string;
+  content: string;
+  expectedVersion: number;
+};
+
+export type DeleteAgentQuickPromptRequest = {
+  expectedVersion: number;
 };
 
 export type UserProject = {
@@ -3380,6 +3471,198 @@ export type PurgeDeletedAgentConversationsResponses = {
 
 export type PurgeDeletedAgentConversationsResponse =
   PurgeDeletedAgentConversationsResponses[keyof PurgeDeletedAgentConversationsResponses];
+
+export type ListAgentQuickPromptsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/v1/agent-quick-prompts";
+};
+
+export type ListAgentQuickPromptsErrors = {
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Agent quick prompt persistence operation failed
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type ListAgentQuickPromptsError =
+  ListAgentQuickPromptsErrors[keyof ListAgentQuickPromptsErrors];
+
+export type ListAgentQuickPromptsResponses = {
+  /**
+   * Agent quick prompt list
+   */
+  200: AgentQuickPromptListResponse;
+};
+
+export type ListAgentQuickPromptsResponse =
+  ListAgentQuickPromptsResponses[keyof ListAgentQuickPromptsResponses];
+
+export type CreateAgentQuickPromptData = {
+  body: CreateAgentQuickPromptRequest;
+  path?: never;
+  query?: never;
+  url: "/v1/agent-quick-prompts";
+};
+
+export type CreateAgentQuickPromptErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Agent quick prompt limit or expected version conflicts with current state
+   */
+  409: ApiErrorResponse;
+  /**
+   * Agent quick prompt persistence operation failed
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type CreateAgentQuickPromptError =
+  CreateAgentQuickPromptErrors[keyof CreateAgentQuickPromptErrors];
+
+export type CreateAgentQuickPromptResponses = {
+  /**
+   * Agent quick prompt created
+   */
+  201: AgentQuickPromptResponse;
+};
+
+export type CreateAgentQuickPromptResponse =
+  CreateAgentQuickPromptResponses[keyof CreateAgentQuickPromptResponses];
+
+export type DeleteAgentQuickPromptData = {
+  body: DeleteAgentQuickPromptRequest;
+  path: {
+    promptId: string;
+  };
+  query?: never;
+  url: "/v1/agent-quick-prompts/{promptId}";
+};
+
+export type DeleteAgentQuickPromptErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Agent quick prompt was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Agent quick prompt limit or expected version conflicts with current state
+   */
+  409: ApiErrorResponse;
+  /**
+   * Agent quick prompt persistence operation failed
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type DeleteAgentQuickPromptError =
+  DeleteAgentQuickPromptErrors[keyof DeleteAgentQuickPromptErrors];
+
+export type DeleteAgentQuickPromptResponses = {
+  /**
+   * Agent quick prompt deleted
+   */
+  204: void;
+};
+
+export type DeleteAgentQuickPromptResponse =
+  DeleteAgentQuickPromptResponses[keyof DeleteAgentQuickPromptResponses];
+
+export type UpdateAgentQuickPromptData = {
+  body: UpdateAgentQuickPromptRequest;
+  path: {
+    promptId: string;
+  };
+  query?: never;
+  url: "/v1/agent-quick-prompts/{promptId}";
+};
+
+export type UpdateAgentQuickPromptErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Agent quick prompt was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Agent quick prompt limit or expected version conflicts with current state
+   */
+  409: ApiErrorResponse;
+  /**
+   * Agent quick prompt persistence operation failed
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type UpdateAgentQuickPromptError =
+  UpdateAgentQuickPromptErrors[keyof UpdateAgentQuickPromptErrors];
+
+export type UpdateAgentQuickPromptResponses = {
+  /**
+   * Agent quick prompt updated
+   */
+  200: AgentQuickPromptResponse;
+};
+
+export type UpdateAgentQuickPromptResponse =
+  UpdateAgentQuickPromptResponses[keyof UpdateAgentQuickPromptResponses];
 
 export type DeleteUserProjectData = {
   body: DeleteUserProjectRequest;
@@ -6591,9 +6874,17 @@ export type GetAgentProviderStatusesData = {
      */
     includeNetwork?: boolean;
     /**
-     * Bypass the daemon provider-readiness cache.
+     * Opt into cached remote update discovery for provider CLIs. Off by default so ordinary readiness and status requests stay purely local. Discovery failures are reported on each provider's update status and do not fail the status request.
+     */
+    includeUpdates?: boolean;
+    /**
+     * Bypass only the daemon's local provider-readiness cache. This does not opt into or refresh remote update discovery.
      */
     refresh?: boolean;
+    /**
+     * Bypass only the provider update-metadata cache when includeUpdates is true. This does not bypass local readiness or network-diagnostic caches and does not opt into discovery by itself.
+     */
+    refreshUpdates?: boolean;
   };
   url: "/v1/agent-providers/status";
 };

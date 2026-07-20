@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AddLinedIcon,
   Button,
+  ChevronDownIcon,
   DeleteIcon,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Input,
   Select,
   SelectContent,
@@ -15,6 +20,7 @@ import { useAnalyticsDebugPreferenceService } from "@renderer/features/analytics
 import { useDesktopPreferencesService } from "@renderer/features/desktop-preferences/ui/useDesktopPreferencesService";
 import { useTranslation } from "@renderer/i18n";
 import { cn } from "@renderer/lib/format";
+import type { DesktopDeveloperLogsExportScope } from "@shared/contracts/ipc";
 import type { DesktopI18nKey } from "@shared/i18n";
 import {
   desktopAppCatalogChannels,
@@ -22,19 +28,18 @@ import {
   desktopUpdateChannels,
   normalizeDesktopFileExtension,
   type DesktopAppCatalogChannel,
-  type DesktopFeatureFlags,
   type DesktopFileDefaultOpener,
   type DesktopFileDefaultOpenersByExtension,
   type DesktopUpdateChannel
 } from "@shared/preferences";
 import {
+  AGENT_QUICK_PROMPT_LIBRARY_FLAG,
   AGENT_REFERENCE_PROVENANCE_FILTER_FLAG,
   isFeatureEnabled,
   LAB_ENABLED_FLAG
 } from "../../../../../shared/featureFlags/catalog.ts";
 import { formatWorkspaceSettingsBytes } from "../services/workspaceSettingsFormat";
 import { useWorkspaceSettingsService } from "./useWorkspaceSettingsService";
-import { WorkspaceAgentExtensionDeveloperSettings } from "./WorkspaceAgentExtensionDeveloperSettings";
 import { SettingsRow, SettingsRows } from "./WorkspaceSettingsRows";
 
 const workspaceSettingsSelectTriggerClass =
@@ -64,7 +69,6 @@ export function WorkspaceDeveloperSettingsSection() {
   const pendingFeatureFlags =
     desktopPreferencesState.changingFeatureFlags ??
     desktopPreferencesState.featureFlags;
-  const agentExtensionFeatureFlags = pendingFeatureFlags;
   const analyticsDebugAvailable = analyticsDebugPreferenceState.available;
   const analyticsDebugEnabled = analyticsDebugPreferenceState.enabled;
   const appCatalogChannel = desktopPreferencesState.appCatalogChannel;
@@ -79,6 +83,10 @@ export function WorkspaceDeveloperSettingsSection() {
   const referenceProvenanceFilterEnabled = isFeatureEnabled(
     pendingFeatureFlags,
     AGENT_REFERENCE_PROVENANCE_FILTER_FLAG
+  );
+  const quickPromptLibraryEnabled = isFeatureEnabled(
+    pendingFeatureFlags,
+    AGENT_QUICK_PROMPT_LIBRARY_FLAG
   );
   const featureFlagsUpdating =
     desktopPreferencesState.changingFeatureFlags !== null;
@@ -104,14 +112,11 @@ export function WorkspaceDeveloperSettingsSection() {
   const onClearLogs = () => {
     void settingsService.clearDeveloperLogs();
   };
-  const onAgentExtensionFeatureFlagsChange = (flags: DesktopFeatureFlags) => {
-    void settingsService.changeFeatureFlags(flags);
-  };
   const onDeveloperPanelVisibleChange = (visible: boolean) => {
     settingsService.setDeveloperPanelVisible(visible);
   };
-  const onExportLogs = () => {
-    void settingsService.exportDeveloperLogs();
+  const onExportLogs = (scope: DesktopDeveloperLogsExportScope) => {
+    void settingsService.exportDeveloperLogs(scope);
   };
   const onFileDefaultOpenersChange = (
     openersByExtension: DesktopFileDefaultOpenersByExtension
@@ -130,6 +135,12 @@ export function WorkspaceDeveloperSettingsSection() {
     void settingsService.changeFeatureFlags({
       ...pendingFeatureFlags,
       [AGENT_REFERENCE_PROVENANCE_FILTER_FLAG]: enabled
+    });
+  };
+  const onQuickPromptLibraryEnabledChange = (enabled: boolean) => {
+    void settingsService.changeFeatureFlags({
+      ...pendingFeatureFlags,
+      [AGENT_QUICK_PROMPT_LIBRARY_FLAG]: enabled
     });
   };
   const onShowAppDeveloperSourcesChange = (show: boolean) => {
@@ -264,6 +275,23 @@ export function WorkspaceDeveloperSettingsSection() {
       <div className="flex w-full items-center justify-between gap-4 max-[560px]:flex-col max-[560px]:items-stretch">
         <div className="flex min-w-0 flex-1 flex-col gap-1 max-[560px]:w-full">
           <strong className="text-[13px] font-semibold text-[var(--text-primary)]">
+            {t("workspace.settings.developer.quickPromptLibraryLabel")}
+          </strong>
+          <p className="m-0 text-[13px] leading-[1.3] text-[var(--text-secondary)]">
+            {t("workspace.settings.developer.quickPromptLibraryDescription")}
+          </p>
+        </div>
+        <Switch
+          aria-label={t("workspace.settings.developer.quickPromptLibraryLabel")}
+          checked={quickPromptLibraryEnabled}
+          disabled={featureFlagsUpdating}
+          onCheckedChange={onQuickPromptLibraryEnabledChange}
+        />
+      </div>
+
+      <div className="flex w-full items-center justify-between gap-4 max-[560px]:flex-col max-[560px]:items-stretch">
+        <div className="flex min-w-0 flex-1 flex-col gap-1 max-[560px]:w-full">
+          <strong className="text-[13px] font-semibold text-[var(--text-primary)]">
             {t("workspace.settings.developer.referenceProvenanceFilterLabel")}
           </strong>
           <p className="m-0 text-[13px] leading-[1.3] text-[var(--text-secondary)]">
@@ -326,12 +354,6 @@ export function WorkspaceDeveloperSettingsSection() {
           onCheckedChange={onTuttiAgentSwitchEnabledChange}
         />
       </div>
-
-      <WorkspaceAgentExtensionDeveloperSettings
-        disabled={featureFlagsUpdating}
-        featureFlags={agentExtensionFeatureFlags}
-        onFeatureFlagsChange={onAgentExtensionFeatureFlagsChange}
-      />
 
       <div className="flex w-full items-center justify-between gap-4 max-[560px]:flex-col max-[560px]:items-stretch">
         <div className="flex min-w-0 flex-1 flex-col gap-1 max-[560px]:w-full">
@@ -535,16 +557,30 @@ export function WorkspaceDeveloperSettingsSection() {
 
       <SettingsRow label={t("workspace.settings.developer.actionsLabel")}>
         <div className="flex flex-wrap justify-end gap-2 max-[560px]:justify-start">
-          <Button
-            variant="secondary"
-            type="button"
-            onClick={onExportLogs}
-            disabled={developerLogs.exporting}
-          >
-            {developerLogs.exporting
-              ? t("workspace.settings.developer.exportingLogs")
-              : t("workspace.settings.developer.exportLogs")}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={developerLogs.exporting}
+              >
+                {developerLogs.exporting
+                  ? t("workspace.settings.developer.exportingLogs")
+                  : t("workspace.settings.developer.exportLogs")}
+                <ChevronDownIcon className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onSelect={() => onExportLogs("all")}>
+                {t("workspace.settings.developer.exportAllLogs")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => onExportLogs("recent-10-minutes")}
+              >
+                {t("workspace.settings.developer.exportRecentTenMinutesLogs")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             variant="secondary"
             type="button"

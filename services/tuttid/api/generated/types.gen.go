@@ -114,6 +114,7 @@ const (
 	AgentProviderActionIDInstall AgentProviderActionID = "install"
 	AgentProviderActionIDLogin   AgentProviderActionID = "login"
 	AgentProviderActionIDRefresh AgentProviderActionID = "refresh"
+	AgentProviderActionIDUpdate  AgentProviderActionID = "update"
 )
 
 // Valid indicates whether the value is a known member of the AgentProviderActionID enum.
@@ -124,6 +125,8 @@ func (e AgentProviderActionID) Valid() bool {
 	case AgentProviderActionIDLogin:
 		return true
 	case AgentProviderActionIDRefresh:
+		return true
+	case AgentProviderActionIDUpdate:
 		return true
 	default:
 		return false
@@ -176,6 +179,7 @@ const (
 	AgentProviderActiveActionPhaseError   AgentProviderActiveActionPhase = "error"
 	AgentProviderActiveActionPhaseInstall AgentProviderActiveActionPhase = "install"
 	AgentProviderActiveActionPhaseRepair  AgentProviderActiveActionPhase = "repair"
+	AgentProviderActiveActionPhaseUpdate  AgentProviderActiveActionPhase = "update"
 	AgentProviderActiveActionPhaseVerify  AgentProviderActiveActionPhase = "verify"
 )
 
@@ -191,6 +195,8 @@ func (e AgentProviderActiveActionPhase) Valid() bool {
 	case AgentProviderActiveActionPhaseInstall:
 		return true
 	case AgentProviderActiveActionPhaseRepair:
+		return true
+	case AgentProviderActiveActionPhaseUpdate:
 		return true
 	case AgentProviderActiveActionPhaseVerify:
 		return true
@@ -400,6 +406,39 @@ func (e AgentProviderSkillOptionSourceKind) Valid() bool {
 	}
 }
 
+// Defines values for AgentProviderUpdateCapability.
+const (
+	Supported   AgentProviderUpdateCapability = "supported"
+	Unsupported AgentProviderUpdateCapability = "unsupported"
+)
+
+// Valid indicates whether the value is a known member of the AgentProviderUpdateCapability enum.
+func (e AgentProviderUpdateCapability) Valid() bool {
+	switch e {
+	case Supported:
+		return true
+	case Unsupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentProviderUpdateSource.
+const (
+	AgentProviderUpdateSourceNpm AgentProviderUpdateSource = "npm"
+)
+
+// Valid indicates whether the value is a known member of the AgentProviderUpdateSource enum.
+func (e AgentProviderUpdateSource) Valid() bool {
+	switch e {
+	case AgentProviderUpdateSourceNpm:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentSlashCommandEffect.
 const (
 	ActivateGoalMode AgentSlashCommandEffect = "activateGoalMode"
@@ -462,19 +501,22 @@ func (e AgentTargetExtensionLaunchRefType) Valid() bool {
 
 // Defines values for AgentTargetInstallPlanRunner.
 const (
-	Npm  AgentTargetInstallPlanRunner = "npm"
-	Pnpm AgentTargetInstallPlanRunner = "pnpm"
-	Uv   AgentTargetInstallPlanRunner = "uv"
+	AgentTargetInstallPlanRunnerBinary AgentTargetInstallPlanRunner = "binary"
+	AgentTargetInstallPlanRunnerNpm    AgentTargetInstallPlanRunner = "npm"
+	AgentTargetInstallPlanRunnerPnpm   AgentTargetInstallPlanRunner = "pnpm"
+	AgentTargetInstallPlanRunnerUv     AgentTargetInstallPlanRunner = "uv"
 )
 
 // Valid indicates whether the value is a known member of the AgentTargetInstallPlanRunner enum.
 func (e AgentTargetInstallPlanRunner) Valid() bool {
 	switch e {
-	case Npm:
+	case AgentTargetInstallPlanRunnerBinary:
 		return true
-	case Pnpm:
+	case AgentTargetInstallPlanRunnerNpm:
 		return true
-	case Uv:
+	case AgentTargetInstallPlanRunnerPnpm:
+		return true
+	case AgentTargetInstallPlanRunnerUv:
 		return true
 	default:
 		return false
@@ -627,23 +669,32 @@ func (e AgentTargetSource) Valid() bool {
 
 // Defines values for ApiErrorDetailsCode.
 const (
-	InvalidRequest                 ApiErrorDetailsCode = "invalid_request"
-	MethodNotAllowed               ApiErrorDetailsCode = "method_not_allowed"
-	PreferencesOperationFailed     ApiErrorDetailsCode = "preferences_operation_failed"
-	ServiceUnavailable             ApiErrorDetailsCode = "service_unavailable"
-	Unauthorized                   ApiErrorDetailsCode = "unauthorized"
-	WorkspaceAppNotFound           ApiErrorDetailsCode = "workspace_app_not_found"
-	WorkspaceFileNotFound          ApiErrorDetailsCode = "workspace_file_not_found"
-	WorkspaceIssueResourceExists   ApiErrorDetailsCode = "workspace_issue_resource_exists"
-	WorkspaceIssueResourceNotFound ApiErrorDetailsCode = "workspace_issue_resource_not_found"
-	WorkspaceNotFound              ApiErrorDetailsCode = "workspace_not_found"
-	WorkspaceOperationFailed       ApiErrorDetailsCode = "workspace_operation_failed"
-	WorkspaceTerminalNotFound      ApiErrorDetailsCode = "workspace_terminal_not_found"
+	AgentQuickPromptConflict        ApiErrorDetailsCode = "agent_quick_prompt_conflict"
+	AgentQuickPromptNotFound        ApiErrorDetailsCode = "agent_quick_prompt_not_found"
+	AgentQuickPromptOperationFailed ApiErrorDetailsCode = "agent_quick_prompt_operation_failed"
+	InvalidRequest                  ApiErrorDetailsCode = "invalid_request"
+	MethodNotAllowed                ApiErrorDetailsCode = "method_not_allowed"
+	PreferencesOperationFailed      ApiErrorDetailsCode = "preferences_operation_failed"
+	ServiceUnavailable              ApiErrorDetailsCode = "service_unavailable"
+	Unauthorized                    ApiErrorDetailsCode = "unauthorized"
+	WorkspaceAppNotFound            ApiErrorDetailsCode = "workspace_app_not_found"
+	WorkspaceFileNotFound           ApiErrorDetailsCode = "workspace_file_not_found"
+	WorkspaceIssueResourceExists    ApiErrorDetailsCode = "workspace_issue_resource_exists"
+	WorkspaceIssueResourceNotFound  ApiErrorDetailsCode = "workspace_issue_resource_not_found"
+	WorkspaceNotFound               ApiErrorDetailsCode = "workspace_not_found"
+	WorkspaceOperationFailed        ApiErrorDetailsCode = "workspace_operation_failed"
+	WorkspaceTerminalNotFound       ApiErrorDetailsCode = "workspace_terminal_not_found"
 )
 
 // Valid indicates whether the value is a known member of the ApiErrorDetailsCode enum.
 func (e ApiErrorDetailsCode) Valid() bool {
 	switch e {
+	case AgentQuickPromptConflict:
+		return true
+	case AgentQuickPromptNotFound:
+		return true
+	case AgentQuickPromptOperationFailed:
+		return true
 	case InvalidRequest:
 		return true
 	case MethodNotAllowed:
@@ -763,6 +814,36 @@ func (e CliCapabilityVisibility) Valid() bool {
 	case Integration:
 		return true
 	case Public:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CliCommandContinuationState.
+const (
+	CliCommandContinuationStatePending CliCommandContinuationState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the CliCommandContinuationState enum.
+func (e CliCommandContinuationState) Valid() bool {
+	switch e {
+	case CliCommandContinuationStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CliCommandExecutionMode.
+const (
+	Wait CliCommandExecutionMode = "wait"
+)
+
+// Valid indicates whether the value is a known member of the CliCommandExecutionMode enum.
+func (e CliCommandExecutionMode) Valid() bool {
+	switch e {
+	case Wait:
 		return true
 	default:
 		return false
@@ -1680,22 +1761,22 @@ func (e WorkspaceAgentTurnCancelResultReason) Valid() bool {
 
 // Defines values for WorkspaceAgentTurnOutcome.
 const (
-	WorkspaceAgentTurnOutcomeCanceled    WorkspaceAgentTurnOutcome = "canceled"
-	WorkspaceAgentTurnOutcomeCompleted   WorkspaceAgentTurnOutcome = "completed"
-	WorkspaceAgentTurnOutcomeFailed      WorkspaceAgentTurnOutcome = "failed"
-	WorkspaceAgentTurnOutcomeInterrupted WorkspaceAgentTurnOutcome = "interrupted"
+	Canceled    WorkspaceAgentTurnOutcome = "canceled"
+	Completed   WorkspaceAgentTurnOutcome = "completed"
+	Failed      WorkspaceAgentTurnOutcome = "failed"
+	Interrupted WorkspaceAgentTurnOutcome = "interrupted"
 )
 
 // Valid indicates whether the value is a known member of the WorkspaceAgentTurnOutcome enum.
 func (e WorkspaceAgentTurnOutcome) Valid() bool {
 	switch e {
-	case WorkspaceAgentTurnOutcomeCanceled:
+	case Canceled:
 		return true
-	case WorkspaceAgentTurnOutcomeCompleted:
+	case Completed:
 		return true
-	case WorkspaceAgentTurnOutcomeFailed:
+	case Failed:
 		return true
-	case WorkspaceAgentTurnOutcomeInterrupted:
+	case Interrupted:
 		return true
 	default:
 		return false
@@ -2621,6 +2702,7 @@ type AgentProviderStatus struct {
 	Cli          AgentProviderCliStatus      `json:"cli"`
 	Network      *AgentProviderNetworkStatus `json:"network,omitempty"`
 	Provider     WorkspaceAgentProvider      `json:"provider"`
+	Update       AgentProviderUpdateStatus   `json:"update"`
 }
 
 // AgentProviderStatusListResponse defines model for AgentProviderStatusListResponse.
@@ -2634,6 +2716,50 @@ type AgentProviderStatusListResponse struct {
 type AgentProviderTerminalCommand struct {
 	Cwd   *string `json:"cwd,omitempty"`
 	Input string  `json:"input"`
+}
+
+// AgentProviderUpdateCapability defines model for AgentProviderUpdateCapability.
+type AgentProviderUpdateCapability string
+
+// AgentProviderUpdateSource defines model for AgentProviderUpdateSource.
+type AgentProviderUpdateSource string
+
+// AgentProviderUpdateStatus defines model for AgentProviderUpdateStatus.
+type AgentProviderUpdateStatus struct {
+	Capability     AgentProviderUpdateCapability `json:"capability"`
+	CurrentVersion *string                       `json:"currentVersion"`
+	LastCheckedAt  *time.Time                    `json:"lastCheckedAt"`
+	LatestVersion  *string                       `json:"latestVersion"`
+
+	// ReasonCode Non-fatal discovery or version-comparison result code.
+	ReasonCode *string                    `json:"reasonCode"`
+	Source     *AgentProviderUpdateSource `json:"source"`
+
+	// UnsupportedReason Stable reason why this provider cannot be updated by tuttid.
+	UnsupportedReason *string `json:"unsupportedReason"`
+
+	// UpdateAvailable Null when discovery has not run, failed, or the current/latest versions cannot be compared safely.
+	UpdateAvailable *bool `json:"updateAvailable"`
+}
+
+// AgentQuickPrompt defines model for AgentQuickPrompt.
+type AgentQuickPrompt struct {
+	Content         string `json:"content"`
+	CreatedAtUnixMs int64  `json:"createdAtUnixMs"`
+	Id              string `json:"id"`
+	Title           string `json:"title"`
+	UpdatedAtUnixMs int64  `json:"updatedAtUnixMs"`
+	Version         int64  `json:"version"`
+}
+
+// AgentQuickPromptListResponse defines model for AgentQuickPromptListResponse.
+type AgentQuickPromptListResponse struct {
+	Prompts []AgentQuickPrompt `json:"prompts"`
+}
+
+// AgentQuickPromptResponse defines model for AgentQuickPromptResponse.
+type AgentQuickPromptResponse struct {
+	Prompt AgentQuickPrompt `json:"prompt"`
 }
 
 // AgentSessionComposerSettings defines model for AgentSessionComposerSettings.
@@ -2944,7 +3070,11 @@ type CliCapabilitiesResponse struct {
 // CliCapability Stable command metadata exposed by the local CLI capability protocol.
 type CliCapability struct {
 	// Description Optional longer human-readable command description.
-	Description *string `json:"description,omitempty"`
+	Description *string              `json:"description,omitempty"`
+	Execution   *CliCommandExecution `json:"execution,omitempty"`
+
+	// HandlerTimeoutMs Per-invocation App handler timeout used by clients to budget the daemon request.
+	HandlerTimeoutMs *int `json:"handlerTimeoutMs,omitempty"`
 
 	// Id Stable command identifier used by invoke routes.
 	Id string `json:"id"`
@@ -2996,14 +3126,33 @@ type CliCapabilitySourceKind string
 // CliCapabilityVisibility defines model for CliCapabilityVisibility.
 type CliCapabilityVisibility string
 
+// CliCommandContinuation Internal continuation signal consumed by the CLI for wait commands and not rendered as a terminal result.
+type CliCommandContinuation struct {
+	// RetryAfterMs Delay before the CLI invokes the same command again.
+	RetryAfterMs int                         `json:"retryAfterMs"`
+	State        CliCommandContinuationState `json:"state"`
+}
+
+// CliCommandContinuationState defines model for CliCommandContinuationState.
+type CliCommandContinuationState string
+
+// CliCommandExecution Optional client-side execution behavior declared by a command. Wait commands remain active while handlers return a pending continuation.
+type CliCommandExecution struct {
+	Mode CliCommandExecutionMode `json:"mode"`
+}
+
+// CliCommandExecutionMode defines model for CliCommandExecutionMode.
+type CliCommandExecutionMode string
+
 // CliCommandOutput defines model for CliCommandOutput.
 type CliCommandOutput struct {
-	Columns  *[]CliTableColumn         `json:"columns,omitempty"`
-	Kind     CliOutputMode             `json:"kind"`
-	Rows     *[]map[string]interface{} `json:"rows,omitempty"`
-	Text     *string                   `json:"text,omitempty"`
-	Value    *map[string]interface{}   `json:"value,omitempty"`
-	Warnings *[]CliCommandWarning      `json:"warnings,omitempty"`
+	Columns      *[]CliTableColumn         `json:"columns,omitempty"`
+	Continuation *CliCommandContinuation   `json:"continuation,omitempty"`
+	Kind         CliOutputMode             `json:"kind"`
+	Rows         *[]map[string]interface{} `json:"rows,omitempty"`
+	Text         *string                   `json:"text,omitempty"`
+	Value        *map[string]interface{}   `json:"value,omitempty"`
+	Warnings     *[]CliCommandWarning      `json:"warnings,omitempty"`
 }
 
 // CliCommandWarning defines model for CliCommandWarning.
@@ -3080,6 +3229,12 @@ type CompleteWorkspaceAppUploadResponse struct {
 // CopyWorkspaceFileEntryRequest defines model for CopyWorkspaceFileEntryRequest.
 type CopyWorkspaceFileEntryRequest struct {
 	Path string `json:"path"`
+}
+
+// CreateAgentQuickPromptRequest defines model for CreateAgentQuickPromptRequest.
+type CreateAgentQuickPromptRequest struct {
+	Content string `json:"content"`
+	Title   string `json:"title"`
 }
 
 // CreateIssueManagerIssueRequest defines model for CreateIssueManagerIssueRequest.
@@ -3185,6 +3340,11 @@ type CreateWorkspaceTerminalRequest struct {
 	Rows         *int    `json:"rows,omitempty"`
 }
 
+// DeleteAgentQuickPromptRequest defines model for DeleteAgentQuickPromptRequest.
+type DeleteAgentQuickPromptRequest struct {
+	ExpectedVersion int64 `json:"expectedVersion"`
+}
+
 // DeleteIssueManagerContextRefResponse defines model for DeleteIssueManagerContextRefResponse.
 type DeleteIssueManagerContextRefResponse struct {
 	Removed bool `json:"removed"`
@@ -3277,7 +3437,6 @@ type DesktopAgentComposerDefaultsByProvider struct {
 	ClaudeCode *DesktopAgentComposerDefaults `json:"claude-code,omitempty"`
 	Codex      *DesktopAgentComposerDefaults `json:"codex,omitempty"`
 	Cursor     *DesktopAgentComposerDefaults `json:"cursor,omitempty"`
-	Hermes     *DesktopAgentComposerDefaults `json:"hermes,omitempty"`
 	Nexight    *DesktopAgentComposerDefaults `json:"nexight,omitempty"`
 	Openclaw   *DesktopAgentComposerDefaults `json:"openclaw,omitempty"`
 	Opencode   *DesktopAgentComposerDefaults `json:"opencode,omitempty"`
@@ -3295,7 +3454,6 @@ type DesktopAgentGuiConversationRailCollapsedByProvider struct {
 	ClaudeCode *bool `json:"claude-code,omitempty"`
 	Codex      *bool `json:"codex,omitempty"`
 	Cursor     *bool `json:"cursor,omitempty"`
-	Hermes     *bool `json:"hermes,omitempty"`
 	Nexight    *bool `json:"nexight,omitempty"`
 	Openclaw   *bool `json:"openclaw,omitempty"`
 	Opencode   *bool `json:"opencode,omitempty"`
@@ -3334,6 +3492,8 @@ type DesktopMinimizeAnimation string
 
 // DesktopPreferences defines model for DesktopPreferences.
 type DesktopPreferences struct {
+	// AgentCliUpdateCheckEnabled Whether tuttid may periodically discover newer managed agent CLI releases on this device. This never authorizes automatic installation.
+	AgentCliUpdateCheckEnabled                  bool                                               `json:"agentCliUpdateCheckEnabled"`
 	AgentComposerDefaultsByAgentTarget          *DesktopAgentComposerDefaultsByAgentTarget         `json:"agentComposerDefaultsByAgentTarget,omitempty"`
 	AgentComposerDefaultsByProvider             DesktopAgentComposerDefaultsByProvider             `json:"agentComposerDefaultsByProvider"`
 	AgentConversationDetailMode                 DesktopAgentConversationDetailMode                 `json:"agentConversationDetailMode"`
@@ -4019,6 +4179,13 @@ type TrackEvent struct {
 // TrackEventsRequest defines model for TrackEventsRequest.
 type TrackEventsRequest struct {
 	Events []TrackEvent `json:"events"`
+}
+
+// UpdateAgentQuickPromptRequest defines model for UpdateAgentQuickPromptRequest.
+type UpdateAgentQuickPromptRequest struct {
+	Content         string `json:"content"`
+	ExpectedVersion int64  `json:"expectedVersion"`
+	Title           string `json:"title"`
 }
 
 // UpdateIssueManagerIssueRequest defines model for UpdateIssueManagerIssueRequest.
@@ -5152,6 +5319,15 @@ type WorkspaceFileSearchWithin = string
 // WorkspaceID defines model for WorkspaceID.
 type WorkspaceID = string
 
+// AgentQuickPromptConflictError defines model for AgentQuickPromptConflictError.
+type AgentQuickPromptConflictError = ApiErrorResponse
+
+// AgentQuickPromptNotFoundError defines model for AgentQuickPromptNotFoundError.
+type AgentQuickPromptNotFoundError = ApiErrorResponse
+
+// AgentQuickPromptOperationError defines model for AgentQuickPromptOperationError.
+type AgentQuickPromptOperationError = ApiErrorResponse
+
 // InvalidRequestError defines model for InvalidRequestError.
 type InvalidRequestError = ApiErrorResponse
 
@@ -5203,8 +5379,14 @@ type GetAgentProviderStatusesParams struct {
 	// IncludeNetwork Opt into the network connectivity probe (registry / provider API / proxy reachability). Off by default so the common detection path stays local and never blocks on the network; only the agent-env wizard's network diagnostic sets this.
 	IncludeNetwork *bool `form:"includeNetwork,omitempty" json:"includeNetwork,omitempty"`
 
-	// Refresh Bypass the daemon provider-readiness cache.
+	// IncludeUpdates Opt into cached remote update discovery for provider CLIs. Off by default so ordinary readiness and status requests stay purely local. Discovery failures are reported on each provider's update status and do not fail the status request.
+	IncludeUpdates *bool `form:"includeUpdates,omitempty" json:"includeUpdates,omitempty"`
+
+	// Refresh Bypass only the daemon's local provider-readiness cache. This does not opt into or refresh remote update discovery.
 	Refresh *bool `form:"refresh,omitempty" json:"refresh,omitempty"`
+
+	// RefreshUpdates Bypass only the provider update-metadata cache when includeUpdates is true. This does not bypass local readiness or network-diagnostic caches and does not opt into discovery by itself.
+	RefreshUpdates *bool `form:"refreshUpdates,omitempty" json:"refreshUpdates,omitempty"`
 }
 
 // ListCliCapabilitiesParams defines parameters for ListCliCapabilities.
@@ -5387,6 +5569,15 @@ type DismissAccountRegistrationCreditsRewardJSONRequestBody = DismissAccountRegi
 
 // GetAgentProviderComposerOptionsJSONRequestBody defines body for GetAgentProviderComposerOptions for application/json ContentType.
 type GetAgentProviderComposerOptionsJSONRequestBody = GetAgentProviderComposerOptionsRequest
+
+// CreateAgentQuickPromptJSONRequestBody defines body for CreateAgentQuickPrompt for application/json ContentType.
+type CreateAgentQuickPromptJSONRequestBody = CreateAgentQuickPromptRequest
+
+// DeleteAgentQuickPromptJSONRequestBody defines body for DeleteAgentQuickPrompt for application/json ContentType.
+type DeleteAgentQuickPromptJSONRequestBody = DeleteAgentQuickPromptRequest
+
+// UpdateAgentQuickPromptJSONRequestBody defines body for UpdateAgentQuickPrompt for application/json ContentType.
+type UpdateAgentQuickPromptJSONRequestBody = UpdateAgentQuickPromptRequest
 
 // SetSystemAgentTargetEnabledJSONRequestBody defines body for SetSystemAgentTargetEnabled for application/json ContentType.
 type SetSystemAgentTargetEnabledJSONRequestBody = SetSystemAgentTargetEnabledRequest

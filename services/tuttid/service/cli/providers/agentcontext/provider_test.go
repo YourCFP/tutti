@@ -845,6 +845,45 @@ func TestWaitCommandUsesDefaultTimeout(t *testing.T) {
 	}
 }
 
+func TestWaitCommandDeclaresContinuationOnlyForInternalObservationTimeout(t *testing.T) {
+	provider := newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, &fakeAgentSessions{
+		waitResult: agentservice.WaitResult{
+			Session:  agentservice.Session{ID: "SESSION-1", Provider: "codex", Visible: true},
+			Reason:   agentservice.WaitReasonTimeout,
+			TimedOut: true,
+		},
+	})
+	command := provider.newWaitCommand()
+	if command.Capability.Execution == nil || command.Capability.Execution.Mode != cliservice.CommandExecutionModeWait {
+		t.Fatalf("execution = %#v", command.Capability.Execution)
+	}
+	output, err := command.Handler(context.Background(), cliservice.InvokeRequest{
+		Input: map[string]any{"session-id": "SESSION-1"}, OutputMode: cliservice.OutputModeJSON,
+	})
+	if err != nil {
+		t.Fatalf("Handler() error = %v", err)
+	}
+	if output.Continuation == nil || output.Continuation.State != "pending" || output.Continuation.RetryAfterMs != 250 {
+		t.Fatalf("output = %#v", output)
+	}
+
+	provider = newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, &fakeAgentSessions{
+		waitResult: agentservice.WaitResult{
+			Session: agentservice.Session{ID: "SESSION-1", Provider: "codex", Visible: true},
+			Reason:  agentservice.WaitReasonCompleted,
+		},
+	})
+	output, err = provider.newWaitCommand().Handler(context.Background(), cliservice.InvokeRequest{
+		Input: map[string]any{"session-id": "SESSION-1"}, OutputMode: cliservice.OutputModeJSON,
+	})
+	if err != nil {
+		t.Fatalf("completed Handler() error = %v", err)
+	}
+	if output.Continuation != nil {
+		t.Fatalf("completed output continuation = %#v", output.Continuation)
+	}
+}
+
 func TestWaitCommandReturnsFinalMessageAndDetailedInteractions(t *testing.T) {
 	t.Run("completed", func(t *testing.T) {
 		sessions := &fakeAgentSessions{waitResult: agentservice.WaitResult{
@@ -935,7 +974,7 @@ func TestRespondCommandPassesResponseAndReturnsDisposition(t *testing.T) {
 	command := newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, sessions).newRespondCommand()
 	output, err := command.Handler(context.Background(), cliservice.InvokeRequest{
 		Input: map[string]any{
-			"session-id": "SESSION-1", "request-id": "request-1", "action": "approve",
+			"session-id": "SESSION-1", "turn-id": "turn-1", "request-id": "request-1", "action": "approve",
 			"option": "allow-once", "payload": `{"answer":"yes"}`,
 		},
 		OutputMode: cliservice.OutputModeJSON,
@@ -944,7 +983,7 @@ func TestRespondCommandPassesResponseAndReturnsDisposition(t *testing.T) {
 		t.Fatalf("Handler: %v", err)
 	}
 	if sessions.respondInput.WorkspaceID != "workspace-1" || sessions.respondInput.AgentSessionID != "SESSION-1" ||
-		sessions.respondInput.RequestID != "request-1" || optionalTestString(sessions.respondInput.Action) != "approve" ||
+		sessions.respondInput.TurnID != "turn-1" || sessions.respondInput.RequestID != "request-1" || optionalTestString(sessions.respondInput.Action) != "approve" ||
 		optionalTestString(sessions.respondInput.OptionID) != "allow-once" || sessions.respondInput.Payload["answer"] != "yes" {
 		t.Fatalf("respond input = %#v", sessions.respondInput)
 	}
@@ -957,7 +996,7 @@ func TestRespondCommandPassesSemanticWithoutProviderMapping(t *testing.T) {
 	sessions := &fakeAgentSessions{}
 	command := newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, sessions).newRespondCommand()
 	if _, err := command.Handler(context.Background(), cliservice.InvokeRequest{
-		Input:      map[string]any{"session-id": "SESSION-1", "request-id": "request-1", "semantic": "approve"},
+		Input:      map[string]any{"session-id": "SESSION-1", "turn-id": "turn-1", "request-id": "request-1", "semantic": "approve"},
 		OutputMode: cliservice.OutputModeJSON,
 	}); err != nil {
 		t.Fatalf("Handler: %v", err)
@@ -973,13 +1012,13 @@ func TestRespondCommandReturnsStructuredInputErrors(t *testing.T) {
 		input    map[string]any
 		sessions *fakeAgentSessions
 	}{
-		{name: "missing response", input: map[string]any{"session-id": "SESSION-1", "request-id": "request-1"}, sessions: &fakeAgentSessions{}},
-		{name: "invalid payload", input: map[string]any{"session-id": "SESSION-1", "request-id": "request-1", "payload": `[]`}, sessions: &fakeAgentSessions{}},
-		{name: "action and semantic", input: map[string]any{"session-id": "SESSION-1", "request-id": "request-1", "action": "approve", "semantic": "approve"}, sessions: &fakeAgentSessions{}},
-		{name: "unknown request", input: map[string]any{"session-id": "SESSION-1", "request-id": "missing", "action": "approve"}, sessions: &fakeAgentSessions{respondErr: agentservice.ErrInteractionRequestNotFound}},
-		{name: "non pending", input: map[string]any{"session-id": "SESSION-1", "request-id": "answered", "action": "approve"}, sessions: &fakeAgentSessions{respondErr: agentservice.ErrInteractionRequestNotPending}},
-		{name: "semantic missing", input: map[string]any{"session-id": "SESSION-1", "request-id": "request-1", "semantic": "approve"}, sessions: &fakeAgentSessions{respondErr: agentservice.ErrInteractionSemanticNotFound}},
-		{name: "semantic ambiguous", input: map[string]any{"session-id": "SESSION-1", "request-id": "request-1", "semantic": "approve"}, sessions: &fakeAgentSessions{respondErr: agentservice.ErrInteractionSemanticAmbiguous}},
+		{name: "missing turn", input: map[string]any{"session-id": "SESSION-1", "request-id": "request-1", "action": "approve"}, sessions: &fakeAgentSessions{}},
+		{name: "missing response", input: map[string]any{"session-id": "SESSION-1", "turn-id": "turn-1", "request-id": "request-1"}, sessions: &fakeAgentSessions{}},
+		{name: "invalid payload", input: map[string]any{"session-id": "SESSION-1", "turn-id": "turn-1", "request-id": "request-1", "payload": `[]`}, sessions: &fakeAgentSessions{}},
+		{name: "action and semantic", input: map[string]any{"session-id": "SESSION-1", "turn-id": "turn-1", "request-id": "request-1", "action": "approve", "semantic": "approve"}, sessions: &fakeAgentSessions{}},
+		{name: "unknown request", input: map[string]any{"session-id": "SESSION-1", "turn-id": "turn-1", "request-id": "missing", "action": "approve"}, sessions: &fakeAgentSessions{respondErr: agentservice.ErrInteractionRequestNotFound}},
+		{name: "semantic missing", input: map[string]any{"session-id": "SESSION-1", "turn-id": "turn-1", "request-id": "request-1", "semantic": "approve"}, sessions: &fakeAgentSessions{respondErr: agentservice.ErrInteractionSemanticNotFound}},
+		{name: "semantic ambiguous", input: map[string]any{"session-id": "SESSION-1", "turn-id": "turn-1", "request-id": "request-1", "semantic": "approve"}, sessions: &fakeAgentSessions{respondErr: agentservice.ErrInteractionSemanticAmbiguous}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			command := newTestProvider(fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}}, test.sessions).newRespondCommand()
@@ -1683,6 +1722,41 @@ func TestAgentListKeepsMultipleAgentsForOneProvider(t *testing.T) {
 	}
 	if output.Value["defaultAgentTargetId"] != agenttargetbiz.IDLocalCodex {
 		t.Fatalf("defaultAgentTargetId = %#v, want exact built-in target %q", output.Value["defaultAgentTargetId"], agenttargetbiz.IDLocalCodex)
+	}
+}
+
+func TestDisabledAgentIsExcludedFromListAndCannotStart(t *testing.T) {
+	targets := agenttargetbiz.DefaultSystemTargets(1)
+	for index := range targets {
+		if targets[index].ID == agenttargetbiz.IDLocalCodex {
+			targets[index].Enabled = false
+		}
+	}
+	sessions := &fakeAgentSessions{}
+	provider := NewProviderWithAgentTargets(
+		fakeWorkspaceCatalog{startup: workspacebiz.Summary{ID: "workspace-1"}},
+		sessions, nil, fakeAgentTargetList{targets: targets},
+	)
+
+	output, err := provider.newAgentsCommand().Handler(context.Background(), cliservice.InvokeRequest{OutputMode: cliservice.OutputModeJSON})
+	if err != nil {
+		t.Fatalf("agent list: %v", err)
+	}
+	for _, value := range output.Value["agents"].([]any) {
+		agent := value.(map[string]any)
+		if agent["id"] == agenttargetbiz.IDLocalCodex {
+			t.Fatalf("disabled agent unexpectedly listed: %#v", agent)
+		}
+	}
+
+	_, err = provider.newStartCommand().Handler(context.Background(), cliservice.InvokeRequest{
+		Input: map[string]any{"agent-id": agenttargetbiz.IDLocalCodex, "prompt": "do work"},
+	})
+	if !errors.Is(err, cliservice.ErrInvalidInput) || !strings.Contains(err.Error(), "enabled agent") {
+		t.Fatalf("agent start error = %v, want disabled target rejection", err)
+	}
+	if sessions.createCallCount != 0 {
+		t.Fatalf("createCallCount = %d, want 0", sessions.createCallCount)
 	}
 }
 

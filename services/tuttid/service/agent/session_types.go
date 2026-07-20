@@ -27,6 +27,7 @@ type Service struct {
 	SessionInitializer             SessionInitializer
 	SessionReader                  SessionReader
 	SessionPurgeStore              agenthost.SessionPurgeStore
+	AgentSessionResourceReleaser   AgentSessionResourceReleaser
 	UserProjectReader              UserProjectReader
 	MessageReader                  MessageReader
 	ExternalImportStore            agentactivitybiz.Repository
@@ -135,6 +136,8 @@ type ExtensionComposerProfile struct {
 	Capabilities                     []string
 	ModelConfigOptionID              string
 	PermissionConfigOptionID         string
+	DefaultPermissionModeID          string
+	PermissionModeIDsAreSemantic     bool
 	PermissionModes                  []ExtensionComposerPermissionMode
 	ReasoningConfigOptionID          string
 	Skills                           *ExtensionComposerSkillProfile
@@ -388,6 +391,10 @@ type SessionClearer interface {
 	ClearSessions(context.Context, string) (ClearSessionsResult, error)
 }
 
+type AgentSessionResourceReleaser interface {
+	ReleaseAgent(context.Context, string) error
+}
+
 type SessionDeleter interface {
 	DeleteSession(context.Context, string, string) (bool, error)
 }
@@ -514,7 +521,6 @@ type SendInputResult struct {
 
 type PromptContentBlock = agenthost.PromptContentBlock
 type PromptAttachment = agenthost.PromptAttachment
-type SubmitInteractiveInput = agenthost.SubmitInteractiveInput
 type SubmitPlanDecisionInput = agenthost.SubmitPlanDecisionInput
 
 type InteractionAction struct {
@@ -526,6 +532,7 @@ type InteractionAction struct {
 type RespondInput struct {
 	WorkspaceID    string
 	AgentSessionID string
+	TurnID         string
 	RequestID      string
 	Action         *string
 	OptionID       *string

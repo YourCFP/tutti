@@ -1,5 +1,6 @@
 import { createDecorator } from "@tutti-os/infra/di";
 import type {
+  DesktopDeveloperLogsExportScope,
   DesktopComputerUseActionResult,
   DesktopComputerUsePermissionGrantStatus,
   DesktopComputerUsePermissionPane,
@@ -29,6 +30,7 @@ import type {
 import type { DesktopThemeSource } from "@shared/theme";
 import type {
   WorkspaceSettingsReadableStoreState,
+  WorkspaceSettingsAgentTab,
   WorkspaceSettingsGeneralFocusAnchor,
   WorkspaceSettingsSectionID,
   WorkspaceManagedModelProviderDraft,
@@ -75,7 +77,9 @@ export interface IWorkspaceSettingsService {
     options?: WorkspaceSettingsOpenOptions
   ): void;
   selectSection(sectionID: WorkspaceSettingsSectionID): void;
+  selectAgentTab(tab: WorkspaceSettingsAgentTab): void;
   setDeveloperPanelVisible(visible: boolean): void;
+  setAgentTargetEnabled(agentTargetID: string, enabled: boolean): Promise<void>;
   setTuttiAgentSwitchEnabled(enabled: boolean): Promise<void>;
   beginManagedModelProviderDraft(
     provider: WorkspaceManagedModelProviderID
@@ -120,7 +124,7 @@ export interface IWorkspaceSettingsService {
   clearConversationHistory(): Promise<void>;
   purgeDeletedConversations(): Promise<void>;
   clearDeveloperLogs(): Promise<void>;
-  exportDeveloperLogs(): Promise<void>;
+  exportDeveloperLogs(scope: DesktopDeveloperLogsExportScope): Promise<void>;
   openLogDirectory(): Promise<void>;
   openLogFile(kind: DesktopDeveloperLogKind): Promise<void>;
   refreshDeveloperLogs(): Promise<void>;

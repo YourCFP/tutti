@@ -35,6 +35,7 @@ import type {
 import type { I18nRuntime } from "@tutti-os/ui-i18n-runtime";
 import { createDesktopAgentGUIWorkbenchHostInput } from "@renderer/features/workspace-agent/services/createDesktopAgentGUIWorkbenchHostInput.ts";
 import { IAgentsService } from "@renderer/features/workspace-agent/services/agentsService.interface.ts";
+import { IAgentQuickPromptService } from "@renderer/features/workspace-agent/services/agentQuickPromptService.interface.ts";
 import type { IAgentProviderStatusService as AgentProviderStatusService } from "@renderer/features/workspace-agent/services/agentProviderStatusService.interface.ts";
 import type { IWorkspaceAgentActivityService as WorkspaceAgentActivityService } from "@renderer/features/workspace-agent/services/workspaceAgentActivityService.interface.ts";
 import { IAgentEnvService } from "@renderer/features/workspace-agent/services/agentEnvService.interface.ts";
@@ -87,6 +88,7 @@ import {
   useStandaloneAgentWindowHeaderIdentity
 } from "./StandaloneAgentWindowHeader.tsx";
 import { StandaloneAgentWindowContentReady } from "./StandaloneAgentWindowContentReady.tsx";
+import { StandaloneAgentStartupShell } from "./StandaloneAgentStartupShell.tsx";
 import { showWorkspaceFileMissingToast } from "../services/workspaceFilesLaunchFeedback.ts";
 import { Toast } from "@renderer/lib/toast";
 import { useStandaloneAgentWindowLayout } from "./useStandaloneAgentWindowLayout.ts";
@@ -160,6 +162,7 @@ export function StandaloneAgentWindow({
 }: StandaloneAgentWindowProps): ReactNode {
   const { i18n } = useTranslation();
   const agentsService = useService(IAgentsService);
+  const agentQuickPromptService = useService(IAgentQuickPromptService);
   const agentEnvService = useService(IAgentEnvService);
   const workspaceAppSurfaceHost = useService(IWorkspaceAppSurfaceHost);
   const workspaceFilePreviewSurfaceHost = useService(
@@ -312,6 +315,10 @@ export function StandaloneAgentWindow({
     getAgentDirectorySnapshot
   );
   const agents = agentDirectorySnapshot.agents;
+  const isAgentDirectoryLoading =
+    agents.length === 0 &&
+    (agentDirectorySnapshot.status === "idle" ||
+      agentDirectorySnapshot.status === "loading");
   const defaultAgentTargetId = useMemo(() => {
     const requestedTargetId = launchAgentTargetId?.trim() || null;
     if (
@@ -459,6 +466,7 @@ export function StandaloneAgentWindow({
   const agentGuiHostInput = useMemo(
     () =>
       createDesktopAgentGUIWorkbenchHostInput({
+        agentQuickPromptService,
         hostFilesApi: desktopApi.host.files,
         tuttidClient,
         platformApi: desktopApi.platform,
@@ -472,6 +480,7 @@ export function StandaloneAgentWindow({
         workspaceId
       }),
     [
+      agentQuickPromptService,
       desktopApi.host.files,
       desktopApi.platform,
       desktopApi.runtime,
@@ -680,6 +689,7 @@ export function StandaloneAgentWindow({
       >
         <StandaloneAgentToolSidebar
           activityService={workspaceAgentActivityService}
+          agentSessionId={nodeState.lastActiveAgentSessionId}
           appOpenId={openAppId}
           appI18n={toolWorkbench.appI18n}
           browserApi={desktopApi.browser}
@@ -764,7 +774,11 @@ export function StandaloneAgentWindow({
           resizeWindowContentWidth={resizeStandaloneAgentWindowContentWidth}
           workspaceId={workspaceId}
         >
-          <StandaloneAgentWindowContentReady onReady={handleContentReady}>
+          <StandaloneAgentWindowContentReady
+            isPending={isAgentDirectoryLoading}
+            pendingFallback={<StandaloneAgentStartupShell scope="body" />}
+            onReady={handleContentReady}
+          >
             <DesktopAgentGUISurface
               agentActivityRuntime={agentGuiHostInput.agentActivityRuntime}
               agentHostApi={agentGuiHostInput.agentHostApi}

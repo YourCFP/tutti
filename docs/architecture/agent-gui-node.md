@@ -380,6 +380,18 @@ Do not restore flat compatibility props or hide workflow inside a render slot.
 
 `AgentHostApi` supplies host capabilities only: files, clipboard, project/account lookup, Agent Target setup/probes, diagnostics, and OS/Workbench helpers. It must not become a Session, Turn, timeline, or write source again.
 
+The optional quick-prompt library follows that host-capability boundary. Tutti
+Desktop projects the device-global `tuttid` quick-prompt CRUD service through
+`AgentHostApi.quickPrompts`; AgentGUI owns only the picker/editor presentation
+and inserts a selected prompt into the current TipTap selection without
+submitting it. The library snapshot, developer feature gate, and cross-window
+invalidation are not Session or Turn state and must not enter
+`AgentActivityRuntime` or the workspace engine. Hosts that omit the capability,
+and hosts whose capability reports the developer gate disabled, render no
+quick-prompt composer entry. AgentGUI may also present a small, localized set
+of recommended templates; those only prefill the existing editor and remain
+client-local until the user explicitly saves them through the CRUD capability.
+
 ### 6.4 Multiple surfaces
 
 AgentGUI, Message Center, dock/header, workspace window, and standalone Agent window consume the same workspace engine.
@@ -428,7 +440,10 @@ canonical Interaction(pending)
   -> answered or superseded projection
 ```
 
-Every surface shares request identity and submitting state.
+Every surface shares the exact interaction identity
+`(workspaceId, agentSessionId, turnId, requestId)` and submitting state.
+Provider request ids remain unchanged and may repeat across Turns; no adapter
+may recover a missing Turn by scanning for a session-wide request-id match.
 
 A synthesized plan decision uses a durable `plan_decision` operation. A provider-native plan Interaction continues through `interactive_response`. Similar UI does not justify merging their write paths.
 
@@ -525,6 +540,27 @@ Diagnose in owner order:
 6. Did projection/view render only its input?
 
 Do not start by adding a fallback to the visible component.
+
+### 8.1 Agent settings surface
+
+The desktop settings panel's agent section has two tabs: General Settings and
+an Agents tab. The Agents tab renders provider rows from the authoritative
+identity catalog plus the live `IAgentProviderStatusService`; it does not copy
+a provider registry. Its Enable/Disable control reads all Agent Targets from
+`IAgentsService` and persists the daemon-owned Agent Target `enabled` field.
+Disabled targets remain in this settings control plane so they can be
+re-enabled, but they are excluded from the AgentGUI agent projection and from
+CLI discovery and launch. The device-global provider-rail preferences remain
+presentation-only (ordering and optional sidebar personalization); they do not
+authorize an Agent Target or replace daemon enablement. Staged
+(Beta/Preview/in-progress) rows are gated by the `lab.previewAgents` switch via
+the provider-neutral `agentGuiWorkbenchPreviewProviders` predicate; stable rows
+always show in settings. Deep links reach the tab through the existing
+`openWorkspaceSettingsPanel` intent (now carrying optional `pane`/`provider`)
+plus a bumped `agentFocus` request that scrolls and briefly highlights the row;
+a link to a hidden preview agent surfaces an "enable Preview Agents" hint rather
+than failing silently. This is a settings surface, not a second Agent Target
+state store.
 
 ## 9. Folder guide
 

@@ -1,4 +1,5 @@
 import { zhCNAgentGuiProviderIdentity } from "./zh-CN.agentGuiProviderIdentity.ts";
+import { zhCNAgentGuiQuickPrompts } from "./zh-CN.agentGuiQuickPrompts.ts";
 import { zhCNAgentGuiReferencePicker } from "./zh-CN.agentGuiReferencePicker.ts";
 import { zhCNAgentGuiRuntimeNotices } from "./zh-CN.agentGuiRuntimeNotices.ts";
 import { zhCNAgentGuiSlashPalette } from "./zh-CN.agentGuiSlashPalette.ts";
@@ -33,7 +34,8 @@ export const zhCNAgentGui = {
   providerGatePendingLogin: "正在打开登录…",
   providerGatePendingRefresh: "正在检测…",
   targetSetupTitle: "设置 {{provider}}",
-  targetSetupDescription: "优先使用兼容的本地运行时，也可由 Tutti 安装固定版本",
+  targetSetupDescription:
+    "优先使用兼容的本地运行时，也可由 Tutti 安装并验证固定版本",
   targetSetupAuthRequired: "运行时已安装并通过 ACP 检测，但仍需完成登录",
   targetSetupReady: "已检测到运行时，可重新检测或重新登录",
   targetSetupOpen: "打开设置",
@@ -635,6 +637,7 @@ export const zhCNAgentGui = {
   mentionPalette: "提及上下文",
   addReference: "添加引用",
   addContent: "添加文件等内容",
+  quickPrompts: zhCNAgentGuiQuickPrompts,
   referenceWorkspaceFiles: "引用空间文件",
   ...zhCNAgentGuiReferencePicker,
   projectLocked: "会话开始后项目不可更改",

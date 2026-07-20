@@ -212,10 +212,11 @@ export async function bootstrapDesktopApp(): Promise<void> {
         desktopAppServices.preferences,
         desktopAppServices.tuttidClient
       ).clearLogs(),
-    exportDeveloperLogs: () =>
+    exportDeveloperLogs: (input) =>
       exportDesktopDeveloperLogsAndNotify(
         desktopAppServices.preferences,
-        desktopAppServices.tuttidClient
+        desktopAppServices.tuttidClient,
+        input
       ),
     getLocale: () => desktopAppServices.preferences.getLocale(),
     logger,
@@ -236,7 +237,7 @@ export async function bootstrapDesktopApp(): Promise<void> {
         : undefined
   });
 
-  registerIpcHandlers({
+  const ipcDisposables = await registerIpcHandlers({
     daemonEndpoint: desktopAppServices.daemonEndpoint,
     fileDialogs: desktopAppServices.fileDialogs,
     logger,
@@ -287,6 +288,7 @@ export async function bootstrapDesktopApp(): Promise<void> {
     logger,
     tuttid: desktopAppServices.tuttid,
     disposables: [
+      ...ipcDisposables,
       hostPreferencesEventStream,
       agentPowerSaveBlocker,
       {

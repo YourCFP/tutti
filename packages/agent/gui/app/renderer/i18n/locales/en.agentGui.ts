@@ -1,4 +1,5 @@
 import { enAgentGuiProviderIdentity } from "./en.agentGuiProviderIdentity.ts";
+import { enAgentGuiQuickPrompts } from "./en.agentGuiQuickPrompts.ts";
 import { enAgentGuiReferencePicker } from "./en.agentGuiReferencePicker.ts";
 import { enAgentGuiRuntimeNotices } from "./en.agentGuiRuntimeNotices.ts";
 import { enAgentGuiSlashPalette } from "./en.agentGuiSlashPalette.ts";
@@ -35,7 +36,7 @@ export const enAgentGui = {
   providerGatePendingRefresh: "Checking…",
   targetSetupTitle: "Set up {{provider}}",
   targetSetupDescription:
-    "Use a compatible local runtime, or let Tutti install the pinned runtime.",
+    "Use a compatible local runtime, or let Tutti install and verify the pinned runtime.",
   targetSetupAuthRequired:
     "Runtime is installed and responds over ACP, but authentication is required.",
   targetSetupReady:
@@ -686,6 +687,7 @@ export const enAgentGui = {
   mentionPalette: "Mention context",
   addReference: "Add reference",
   addContent: "Add files and more",
+  quickPrompts: enAgentGuiQuickPrompts,
   referenceWorkspaceFiles: "Reference workspace files",
   ...enAgentGuiReferencePicker,
   projectLocked: "Project cannot be changed after the session starts",

@@ -9,6 +9,7 @@ import type { ReporterEventInput } from "../../../analytics/services/reporterSer
 import {
   AGENT_EXTENSION_ACTIVATION_FLAGS,
   AGENT_EXTENSION_GEMINI_FLAG,
+  AGENT_QUICK_PROMPT_LIBRARY_FLAG,
   LAB_ENABLED_FLAG
 } from "../../../../../../shared/featureFlags/catalog.ts";
 import type { DesktopWorkspaceSettingsClient } from "./adapters/desktopWorkspaceSettingsClient.ts";
@@ -84,6 +85,35 @@ test("WorkspaceSettingsService persists Tutti Agent visibility before updating U
 
   assert.equal(persisted, false);
   assert.equal(service.store.tuttiAgentSwitchEnabled, false);
+  assert.equal(refreshes, 1);
+});
+
+test("WorkspaceSettingsService persists a system Agent Target enabled state and refreshes consumers", async () => {
+  const writes: Array<{ agentTargetID: string; enabled: boolean }> = [];
+  let refreshes = 0;
+  const codexTarget: AgentTarget = {
+    ...createTuttiAgentTarget(true),
+    id: "local:codex",
+    iconKey: "codex",
+    launchRef: { provider: "codex", type: "builtin_local" },
+    name: "Codex",
+    provider: "codex"
+  };
+  const service = new WorkspaceSettingsService({
+    client: createWorkspaceSettingsClient({
+      setSystemAgentTargetEnabled: async (agentTargetID, enabled) => {
+        writes.push({ agentTargetID, enabled });
+        return { ...codexTarget, enabled };
+      }
+    }),
+    onAgentTargetsChanged: async () => {
+      refreshes += 1;
+    }
+  });
+
+  await service.setAgentTargetEnabled(" local:codex ", false);
+
+  assert.deepEqual(writes, [{ agentTargetID: "local:codex", enabled: false }]);
   assert.equal(refreshes, 1);
 });
 
@@ -992,6 +1022,31 @@ test("WorkspaceSettingsService does not refresh Agent Targets after changing an 
   );
 });
 
+test("WorkspaceSettingsService reports a quick prompt specific save failure", async () => {
+  const notifications = createNotificationRecorder();
+  const service = new WorkspaceSettingsService(
+    { client: createWorkspaceSettingsClient({}) },
+    createDesktopPreferencesService({
+      onSetFeatureFlags: async () => {
+        throw new Error("preferences unavailable");
+      },
+      state: createPreferencesState({ featureFlags: {} })
+    }),
+    notifications.service
+  );
+
+  await service.changeFeatureFlags({
+    [AGENT_QUICK_PROMPT_LIBRARY_FLAG]: true
+  });
+
+  assert.equal(notifications.items.length, 1);
+  assert.ok(
+    notifications.items[0] ===
+      "We couldn't update quick-prompt library availability." ||
+      notifications.items[0] === "暂时无法更新快捷提示词库可用状态"
+  );
+});
+
 test("WorkspaceSettingsService compares Agent Extension activation against pending flags", async () => {
   assert.deepEqual(
     await changeFeatureFlagsAndRecordEffects({
@@ -1166,6 +1221,26 @@ test("WorkspaceSettingsService tracks theme changes without developer log clear 
       }
     ]
   ]);
+});
+
+test("WorkspaceSettingsService forwards the selected developer log export scope", async () => {
+  const scopes: string[] = [];
+  const service = new WorkspaceSettingsService({
+    client: createWorkspaceSettingsClient({
+      exportLogs: async (scope) => {
+        scopes.push(scope);
+        return {
+          canceled: true,
+          fileCount: 0,
+          filePath: null
+        };
+      }
+    })
+  });
+
+  await service.exportDeveloperLogs("recent-10-minutes");
+
+  assert.deepEqual(scopes, ["recent-10-minutes"]);
 });
 
 test("WorkspaceSettingsService clears workspace conversation history", async () => {
@@ -1437,6 +1512,7 @@ function createDeferred<T>(): {
 }
 
 function createDesktopPreferencesService(input: {
+  onSetAgentCliUpdateCheckEnabled?: IDesktopPreferencesService["setAgentCliUpdateCheckEnabled"];
   onSetDefaultAgentProvider?: IDesktopPreferencesService["setDefaultAgentProvider"];
   onSetAgentConversationDetailMode?: IDesktopPreferencesService["setAgentConversationDetailMode"];
   onSetAppCatalogChannel?: IDesktopPreferencesService["setAppCatalogChannel"];
@@ -1459,6 +1535,8 @@ function createDesktopPreferencesService(input: {
   return {
     _serviceBrand: undefined,
     store: input.state,
+    setAgentCliUpdateCheckEnabled:
+      input.onSetAgentCliUpdateCheckEnabled ?? (async (enabled) => enabled),
     rememberAgentComposerDefaultsForAgentTarget: async () => ({
       acknowledgedFields: [],
       supersededFields: []
@@ -1503,6 +1581,7 @@ function createPreferencesState(
   overrides: Partial<DesktopPreferencesReadableStoreState>
 ): DesktopPreferencesReadableStoreState {
   return {
+    agentCliUpdateCheckEnabled: true,
     agentComposerDefaultsByProvider: {},
     agentComposerDefaultsByAgentTarget: {},
     agentGuiConversationRailCollapsedByProvider: {},
@@ -1510,6 +1589,7 @@ function createPreferencesState(
     appCatalogChannel: "production",
     browserUseConnectionMode: "isolated",
     changingAppCatalogChannel: null,
+    changingAgentCliUpdateCheckEnabled: null,
     changingAgentConversationDetailMode: null,
     changingBrowserUseConnectionMode: null,
     changingDefaultAgentProvider: null,
@@ -1602,3 +1682,41 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
   assert.fail("Timed out waiting for condition");
 }
+
+test("WorkspaceSettingsService selects the agent sub-tab without side effects", () => {
+  const service = new WorkspaceSettingsService({
+    client: createWorkspaceSettingsClient({})
+  });
+  service.openPanel({ id: "workspace-1" });
+  assert.equal(service.store.agentTab, "general");
+  service.selectAgentTab("agents");
+  assert.equal(service.store.agentTab, "agents");
+  // Idempotent: selecting the same tab is a no-op.
+  service.selectAgentTab("agents");
+  assert.equal(service.store.agentTab, "agents");
+});
+
+test("WorkspaceSettingsService deep-links openPanel to the Agents tab and focuses a provider", () => {
+  const service = new WorkspaceSettingsService({
+    client: createWorkspaceSettingsClient({})
+  });
+  const before = service.store.agentFocusRequestID;
+  service.openPanel(
+    { id: "workspace-1" },
+    { pane: "agents", provider: "hermes" }
+  );
+  assert.equal(service.store.activeSection, "agent");
+  assert.equal(service.store.agentTab, "agents");
+  assert.equal(service.store.agentFocusProvider, "hermes");
+  assert.equal(service.store.agentFocusRequestID, before + 1);
+});
+
+test("WorkspaceSettingsService Agents deep-link works without a provider (blank focus)", () => {
+  const service = new WorkspaceSettingsService({
+    client: createWorkspaceSettingsClient({})
+  });
+  service.openPanel({ id: "workspace-1" }, { pane: "agents" });
+  assert.equal(service.store.activeSection, "agent");
+  assert.equal(service.store.agentTab, "agents");
+  assert.equal(service.store.agentFocusProvider, null);
+});
