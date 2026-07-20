@@ -34,7 +34,7 @@ export interface BrowserNodeAutomationTargetSummary extends BrowserNodeAutomatio
 export interface BrowserNodeAutomationAuthorizationInput {
   agentSessionId: string | null;
   args: Record<string, unknown>;
-  target: BrowserNodeAutomationTargetSummary;
+  target: BrowserNodeAutomationTargetSummary | null;
   tool: BrowserNodeAutomationTool;
   workspaceId: string;
 }
@@ -56,6 +56,11 @@ export interface BrowserNodeAutomationRegistryOptions {
   ) =>
     | BrowserNodeAutomationAuthorizationResult
     | Promise<BrowserNodeAutomationAuthorizationResult>;
+  authorizeRequest?: (
+    input: BrowserNodeAutomationAuthorizationInput
+  ) =>
+    | BrowserNodeAutomationAuthorizationResult
+    | Promise<BrowserNodeAutomationAuthorizationResult>;
   closeTarget?: (target: BrowserNodeAutomationTargetSummary) => Promise<void>;
   leaseTtlMs?: number;
   now?: () => number;
@@ -66,6 +71,7 @@ export interface BrowserNodeAutomationRegistryOptions {
 }
 
 export interface BrowserNodeAutomationTargetRegistry {
+  invalidate(nodeId: string, contents?: BrowserGuestWebContents | null): void;
   register(
     nodeId: string,
     contents: BrowserGuestWebContents,
@@ -83,5 +89,5 @@ export interface BrowserNodeAutomationRegistry extends BrowserNodeAutomationTarg
     agentSessionId?: string | null;
     workspaceId: string;
   }): readonly BrowserNodeAutomationTargetSummary[];
-  releaseAgent(agentSessionId: string): void;
+  releaseAgent(agentSessionId: string): Promise<void>;
 }

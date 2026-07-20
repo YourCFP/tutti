@@ -147,6 +147,8 @@ The Browser Node package owns:
 - Electron BrowserNode automation target registration, CDP-backed snapshot,
   interaction, evaluation, navigation, and screenshot mechanics
 - per-Agent stable page selection and per-tab automation leases
+- per-target command serialization, navigation-time snapshot invalidation, and
+  request interception for redirects and subresources while a lease is active
 - an authenticated loopback automation endpoint that a daemon can select
   explicitly instead of launching a second browser backend
 
@@ -193,11 +195,23 @@ it must fail if the BrowserNode host is unavailable and must not fall back to a
 separate Chrome process. A daemon without the configuration remains the
 explicit headless mode and may own managed Chrome.
 
-Network authorization runs before leasing or operating a tab. The standard
-desktop policy allows public HTTP/HTTPS destinations and loopback sandbox
-previews, while rejecting private, link-local, metadata, multicast, and local
-network targets. `list_pages` remains metadata-only so an Agent can report the
-title and URL of a restricted page without reading its contents.
+The Desktop renderer owns page lifecycle. Main sends internal
+create/select/close requests only to the registered workspace or Agent window,
+and accepts a response only from that same renderer. Agent requests ensure a
+session-keyed Browser tool surface without opening the sidebar or taking focus;
+the header exposes that retained surface, and switching the active conversation
+does not rebind it to another session. Deleting an Agent session releases its
+leases and closes its retained Agent Browser surface through the same path.
+
+Network authorization runs before leasing or creating a tab. While leased,
+CDP request interception applies the same policy to main-frame redirects,
+subresources, and script-initiated requests. The standard policy permits public
+HTTP/HTTPS destinations while rejecting private, link-local, metadata,
+multicast, and local-network targets. Loopback is denied by default; a
+virtualized host may enable it only after its product-owned preview resolver
+maps the URL to the caller's sandbox instead of host localhost. `list_pages`
+remains metadata-only so an Agent can report a restricted page's title and URL
+without reading its contents.
 
 `BrowserNode` also accepts a `renderHome` slot. The package shows it only for
 an empty/`about:blank` tab and supplies a package-owned navigation callback.

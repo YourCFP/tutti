@@ -44,10 +44,13 @@ import {
   isFeatureEnabled
 } from "../../shared/featureFlags/catalog.ts";
 import { resolveBrowserNodeAutomationListenerInfoPath } from "../transport/paths.ts";
+import { createDesktopBrowserAutomationCoordinator } from "./browserAutomationCoordinator.ts";
 
 type BrowserInvokeChannel = Exclude<
   (typeof desktopIpcChannels.browser)[keyof typeof desktopIpcChannels.browser],
-  typeof desktopIpcChannels.browser.event
+  | typeof desktopIpcChannels.browser.automationRequest
+  | typeof desktopIpcChannels.browser.automationResponse
+  | typeof desktopIpcChannels.browser.event
 >;
 
 const prefersColorSchemeFeatureName = "prefers-color-scheme";
@@ -62,14 +65,32 @@ function getPreferredColorScheme(
   });
 }
 
-export function registerBrowserIpc(
+export async function registerBrowserIpc(
   preferences: DesktopHostPreferencesState
 ): Promise<{ dispose(): void }> {
   const logger = getDesktopLogger();
+  const automationCoordinator = createDesktopBrowserAutomationCoordinator();
+  const automationNetworkAuthorizer =
+    createBrowserNodeAutomationNetworkAuthorizer({
+      allowLoopback: false
+    });
   const automationRegistry = createBrowserNodeAutomationRegistry({
-    authorize: createBrowserNodeAutomationNetworkAuthorizer({
-      allowLoopback: true
-    })
+    authorize: automationNetworkAuthorizer,
+    authorizeRequest: automationNetworkAuthorizer,
+    closeTarget: automationCoordinator.closeTarget,
+    requestTarget: async (input) => {
+      const nodeId = await automationCoordinator.requestTarget(input);
+      if (nodeId) {
+        await waitForAutomationTarget(
+          automationRegistry,
+          input.workspaceId,
+          input.agentSessionId,
+          nodeId
+        );
+      }
+      return nodeId;
+    },
+    selectTarget: automationCoordinator.selectTarget
   });
   const preparedDownloadSessions = new WeakSet<Electron.Session>();
   const chromeCookieImport = createMacosChromeCookieImportAdapter({
@@ -262,11 +283,37 @@ export function registerBrowserIpc(
     });
   });
 
-  return createBrowserNodeAutomationServer({
+  const automationServer = await createBrowserNodeAutomationServer({
     listenerInfoPath: resolveBrowserNodeAutomationListenerInfoPath(),
     logger,
     registry: automationRegistry
   });
+  return {
+    dispose() {
+      automationCoordinator.dispose();
+      automationServer.dispose();
+    }
+  };
+}
+
+async function waitForAutomationTarget(
+  registry: ReturnType<typeof createBrowserNodeAutomationRegistry>,
+  workspaceId: string,
+  agentSessionId: string | null,
+  nodeId: string
+): Promise<void> {
+  const deadline = Date.now() + 8_000;
+  while (Date.now() < deadline) {
+    if (
+      registry
+        .list({ agentSessionId, workspaceId })
+        .some((target) => target.nodeId === nodeId)
+    ) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`In-app Browser page did not attach: ${nodeId}`);
 }
 
 function isBrowserDevToolsEnabled(): boolean {

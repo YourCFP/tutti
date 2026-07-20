@@ -1,5 +1,13 @@
-import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 import {
+  lazy,
+  Suspense,
+  useCallback,
+  useMemo,
+  useState,
+  type ReactNode
+} from "react";
+import {
+  closeBrowserNodeTab,
   createBrowserNodeFeature,
   isBrowserNodeSurfaceEvent,
   type BrowserNodeChromeImportPromptAdapter,
@@ -31,9 +39,18 @@ export interface AgentToolBrowserPanelProps {
   loadingFallback?: ReactNode;
   navigationActions?: ReactNode;
   nodeIdPrefix?: string;
+  onControllerReady?: (controller: AgentToolBrowserController | null) => void;
   profileId?: string | null;
   sessionMode?: BrowserNodeSessionMode;
   sessionPartition?: string | null;
+}
+
+export interface AgentToolBrowserController {
+  closePage(nodeId: string): "closed" | "last-page" | "not-found";
+  createPage(url?: string | null): string;
+  ownsPage(nodeId: string): boolean;
+  selectPage(nodeId: string): boolean;
+  surfaceNodeId: string;
 }
 
 export function AgentToolBrowserPanel({
@@ -46,6 +63,7 @@ export function AgentToolBrowserPanel({
   loadingFallback = null,
   navigationActions,
   nodeIdPrefix = "browser:agent-tool",
+  onControllerReady,
   profileId = null,
   sessionMode = "shared",
   sessionPartition = null
@@ -61,12 +79,64 @@ export function AgentToolBrowserPanel({
       }),
     [browserApi, chromeCookieImportPrompt, i18n, nodeId]
   );
+  const controller = useMemo<AgentToolBrowserController>(() => {
+    const getPage = (pageNodeId: string) => {
+      const state = feature.tabsStore.getSurfaceState(nodeId);
+      const tab = state?.tabs.find(
+        (candidate) => candidate.nodeId === pageNodeId
+      );
+      return state && tab ? { state, tab } : null;
+    };
+    return {
+      closePage(pageNodeId) {
+        const page = getPage(pageNodeId);
+        if (!page) return "not-found";
+        if (page.state.tabs.length === 1) return "last-page";
+        closeBrowserNodeTab(feature, nodeId, page.tab.id);
+        return "closed";
+      },
+      createPage(url) {
+        const resolvedUrl = url?.trim() || "about:blank";
+        const state = feature.tabsStore.ensureSurface(nodeId, defaultUrl);
+        const activeTab = state.tabs.find(
+          (tab) => tab.id === state.activeTabId
+        );
+        const activeRuntime = activeTab
+          ? feature.runtimeStore.getNodeState(activeTab.nodeId)
+          : null;
+        if (
+          state.tabs.length === 1 &&
+          activeTab?.defaultUrl === "about:blank" &&
+          !activeRuntime?.url
+        ) {
+          feature.tabsStore.syncDefaultUrl(nodeId, resolvedUrl);
+          return activeTab.nodeId;
+        }
+        return feature.tabsStore.addTab(nodeId, resolvedUrl).nodeId;
+      },
+      ownsPage: (pageNodeId) => getPage(pageNodeId) !== null,
+      selectPage(pageNodeId) {
+        const page = getPage(pageNodeId);
+        if (!page) return false;
+        feature.tabsStore.selectTab(nodeId, page.tab.id);
+        return true;
+      },
+      surfaceNodeId: nodeId
+    };
+  }, [defaultUrl, feature, nodeId]);
+
+  const bindController = useCallback(
+    (node: HTMLDivElement | null) =>
+      onControllerReady?.(node ? controller : null),
+    [controller, onControllerReady]
+  );
 
   return (
     <div
       className="relative h-full min-h-0 overflow-hidden"
       data-agent-tool-browser-surface="true"
       data-agent-tool-browser-surface-id={nodeId}
+      ref={bindController}
     >
       <Suspense fallback={loadingFallback}>
         <LazyBrowserNode

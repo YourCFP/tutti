@@ -19,6 +19,8 @@ const maximumRequestBytes = 1024 * 1024;
 const genericRequestFailure = "BrowserNode automation request failed";
 const notFoundMessage = "Not found";
 const unauthorizedMessage = "Unauthorized";
+const callPath = "/v1/call";
+const releaseAgentPath = "/v1/release-agent";
 
 export interface BrowserNodeAutomationListenerInfo {
   address: string;
@@ -97,7 +99,10 @@ async function handleRequest(
   token: string,
   registry: BrowserNodeAutomationRegistry
 ): Promise<void> {
-  if (request.method !== "POST" || request.url !== "/v1/call") {
+  if (
+    request.method !== "POST" ||
+    (request.url !== callPath && request.url !== releaseAgentPath)
+  ) {
     sendJson(response, 404, { error: { message: notFoundMessage } });
     return;
   }
@@ -106,9 +111,25 @@ async function handleRequest(
     return;
   }
 
+  const body = await readRequestBody(request);
+  if (request.url === releaseAgentPath) {
+    try {
+      const agentSessionId = parseReleaseAgent(body);
+      await registry.releaseAgent(agentSessionId);
+      sendJson(response, 200, { result: { text: "" } });
+    } catch (error) {
+      sendJson(response, 400, {
+        error: {
+          message: error instanceof Error ? error.message : String(error)
+        }
+      });
+    }
+    return;
+  }
+
   let call: BrowserNodeAutomationCallInput;
   try {
-    call = parseCall(await readRequestBody(request));
+    call = parseCall(body);
   } catch (error) {
     sendJson(response, 400, {
       error: {
@@ -128,6 +149,18 @@ async function handleRequest(
       }
     });
   }
+}
+
+function parseReleaseAgent(raw: string): string {
+  const value = JSON.parse(raw) as { agentSessionId?: unknown };
+  const agentSessionId =
+    typeof value?.agentSessionId === "string"
+      ? value.agentSessionId.trim()
+      : "";
+  if (!agentSessionId) {
+    throw new Error("Invalid BrowserNode Agent release request");
+  }
+  return agentSessionId;
 }
 
 async function readRequestBody(request: IncomingMessage): Promise<string> {

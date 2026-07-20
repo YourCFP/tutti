@@ -20,6 +20,49 @@ const browserNodeResponseLimit = 64 * 1024 * 1024
 
 type browserNodeBackend interface {
 	Call(context.Context, string, string, string, map[string]any) (ToolResult, error)
+	ReleaseAgent(context.Context, string) error
+}
+
+func (b *browserNodeHTTPBackend) ReleaseAgent(ctx context.Context, agentSessionID string) error {
+	agentSessionID = strings.TrimSpace(agentSessionID)
+	if agentSessionID == "" {
+		return errors.New("BrowserNode Agent session ID is required")
+	}
+	info, err := b.readListenerInfo()
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(map[string]string{"agentSessionId": agentSessionID})
+	if err != nil {
+		return fmt.Errorf("encode BrowserNode Agent release: %w", err)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+info.Address+"/v1/release-agent", bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("create BrowserNode Agent release request: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+info.Token)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := b.client.Do(request)
+	if err != nil {
+		return fmt.Errorf("BrowserNode desktop host is unavailable: %w", err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(response.Body, browserNodeResponseLimit+1))
+	if err != nil {
+		return fmt.Errorf("read BrowserNode Agent release response: %w", err)
+	}
+	if len(body) > browserNodeResponseLimit {
+		return errors.New("BrowserNode Agent release response is too large")
+	}
+	if response.StatusCode != http.StatusOK {
+		var decoded browserNodeCallResponse
+		_ = json.Unmarshal(body, &decoded)
+		if decoded.Error != nil && strings.TrimSpace(decoded.Error.Message) != "" {
+			return errors.New(decoded.Error.Message)
+		}
+		return errors.New("BrowserNode Agent release failed")
+	}
+	return nil
 }
 
 type browserNodeHTTPBackend struct {

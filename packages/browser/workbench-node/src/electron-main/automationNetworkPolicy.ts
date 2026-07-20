@@ -15,7 +15,7 @@ export function createBrowserNodeAutomationNetworkAuthorizer(
 ): (
   input: BrowserNodeAutomationAuthorizationInput
 ) => Promise<BrowserNodeAutomationAuthorizationResult> {
-  const allowLoopback = options.allowLoopback !== false;
+  const allowLoopback = options.allowLoopback === true;
   const resolveHost = options.resolveHost ?? resolveHostnameAddresses;
   return async (input) => {
     const candidate = resolveAuthorizationUrl(input);
@@ -74,11 +74,11 @@ export function createBrowserNodeAutomationNetworkAuthorizer(
 function resolveAuthorizationUrl(
   input: BrowserNodeAutomationAuthorizationInput
 ): string {
-  if (input.tool === "navigate_page") {
+  if (input.tool === "navigate_page" || input.tool === "new_page") {
     const candidate = input.args.url;
     return typeof candidate === "string" ? candidate.trim() : "";
   }
-  return input.target.url.trim() || "about:blank";
+  return input.target?.url.trim() || "about:blank";
 }
 
 async function resolveHostnameAddresses(hostname: string): Promise<string[]> {

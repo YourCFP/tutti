@@ -216,6 +216,14 @@ export interface BrowserGuestDebugger {
   attach(protocolVersion?: string): void;
   detach(): void;
   isAttached(): boolean;
+  off?(
+    event: "message",
+    listener: (event: unknown, method: string, params: unknown) => void
+  ): this;
+  on?(
+    event: "message",
+    listener: (event: unknown, method: string, params: unknown) => void
+  ): this;
   sendCommand(
     method: string,
     commandParams?: Record<string, unknown>

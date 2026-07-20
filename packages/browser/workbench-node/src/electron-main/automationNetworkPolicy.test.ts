@@ -28,6 +28,7 @@ function authorizationInput(
 
 test("automation network policy permits public pages and sandbox loopback", async () => {
   const authorize = createBrowserNodeAutomationNetworkAuthorizer({
+    allowLoopback: true,
     resolveHost: async () => ["93.184.216.34"]
   });
   assert.deepEqual(await authorize(authorizationInput("https://example.com")), {

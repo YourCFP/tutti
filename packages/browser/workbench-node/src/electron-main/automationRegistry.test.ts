@@ -135,3 +135,80 @@ test("automation authorization runs before a target lease is acquired", async ()
     /blocked_by_policy/u
   );
 });
+
+test("new page authorization runs before requesting a renderer target", async () => {
+  let requested = false;
+  const registry = createBrowserNodeAutomationRegistry({
+    authorize: async () => ({
+      allowed: false,
+      code: "blocked_by_policy",
+      message: "private target"
+    }),
+    requestTarget: async () => {
+      requested = true;
+      return "agent:tab:1";
+    }
+  });
+
+  await assert.rejects(
+    registry.call({
+      agentSessionId: "agent-a",
+      args: { url: "http://169.254.169.254" },
+      tool: "new_page",
+      workspaceId: "ws-1"
+    }),
+    /blocked_by_policy/u
+  );
+  assert.equal(requested, false);
+});
+
+test("automation target ids are isolated by workspace", () => {
+  const registry = createBrowserNodeAutomationRegistry();
+  for (const workspaceId of ["ws-1", "ws-2"]) {
+    registry.register(
+      "browser:tab:1",
+      fakeContents(workspaceId, `https://${workspaceId}.test`),
+      {
+        selected: true,
+        surfaceId: "browser",
+        surfaceRole: "user",
+        tabId: "tab-1",
+        workspaceId
+      }
+    );
+  }
+
+  assert.equal(registry.list({ workspaceId: "ws-1" })[0]?.title, "ws-1");
+  assert.equal(registry.list({ workspaceId: "ws-2" })[0]?.title, "ws-2");
+});
+
+test("releasing an Agent closes only its retained Browser pages", async () => {
+  const closed: string[] = [];
+  const registry = createBrowserNodeAutomationRegistry({
+    closeTarget: async (target) => {
+      closed.push(target.nodeId);
+    }
+  });
+  registry.register("user:tab:1", fakeContents("User", "https://user.test"), {
+    selected: true,
+    surfaceId: "user",
+    surfaceRole: "user",
+    tabId: "tab-1",
+    workspaceId: "ws-1"
+  });
+  registry.register(
+    "agent-a:tab:1",
+    fakeContents("Agent A", "https://agent.test"),
+    {
+      agentSessionId: "agent-a",
+      selected: true,
+      surfaceId: "agent-a",
+      surfaceRole: "agent",
+      tabId: "tab-1",
+      workspaceId: "ws-1"
+    }
+  );
+
+  await registry.releaseAgent("agent-a");
+  assert.deepEqual(closed, ["agent-a:tab:1"]);
+});

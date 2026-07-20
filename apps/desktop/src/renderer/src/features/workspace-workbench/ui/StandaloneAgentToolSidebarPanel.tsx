@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import type { I18nRuntime } from "@tutti-os/ui-i18n-runtime";
 import type { AgentToolTab } from "@tutti-os/agent-gui/workbench/tool-sidebar";
+import type { AgentToolBrowserController } from "@tutti-os/agent-gui/workbench/tool-sidebar";
 import type {
   WorkbenchContribution,
   WorkbenchHostHandle
@@ -74,6 +75,7 @@ export function StandaloneAgentToolSidebarPanel({
   messageCenterOpen,
   onAppendBrowserElementMention,
   onBrowserElementError,
+  onBrowserControllerReady,
   onCloseMessageCenter,
   onOpenMessageCenterChat,
   tab,
@@ -94,6 +96,11 @@ export function StandaloneAgentToolSidebarPanel({
   messageCenterOpen: boolean;
   onAppendBrowserElementMention: (mention: string) => void;
   onBrowserElementError: (message: string) => void;
+  onBrowserControllerReady?: (
+    tabId: string,
+    agentSessionId: string | null,
+    controller: AgentToolBrowserController | null
+  ) => void;
   onCloseMessageCenter: () => void;
   onOpenMessageCenterChat: (input: {
     agentSessionId: string;
@@ -196,6 +203,7 @@ export function StandaloneAgentToolSidebarPanel({
       <StandaloneAgentBrowserToolPanel
         agentSessionId={agentSessionId}
         appI18n={appI18n}
+        automationManaged={Boolean(tab.resourceId)}
         browserApi={browserApi}
         elementContextCopy={{
           cancel: i18n.t("workspace.agentGui.browserElementContext.cancel"),
@@ -207,6 +215,8 @@ export function StandaloneAgentToolSidebarPanel({
         workspaceId={workspaceId}
         onAppendBrowserElementMention={onAppendBrowserElementMention}
         onBrowserElementError={onBrowserElementError}
+        onControllerReady={onBrowserControllerReady}
+        tabId={tab.id}
       />
     ) : null;
   }

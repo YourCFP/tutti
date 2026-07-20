@@ -59,6 +59,31 @@ func TestBrowserNodeBackendWritesScreenshotToRequestedPath(t *testing.T) {
 	}
 }
 
+func TestBrowserNodeBackendReleasesAgentLease(t *testing.T) {
+	var gotPath string
+	var gotAgentSessionID string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		gotPath = request.URL.Path
+		var payload struct {
+			AgentSessionID string `json:"agentSessionId"`
+		}
+		_ = json.NewDecoder(request.Body).Decode(&payload)
+		gotAgentSessionID = payload.AgentSessionID
+		_ = json.NewEncoder(response).Encode(map[string]any{
+			"result": map[string]any{"text": "released"},
+		})
+	}))
+	defer server.Close()
+
+	backend := newBrowserNodeHTTPBackend(writeBrowserNodeListenerInfo(t, strings.TrimPrefix(server.URL, "http://"), "secret"))
+	if err := backend.ReleaseAgent(context.Background(), "agent-1"); err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/v1/release-agent" || gotAgentSessionID != "agent-1" {
+		t.Fatalf("path = %q, agentSessionId = %q", gotPath, gotAgentSessionID)
+	}
+}
+
 func TestBrowserNodeBackendRejectsNonLoopbackListener(t *testing.T) {
 	backend := newBrowserNodeHTTPBackend(writeBrowserNodeListenerInfo(t, "10.0.0.1:1234", "secret"))
 	_, err := backend.Call(context.Background(), "workspace-1", "agent-1", "list_pages", nil)

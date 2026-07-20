@@ -152,6 +152,8 @@ export const desktopIpcChannels = {
   },
   browser: {
     activate: "browser:activate",
+    automationRequest: "browser:automation-request",
+    automationResponse: "browser:automation-response",
     capturePreview: "browser:capturePreview",
     chooseDownloadDirectory: "browser:chooseDownloadDirectory",
     clearBrowsingData: "browser:clearBrowsingData",
@@ -856,6 +858,28 @@ export interface DesktopComputerUseRestartDriverResult {
   result: DesktopComputerUseActionResult;
   status: DesktopComputerUseStatus;
 }
+
+export interface DesktopBrowserAutomationRequest {
+  action: "create" | "select" | "close";
+  agentSessionId: string | null;
+  nodeId: string | null;
+  requestId: string;
+  surfaceRole: "agent" | "user";
+  url: string | null;
+  workspaceId: string;
+}
+
+export type DesktopBrowserAutomationResponse =
+  | {
+      nodeId: string | null;
+      ok: true;
+      requestId: string;
+    }
+  | {
+      error: string;
+      ok: false;
+      requestId: string;
+    };
 
 export interface DesktopInvokePayloadByChannel {
   [desktopIpcChannels.computerUse.checkStatus]: undefined;

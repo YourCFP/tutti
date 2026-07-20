@@ -121,6 +121,16 @@ func (s *Service) CallToolForAgent(ctx context.Context, workspaceID, cwd, agentS
 	return result, err
 }
 
+// ReleaseAgent closes BrowserNode pages and relinquishes their leases when a
+// durable Agent session is deleted. Managed Chrome sessions are
+// workspace-scoped and do not have per-Agent resources.
+func (s *Service) ReleaseAgent(ctx context.Context, agentSessionID string) error {
+	if s.browserNode == nil {
+		return nil
+	}
+	return s.browserNode.ReleaseAgent(ctx, strings.TrimSpace(agentSessionID))
+}
+
 // isBrowserPageGoneError reports whether err is chrome-devtools-mcp's error for
 // a page-scoped tool call made after the selected page (or all pages) closed
 // out from under the browser, e.g. because the user manually closed the

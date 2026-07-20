@@ -110,5 +110,9 @@ a host explicitly opts them in.
 `createBrowserNodeAutomationServer` publishes the registry on authenticated
 loopback and writes a private listener-info file for an explicitly configured
 daemon. `createBrowserNodeAutomationNetworkAuthorizer` provides the standard
-public HTTP/HTTPS plus loopback policy and blocks private, link-local, metadata,
-multicast, and local-network pages from inspect/control calls.
+public HTTP/HTTPS policy and blocks private, link-local, metadata, multicast,
+and local-network pages from inspect/control calls. Loopback fails closed by
+default; hosts may enable it only after supplying sandbox-owned preview
+routing. Hosts should also install the authorizer as the registry's
+`authorizeRequest` callback so redirects, subresources, and script-initiated
+requests remain guarded for the lifetime of an automation lease.

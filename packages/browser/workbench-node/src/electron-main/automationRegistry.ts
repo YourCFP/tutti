@@ -17,11 +17,13 @@ interface RegisteredTarget {
   focusedSequence: number;
   metadata: BrowserNodeAutomationTargetMetadata;
   nodeId: string;
+  queue: Promise<void>;
 }
 
 interface AutomationLease {
   expiresAt: number;
   owner: string;
+  timeout: ReturnType<typeof setTimeout>;
 }
 
 const defaultLeaseTtlMs = 60_000;
@@ -69,7 +71,9 @@ export function createBrowserNodeAutomationRegistry(
         visible.find((target) => target.selected) ??
         visible[0]);
     if (selected) {
-      const registered = targets.get(selected.nodeId);
+      const registered = targets.get(
+        targetKey(input.workspaceId, selected.nodeId)
+      );
       if (registered) {
         selectedTargetByOwner.set(ownerKey, registered.nodeId);
         return registered;
@@ -84,7 +88,9 @@ export function createBrowserNodeAutomationRegistry(
       requestedPageId: null,
       workspaceId: input.workspaceId
     });
-    const requested = requestedNodeId ? targets.get(requestedNodeId) : null;
+    const requested = requestedNodeId
+      ? targets.get(targetKey(input.workspaceId, requestedNodeId))
+      : null;
     if (
       !requested ||
       !isTargetVisible(
@@ -95,6 +101,7 @@ export function createBrowserNodeAutomationRegistry(
     ) {
       throw new Error("No in-app Browser page is available");
     }
+    selectedTargetByOwner.set(ownerKey, requested.nodeId);
     return requested;
   };
 
@@ -118,18 +125,34 @@ export function createBrowserNodeAutomationRegistry(
   const acquireLease = (
     input: BrowserNodeAutomationCallInput,
     target: RegisteredTarget
-  ): void => {
+  ): { key: string; lease: AutomationLease } => {
     const timestamp = now();
     const owner =
       normalizeOptional(input.agentSessionId) ??
       `manual:${normalizeRequired(input.workspaceId, "workspaceId")}`;
-    const current = leases.get(target.nodeId);
+    const key = targetKey(target.metadata.workspaceId, target.nodeId);
+    const current = leases.get(key);
     if (current && current.owner !== owner && current.expiresAt > timestamp) {
       throw new Error(
         `tab_in_use: browser page is controlled by ${current.owner}`
       );
     }
-    leases.set(target.nodeId, { expiresAt: timestamp + leaseTtlMs, owner });
+    if (current) clearTimeout(current.timeout);
+    const timeout = setTimeout(() => {
+      if (leases.get(key) !== lease) return;
+      leases.delete(key);
+      void targets.get(key)?.driver.disableRequestGuard();
+    }, leaseTtlMs);
+    (
+      timeout as ReturnType<typeof setTimeout> & { unref?: () => void }
+    ).unref?.();
+    const lease: AutomationLease = {
+      expiresAt: timestamp + leaseTtlMs,
+      owner,
+      timeout
+    };
+    leases.set(key, lease);
+    return { key, lease };
   };
 
   return {
@@ -145,9 +168,31 @@ export function createBrowserNodeAutomationRegistry(
       }
 
       if (input.tool === "new_page") {
+        const ownerKey = resolveOwnerKey(input);
+        const visibleTargets = list({
+          agentSessionId: input.agentSessionId,
+          workspaceId
+        });
         const requestedPageId =
-          readString(args.pageId) || readString(args.page_id) || null;
+          readString(args.pageId) ||
+          readString(args.page_id) ||
+          selectedTargetByOwner.get(ownerKey) ||
+          visibleTargets.find((target) => target.focused && target.selected)
+            ?.nodeId ||
+          visibleTargets.find((target) => target.selected)?.nodeId ||
+          visibleTargets[0]?.nodeId ||
+          null;
         const rawUrl = readString(args.url) || "about:blank";
+        const authorization = await options.authorize?.({
+          agentSessionId: normalizeOptional(input.agentSessionId),
+          args: { ...args, url: rawUrl },
+          target: null,
+          tool: input.tool,
+          workspaceId
+        });
+        if (authorization && !authorization.allowed) {
+          throw new Error(`${authorization.code}: ${authorization.message}`);
+        }
         const nodeId = await options.requestTarget?.({
           agentSessionId: normalizeOptional(input.agentSessionId),
           requestedPageId,
@@ -157,56 +202,79 @@ export function createBrowserNodeAutomationRegistry(
         if (!nodeId) {
           throw new Error("In-app Browser did not create a page");
         }
-        selectedTargetByOwner.set(resolveOwnerKey(input), nodeId);
+        selectedTargetByOwner.set(ownerKey, nodeId);
         const text = `${createdPageResultPrefix} ${nodeId}`;
         return { text };
       }
 
       const normalizedInput = { ...input, workspaceId };
       const target = await resolveTarget(normalizedInput, args);
-      await authorize(normalizedInput, args, target);
-      acquireLease(normalizedInput, target);
-
-      switch (input.tool) {
-        case "click":
-          return target.driver.click(requireString(args, "uid"));
-        case "close_page":
-          if (!options.closeTarget) {
-            throw new Error("Closing in-app Browser pages is unavailable");
+      return enqueueTarget(target, async () => {
+        await authorize(normalizedInput, args, target);
+        const acquired = acquireLease(normalizedInput, target);
+        try {
+          if (options.authorizeRequest) {
+            await target.driver.enableRequestGuard(async (url) =>
+              options.authorizeRequest!({
+                agentSessionId: normalizeOptional(input.agentSessionId),
+                args: { url },
+                target: toSummary(target),
+                tool: "navigate_page",
+                workspaceId
+              })
+            );
           }
-          await options.closeTarget(toSummary(target));
-          clearSelectedTarget(selectedTargetByOwner, target.nodeId);
-          return {
-            text: formatPageResult(closedPageResultPrefix, target.nodeId)
-          };
-        case "evaluate_script":
-          return target.driver.evaluate(requireString(args, "function"));
-        case "fill":
-          return target.driver.fill(
-            requireString(args, "uid"),
-            requireString(args, "value")
-          );
-        case "navigate_page":
-          return navigateTarget(target, requireString(args, "url"));
-        case "select_page":
-          selectedTargetByOwner.set(
-            resolveOwnerKey(normalizedInput),
-            target.nodeId
-          );
-          await options.selectTarget?.(toSummary(target));
-          return {
-            text: formatPageResult(selectedPageResultPrefix, target.nodeId)
-          };
-        case "take_screenshot":
-          return target.driver.screenshot(args.fullPage === true);
-        case "take_snapshot":
-          return target.driver.snapshot();
-      }
+        } catch (error) {
+          if (leases.get(acquired.key) === acquired.lease) {
+            clearTimeout(acquired.lease.timeout);
+            leases.delete(acquired.key);
+          }
+          throw error;
+        }
+
+        switch (input.tool) {
+          case "click":
+            return target.driver.click(requireString(args, "uid"));
+          case "close_page":
+            if (!options.closeTarget) {
+              throw new Error("Closing in-app Browser pages is unavailable");
+            }
+            await options.closeTarget(toSummary(target));
+            clearSelectedTarget(selectedTargetByOwner, target.nodeId);
+            return {
+              text: formatPageResult(closedPageResultPrefix, target.nodeId)
+            };
+          case "evaluate_script":
+            return target.driver.evaluate(requireString(args, "function"));
+          case "fill":
+            return target.driver.fill(
+              requireString(args, "uid"),
+              requireString(args, "value")
+            );
+          case "navigate_page":
+            return navigateTarget(target, requireString(args, "url"));
+          case "select_page":
+            selectedTargetByOwner.set(
+              resolveOwnerKey(normalizedInput),
+              target.nodeId
+            );
+            await options.selectTarget?.(toSummary(target));
+            return {
+              text: formatPageResult(selectedPageResultPrefix, target.nodeId)
+            };
+          case "take_screenshot":
+            return target.driver.screenshot(args.fullPage === true);
+          case "take_snapshot":
+            return target.driver.snapshot();
+        }
+        throw new Error(`Unsupported browser automation tool: ${input.tool}`);
+      });
     },
     list,
     register(nodeId, contents, metadata) {
       const normalizedNodeId = normalizeRequired(nodeId, "nodeId");
-      const existing = targets.get(normalizedNodeId);
+      const key = targetKey(metadata.workspaceId, normalizedNodeId);
+      const existing = targets.get(key);
       if (existing?.contents === contents) {
         existing.metadata = normalizeMetadata(metadata);
         if (metadata.focused) {
@@ -215,34 +283,70 @@ export function createBrowserNodeAutomationRegistry(
         return;
       }
       existing?.driver.dispose();
-      targets.set(normalizedNodeId, {
+      targets.set(key, {
         contents,
         driver: new BrowserNodeAutomationDriver(contents),
         focusedSequence: metadata.focused ? ++focusSequence : 0,
         metadata: normalizeMetadata(metadata),
-        nodeId: normalizedNodeId
+        nodeId: normalizedNodeId,
+        queue: Promise.resolve()
       });
     },
-    releaseAgent(agentSessionId) {
+    invalidate(nodeId, contents) {
+      for (const target of targets.values()) {
+        if (
+          target.nodeId === nodeId &&
+          (!contents || target.contents === contents)
+        ) {
+          target.driver.invalidate();
+        }
+      }
+    },
+    async releaseAgent(agentSessionId) {
       const owner = normalizeRequired(agentSessionId, "agentSessionId");
       for (const [nodeId, lease] of leases) {
         if (lease.owner === owner) {
+          clearTimeout(lease.timeout);
           leases.delete(nodeId);
+          void targets.get(nodeId)?.driver.disableRequestGuard();
+        }
+      }
+      for (const ownerKey of selectedTargetByOwner.keys()) {
+        if (ownerKey.endsWith(`:${owner}`)) {
+          selectedTargetByOwner.delete(ownerKey);
+        }
+      }
+      if (options.closeTarget) {
+        const agentTargets = Array.from(targets.values()).filter(
+          (target) =>
+            target.metadata.surfaceRole === "agent" &&
+            normalizeOptional(target.metadata.agentSessionId) === owner
+        );
+        for (const target of agentTargets) {
+          await enqueueTarget(target, () =>
+            options.closeTarget!(toSummary(target))
+          );
         }
       }
     },
     unregister(nodeId, contents) {
-      const existing = targets.get(nodeId);
-      if (!existing || (contents && existing.contents !== contents)) {
-        return;
+      for (const [key, existing] of targets) {
+        if (
+          existing.nodeId !== nodeId ||
+          (contents && existing.contents !== contents)
+        ) {
+          continue;
+        }
+        existing.driver.dispose();
+        targets.delete(key);
+        const lease = leases.get(key);
+        if (lease) clearTimeout(lease.timeout);
+        leases.delete(key);
+        clearSelectedTarget(selectedTargetByOwner, existing.nodeId);
       }
-      existing.driver.dispose();
-      targets.delete(nodeId);
-      leases.delete(nodeId);
-      clearSelectedTarget(selectedTargetByOwner, nodeId);
     },
     update(nodeId, metadata) {
-      const target = targets.get(nodeId);
+      const target = targets.get(targetKey(metadata.workspaceId, nodeId));
       if (!target) {
         return;
       }
@@ -252,6 +356,27 @@ export function createBrowserNodeAutomationRegistry(
       }
     }
   };
+}
+
+async function enqueueTarget<TResult>(
+  target: RegisteredTarget,
+  operation: () => Promise<TResult>
+): Promise<TResult> {
+  const previous = target.queue;
+  let release!: () => void;
+  target.queue = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release();
+  }
+}
+
+function targetKey(workspaceId: string, nodeId: string): string {
+  return `${normalizeRequired(workspaceId, "workspaceId")}\u0000${normalizeRequired(nodeId, "nodeId")}`;
 }
 
 function resolveOwnerKey(input: BrowserNodeAutomationCallInput): string {

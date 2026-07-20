@@ -1,5 +1,8 @@
 import type { BrowserGuestDebugger, BrowserGuestWebContents } from "./types.ts";
-import type { BrowserNodeAutomationToolResult } from "./automationTypes.ts";
+import type {
+  BrowserNodeAutomationAuthorizationResult,
+  BrowserNodeAutomationToolResult
+} from "./automationTypes.ts";
 
 const clickedResultPrefix = "Clicked";
 const filledResultPrefix = "Filled";
@@ -23,9 +26,25 @@ export class BrowserNodeAutomationDriver {
   private readonly contents: BrowserGuestWebContents;
   private readonly elements = new Map<string, SnapshotElement>();
   private nextSnapshotSequence = 1;
+  private requestAuthorizer:
+    | ((url: string) => Promise<BrowserNodeAutomationAuthorizationResult>)
+    | null = null;
+  private requestGuardEnabled = false;
+  private readonly onNavigation = (): void => {
+    this.elements.clear();
+  };
+  private readonly onDebuggerMessage = (
+    _event: unknown,
+    method: string,
+    rawParams: unknown
+  ): void => {
+    if (method !== "Fetch.requestPaused") return;
+    void this.handlePausedRequest(asRecord(rawParams));
+  };
 
   constructor(contents: BrowserGuestWebContents) {
     this.contents = contents;
+    this.contents.on("did-start-navigation", this.onNavigation);
   }
 
   async click(uid: string): Promise<BrowserNodeAutomationToolResult> {
@@ -66,6 +85,52 @@ export class BrowserNodeAutomationDriver {
       debuggerClient.detach();
     }
     this.attachedByDriver = false;
+    this.requestAuthorizer = null;
+    this.requestGuardEnabled = false;
+    this.elements.clear();
+    this.contents.off("did-start-navigation", this.onNavigation);
+    debuggerClient?.off?.("message", this.onDebuggerMessage);
+  }
+
+  async enableRequestGuard(
+    authorizer: (
+      url: string
+    ) => Promise<BrowserNodeAutomationAuthorizationResult>
+  ): Promise<void> {
+    this.requestAuthorizer = authorizer;
+    if (this.requestGuardEnabled) return;
+    const debuggerClient = this.requireDebugger();
+    if (!debuggerClient.on) {
+      throw new Error("Browser request interception is unavailable");
+    }
+    debuggerClient.on("message", this.onDebuggerMessage);
+    try {
+      await debuggerClient.sendCommand("Fetch.enable", {
+        patterns: [
+          { requestStage: "Request", urlPattern: "http://*" },
+          { requestStage: "Request", urlPattern: "https://*" }
+        ]
+      });
+      this.requestGuardEnabled = true;
+    } catch (error) {
+      debuggerClient.off?.("message", this.onDebuggerMessage);
+      this.requestAuthorizer = null;
+      throw error;
+    }
+  }
+
+  async disableRequestGuard(): Promise<void> {
+    this.requestAuthorizer = null;
+    if (!this.requestGuardEnabled) return;
+    this.requestGuardEnabled = false;
+    const debuggerClient = this.contents.debugger;
+    debuggerClient?.off?.("message", this.onDebuggerMessage);
+    if (debuggerClient?.isAttached()) {
+      await debuggerClient.sendCommand("Fetch.disable").catch(() => undefined);
+    }
+  }
+
+  invalidate(): void {
     this.elements.clear();
   }
 
@@ -202,6 +267,27 @@ export class BrowserNodeAutomationDriver {
       this.attachedByDriver = true;
     }
     return debuggerClient;
+  }
+
+  private async handlePausedRequest(
+    params: Record<string, unknown>
+  ): Promise<void> {
+    const debuggerClient = this.contents.debugger;
+    const requestId = readString(params.requestId);
+    const url = readString(asRecord(params.request)?.url);
+    if (!debuggerClient?.isAttached() || !requestId) return;
+    let allowed = false;
+    try {
+      allowed = Boolean(url && (await this.requestAuthorizer?.(url))?.allowed);
+    } catch {
+      allowed = false;
+    }
+    await debuggerClient
+      .sendCommand(
+        allowed ? "Fetch.continueRequest" : "Fetch.failRequest",
+        allowed ? { requestId } : { errorReason: "BlockedByClient", requestId }
+      )
+      .catch(() => undefined);
   }
 
   private requireElement(uid: string): SnapshotElement {

@@ -10,14 +10,18 @@ test("automation server publishes a private authenticated loopback endpoint", as
   const directory = await mkdtemp(join(tmpdir(), "browser-node-server-"));
   const listenerInfoPath = join(directory, "listener.json");
   let callCount = 0;
+  const releasedAgents: string[] = [];
   const registry: BrowserNodeAutomationRegistry = {
     async call(input) {
       callCount += 1;
       return { text: `${input.workspaceId}:${input.tool}` };
     },
     list: () => [],
+    invalidate() {},
     register() {},
-    releaseAgent() {},
+    async releaseAgent(agentSessionId) {
+      releasedAgents.push(agentSessionId);
+    },
     unregister() {},
     update() {}
   };
@@ -56,4 +60,12 @@ test("automation server publishes a private authenticated loopback endpoint", as
     result: { text: "workspace-1:list_pages" }
   });
   assert.equal(callCount, 1);
+
+  const released = await fetch(`http://${published.address}/v1/release-agent`, {
+    body: JSON.stringify({ agentSessionId: "agent-1" }),
+    headers: { authorization: `Bearer ${published.token}` },
+    method: "POST"
+  });
+  assert.equal(released.status, 200);
+  assert.deepEqual(releasedAgents, ["agent-1"]);
 });

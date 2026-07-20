@@ -250,6 +250,10 @@ export function createBrowserGuestManager({
     }
 
     const onStateChange = () => publishState(session);
+    const onDidStartNavigation = () => {
+      automationRegistry?.invalidate(session.nodeId, contents);
+      publishState(session);
+    };
     const onDidNavigate = (...args: unknown[]) => {
       const url = typeof args[1] === "string" ? args[1] : undefined;
       const statusCode = typeof args[2] === "number" ? args[2] : undefined;
@@ -344,6 +348,7 @@ export function createBrowserGuestManager({
 
     const records: BrowserGuestSession["listeners"] = [
       { event: "did-start-loading", listener: onStateChange },
+      { event: "did-start-navigation", listener: onDidStartNavigation },
       { event: "did-stop-loading", listener: onStateChange },
       { event: "did-navigate", listener: onDidNavigate },
       { event: "did-navigate-in-page", listener: onStateChange },
