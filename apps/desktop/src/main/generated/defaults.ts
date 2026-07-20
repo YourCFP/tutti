@@ -102,9 +102,9 @@ export const generatedDefaults = {
         key: "grok",
         releaseIndexUrl:
           "https://d1x7gb6wqsqmnm.cloudfront.net/tutti-agent-releases/agents/grok/versions.json",
-        signingKeyId: "tutti-grok-release-v1",
+        signingKeyId: "tutti-grok-release-v2",
         signingPublicKey:
-          "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA2ZaE97XclDVCG9MLnQ5z1ZTd8FJPeLqj6KDsY69Iyu8=\n-----END PUBLIC KEY-----\n",
+          "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAwEnBjsJWjJnmmCCmS2MZTMaNJZSkfVhL7rm3lcsutyA=\n-----END PUBLIC KEY-----\n",
         enabled: false
       }
     ]
