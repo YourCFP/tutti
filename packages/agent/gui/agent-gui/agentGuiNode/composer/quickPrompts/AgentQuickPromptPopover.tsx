@@ -1,7 +1,8 @@
-import { useId, useRef, useState } from "react";
+import { type PointerEvent, useId, useRef, useState } from "react";
 import {
   Button,
   ConfirmationDialog,
+  DialogFooter,
   Input,
   Popover,
   PopoverContent,
@@ -43,6 +44,16 @@ export function AgentQuickPromptPopover({
   const [view, setView] = useState<"prompts" | "templates">("prompts");
   const titleId = useId();
   const { labels, snapshot } = controller;
+  const templateEntryAction = usePrimaryPointerAction(() =>
+    setView("templates")
+  );
+  const returnToPromptsAction = usePrimaryPointerAction(() =>
+    setView("prompts")
+  );
+  const deleteCancelAction = usePrimaryPointerAction(controller.closeDialog);
+  const deleteConfirmAction = usePrimaryPointerAction(() => {
+    void controller.submitDelete();
+  });
 
   if (!controller.capabilityAvailable) {
     return null;
@@ -138,7 +149,7 @@ export function AgentQuickPromptPopover({
                 size="sm"
                 type="button"
                 variant="ghost"
-                onClick={() => setView("prompts")}
+                {...returnToPromptsAction}
               >
                 <ArrowLeftIcon data-icon="inline-start" />
                 {labels.returnToPrompts}
@@ -288,7 +299,7 @@ export function AgentQuickPromptPopover({
                 ))}
                 <TemplateEntry
                   label={labels.createFromTemplate}
-                  onSelect={() => setView("templates")}
+                  action={templateEntryAction}
                 />
               </div>
             )}
@@ -309,8 +320,28 @@ export function AgentQuickPromptPopover({
             ? labels.deleteDescription(controller.promptToDelete.title)
             : undefined
         }
-        onCancel={controller.closeDialog}
-        onConfirm={() => void controller.submitDelete()}
+        footer={
+          <DialogFooter>
+            <Button
+              {...deleteCancelAction}
+              disabled={controller.isDeleting}
+              size="dialog"
+              type="button"
+              variant="ghost"
+            >
+              {labels.cancel}
+            </Button>
+            <Button
+              {...deleteConfirmAction}
+              disabled={controller.isDeleting}
+              size="dialog"
+              type="button"
+              variant="destructive"
+            >
+              {controller.isDeleting ? labels.deleting : labels.deleteConfirm}
+            </Button>
+          </DialogFooter>
+        }
         onOpenChange={(open) => {
           if (!open && !controller.isDeleting) controller.closeDialog();
         }}
@@ -388,23 +419,48 @@ function RecommendedTemplateList({
 }
 
 function TemplateEntry({
-  label,
-  onSelect
+  action,
+  label
 }: {
+  action: PrimaryPointerAction;
   label: string;
-  onSelect: () => void;
 }): React.JSX.Element {
   return (
     <Button
+      {...action}
       className="mt-1 h-auto w-full justify-between px-2 py-2 text-left whitespace-normal"
       type="button"
       variant="ghost"
-      onClick={onSelect}
     >
       <span className="font-medium">{label}</span>
       <ArrowRightIcon data-icon="inline-end" />
     </Button>
   );
+}
+
+type PrimaryPointerAction = {
+  onClick: () => void;
+  onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
+};
+
+function usePrimaryPointerAction(action: () => void): PrimaryPointerAction {
+  const actionRequestedOnPointerDownRef = useRef(false);
+
+  return {
+    onPointerDown: (event) => {
+      if (event.button !== 0) return;
+      actionRequestedOnPointerDownRef.current = true;
+      event.preventDefault();
+      action();
+    },
+    onClick: () => {
+      if (actionRequestedOnPointerDownRef.current) {
+        actionRequestedOnPointerDownRef.current = false;
+        return;
+      }
+      action();
+    }
+  };
 }
 
 function PromptState({

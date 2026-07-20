@@ -210,10 +210,11 @@ describe("AgentQuickPromptPopover", () => {
       </TooltipProvider>
     );
 
-    fireEvent.click(
+    fireEvent.pointerDown(
       screen.getByRole("button", {
         name: "Create from a recommended template"
-      })
+      }),
+      { button: 0 }
     );
     expect(
       screen.getByRole("heading", { name: "Recommended templates", level: 2 })
@@ -223,7 +224,9 @@ describe("AgentQuickPromptPopover", () => {
       screen.getByRole("button", { name: "My prompts" })
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "My prompts" }));
+    fireEvent.pointerDown(screen.getByRole("button", { name: "My prompts" }), {
+      button: 0
+    });
     expect(
       screen.getByRole("heading", { name: "Quick prompts", level: 2 })
     ).toBeInTheDocument();
@@ -280,6 +283,40 @@ describe("AgentQuickPromptPopover", () => {
     expect(
       screen.getByRole("button", { name: labels.deleteConfirm })
     ).toBeInTheDocument();
+  });
+
+  it("runs dialog cancellation and deletion on primary pointer down", () => {
+    const createSubject = controller({
+      isEditorOpen: true,
+      isPopoverOpen: false,
+      mode: "create"
+    });
+    const createRender = render(
+      <TooltipProvider>
+        <AgentQuickPromptPopover controller={createSubject} disabled={false} />
+      </TooltipProvider>
+    );
+    fireEvent.pointerDown(screen.getByRole("button", { name: labels.cancel }), {
+      button: 0
+    });
+    expect(createSubject.closeDialog).toHaveBeenCalledOnce();
+    createRender.unmount();
+
+    const deleteSubject = controller({
+      isPopoverOpen: false,
+      mode: "delete",
+      promptToDelete: controller().filteredPrompts[0]!
+    });
+    render(
+      <TooltipProvider>
+        <AgentQuickPromptPopover controller={deleteSubject} disabled={false} />
+      </TooltipProvider>
+    );
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: labels.deleteConfirm }),
+      { button: 0 }
+    );
+    expect(deleteSubject.submitDelete).toHaveBeenCalledOnce();
   });
 
   it("preserves an edited draft when a conflict refreshes the same prompt", () => {
@@ -400,6 +437,7 @@ describe("quick-prompt UI composition", () => {
     expect(source).toContain("onCloseAutoFocus");
     expect(editorSource).toContain("<Dialog");
     expect(editorSource).toContain("<Textarea");
+    expect(editorSource).toContain("min-h-[128px]");
     expect(editorSource).toContain("onKeyDownCapture");
     expect(source).not.toMatch(/<button\b/u);
     expect(editorSource).not.toMatch(/<button\b/u);

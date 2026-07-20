@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type PointerEvent, useRef, useState } from "react";
 import {
   Button,
   Dialog,
@@ -31,6 +31,7 @@ export function AgentQuickPromptEditorDialog({
     () => controller.initialDraft ?? promptDraft(source)
   );
   const [validationError, setValidationError] = useState<string | null>(null);
+  const cancelRequestedOnPointerDownRef = useRef(false);
 
   const submit = async (): Promise<void> => {
     const error = validateDraft(draft, labels);
@@ -112,7 +113,7 @@ export function AgentQuickPromptEditorDialog({
             <span>{labels.contentLabel}</span>
             <Textarea
               aria-invalid={Boolean(validationError)}
-              className="min-h-[240px] resize-y"
+              className="min-h-[128px] resize-y"
               disabled={controller.isSaving}
               placeholder={labels.contentPlaceholder}
               value={draft.content}
@@ -135,7 +136,19 @@ export function AgentQuickPromptEditorDialog({
               size="dialog"
               type="button"
               variant="ghost"
-              onClick={controller.closeDialog}
+              onPointerDown={(event: PointerEvent<HTMLButtonElement>) => {
+                if (event.button !== 0) return;
+                cancelRequestedOnPointerDownRef.current = true;
+                event.preventDefault();
+                controller.closeDialog();
+              }}
+              onClick={() => {
+                if (cancelRequestedOnPointerDownRef.current) {
+                  cancelRequestedOnPointerDownRef.current = false;
+                  return;
+                }
+                controller.closeDialog();
+              }}
             >
               {labels.cancel}
             </Button>
