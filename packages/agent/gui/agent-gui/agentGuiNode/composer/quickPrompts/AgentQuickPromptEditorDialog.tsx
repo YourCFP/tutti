@@ -63,6 +63,12 @@ export function AgentQuickPromptEditorDialog({
       <DialogContent
         className="sm:max-w-[560px]"
         showCloseButton={false}
+        onKeyDownCapture={(event) => {
+          // The dialog is portalled but still participates in the Composer's
+          // React event tree. Keep Enter inside the form so a keyboard save
+          // cannot reach the Composer submit shortcut after the dialog closes.
+          if (event.key === "Enter") event.stopPropagation();
+        }}
         onEscapeKeyDown={(event) => {
           if (controller.isSaving) event.preventDefault();
         }}

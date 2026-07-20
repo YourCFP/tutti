@@ -227,6 +227,29 @@ describe("AgentQuickPromptPopover", () => {
       "My unsaved draft"
     );
   });
+
+  it("keeps Enter in the editor Dialog out of the Composer shortcut", () => {
+    const onComposerKeyDown = vi.fn();
+    render(
+      <div onKeyDown={onComposerKeyDown}>
+        <TooltipProvider>
+          <AgentQuickPromptPopover
+            controller={controller({
+              isEditorOpen: true,
+              isPopoverOpen: false,
+              mode: "create"
+            })}
+            disabled={false}
+          />
+        </TooltipProvider>
+      </div>
+    );
+
+    fireEvent.keyDown(screen.getByLabelText(labels.titleLabel), {
+      key: "Enter"
+    });
+    expect(onComposerKeyDown).not.toHaveBeenCalled();
+  });
 });
 
 describe("quick-prompt UI composition", () => {
@@ -260,6 +283,7 @@ describe("quick-prompt UI composition", () => {
     expect(source).toContain("onCloseAutoFocus");
     expect(editorSource).toContain("<Dialog");
     expect(editorSource).toContain("<Textarea");
+    expect(editorSource).toContain("onKeyDownCapture");
     expect(source).not.toMatch(/<button\b/u);
     expect(editorSource).not.toMatch(/<button\b/u);
     expect(source).not.toContain("radix-ui");
