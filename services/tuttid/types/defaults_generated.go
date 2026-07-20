@@ -70,6 +70,20 @@ var generatedDefaults = generatedDefaultsSpec{
 				Enabled:          false,
 			},
 			{
+				Key:              "hermes",
+				ReleaseIndexURL:  "https://d1x7gb6wqsqmnm.cloudfront.net/tutti-agent-releases/agents/hermes/versions.json",
+				SigningKeyID:     "tutti-hermes-release-v1",
+				SigningPublicKey: "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAIeel8ddNiN3b4qOq0KucF3BRxfi3zourM0BVyGuP8eY=\n-----END PUBLIC KEY-----\n",
+				Enabled:          false,
+			},
+			{
+				Key:              "kimi-code",
+				ReleaseIndexURL:  "https://d1x7gb6wqsqmnm.cloudfront.net/tutti-agent-releases/agents/kimi-code/versions.json",
+				SigningKeyID:     "tutti-kimi-code-release-v1",
+				SigningPublicKey: "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAnO+V8MpPIY90uDINyaJjtENg/vPQpURo0AltBZLqvgw=\n-----END PUBLIC KEY-----\n",
+				Enabled:          false,
+			},
+			{
 				Key:              "grok",
 				ReleaseIndexURL:  "https://d1x7gb6wqsqmnm.cloudfront.net/tutti-agent-releases/agents/grok/versions.json",
 				SigningKeyID:     "tutti-grok-release-v1",
