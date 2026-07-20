@@ -96,6 +96,7 @@ export function useAgentQuickPromptLibrary(input: {
   disclosureAvailableRef.current = disclosureAvailable;
   if (previousDisclosureAvailable !== disclosureAvailable) {
     setPreviousDisclosureAvailable(disclosureAvailable);
+    modeRef.current = "closed";
     setMode("closed");
     setSelectedPrompt(null);
     setInitialDraft(null);
@@ -130,6 +131,7 @@ export function useAgentQuickPromptLibrary(input: {
     }
     onBeforeOpen();
     setMutationError(null);
+    modeRef.current = "popover";
     setMode("popover");
     if (snapshot.status === "idle") {
       void quickPrompts?.ensureLoaded().catch(() => undefined);
@@ -143,6 +145,7 @@ export function useAgentQuickPromptLibrary(input: {
   ]);
 
   const close = useCallback(() => {
+    modeRef.current = "closed";
     setMode("closed");
     setSelectedPrompt(null);
     setInitialDraft(null);
@@ -151,11 +154,13 @@ export function useAgentQuickPromptLibrary(input: {
   }, []);
 
   const closeDialog = useCallback(() => {
+    const nextMode = capabilityAvailable && !disabled ? "popover" : "closed";
+    modeRef.current = nextMode;
     setMutationError(null);
     setSelectedPrompt(null);
     setInitialDraft(null);
     setPromptToDelete(null);
-    setMode(capabilityAvailable && !disabled ? "popover" : "closed");
+    setMode(nextMode);
   }, [capabilityAvailable, disabled]);
 
   const setPopoverOpen = useCallback(
@@ -170,6 +175,7 @@ export function useAgentQuickPromptLibrary(input: {
   );
 
   const openCreate = useCallback((draft?: AgentQuickPromptDraft) => {
+    modeRef.current = "create";
     setSelectedPrompt(null);
     setInitialDraft(draft ?? null);
     setMutationError(null);
@@ -177,6 +183,7 @@ export function useAgentQuickPromptLibrary(input: {
   }, []);
 
   const openEdit = useCallback((prompt: AgentHostQuickPrompt) => {
+    modeRef.current = "edit";
     setSelectedPrompt(prompt);
     setInitialDraft(null);
     setMutationError(null);
@@ -184,6 +191,7 @@ export function useAgentQuickPromptLibrary(input: {
   }, []);
 
   const deletePrompt = useCallback((prompt: AgentHostQuickPrompt) => {
+    modeRef.current = "delete";
     setPromptToDelete(prompt);
     setMutationError(null);
     setMode("delete");
@@ -207,7 +215,9 @@ export function useAgentQuickPromptLibrary(input: {
           : await quickPrompts.create(draft);
         setSelectedPrompt(saved);
         setInitialDraft(null);
-        setMode(disclosureAvailableRef.current ? "popover" : "closed");
+        const nextMode = disclosureAvailableRef.current ? "popover" : "closed";
+        modeRef.current = nextMode;
+        setMode(nextMode);
         return true;
       } catch (error) {
         const conflict = isVersionConflict(error);
@@ -248,7 +258,9 @@ export function useAgentQuickPromptLibrary(input: {
         expectedVersion: promptToDelete.version
       });
       setPromptToDelete(null);
-      setMode(disclosureAvailableRef.current ? "popover" : "closed");
+      const nextMode = disclosureAvailableRef.current ? "popover" : "closed";
+      modeRef.current = nextMode;
+      setMode(nextMode);
       return true;
     } catch (error) {
       const conflict = isVersionConflict(error);
