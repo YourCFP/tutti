@@ -66,6 +66,44 @@ their host path and kind, do not become prompt assets, and preserve their
 position relative to prepared entries. Hosts that cannot expose a live local
 reference omit that capability or classify the entry for preparation.
 
+### Project Directory Selection
+
+AgentGUI reuses `ReferenceSourcePicker` for project-directory selection instead
+of owning a second directory dialog. The host injects a dedicated
+`projectDirectorySourceAggregator`; opening either project entry point switches
+the shared picker to the `directory` purpose and routes the resolved folder path
+back through the existing project-selection callback.
+
+`WorkspaceUserProjectSelect` does not own project-directory creation UI. Both
+“Use existing project” and “Add project” invoke the same `selectDirectory`
+capability; “Add project” relies on the selected directory source's
+`createDirectory()` action when the user needs a new subdirectory. The menu
+actions retain distinct selection metadata, but they do not select different
+picker implementations.
+
+The directory purpose is a constrained use of the same source architecture:
+
+- the injected registry contains only directory sources that are valid project
+  roots, so host-local file sections do not appear implicitly;
+- sources return and search folders only, and enforce workspace boundaries
+  before pagination;
+- the picker uses single selection, disables file-type and provenance controls,
+  and supplies directory-specific title, search, empty, and confirmation copy;
+- a source that declares `directoryCreatable` implements `createDirectory()`;
+  it owns path-segment validation, parent-boundary checks, persistence, and the
+  canonical node returned after refreshing the parent;
+- picker/controller code routes creation by `sourceId` and may update selection
+  and loaded child state, but never constructs paths from opaque node ids.
+
+Hosts that do not inject `projectDirectorySourceAggregator` retain their
+existing project-selection capability. This keeps filesystem authority and
+product-specific project-root policy outside AgentGUI.
+
+Hosts that construct the AgentGUI i18n runtime must merge the workspace file
+manager resources as well as the AgentGUI and project-selector resources. The
+shared directory creation dialog reads its label, placeholder, cancel, and
+create copy from the `workspaceFileManager` namespace.
+
 ### Composer Mention Directory Navigation
 
 The compact AgentGUI `@` palette uses `AgentContextMentionProvider` instead of
@@ -164,6 +202,8 @@ cache expires; they do not claim exhaustive history.
 
 - Route every operation by `sourceId`; reject unknown sources.
 - Never derive hierarchy by splitting an opaque `nodeId`.
+- Never implement directory creation by joining or decoding `nodeId` in shared
+  picker code; the owning source validates and creates the directory.
 - Never derive composer-folder child counts from the currently loaded mention
   rows; directory providers own that count and the corresponding child query.
 - Keep node ids stable across repeated listings so selection and pagination can
