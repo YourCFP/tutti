@@ -1,4 +1,4 @@
-import { useId, useRef } from "react";
+import { useId, useRef, useState } from "react";
 import {
   Button,
   ConfirmationDialog,
@@ -15,6 +15,8 @@ import {
 } from "@tutti-os/ui-system";
 import {
   AddIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
   DeleteIcon,
   EditIcon,
   FileTextIcon,
@@ -22,6 +24,7 @@ import {
 } from "@tutti-os/ui-system/icons";
 import type { AgentHostQuickPrompt } from "../../../../host/agentHostApi";
 import { AgentQuickPromptEditorDialog } from "./AgentQuickPromptEditorDialog";
+import type { AgentQuickPromptTemplate } from "./agentQuickPromptLabels";
 import type { AgentQuickPromptLibraryController } from "./useAgentQuickPromptLibrary";
 
 export function AgentQuickPromptPopover({
@@ -33,8 +36,11 @@ export function AgentQuickPromptPopover({
 }): React.JSX.Element | null {
   const searchRef = useRef<HTMLInputElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
+  const firstTemplateRef = useRef<HTMLButtonElement | null>(null);
   const preserveExternalFocusRef = useRef(false);
   const createRequestedOnPointerDownRef = useRef(false);
+  const templateRequestedOnPointerDownRef = useRef(false);
+  const [view, setView] = useState<"prompts" | "templates">("prompts");
   const titleId = useId();
   const { labels, snapshot } = controller;
 
@@ -56,13 +62,21 @@ export function AgentQuickPromptPopover({
     preserveExternalFocusRef.current = true;
     controller.openCreate();
   };
+  const requestTemplate = (template: AgentQuickPromptTemplate): void => {
+    preserveExternalFocusRef.current = true;
+    controller.openCreate({ title: template.title, content: template.content });
+  };
+  const isTemplateView = view === "templates";
 
   return (
     <>
       <Popover
         modal={false}
         open={controller.isPopoverOpen}
-        onOpenChange={controller.setPopoverOpen}
+        onOpenChange={(open) => {
+          if (!open) setView("prompts");
+          controller.setPopoverOpen(open);
+        }}
       >
         <TooltipProvider delayDuration={120}>
           <Tooltip>
@@ -96,6 +110,10 @@ export function AgentQuickPromptPopover({
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             window.requestAnimationFrame(() => {
+              if (isTemplateView) {
+                firstTemplateRef.current?.focus();
+                return;
+              }
               const selectedId = controller.selectedPrompt?.id;
               const selectedRow = selectedId
                 ? rowRefs.current.get(selectedId)
@@ -113,52 +131,68 @@ export function AgentQuickPromptPopover({
               id={titleId}
               className="text-[14px] font-medium text-[var(--text-primary)]"
             >
-              {labels.title}
+              {isTemplateView ? labels.recommendedTemplatesTitle : labels.title}
             </h2>
-            <Button
-              size="sm"
-              type="button"
-              variant="ghost"
-              onPointerDown={(event) => {
-                if (event.button !== 0) return;
-                createRequestedOnPointerDownRef.current = true;
-                requestCreate();
-              }}
-              onClick={() => {
-                if (createRequestedOnPointerDownRef.current) {
-                  createRequestedOnPointerDownRef.current = false;
-                  return;
-                }
-                requestCreate();
-              }}
-            >
-              <AddIcon data-icon="inline-start" />
-              {labels.add}
-            </Button>
+            {isTemplateView ? (
+              <Button
+                size="sm"
+                type="button"
+                variant="ghost"
+                onClick={() => setView("prompts")}
+              >
+                <ArrowLeftIcon data-icon="inline-start" />
+                {labels.returnToPrompts}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                type="button"
+                variant="ghost"
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  createRequestedOnPointerDownRef.current = true;
+                  requestCreate();
+                }}
+                onClick={() => {
+                  if (createRequestedOnPointerDownRef.current) {
+                    createRequestedOnPointerDownRef.current = false;
+                    return;
+                  }
+                  requestCreate();
+                }}
+              >
+                <AddIcon data-icon="inline-start" />
+                {labels.add}
+              </Button>
+            )}
           </div>
-          <div className="relative shrink-0 px-3 py-2.5">
-            <SearchIcon
-              aria-hidden
-              className="pointer-events-none absolute top-1/2 left-5 size-3.5 -translate-y-1/2 text-[var(--text-tertiary)]"
-            />
-            <Input
-              ref={searchRef}
-              aria-label={labels.searchPlaceholder}
-              className="pl-8"
-              placeholder={labels.searchPlaceholder}
-              value={controller.searchQuery}
-              onChange={(event) =>
-                controller.setSearchQuery(event.target.value)
-              }
-              onKeyDown={(event) => {
-                if (event.key === "ArrowDown") {
-                  event.preventDefault();
-                  focusRow(0);
+          {!isTemplateView ? (
+            <div className="relative shrink-0 px-3 py-2.5">
+              <SearchIcon
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-5 size-3.5 -translate-y-1/2 text-[var(--text-tertiary)]"
+              />
+              <Input
+                ref={searchRef}
+                aria-label={labels.searchPlaceholder}
+                className="pl-8"
+                placeholder={labels.searchPlaceholder}
+                value={controller.searchQuery}
+                onChange={(event) =>
+                  controller.setSearchQuery(event.target.value)
                 }
-              }}
-            />
-          </div>
-          {snapshot.status === "error" && snapshot.prompts.length > 0 ? (
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    focusRow(0);
+                  }
+                }}
+              />
+            </div>
+          ) : null}
+          {!isTemplateView &&
+          snapshot.status === "error" &&
+          snapshot.prompts.length > 0 ? (
             <div
               className="flex shrink-0 items-center justify-between gap-2 px-3 pb-2 text-[12px] text-[var(--state-danger)]"
               role="alert"
@@ -179,7 +213,17 @@ export function AgentQuickPromptPopover({
             viewportClassName="px-2 pb-2"
             viewportTestId="agent-quick-prompt-scroll-viewport"
           >
-            {snapshot.status === "loading" && snapshot.prompts.length === 0 ? (
+            {isTemplateView ? (
+              <RecommendedTemplateList
+                firstTemplateRef={firstTemplateRef}
+                labels={labels}
+                onSelect={requestTemplate}
+                selectionRequestedOnPointerDownRef={
+                  templateRequestedOnPointerDownRef
+                }
+              />
+            ) : snapshot.status === "loading" &&
+              snapshot.prompts.length === 0 ? (
               <PromptState
                 icon={<Spinner size={16} />}
                 label={labels.loading}
@@ -198,8 +242,16 @@ export function AgentQuickPromptPopover({
                   </Button>
                 }
               />
-            ) : snapshot.prompts.length === 0 ? (
-              <PromptState label={labels.empty} />
+            ) : snapshot.prompts.length === 0 &&
+              !controller.searchQuery.trim() ? (
+              <RecommendedTemplateList
+                firstTemplateRef={firstTemplateRef}
+                labels={labels}
+                onSelect={requestTemplate}
+                selectionRequestedOnPointerDownRef={
+                  templateRequestedOnPointerDownRef
+                }
+              />
             ) : controller.filteredPrompts.length === 0 ? (
               <PromptState label={labels.noResults} />
             ) : (
@@ -234,6 +286,10 @@ export function AgentQuickPromptPopover({
                     }}
                   />
                 ))}
+                <TemplateEntry
+                  label={labels.createFromTemplate}
+                  onSelect={() => setView("templates")}
+                />
               </div>
             )}
           </ScrollArea>
@@ -269,6 +325,85 @@ export function AgentQuickPromptPopover({
         ) : null}
       </ConfirmationDialog>
     </>
+  );
+}
+
+function RecommendedTemplateList({
+  firstTemplateRef,
+  labels,
+  onSelect,
+  selectionRequestedOnPointerDownRef
+}: {
+  firstTemplateRef: React.RefObject<HTMLButtonElement | null>;
+  labels: AgentQuickPromptLibraryController["labels"];
+  onSelect: (template: AgentQuickPromptTemplate) => void;
+  selectionRequestedOnPointerDownRef: React.MutableRefObject<boolean>;
+}): React.JSX.Element {
+  return (
+    <section className="flex flex-col gap-1 px-1 pt-2">
+      <div className="px-2 pb-1">
+        <h3 className="text-[13px] font-medium text-[var(--text-primary)]">
+          {labels.recommendedTemplatesTitle}
+        </h3>
+        <p className="pt-0.5 text-[12px] leading-[1.35] text-[var(--text-secondary)]">
+          {labels.recommendedTemplatesDescription}
+        </p>
+      </div>
+      {labels.recommendedTemplates.map((template, index) => (
+        <Button
+          key={template.id}
+          ref={index === 0 ? firstTemplateRef : undefined}
+          className="h-auto w-full justify-between px-2 py-2 text-left whitespace-normal"
+          type="button"
+          variant="ghost"
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            selectionRequestedOnPointerDownRef.current = true;
+            onSelect(template);
+          }}
+          onClick={() => {
+            if (selectionRequestedOnPointerDownRef.current) {
+              selectionRequestedOnPointerDownRef.current = false;
+              return;
+            }
+            onSelect(template);
+          }}
+        >
+          <span className="flex min-w-0 flex-col items-start gap-0.5">
+            <span className="w-full truncate font-medium text-[var(--text-primary)]">
+              {template.title}
+            </span>
+            <span className="line-clamp-2 w-full text-[12px] leading-[1.35] text-[var(--text-secondary)]">
+              {template.description}
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1 text-[12px] text-[var(--text-secondary)]">
+            {labels.useTemplate}
+            <ArrowRightIcon data-icon="inline-end" />
+          </span>
+        </Button>
+      ))}
+    </section>
+  );
+}
+
+function TemplateEntry({
+  label,
+  onSelect
+}: {
+  label: string;
+  onSelect: () => void;
+}): React.JSX.Element {
+  return (
+    <Button
+      className="mt-1 h-auto w-full justify-between px-2 py-2 text-left whitespace-normal"
+      type="button"
+      variant="ghost"
+      onClick={onSelect}
+    >
+      <span className="font-medium">{label}</span>
+      <ArrowRightIcon data-icon="inline-end" />
+    </Button>
   );
 }
 

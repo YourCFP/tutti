@@ -42,10 +42,11 @@ export interface AgentQuickPromptLibraryController {
   isEditorOpen: boolean;
   isPopoverOpen: boolean;
   isSaving: boolean;
+  initialDraft: AgentQuickPromptDraft | null;
   labels: AgentQuickPromptLabels;
   mode: AgentQuickPromptMode;
   mutationError: AgentQuickPromptMutationError;
-  openCreate: () => void;
+  openCreate: (draft?: AgentQuickPromptDraft) => void;
   openEdit: (prompt: AgentHostQuickPrompt) => void;
   openPopover: () => void;
   promptToDelete: AgentHostQuickPrompt | null;
@@ -79,6 +80,8 @@ export function useAgentQuickPromptLibrary(input: {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPrompt, setSelectedPrompt] =
     useState<AgentHostQuickPrompt | null>(null);
+  const [initialDraft, setInitialDraft] =
+    useState<AgentQuickPromptDraft | null>(null);
   const [promptToDelete, setPromptToDelete] =
     useState<AgentHostQuickPrompt | null>(null);
   const [mutationError, setMutationError] =
@@ -95,6 +98,7 @@ export function useAgentQuickPromptLibrary(input: {
     setPreviousDisclosureAvailable(disclosureAvailable);
     setMode("closed");
     setSelectedPrompt(null);
+    setInitialDraft(null);
     setPromptToDelete(null);
     setMutationError(null);
   }
@@ -141,6 +145,7 @@ export function useAgentQuickPromptLibrary(input: {
   const close = useCallback(() => {
     setMode("closed");
     setSelectedPrompt(null);
+    setInitialDraft(null);
     setPromptToDelete(null);
     setMutationError(null);
   }, []);
@@ -148,6 +153,7 @@ export function useAgentQuickPromptLibrary(input: {
   const closeDialog = useCallback(() => {
     setMutationError(null);
     setSelectedPrompt(null);
+    setInitialDraft(null);
     setPromptToDelete(null);
     setMode(capabilityAvailable && !disabled ? "popover" : "closed");
   }, [capabilityAvailable, disabled]);
@@ -163,14 +169,16 @@ export function useAgentQuickPromptLibrary(input: {
     [close, openPopover]
   );
 
-  const openCreate = useCallback(() => {
+  const openCreate = useCallback((draft?: AgentQuickPromptDraft) => {
     setSelectedPrompt(null);
+    setInitialDraft(draft ?? null);
     setMutationError(null);
     setMode("create");
   }, []);
 
   const openEdit = useCallback((prompt: AgentHostQuickPrompt) => {
     setSelectedPrompt(prompt);
+    setInitialDraft(null);
     setMutationError(null);
     setMode("edit");
   }, []);
@@ -198,6 +206,7 @@ export function useAgentQuickPromptLibrary(input: {
             })
           : await quickPrompts.create(draft);
         setSelectedPrompt(saved);
+        setInitialDraft(null);
         setMode(disclosureAvailableRef.current ? "popover" : "closed");
         return true;
       } catch (error) {
@@ -289,6 +298,7 @@ export function useAgentQuickPromptLibrary(input: {
     isEditorOpen: effectiveMode === "create" || effectiveMode === "edit",
     isPopoverOpen: effectiveMode === "popover",
     isSaving,
+    initialDraft,
     labels,
     mode: effectiveMode,
     mutationError,

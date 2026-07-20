@@ -27,8 +27,8 @@ export function AgentQuickPromptEditorDialog({
 }): React.JSX.Element {
   const { labels } = controller;
   const source = controller.mode === "edit" ? controller.selectedPrompt : null;
-  const [draft, setDraft] = useState<AgentQuickPromptDraft>(() =>
-    promptDraft(source)
+  const [draft, setDraft] = useState<AgentQuickPromptDraft>(
+    () => controller.initialDraft ?? promptDraft(source)
   );
   const [validationError, setValidationError] = useState<string | null>(null);
 

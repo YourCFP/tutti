@@ -15,16 +15,48 @@ const labels = new Proxy(
     triggerTooltip: "Choose a quick prompt",
     searchPlaceholder: "Search quick prompts",
     add: "New prompt",
+    createFromTemplate: "Create from a recommended template",
     moreActions: "More prompt actions",
     edit: "Edit",
     delete: "Delete",
     empty: "No quick prompts yet",
-    noResults: "No matching quick prompts"
+    noResults: "No matching quick prompts",
+    recommendedTemplatesTitle: "Recommended templates",
+    recommendedTemplatesDescription:
+      "Choose one to prefill the editor. It will not be saved or sent until you choose Save.",
+    returnToPrompts: "My prompts",
+    useTemplate: "Use template",
+    recommendedTemplates: [
+      {
+        id: "understand-context",
+        title: "Understand the situation",
+        description: "Summarize context, constraints, risks, and next steps",
+        content: "Summarize the situation"
+      },
+      {
+        id: "create-action-plan",
+        title: "Create an action plan",
+        description: "Break a goal into prioritized, verifiable steps",
+        content: "Create an action plan"
+      },
+      {
+        id: "review-and-improve",
+        title: "Review and improve",
+        description: "Find gaps, risks, and practical improvements",
+        content: "Review and improve"
+      },
+      {
+        id: "draft-clear-update",
+        title: "Draft a clear update",
+        description: "Write a concise explanation for the intended audience",
+        content: "Draft an update"
+      }
+    ]
   },
   {
     get: (target, property) => Reflect.get(target, property) ?? String(property)
   }
-) as AgentQuickPromptLabels;
+) as unknown as AgentQuickPromptLabels;
 
 function controller(
   patch: Partial<AgentQuickPromptLibraryController> = {}
@@ -47,6 +79,7 @@ function controller(
     isEditorOpen: false,
     isPopoverOpen: true,
     isSaving: false,
+    initialDraft: null,
     labels,
     mode: "popover",
     mutationError: null,
@@ -142,6 +175,63 @@ describe("AgentQuickPromptPopover", () => {
     expect(subject.openCreate).toHaveBeenCalledOnce();
   });
 
+  it("shows recommended templates for an empty library and prefills the editor only", () => {
+    const subject = controller({
+      filteredPrompts: [],
+      snapshot: {
+        enabled: true,
+        status: "ready",
+        prompts: [],
+        error: null,
+        revision: 1,
+        pendingMutationIds: []
+      }
+    });
+    render(
+      <TooltipProvider>
+        <AgentQuickPromptPopover controller={subject} disabled={false} />
+      </TooltipProvider>
+    );
+
+    const template = screen.getByRole("button", {
+      name: /Understand the situation.*Use template/u
+    });
+    fireEvent.pointerDown(template, { button: 0 });
+    expect(subject.openCreate).toHaveBeenCalledWith({
+      title: "Understand the situation",
+      content: "Summarize the situation"
+    });
+  });
+
+  it("lets a non-empty library reopen recommended templates in the same Popover", () => {
+    render(
+      <TooltipProvider>
+        <AgentQuickPromptPopover controller={controller()} disabled={false} />
+      </TooltipProvider>
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Create from a recommended template"
+      })
+    );
+    expect(
+      screen.getByRole("heading", { name: "Recommended templates", level: 2 })
+    ).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Search quick prompts")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "My prompts" })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "My prompts" }));
+    expect(
+      screen.getByRole("heading", { name: "Quick prompts", level: 2 })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("Search quick prompts")
+    ).toBeInTheDocument();
+  });
+
   it("hides the complete entry when the host gate is unavailable", () => {
     const rendered = render(
       <TooltipProvider>
@@ -228,6 +318,32 @@ describe("AgentQuickPromptPopover", () => {
     );
   });
 
+  it("prefills the existing editor Dialog from a recommended template draft", () => {
+    render(
+      <TooltipProvider>
+        <AgentQuickPromptPopover
+          controller={controller({
+            initialDraft: {
+              title: "Understand the situation",
+              content: "Summarize the situation"
+            },
+            isEditorOpen: true,
+            isPopoverOpen: false,
+            mode: "create"
+          })}
+          disabled={false}
+        />
+      </TooltipProvider>
+    );
+
+    expect(screen.getByLabelText(labels.titleLabel)).toHaveValue(
+      "Understand the situation"
+    );
+    expect(screen.getByLabelText(labels.contentLabel)).toHaveValue(
+      "Summarize the situation"
+    );
+  });
+
   it("keeps Enter in the editor Dialog out of the Composer shortcut", () => {
     const onComposerKeyDown = vi.fn();
     render(
@@ -277,6 +393,7 @@ describe("quick-prompt UI composition", () => {
       /<TooltipTrigger asChild>\s*<span[^>]*>\s*<PopoverTrigger asChild>/u
     );
     expect(source).toContain("<ConfirmationDialog");
+    expect(source).toContain("<RecommendedTemplateList");
     expect(source).toContain("aria-label={labels.edit}");
     expect(source).toContain("aria-label={labels.delete}");
     expect(source).not.toContain("<DropdownMenu");

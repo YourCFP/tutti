@@ -388,7 +388,9 @@ submitting it. The library snapshot, developer feature gate, and cross-window
 invalidation are not Session or Turn state and must not enter
 `AgentActivityRuntime` or the workspace engine. Hosts that omit the capability,
 and hosts whose capability reports the developer gate disabled, render no
-quick-prompt composer entry.
+quick-prompt composer entry. AgentGUI may also present a small, localized set
+of recommended templates; those only prefill the existing editor and remain
+client-local until the user explicitly saves them through the CRUD capability.
 
 ### 6.4 Multiple surfaces
 

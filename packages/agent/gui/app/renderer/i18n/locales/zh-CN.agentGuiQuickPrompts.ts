@@ -5,6 +5,7 @@ export const zhCNAgentGuiQuickPrompts = {
   contentPlaceholder: "输入可重复使用的提示词内容",
   contentTooLarge: "提示词内容不能超过 32 KiB",
   createTitle: "新增快捷提示词",
+  createFromTemplate: "从推荐模板创建",
   delete: "删除",
   deleteConfirm: "删除提示词",
   deleteDescription: "确定删除「{{title}}」吗？删除后无法恢复",
@@ -20,6 +21,36 @@ export const zhCNAgentGuiQuickPrompts = {
   noResults: "没有匹配的快捷提示词",
   required: "标题和提示词内容不能为空",
   retry: "重试",
+  recommendedTemplates: {
+    understandContext: {
+      title: "梳理现状",
+      description: "总结上下文、约束、风险与下一步",
+      content:
+        "请先总结当前上下文、已确认的事实、约束、风险和待确认问题，区分事实与假设，再给出最小且有价值的下一步建议"
+    },
+    createActionPlan: {
+      title: "制定行动计划",
+      description: "拆分优先级、依赖与验收标准",
+      content:
+        "请把这个目标拆成按优先级排序且可验证的步骤，列出每一步的依赖、风险和验收标准，并建议从哪里开始"
+    },
+    reviewAndImprove: {
+      title: "审阅与改进",
+      description: "找出缺口、风险和可执行的优化建议",
+      content:
+        "请审阅以下内容，说明做得好的部分、缺失的信息、重要风险和可执行的改进建议，并按影响与投入排序"
+    },
+    draftClearUpdate: {
+      title: "生成清晰说明",
+      description: "面向目标受众生成简洁表达",
+      content:
+        "请为目标受众生成一段简洁说明，先表达核心信息，只补充必要上下文，明确需要对方做出的决策或下一步行动，并使用清晰直接的语言"
+    }
+  },
+  recommendedTemplatesDescription:
+    "选择后会预填到编辑窗口，保存前不会创建或发送提示词",
+  recommendedTemplatesTitle: "推荐模板",
+  returnToPrompts: "我的提示词",
   save: "保存",
   saving: "正在保存…",
   searchPlaceholder: "搜索快捷提示词",
@@ -28,5 +59,6 @@ export const zhCNAgentGuiQuickPrompts = {
   titlePlaceholder: "输入简短易识别的名称",
   titleTooLong: "标题不能超过 80 个字符",
   trigger: "提示词",
-  triggerTooltip: "选择快捷提示词"
+  triggerTooltip: "选择快捷提示词",
+  useTemplate: "使用模板"
 } as const;

@@ -1,5 +1,16 @@
 import type { TranslateFn } from "../../../../i18n";
 
+export interface AgentQuickPromptTemplate {
+  content: string;
+  description: string;
+  id:
+    | "understand-context"
+    | "create-action-plan"
+    | "review-and-improve"
+    | "draft-clear-update";
+  title: string;
+}
+
 export interface AgentQuickPromptLabels {
   add: string;
   cancel: string;
@@ -7,6 +18,7 @@ export interface AgentQuickPromptLabels {
   contentLabel: string;
   contentPlaceholder: string;
   createTitle: string;
+  createFromTemplate: string;
   delete: string;
   deleteConfirm: string;
   deleteDescription: (title: string) => string;
@@ -25,6 +37,10 @@ export interface AgentQuickPromptLabels {
   save: string;
   saving: string;
   searchPlaceholder: string;
+  recommendedTemplates: readonly AgentQuickPromptTemplate[];
+  recommendedTemplatesDescription: string;
+  recommendedTemplatesTitle: string;
+  returnToPrompts: string;
   title: string;
   titleLabel: string;
   titlePlaceholder: string;
@@ -32,6 +48,7 @@ export interface AgentQuickPromptLabels {
   contentTooLarge: string;
   trigger: string;
   triggerTooltip: string;
+  useTemplate: string;
 }
 
 export function agentQuickPromptLabels(t: TranslateFn): AgentQuickPromptLabels {
@@ -43,6 +60,7 @@ export function agentQuickPromptLabels(t: TranslateFn): AgentQuickPromptLabels {
     contentPlaceholder: t("agentHost.agentGui.quickPrompts.contentPlaceholder"),
     contentTooLarge: t("agentHost.agentGui.quickPrompts.contentTooLarge"),
     createTitle: t("agentHost.agentGui.quickPrompts.createTitle"),
+    createFromTemplate: t("agentHost.agentGui.quickPrompts.createFromTemplate"),
     delete: t("agentHost.agentGui.quickPrompts.delete"),
     deleteConfirm: t("agentHost.agentGui.quickPrompts.deleteConfirm"),
     deleteDescription: (title) =>
@@ -62,11 +80,69 @@ export function agentQuickPromptLabels(t: TranslateFn): AgentQuickPromptLabels {
     save: t("agentHost.agentGui.quickPrompts.save"),
     saving: t("agentHost.agentGui.quickPrompts.saving"),
     searchPlaceholder: t("agentHost.agentGui.quickPrompts.searchPlaceholder"),
+    recommendedTemplates: [
+      {
+        id: "understand-context",
+        title: t(
+          "agentHost.agentGui.quickPrompts.recommendedTemplates.understandContext.title"
+        ),
+        description: t(
+          "agentHost.agentGui.quickPrompts.recommendedTemplates.understandContext.description"
+        ),
+        content: t(
+          "agentHost.agentGui.quickPrompts.recommendedTemplates.understandContext.content"
+        )
+      },
+      {
+        id: "create-action-plan",
+        title: t(
+          "agentHost.agentGui.quickPrompts.recommendedTemplates.createActionPlan.title"
+        ),
+        description: t(
+          "agentHost.agentGui.quickPrompts.recommendedTemplates.createActionPlan.description"
+        ),
+        content: t(
+          "agentHost.agentGui.quickPrompts.recommendedTemplates.createActionPlan.content"
+        )
+      },
+      {
+        id: "review-and-improve",
+        title: t(
+          "agentHost.agentGui.quickPrompts.recommendedTemplates.reviewAndImprove.title"
+        ),
+        description: t(
+          "agentHost.agentGui.quickPrompts.recommendedTemplates.reviewAndImprove.description"
+        ),
+        content: t(
+          "agentHost.agentGui.quickPrompts.recommendedTemplates.reviewAndImprove.content"
+        )
+      },
+      {
+        id: "draft-clear-update",
+        title: t(
+          "agentHost.agentGui.quickPrompts.recommendedTemplates.draftClearUpdate.title"
+        ),
+        description: t(
+          "agentHost.agentGui.quickPrompts.recommendedTemplates.draftClearUpdate.description"
+        ),
+        content: t(
+          "agentHost.agentGui.quickPrompts.recommendedTemplates.draftClearUpdate.content"
+        )
+      }
+    ],
+    recommendedTemplatesDescription: t(
+      "agentHost.agentGui.quickPrompts.recommendedTemplatesDescription"
+    ),
+    recommendedTemplatesTitle: t(
+      "agentHost.agentGui.quickPrompts.recommendedTemplatesTitle"
+    ),
+    returnToPrompts: t("agentHost.agentGui.quickPrompts.returnToPrompts"),
     title: t("agentHost.agentGui.quickPrompts.title"),
     titleLabel: t("agentHost.agentGui.quickPrompts.titleLabel"),
     titlePlaceholder: t("agentHost.agentGui.quickPrompts.titlePlaceholder"),
     titleTooLong: t("agentHost.agentGui.quickPrompts.titleTooLong"),
     trigger: t("agentHost.agentGui.quickPrompts.trigger"),
-    triggerTooltip: t("agentHost.agentGui.quickPrompts.triggerTooltip")
+    triggerTooltip: t("agentHost.agentGui.quickPrompts.triggerTooltip"),
+    useTemplate: t("agentHost.agentGui.quickPrompts.useTemplate")
   };
 }

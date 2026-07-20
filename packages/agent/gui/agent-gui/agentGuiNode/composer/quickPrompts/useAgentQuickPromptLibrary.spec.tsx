@@ -173,6 +173,32 @@ describe("useAgentQuickPromptLibrary", () => {
     expect(quickPrompts.api.ensureLoaded).not.toHaveBeenCalled();
   });
 
+  it("keeps a recommended template local until the user saves it", () => {
+    const quickPrompts = createQuickPrompts();
+    hostApi = { quickPrompts: quickPrompts.api } as AgentHostRuntimeApi;
+    const rendered = renderHook(() =>
+      useAgentQuickPromptLibrary({
+        disabled: false,
+        labels,
+        onBeforeOpen: vi.fn(),
+        onInsertPrompt: vi.fn()
+      })
+    );
+    const template = {
+      title: "Understand the situation",
+      content: "Summarize the situation"
+    };
+
+    act(() => rendered.result.current.openCreate(template));
+    expect(rendered.result.current.initialDraft).toEqual(template);
+    expect(rendered.result.current.mode).toBe("create");
+    expect(quickPrompts.api.create).not.toHaveBeenCalled();
+
+    act(() => rendered.result.current.closeDialog());
+    expect(rendered.result.current.initialDraft).toBeNull();
+    expect(quickPrompts.api.create).not.toHaveBeenCalled();
+  });
+
   it("runs create and preserves edit disclosure on a version conflict", async () => {
     const quickPrompts = createQuickPrompts();
     hostApi = { quickPrompts: quickPrompts.api } as AgentHostRuntimeApi;
