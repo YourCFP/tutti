@@ -6,14 +6,14 @@ import (
 )
 
 type acpModelInfo struct {
-	Description             string                     `json:"description"`
-	ModelID                 string                     `json:"modelId"`
-	Name                    string                     `json:"name"`
-	SupportsReasoningEffort *bool                      `json:"supportsReasoningEffort"`
-	ReasoningEffort         string                     `json:"reasoningEffort"`
-	ReasoningEfforts        []map[string]any           `json:"reasoningEfforts"`
-	SupportsImageInput      *bool                      `json:"supportsImageInput"`
-	Meta                    map[string]json.RawMessage `json:"_meta"`
+	Description             string          `json:"description"`
+	ModelID                 string          `json:"modelId"`
+	Name                    string          `json:"name"`
+	SupportsReasoningEffort json.RawMessage `json:"supportsReasoningEffort"`
+	ReasoningEffort         json.RawMessage `json:"reasoningEffort"`
+	ReasoningEfforts        json.RawMessage `json:"reasoningEfforts"`
+	SupportsImageInput      json.RawMessage `json:"supportsImageInput"`
+	Meta                    json.RawMessage `json:"_meta"`
 }
 
 func applyACPModelsResult(state *acpLiveState, raw json.RawMessage) {
@@ -72,29 +72,29 @@ func applyACPModelsResult(state *acpLiveState, raw json.RawMessage) {
 }
 
 func applyACPModelMetadata(option map[string]any, model acpModelInfo) {
-	metadata := model.Meta
-	supportsReasoning := model.SupportsReasoningEffort
+	metadata := rawJSONObject(model.Meta)
+	supportsReasoning := rawJSONBool(model.SupportsReasoningEffort)
 	if supportsReasoning == nil {
 		supportsReasoning = rawJSONBool(metadata["supportsReasoningEffort"])
 	}
 	if supportsReasoning != nil {
 		option["supportsReasoningEffort"] = *supportsReasoning
 	}
-	reasoningEffort := strings.TrimSpace(model.ReasoningEffort)
+	reasoningEffort := rawJSONString(model.ReasoningEffort)
 	if reasoningEffort == "" {
 		reasoningEffort = rawJSONString(metadata["reasoningEffort"])
 	}
 	if reasoningEffort != "" {
 		option["reasoningEffort"] = reasoningEffort
 	}
-	reasoningEfforts := model.ReasoningEfforts
-	if reasoningEfforts == nil {
-		_ = json.Unmarshal(metadata["reasoningEfforts"], &reasoningEfforts)
+	reasoningEfforts, advertised := normalizeACPReasoningEfforts(model.ReasoningEfforts)
+	if !advertised {
+		reasoningEfforts, advertised = normalizeACPReasoningEfforts(metadata["reasoningEfforts"])
 	}
-	if reasoningEfforts != nil {
-		option["reasoningEfforts"] = normalizeACPReasoningEfforts(reasoningEfforts)
+	if advertised {
+		option["reasoningEfforts"] = reasoningEfforts
 	}
-	supportsImage := model.SupportsImageInput
+	supportsImage := rawJSONBool(model.SupportsImageInput)
 	if supportsImage == nil {
 		supportsImage = rawJSONBool(metadata["supportsImageInput"])
 	}
@@ -103,11 +103,34 @@ func applyACPModelMetadata(option map[string]any, model acpModelInfo) {
 	}
 }
 
-func normalizeACPReasoningEfforts(values []map[string]any) []any {
+func normalizeACPReasoningEfforts(raw json.RawMessage) ([]any, bool) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, false
+	}
+	var values []any
+	if json.Unmarshal(raw, &values) != nil {
+		return nil, false
+	}
 	result := make([]any, 0, len(values))
 	seen := map[string]struct{}{}
-	for _, raw := range values {
-		value := strings.TrimSpace(firstNonEmptyString(asString(raw["value"]), asString(raw["id"])))
+	for _, item := range values {
+		entry := map[string]any{}
+		value := ""
+		switch valueOrObject := item.(type) {
+		case string:
+			value = strings.TrimSpace(valueOrObject)
+		case map[string]any:
+			value = strings.TrimSpace(firstNonEmptyString(asString(valueOrObject["value"]), asString(valueOrObject["id"])))
+			if label := strings.TrimSpace(firstNonEmptyString(asString(valueOrObject["label"]), asString(valueOrObject["name"]))); label != "" {
+				entry["label"] = label
+			}
+			if description := strings.TrimSpace(asString(valueOrObject["description"])); description != "" {
+				entry["description"] = description
+			}
+			if isDefault, ok := valueOrObject["default"].(bool); ok {
+				entry["default"] = isDefault
+			}
+		}
 		if value == "" {
 			continue
 		}
@@ -115,19 +138,21 @@ func normalizeACPReasoningEfforts(values []map[string]any) []any {
 			continue
 		}
 		seen[value] = struct{}{}
-		entry := map[string]any{"value": value}
-		if label := strings.TrimSpace(firstNonEmptyString(asString(raw["label"]), asString(raw["name"]))); label != "" {
-			entry["label"] = label
-		}
-		if description := strings.TrimSpace(asString(raw["description"])); description != "" {
-			entry["description"] = description
-		}
-		if isDefault, ok := raw["default"].(bool); ok {
-			entry["default"] = isDefault
-		}
+		entry["value"] = value
 		result = append(result, entry)
 	}
-	return result
+	return result, true
+}
+
+func rawJSONObject(raw json.RawMessage) map[string]json.RawMessage {
+	if len(raw) == 0 {
+		return nil
+	}
+	var value map[string]json.RawMessage
+	if json.Unmarshal(raw, &value) != nil {
+		return nil
+	}
+	return value
 }
 
 func rawJSONBool(raw json.RawMessage) *bool {
