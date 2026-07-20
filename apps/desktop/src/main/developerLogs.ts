@@ -14,6 +14,7 @@ import type {
   ClearDeveloperLogsResult,
   DesktopDeveloperLogFileSummary,
   DesktopDeveloperLogKind,
+  DesktopDeveloperLogsExportScope,
   DesktopDeveloperLogsState,
   ExportDeveloperLogsResult
 } from "../shared/contracts/ipc";
@@ -32,11 +33,19 @@ export interface DeveloperLogsDependencies {
   desktopVersion: string;
   flushLogs?: () => Promise<void> | void;
   getDownloadsPath?: () => string;
+  now?: () => Date;
   persistedLocale?: string | null;
   preferredSystemLanguages?: readonly string[] | null;
   systemLocale?: string | null;
   transportSnapshot?: unknown;
 }
+
+export interface DeveloperLogsExportOptions {
+  savePath?: string;
+  scope?: DesktopDeveloperLogsExportScope;
+}
+
+const recentDeveloperLogsWindowMs = 10 * 60 * 1_000;
 
 export interface DeveloperLogsAppCenterSnapshot {
   workspaces: Array<{
@@ -55,6 +64,7 @@ type DeveloperDiagnosticsArtifact =
       category: "managed-log" | "workspace-app-log" | "app-factory-log";
       path: string;
       archivePath: string;
+      modifiedAtUnixMs: number;
       sizeBytes: number;
       clearable: true;
       clearMode: "truncate" | "remove";
@@ -69,6 +79,7 @@ type DeveloperDiagnosticsArtifact =
       agentSessionID: string;
       path: string;
       provider: "claude-code" | "codex" | "cursor";
+      updatedAtUnixMS: number;
       workspaceID: string;
     }
   | {
@@ -138,22 +149,46 @@ export class DeveloperLogsService {
     };
   }
 
-  async exportLogs(savePath?: string): Promise<ExportDeveloperLogsResult> {
+  async exportLogs(
+    options: DeveloperLogsExportOptions = {}
+  ): Promise<ExportDeveloperLogsResult> {
     await this.deps.flushLogs?.();
     const artifacts = await discoverDeveloperDiagnosticsArtifacts(this.deps);
-    const fileArtifacts = artifacts.filter(
+    const exportedAt = this.deps.now?.() ?? new Date();
+    const scope = options.scope ?? "all";
+    const windowStart =
+      scope === "recent-10-minutes"
+        ? new Date(exportedAt.getTime() - recentDeveloperLogsWindowMs)
+        : null;
+    const discoveredFileArtifacts = artifacts.filter(
       (
         artifact
       ): artifact is Extract<DeveloperDiagnosticsArtifact, { kind: "file" }> =>
         artifact.kind === "file"
     );
-    const generatedArtifacts = artifacts.filter(
+    const fileArtifacts = await prepareDeveloperLogFilesForExport(
+      discoveredFileArtifacts,
+      windowStart
+        ? {
+            endTimeUnixMs: exportedAt.getTime(),
+            startTimeUnixMs: windowStart.getTime()
+          }
+        : null
+    );
+    const discoveredGeneratedArtifacts = artifacts.filter(
       (
         artifact
       ): artifact is Extract<
         DeveloperDiagnosticsArtifact,
         { kind: "generated" }
       > => artifact.kind === "generated"
+    );
+    const generatedArtifacts = discoveredGeneratedArtifacts.filter(
+      (artifact) =>
+        artifact.category !== "agent-session" ||
+        !windowStart ||
+        (artifact.updatedAtUnixMS >= windowStart.getTime() &&
+          artifact.updatedAtUnixMS <= exportedAt.getTime())
     );
     const agentSessionArtifacts = generatedArtifacts.filter(
       (
@@ -167,20 +202,25 @@ export class DeveloperLogsService {
       (artifact) => artifact.category === "app-center-snapshot"
     );
 
-    if (artifacts.length === 0) {
+    if (fileArtifacts.length === 0 && generatedArtifacts.length === 0) {
       return {
         canceled: false,
         fileCount: 0,
-        filePath: await this.writeEmptyExport(savePath)
+        filePath: await this.writeEmptyExport({
+          exportedAt,
+          savePath: options.savePath,
+          scope,
+          windowStart
+        })
       };
     }
 
-    const targetPath = savePath
-      ? ensureZipFilePath(savePath)
+    const targetPath = options.savePath
+      ? ensureZipFilePath(options.savePath)
       : ensureZipFilePath(
           join(
             this.deps.getDownloadsPath?.() ?? this.deps.defaults.state.logsDir,
-            createDefaultDeveloperLogsExportFileName()
+            createDefaultDeveloperLogsExportFileName(exportedAt, scope)
           )
         );
 
@@ -197,8 +237,7 @@ export class DeveloperLogsService {
     zipFile.outputStream.pipe(output);
 
     for (const artifact of fileArtifacts) {
-      const content = await readFile(artifact.path);
-      zipFile.addBuffer(content, artifact.archivePath);
+      zipFile.addBuffer(artifact.content, artifact.archivePath);
     }
     for (const artifact of generatedArtifacts) {
       zipFile.addBuffer(artifact.content, artifact.archivePath);
@@ -218,6 +257,7 @@ export class DeveloperLogsService {
       })),
       logFiles: fileArtifacts.map((artifact) => ({
         archivePath: artifact.archivePath,
+        modifiedAtUnixMs: artifact.modifiedAtUnixMs,
         path: artifact.path,
         sizeBytes: artifact.sizeBytes
       })),
@@ -237,7 +277,9 @@ export class DeveloperLogsService {
           {
             schemaVersion: 1,
             desktopVersion: this.deps.desktopVersion,
-            exportedAt: new Date().toISOString(),
+            exportedAt: exportedAt.toISOString(),
+            scope,
+            windowStart: windowStart?.toISOString() ?? null,
             logsDir: this.deps.defaults.state.logsDir,
             agentSessionFileCount: agentSessionArtifacts.length,
             appCenterSnapshotIncluded,
@@ -251,7 +293,7 @@ export class DeveloperLogsService {
             managedLogFileCount: fileArtifacts.filter(
               (artifact) => artifact.category === "managed-log"
             ).length,
-            totalSizeBytes: artifacts.reduce(
+            totalSizeBytes: [...fileArtifacts, ...generatedArtifacts].reduce(
               (sum, artifact) => sum + artifact.sizeBytes,
               0
             )
@@ -274,12 +316,20 @@ export class DeveloperLogsService {
     };
   }
 
-  private async writeEmptyExport(savePath?: string): Promise<string> {
+  private async writeEmptyExport(input: {
+    exportedAt: Date;
+    savePath?: string;
+    scope: DesktopDeveloperLogsExportScope;
+    windowStart: Date | null;
+  }): Promise<string> {
     const targetPath = ensureZipFilePath(
-      savePath ??
+      input.savePath ??
         join(
           this.deps.getDownloadsPath?.() ?? this.deps.defaults.state.logsDir,
-          createDefaultDeveloperLogsExportFileName()
+          createDefaultDeveloperLogsExportFileName(
+            input.exportedAt,
+            input.scope
+          )
         )
     );
     await mkdir(dirname(targetPath), { recursive: true });
@@ -311,7 +361,9 @@ export class DeveloperLogsService {
           {
             schemaVersion: 1,
             desktopVersion: this.deps.desktopVersion,
-            exportedAt: new Date().toISOString(),
+            exportedAt: input.exportedAt.toISOString(),
+            scope: input.scope,
+            windowStart: input.windowStart?.toISOString() ?? null,
             logsDir: this.deps.defaults.state.logsDir,
             agentSessionFileCount: 0,
             fileCount: 0,
@@ -331,12 +383,140 @@ export class DeveloperLogsService {
 }
 
 interface ManagedLogFile {
+  modifiedAtUnixMs: number;
   path: string;
   sizeBytes: number;
 }
 
 interface DiscoveredLogFile extends ManagedLogFile {
   archivePath: string;
+}
+
+type DeveloperDiagnosticsFileArtifact = Extract<
+  DeveloperDiagnosticsArtifact,
+  { kind: "file" }
+>;
+
+type PreparedDeveloperDiagnosticsFile = DeveloperDiagnosticsFileArtifact & {
+  content: Buffer;
+};
+
+interface DeveloperLogsTimeWindow {
+  endTimeUnixMs: number;
+  startTimeUnixMs: number;
+}
+
+async function prepareDeveloperLogFilesForExport(
+  artifacts: DeveloperDiagnosticsFileArtifact[],
+  timeWindow: DeveloperLogsTimeWindow | null
+): Promise<PreparedDeveloperDiagnosticsFile[]> {
+  const prepared = await Promise.all(
+    artifacts.map(async (artifact) => {
+      const originalContent = await readFile(artifact.path);
+      const content = timeWindow
+        ? filterDeveloperLogContentByTime({
+            content: originalContent,
+            modifiedAtUnixMs: artifact.modifiedAtUnixMs,
+            timeWindow
+          })
+        : originalContent;
+
+      if (content === null || (timeWindow && content.byteLength === 0)) {
+        return null;
+      }
+
+      return {
+        ...artifact,
+        content,
+        sizeBytes: content.byteLength
+      } satisfies PreparedDeveloperDiagnosticsFile;
+    })
+  );
+
+  return prepared.filter(
+    (artifact): artifact is PreparedDeveloperDiagnosticsFile =>
+      artifact !== null
+  );
+}
+
+function filterDeveloperLogContentByTime(input: {
+  content: Buffer;
+  modifiedAtUnixMs: number;
+  timeWindow: DeveloperLogsTimeWindow;
+}): Buffer | null {
+  const segments = input.content
+    .toString("utf8")
+    .match(/[^\r\n]*(?:\r\n|\n|\r|$)/g)
+    ?.filter((segment) => segment.length > 0);
+  if (!segments || segments.length === 0) {
+    return null;
+  }
+
+  let foundTimestamp = false;
+  let includeContinuation = false;
+  const selectedSegments: string[] = [];
+
+  for (const segment of segments) {
+    const timestamp = parseDeveloperLogTimestamp(segment);
+    if (timestamp !== null) {
+      foundTimestamp = true;
+      includeContinuation =
+        timestamp >= input.timeWindow.startTimeUnixMs &&
+        timestamp <= input.timeWindow.endTimeUnixMs;
+    }
+
+    if (includeContinuation) {
+      selectedSegments.push(segment);
+    }
+  }
+
+  if (foundTimestamp) {
+    return Buffer.from(selectedSegments.join(""), "utf8");
+  }
+
+  const fileWasUpdatedInWindow =
+    input.modifiedAtUnixMs >= input.timeWindow.startTimeUnixMs &&
+    input.modifiedAtUnixMs <= input.timeWindow.endTimeUnixMs;
+  return fileWasUpdatedInWindow ? input.content : null;
+}
+
+function parseDeveloperLogTimestamp(line: string): number | null {
+  const structuredTime = line.match(/(?:^|\s)time=(?:"([^"]+)"|(\S+))/);
+  const structuredValue = structuredTime?.[1] ?? structuredTime?.[2];
+  if (structuredValue) {
+    const parsed = Date.parse(structuredValue);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  const trimmed = line.trim();
+  if (trimmed.startsWith("{")) {
+    try {
+      const record = JSON.parse(trimmed) as Record<string, unknown>;
+      const value = record.time ?? record.timestamp;
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value < 10_000_000_000 ? value * 1_000 : value;
+      }
+      if (typeof value === "string") {
+        const parsed = Date.parse(value);
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+    } catch {
+      // Fall through to the generic ISO timestamp probe.
+    }
+  }
+
+  const isoTimestamp = line.match(
+    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/
+  )?.[0];
+  if (!isoTimestamp) {
+    return null;
+  }
+  const parsed = Date.parse(isoTimestamp);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 async function discoverDeveloperDiagnosticsArtifacts(
@@ -357,6 +537,12 @@ async function discoverDeveloperDiagnosticsArtifacts(
   const agentSessionFiles = buildProviderAgentSessionRecordFiles(
     agentSessions ?? []
   );
+  const agentSessionUpdatedAtByID = new Map(
+    (agentSessions ?? []).map((session) => [
+      session.agentSessionID,
+      session.updatedAtUnixMS
+    ])
+  );
   const appCenterSnapshot = await deps
     .appCenterSnapshotProvider?.()
     .catch(() => null);
@@ -368,6 +554,7 @@ async function discoverDeveloperDiagnosticsArtifacts(
         category: "managed-log",
         path: file.path,
         archivePath: joinZipPath("logs", basename(file.path)),
+        modifiedAtUnixMs: file.modifiedAtUnixMs,
         sizeBytes: file.sizeBytes,
         clearable: true,
         clearMode: activeManagedLogPaths.has(file.path) ? "truncate" : "remove"
@@ -379,6 +566,7 @@ async function discoverDeveloperDiagnosticsArtifacts(
         category: "workspace-app-log",
         path: file.path,
         archivePath: file.archivePath,
+        modifiedAtUnixMs: file.modifiedAtUnixMs,
         sizeBytes: file.sizeBytes,
         clearable: true,
         clearMode: "remove"
@@ -390,6 +578,7 @@ async function discoverDeveloperDiagnosticsArtifacts(
         category: "app-factory-log",
         path: file.path,
         archivePath: file.archivePath,
+        modifiedAtUnixMs: file.modifiedAtUnixMs,
         sizeBytes: file.sizeBytes,
         clearable: true,
         clearMode: "remove"
@@ -406,6 +595,8 @@ async function discoverDeveloperDiagnosticsArtifacts(
         agentSessionID: file.agentSessionID,
         path: file.path,
         provider: file.provider,
+        updatedAtUnixMS:
+          agentSessionUpdatedAtByID.get(file.agentSessionID) ?? 0,
         workspaceID: file.workspaceID
       })
     )
@@ -429,12 +620,16 @@ async function discoverDeveloperDiagnosticsArtifacts(
   return artifacts;
 }
 
-function createDefaultDeveloperLogsExportFileName(now = new Date()): string {
+function createDefaultDeveloperLogsExportFileName(
+  now = new Date(),
+  scope: DesktopDeveloperLogsExportScope = "all"
+): string {
   const pad = (value: number): string => String(value).padStart(2, "0");
   const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(
     now.getHours()
   )}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-  return `tutti-logs-${stamp}.zip`;
+  const rangeSegment = scope === "recent-10-minutes" ? "-last-10-minutes" : "";
+  return `tutti-logs${rangeSegment}-${stamp}.zip`;
 }
 
 interface BuildRuntimeContextInput {
@@ -593,6 +788,7 @@ async function listManagedLogFiles(logsDir: string): Promise<ManagedLogFile[]> {
         }
 
         return {
+          modifiedAtUnixMs: info.mtimeMs,
           path,
           sizeBytes: info.size
         } satisfies ManagedLogFile;
@@ -693,6 +889,7 @@ async function listWorkspaceAppLogDirFiles(input: {
               .split(/[\\/]+/)
               .map(safeZipPathSegment)
           ),
+          modifiedAtUnixMs: info.mtimeMs,
           path,
           sizeBytes: info.size
         });
@@ -774,6 +971,7 @@ async function listAppFactoryJobLogDirFiles(input: {
               .split(/[\\/]+/)
               .map(safeZipPathSegment)
           ),
+          modifiedAtUnixMs: info.mtimeMs,
           path,
           sizeBytes: info.size
         });
