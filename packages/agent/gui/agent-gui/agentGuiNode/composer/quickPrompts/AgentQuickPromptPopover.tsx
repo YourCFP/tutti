@@ -2,10 +2,6 @@ import { useId, useRef } from "react";
 import {
   Button,
   ConfirmationDialog,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
   Input,
   Popover,
   PopoverContent,
@@ -22,7 +18,6 @@ import {
   DeleteIcon,
   EditIcon,
   FileTextIcon,
-  MoreHorizontalIcon,
   SearchIcon
 } from "@tutti-os/ui-system/icons";
 import type { AgentHostQuickPrompt } from "../../../../host/agentHostApi";
@@ -39,6 +34,7 @@ export function AgentQuickPromptPopover({
   const searchRef = useRef<HTMLInputElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
   const preserveExternalFocusRef = useRef(false);
+  const createRequestedOnPointerDownRef = useRef(false);
   const titleId = useId();
   const { labels, snapshot } = controller;
 
@@ -56,6 +52,10 @@ export function AgentQuickPromptPopover({
       : controller.mutationError === "generic"
         ? labels.mutationError
         : null;
+  const requestCreate = (): void => {
+    preserveExternalFocusRef.current = true;
+    controller.openCreate();
+  };
 
   return (
     <>
@@ -119,9 +119,17 @@ export function AgentQuickPromptPopover({
               size="sm"
               type="button"
               variant="ghost"
+              onPointerDown={(event) => {
+                if (event.button !== 0) return;
+                createRequestedOnPointerDownRef.current = true;
+                requestCreate();
+              }}
               onClick={() => {
-                preserveExternalFocusRef.current = true;
-                controller.openCreate();
+                if (createRequestedOnPointerDownRef.current) {
+                  createRequestedOnPointerDownRef.current = false;
+                  return;
+                }
+                requestCreate();
               }}
             >
               <AddIcon data-icon="inline-start" />
@@ -301,6 +309,10 @@ function PromptRow({
   prompt: AgentHostQuickPrompt;
   selectionRef: (node: HTMLButtonElement | null) => void;
 }): React.JSX.Element {
+  const selectionRequestedOnPointerDownRef = useRef(false);
+  const editRequestedOnPointerDownRef = useRef(false);
+  const deleteRequestedOnPointerDownRef = useRef(false);
+
   return (
     <div className="group flex min-w-0 items-start gap-1 rounded-md hover:bg-[var(--transparency-hover)]">
       <Button
@@ -309,7 +321,18 @@ function PromptRow({
         disabled={pending}
         type="button"
         variant="ghost"
-        onClick={onSelect}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          selectionRequestedOnPointerDownRef.current = true;
+          onSelect();
+        }}
+        onClick={() => {
+          if (selectionRequestedOnPointerDownRef.current) {
+            selectionRequestedOnPointerDownRef.current = false;
+            return;
+          }
+          onSelect();
+        }}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
@@ -326,30 +349,60 @@ function PromptRow({
           </span>
         </span>
       </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+      <Tooltip>
+        <TooltipTrigger asChild>
           <Button
-            aria-label={labels.moreActions}
-            className="mt-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100"
+            aria-label={labels.edit}
+            className="mt-1.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
             size="icon-sm"
             disabled={pending}
             type="button"
             variant="ghost"
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              editRequestedOnPointerDownRef.current = true;
+              onEdit();
+            }}
+            onClick={() => {
+              if (editRequestedOnPointerDownRef.current) {
+                editRequestedOnPointerDownRef.current = false;
+                return;
+              }
+              onEdit();
+            }}
           >
-            <MoreHorizontalIcon />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-36">
-          <DropdownMenuItem onSelect={onEdit}>
             <EditIcon />
-            {labels.edit}
-          </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{labels.edit}</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            aria-label={labels.delete}
+            className="mt-1.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
+            disabled={pending}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              deleteRequestedOnPointerDownRef.current = true;
+              onDelete();
+            }}
+            onClick={() => {
+              if (deleteRequestedOnPointerDownRef.current) {
+                deleteRequestedOnPointerDownRef.current = false;
+                return;
+              }
+              onDelete();
+            }}
+          >
             <DeleteIcon />
-            {labels.delete}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{labels.delete}</TooltipContent>
+      </Tooltip>
     </div>
   );
 }

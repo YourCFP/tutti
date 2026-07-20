@@ -95,24 +95,51 @@ describe("AgentQuickPromptPopover", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps selection and row management as sibling buttons", async () => {
+  it("keeps selection and direct icon management controls as sibling buttons", () => {
+    const subject = controller();
     render(
       <TooltipProvider>
-        <AgentQuickPromptPopover controller={controller()} disabled={false} />
+        <AgentQuickPromptPopover controller={subject} disabled={false} />
       </TooltipProvider>
     );
     const selection = screen.getByRole("button", { name: /^Review/u });
     expect(selection.querySelector("button")).toBeNull();
-    fireEvent.pointerDown(
-      screen.getByRole("button", { name: "More prompt actions" }),
-      { button: 0, ctrlKey: false }
+    const edit = screen.getByRole("button", { name: "Edit" });
+    const remove = screen.getByRole("button", { name: "Delete" });
+    expect(edit).toBeInTheDocument();
+    expect(remove).toBeInTheDocument();
+    fireEvent.pointerDown(edit, { button: 0 });
+    expect(subject.openEdit).toHaveBeenCalledOnce();
+    fireEvent.pointerDown(remove, { button: 0 });
+    expect(subject.deletePrompt).toHaveBeenCalledOnce();
+  });
+
+  it("selects a prompt on primary pointer down before the Popover closes", () => {
+    const subject = controller();
+    render(
+      <TooltipProvider>
+        <AgentQuickPromptPopover controller={subject} disabled={false} />
+      </TooltipProvider>
     );
-    expect(
-      await screen.findByRole("menuitem", { name: "Edit" })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("menuitem", { name: "Delete" })
-    ).toBeInTheDocument();
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: /^Review/u }), {
+      button: 0
+    });
+    expect(subject.selectPrompt).toHaveBeenCalledOnce();
+  });
+
+  it("starts creation on primary pointer down so the Dialog survives Popover dismissal", () => {
+    const subject = controller();
+    render(
+      <TooltipProvider>
+        <AgentQuickPromptPopover controller={subject} disabled={false} />
+      </TooltipProvider>
+    );
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "New prompt" }), {
+      button: 0
+    });
+    expect(subject.openCreate).toHaveBeenCalledOnce();
   });
 
   it("hides the complete entry when the host gate is unavailable", () => {
@@ -227,6 +254,9 @@ describe("quick-prompt UI composition", () => {
       /<TooltipTrigger asChild>\s*<span[^>]*>\s*<PopoverTrigger asChild>/u
     );
     expect(source).toContain("<ConfirmationDialog");
+    expect(source).toContain("aria-label={labels.edit}");
+    expect(source).toContain("aria-label={labels.delete}");
+    expect(source).not.toContain("<DropdownMenu");
     expect(source).toContain("onCloseAutoFocus");
     expect(editorSource).toContain("<Dialog");
     expect(editorSource).toContain("<Textarea");

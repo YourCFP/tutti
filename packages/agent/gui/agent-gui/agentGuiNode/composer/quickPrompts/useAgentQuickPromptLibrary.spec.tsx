@@ -134,6 +134,28 @@ describe("useAgentQuickPromptLibrary", () => {
     expect(rendered.result.current.mode).toBe("closed");
   });
 
+  it("does not let a stale popover close callback dismiss the create dialog", () => {
+    const quickPrompts = createQuickPrompts();
+    hostApi = { quickPrompts: quickPrompts.api } as AgentHostRuntimeApi;
+    const rendered = renderHook(() =>
+      useAgentQuickPromptLibrary({
+        disabled: false,
+        labels,
+        onBeforeOpen: vi.fn(),
+        onInsertPrompt: vi.fn()
+      })
+    );
+
+    act(() => rendered.result.current.openPopover());
+    const stalePopoverOpenChange = rendered.result.current.setPopoverOpen;
+    act(() => rendered.result.current.openCreate());
+    expect(rendered.result.current.mode).toBe("create");
+
+    act(() => stalePopoverOpenChange(false));
+    expect(rendered.result.current.mode).toBe("create");
+    expect(rendered.result.current.isEditorOpen).toBe(true);
+  });
+
   it("does not open or load while composer controls are disabled", () => {
     const quickPrompts = createQuickPrompts();
     hostApi = { quickPrompts: quickPrompts.api } as AgentHostRuntimeApi;

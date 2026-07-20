@@ -74,6 +74,8 @@ export function useAgentQuickPromptLibrary(input: {
     selectQuickPromptSnapshot
   );
   const [mode, setMode] = useState<AgentQuickPromptMode>("closed");
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPrompt, setSelectedPrompt] =
     useState<AgentHostQuickPrompt | null>(null);
@@ -154,11 +156,11 @@ export function useAgentQuickPromptLibrary(input: {
     (open: boolean) => {
       if (open) {
         openPopover();
-      } else if (mode === "popover") {
+      } else if (modeRef.current === "popover") {
         close();
       }
     },
-    [close, mode, openPopover]
+    [close, openPopover]
   );
 
   const openCreate = useCallback(() => {
