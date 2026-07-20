@@ -10,15 +10,25 @@ import type {
   WorkspaceModelPlanDraft,
   WorkspaceModelPlanDraftSeed,
   WorkspaceModelPlanFeedbackKind,
-  WorkspaceModelPlanModel,
   WorkspaceSettingsStoreState
 } from "../workspaceSettingsTypes.ts";
+import {
+  createEmptyWorkspaceModelPlanDraftModel,
+  repairWorkspaceModelPlanDraftDefault
+} from "../workspaceModelPlanDraftModels.ts";
 import type {
   DesktopWorkspaceSettingsClient,
-  DetectModelPlanInput,
   PutModelPlanInput
 } from "./adapters/desktopWorkspaceSettingsClient.ts";
 import { isModelPlanReferencedError } from "./adapters/desktopWorkspaceSettingsClient.ts";
+import {
+  buildWorkspaceModelPlanDetectRequest,
+  hasRequiredWorkspaceModelPlanDraftFields,
+  normalizeWorkspaceModelPlanDraftModels,
+  workspaceModelPlanConnectionChanged,
+  workspaceModelPlanDetectionCorePassed,
+  workspaceModelPlanModelRangeChanged
+} from "./workspaceModelPlanDraftRules.ts";
 import { createWorkspaceSettingsModelPlansState } from "./workspaceSettingsStore.ts";
 
 export interface WorkspaceModelPlansControllerDependencies {
@@ -41,8 +51,9 @@ export interface WorkspaceModelPlansControllerDependencies {
 }
 
 /**
- * Owns the workspace "model plans" settings slice: named model access plans
- * with staged connection detection plus per-agent-target model bindings.
+ * Owns the workspace model-plan settings slice. Legacy fixed-target bindings
+ * remain available through explicit compatibility methods, but the default
+ * settings refresh is Plan-only because WorkspaceAgents own new mappings.
  * API keys only ever live inside the in-flight draft and request payloads.
  */
 export class WorkspaceModelPlansController implements IWorkspaceModelPlansController {
@@ -65,7 +76,7 @@ export class WorkspaceModelPlansController implements IWorkspaceModelPlansContro
   }
 
   async refresh(): Promise<void> {
-    await Promise.all([this.refreshPlans(), this.refreshBindings()]);
+    await this.refreshPlans();
   }
 
   async refreshPlans(): Promise<void> {
@@ -119,14 +130,13 @@ export class WorkspaceModelPlansController implements IWorkspaceModelPlansContro
   }
 
   beginDraft(seed: WorkspaceModelPlanDraftSeed): void {
-    const models = normalizeModels(seed.models ?? []);
     this.setDraft({
       apiKey: "",
       baseUrl: seed.baseUrl ?? "",
-      defaultModel: models[0]?.id ?? "",
+      defaultModel: "",
       enabled: true,
       hasApiKey: false,
-      models,
+      models: [createEmptyWorkspaceModelPlanDraftModel()],
       name: seed.name ?? "",
       planId: null,
       protocol: seed.protocol,
@@ -140,16 +150,19 @@ export class WorkspaceModelPlansController implements IWorkspaceModelPlansContro
     if (!plan) {
       return;
     }
+    const selection = repairWorkspaceModelPlanDraftDefault(
+      plan.models.map((model) => ({ ...model })),
+      plan.defaultModel ?? ""
+    );
     this.setDraft({
       apiKey: "",
       baseUrl: plan.baseUrl ?? "",
-      defaultModel: plan.defaultModel ?? "",
       enabled: plan.enabled,
       hasApiKey: plan.hasApiKey,
-      models: plan.models.map((model) => ({ ...model })),
       name: plan.name,
       planId: plan.id,
       protocol: plan.protocol,
+      ...selection,
       templateId: null,
       templateKind: plan.templateKind
     });
@@ -160,14 +173,26 @@ export class WorkspaceModelPlansController implements IWorkspaceModelPlansContro
     if (!draft) {
       return;
     }
-    const invalidatesDetection =
+    const invalidatesConnection =
       (patch.apiKey !== undefined && patch.apiKey !== draft.apiKey) ||
       (patch.baseUrl !== undefined && patch.baseUrl !== draft.baseUrl) ||
       (patch.protocol !== undefined && patch.protocol !== draft.protocol);
-    this.state.draft = { ...draft, ...patch };
+    let nextDraft = { ...draft, ...patch };
+    if (patch.models !== undefined || patch.defaultModel !== undefined) {
+      const selection = repairWorkspaceModelPlanDraftDefault(
+        nextDraft.models,
+        nextDraft.defaultModel
+      );
+      nextDraft = { ...nextDraft, ...selection };
+    }
+    this.state.draft = nextDraft;
     this.state.draftFeedback = null;
-    if (invalidatesDetection) {
+    this.state.draftSaveImpact = null;
+    if (invalidatesConnection) {
+      // A new connection identity invalidates both the check result and the
+      // model catalog that the previous credentials discovered.
       this.state.draftDetection = null;
+      this.state.draftDiscoveredModels = [];
     }
   }
 
@@ -176,16 +201,22 @@ export class WorkspaceModelPlansController implements IWorkspaceModelPlansContro
     this.state.draftDetection = null;
     this.state.draftDiscoveredModels = [];
     this.state.draftFeedback = null;
+    this.state.draftSaveImpact = null;
   }
 
   async detectDraft(): Promise<void> {
     const workspaceID = this.store.workspaceID;
     const draft = this.state.draft;
-    if (!workspaceID || !draft || this.state.detecting) {
+    if (
+      !workspaceID ||
+      !draft ||
+      this.state.detecting ||
+      this.state.fetchingDraftModels
+    ) {
       return;
     }
-    const baseUrl = draft.baseUrl.trim();
-    if (!baseUrl && !draft.planId) {
+    const request = buildWorkspaceModelPlanDetectRequest(draft);
+    if (!request) {
       this.setDraftFeedback("requiredFields");
       return;
     }
@@ -193,65 +224,85 @@ export class WorkspaceModelPlansController implements IWorkspaceModelPlansContro
     this.state.draftDetection = null;
     this.state.detecting = true;
     try {
-      const models = normalizeModels(draft.models);
-      const request: DetectModelPlanInput = {
-        ...(draft.planId ? { planId: draft.planId } : {}),
-        protocol: draft.protocol,
-        ...(baseUrl ? { baseUrl } : {}),
-        ...(draft.apiKey.trim() ? { apiKey: draft.apiKey } : {}),
-        ...(models.length > 0
-          ? { models: models.map(({ id, name }) => ({ id, name })) }
-          : {}),
-        ...(draft.defaultModel.trim()
-          ? { model: draft.defaultModel.trim() }
-          : {})
-      };
       const result = await this.dependencies.client.detectModelPlan(
         workspaceID,
         request
       );
+      if (this.state.draft !== draft) {
+        // The draft changed while the check was in flight; a stale result
+        // must not attach to (or unlock saving for) the newer draft.
+        return;
+      }
       this.state.draftDetection = result.detection;
       this.state.draftDiscoveredModels = result.discoveredModels;
-      const currentDraft = this.state.draft;
-      if (
-        currentDraft &&
-        currentDraft.models.length === 0 &&
-        result.discoveredModels.length > 0
-      ) {
-        this.state.draft = {
-          ...currentDraft,
-          defaultModel:
-            currentDraft.defaultModel || (result.discoveredModels[0]?.id ?? ""),
-          models: normalizeModels(result.discoveredModels)
-        };
-      }
       if (draft.planId) {
         await this.reloadPlan(draft.planId);
       }
     } catch {
-      this.setDraftFeedback("detectFailed");
+      if (this.state.draft === draft) {
+        this.setDraftFeedback("detectFailed");
+      }
     } finally {
       this.state.detecting = false;
     }
   }
 
-  addDiscoveredModelToDraft(modelID: string): void {
+  /**
+   * Explicit "fetch models" step: runs the daemon detection chain for its
+   * discovery output only. The result feeds the picker catalog; it never
+   * stands in for the final connection check that gates saving.
+   */
+  async fetchDraftModels(): Promise<void> {
+    const workspaceID = this.store.workspaceID;
     const draft = this.state.draft;
-    if (!draft) {
+    if (
+      !workspaceID ||
+      !draft ||
+      this.state.detecting ||
+      this.state.fetchingDraftModels
+    ) {
       return;
     }
-    const discovered = this.state.draftDiscoveredModels.find(
-      (model) => model.id === modelID
-    );
-    if (!discovered) {
+    const request = buildWorkspaceModelPlanDetectRequest(draft);
+    if (!request) {
+      this.setDraftFeedback("requiredFields");
       return;
     }
-    const models = normalizeModels([...draft.models, discovered]);
-    this.state.draft = {
-      ...draft,
-      defaultModel: draft.defaultModel || discovered.id,
-      models
-    };
+    this.state.draftFeedback = null;
+    this.state.fetchingDraftModels = true;
+    try {
+      const result = await this.dependencies.client.detectModelPlan(
+        workspaceID,
+        request
+      );
+      if (this.state.draft !== draft) {
+        // The draft changed while the fetch was in flight; stale candidates
+        // must not leak into the newer draft's catalog.
+        return;
+      }
+      this.state.draftDiscoveredModels = result.discoveredModels;
+      if (result.discoveredModels.length === 0) {
+        const discovery = result.detection.stages.find(
+          (stage) => stage.stage === "model_discovery"
+        );
+        if (discovery?.status === "passed") {
+          // Only an explicitly passed discovery is an empty catalog. The
+          // neutral message keeps the button from appearing unresponsive.
+          this.setDraftFeedback("fetchModelsEmpty");
+        } else {
+          // Failed, missing, or skipped discovery (an earlier stage such as
+          // network or auth failed, so discovery never ran) means the fetch
+          // produced no catalog — surface it as a failure.
+          this.setDraftFeedback("fetchModelsFailed");
+        }
+      }
+    } catch {
+      if (this.state.draft === draft) {
+        this.setDraftFeedback("fetchModelsFailed");
+      }
+    } finally {
+      this.state.fetchingDraftModels = false;
+    }
   }
 
   async saveDraft(): Promise<void> {
@@ -260,13 +311,62 @@ export class WorkspaceModelPlansController implements IWorkspaceModelPlansContro
     if (!workspaceID || !draft || this.state.saving) {
       return;
     }
-    if (!hasRequiredDraftFields(draft)) {
+    if (!hasRequiredWorkspaceModelPlanDraftFields(draft)) {
       this.setDraftFeedback("requiredFields");
       return;
     }
+    const storedPlan = draft.planId
+      ? this.state.plans.find((plan) => plan.id === draft.planId)
+      : undefined;
+    const requiresPersistedDetection =
+      !draft.planId || workspaceModelPlanConnectionChanged(draft, storedPlan);
+    if (
+      requiresPersistedDetection &&
+      !workspaceModelPlanDetectionCorePassed(this.state.draftDetection)
+    ) {
+      this.setDraftFeedback("detectionRequired");
+      return;
+    }
+    if (
+      draft.planId &&
+      workspaceModelPlanModelRangeChanged(draft, storedPlan) &&
+      this.state.draftSaveImpact?.planID !== draft.planId
+    ) {
+      this.state.saving = true;
+      try {
+        const references =
+          await this.dependencies.client.listModelPlanReferences(
+            workspaceID,
+            draft.planId
+          );
+        if (
+          workspaceID !== this.store.workspaceID ||
+          this.state.draft !== draft
+        ) {
+          return;
+        }
+        if (references.length > 0) {
+          this.state.draftSaveImpact = {
+            planID: draft.planId,
+            references
+          };
+          return;
+        }
+      } catch {
+        if (
+          workspaceID === this.store.workspaceID &&
+          this.state.draft === draft
+        ) {
+          this.setDraftFeedback("saveFailed");
+        }
+        return;
+      } finally {
+        this.state.saving = false;
+      }
+    }
     this.state.saving = true;
     try {
-      const models = normalizeModels(draft.models);
+      const models = normalizeWorkspaceModelPlanDraftModels(draft.models);
       const defaultModel = draft.defaultModel.trim();
       const request: PutModelPlanInput = {
         ...(draft.apiKey.trim() ? { apiKey: draft.apiKey } : {}),
@@ -275,7 +375,15 @@ export class WorkspaceModelPlansController implements IWorkspaceModelPlansContro
           ? { defaultModel }
           : {}),
         enabled: draft.enabled,
-        models: models.map(({ id, name }) => ({ id, name })),
+        models: models.map(({ capabilities, id, name }) => ({
+          ...(capabilities !== undefined
+            ? {
+                capabilities: capabilities === null ? null : [...capabilities]
+              }
+            : {}),
+          id,
+          name
+        })),
         name: draft.name.trim(),
         protocol: draft.protocol,
         templateKind: draft.templateKind
@@ -288,6 +396,33 @@ export class WorkspaceModelPlansController implements IWorkspaceModelPlansContro
           )
         : await this.dependencies.client.createModelPlan(workspaceID, request);
       this.upsertPlan(saved);
+      if (requiresPersistedDetection) {
+        // Draft detection proves the proposed endpoint before commit. Repeat
+        // the check against the saved Plan identity so the durable list row
+        // enters pending_first_use instead of falling back to undetected.
+        this.state.draft = {
+          ...draft,
+          apiKey: "",
+          hasApiKey: saved.hasApiKey,
+          planId: saved.id
+        };
+        try {
+          const result = await this.dependencies.client.detectModelPlan(
+            workspaceID,
+            { planId: saved.id }
+          );
+          this.state.draftDetection = result.detection;
+          this.state.draftDiscoveredModels = result.discoveredModels;
+          await this.reloadPlan(saved.id);
+          if (!workspaceModelPlanDetectionCorePassed(result.detection)) {
+            this.setDraftFeedback("detectFailed");
+            return;
+          }
+        } catch {
+          this.setDraftFeedback("detectFailed");
+          return;
+        }
+      }
       this.cancelDraft();
     } catch {
       this.setDraftFeedback("saveFailed");
@@ -451,10 +586,10 @@ export class WorkspaceModelPlansController implements IWorkspaceModelPlansContro
     try {
       const plans = await this.dependencies.client.listModelPlans(workspaceID);
       const refreshed = plans.find((plan) => plan.id === planID);
-      this.state.plans = plans;
       if (!refreshed) {
         return;
       }
+      this.state.plans = plans;
     } catch {
       // Detection already surfaced its own result; a stale list row is
       // recoverable on the next refresh.
@@ -466,6 +601,7 @@ export class WorkspaceModelPlansController implements IWorkspaceModelPlansContro
     this.state.draftDetection = null;
     this.state.draftDiscoveredModels = [];
     this.state.draftFeedback = null;
+    this.state.draftSaveImpact = null;
     this.state.confirmingDeletePlanID = null;
     this.state.deleteBlock = null;
   }
@@ -503,36 +639,6 @@ export class WorkspaceModelPlansController implements IWorkspaceModelPlansContro
     delete next[planID];
     this.state.planFeedback = next;
   }
-}
-
-function hasRequiredDraftFields(draft: WorkspaceModelPlanDraft): boolean {
-  return (
-    draft.name.trim().length > 0 &&
-    draft.baseUrl.trim().length > 0 &&
-    (draft.hasApiKey || draft.apiKey.trim().length > 0)
-  );
-}
-
-function normalizeModels(
-  models: readonly WorkspaceModelPlanModel[]
-): WorkspaceModelPlanModel[] {
-  const seen = new Set<string>();
-  const normalized: WorkspaceModelPlanModel[] = [];
-  for (const model of models) {
-    const id = model.id.trim();
-    if (!id || seen.has(id)) {
-      continue;
-    }
-    seen.add(id);
-    normalized.push({
-      ...(model.capabilities !== undefined
-        ? { capabilities: model.capabilities }
-        : {}),
-      id,
-      name: model.name.trim() || id
-    });
-  }
-  return normalized;
 }
 
 function createActiveTranslator() {

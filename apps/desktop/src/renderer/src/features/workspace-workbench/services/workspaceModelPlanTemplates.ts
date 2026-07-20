@@ -235,6 +235,12 @@ export function getWorkspaceModelPlanTemplateGroup(
   );
 }
 
+export function workspaceModelPlanUsesNativeLogin(
+  templateKind: WorkspaceModelPlanTemplateKind
+): boolean {
+  return templateKind === "official_subscription";
+}
+
 export function getWorkspaceModelPlanTemplatePreset(
   templateId: string | null
 ): WorkspaceModelPlanTemplatePreset | null {

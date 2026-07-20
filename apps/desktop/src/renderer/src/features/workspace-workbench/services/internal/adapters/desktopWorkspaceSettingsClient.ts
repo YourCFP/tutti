@@ -8,6 +8,7 @@ import type {
   DeletedAgentConversationPurgeResult,
   TuttidClient
 } from "@tutti-os/client-tuttid-ts";
+import { getTuttidProtocolErrorCode } from "@tutti-os/client-tuttid-ts";
 import type {
   ClearDeveloperLogsResult,
   DesktopComputerUseActionResult,
@@ -94,10 +95,7 @@ export class DesktopWorkspaceSettingsDaemonError extends Error {
 }
 
 export function isModelPlanReferencedError(error: unknown): boolean {
-  return (
-    error instanceof DesktopWorkspaceSettingsDaemonError &&
-    error.code === "model_plan_referenced"
-  );
+  return getTuttidProtocolErrorCode(error) === "model_plan_referenced";
 }
 
 export interface DesktopWorkspaceSettingsClient {

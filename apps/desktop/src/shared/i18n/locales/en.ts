@@ -826,7 +826,6 @@ export const en = {
         },
         appCatalogChannelSaveFailed: "We couldn't switch the app source.",
         modelPlans: {
-          addDiscoveredModel: "Add {{model}}",
           addModel: "Add model",
           addPlan: "Add plan",
           agentRuntimePendingHint:
@@ -846,8 +845,7 @@ export const en = {
             title: "Agent bindings",
             unsupported: "Binding not supported yet"
           },
-          defaultModelLabel: "Default model",
-          defaultModelNone: "Not set",
+          defaultMarker: "Default",
           delete: "Delete",
           deleteBlockedDescription:
             "Rebind or disable the consumers below before deleting this plan.",
@@ -858,11 +856,13 @@ export const en = {
           deleting: "Deleting...",
           description:
             "Set up named model access plans — official subscriptions, coding plans, domestic providers, relays, or custom endpoints — for your workspace agents and apps",
+          confirmModelRangeImpact: "Confirm impact and save",
           detect: "Test connection",
           detectFailed: "Couldn't run the connection check — try again.",
           detecting: "Checking...",
+          detectionRequired:
+            "Complete a successful connection check before saving this plan.",
           detectionTitle: "Connection check",
-          discoveredModels: "Detected models",
           duplicate: "Duplicate",
           duplicateFailed: "Couldn't duplicate — try again.",
           edit: "Edit",
@@ -882,6 +882,13 @@ export const en = {
             unauthorized: "The endpoint rejected the credentials.",
             unknown: "The check failed."
           },
+          fetchModels: "Fetch models",
+          fetchModelsEmpty:
+            "The endpoint returned no models. You can still type a model ID manually.",
+          fetchModelsFailed:
+            "Couldn't fetch the model list — check the credentials and Base URL, then try again.",
+          fetchModelsResult: "Fetched {{count}} selectable models",
+          fetchingModels: "Fetching...",
           getApiKey: "Get {{provider}} API key",
           hideApiKey: "Hide key",
           keepExistingKey: "Leave blank to keep the saved key",
@@ -889,7 +896,15 @@ export const en = {
           loadFailed: "We couldn't load model plans.",
           modelCount: "{{count}} models",
           modelId: "Model ID",
-          modelIdPlaceholder: "model-id",
+          modelPickerEmpty: "No matching models.",
+          modelPickerPlaceholder: "Select or type a model ID",
+          modelPickerSearchPlaceholder: "Search model IDs or names",
+          modelPickerUseCustom: "Use “{{model}}”",
+          nativeLoginHint:
+            "This plan uses the existing Codex or Claude Code login on this device. Sign in from Agent settings if needed, then run the connection check; no API key or Base URL is stored in this plan.",
+          modelRangeImpactDescription:
+            "These consumers may use the changed model range on their next call. Review the impact, then confirm to save; running calls are unchanged.",
+          modelRangeImpactTitle: "Review affected consumers",
           models: "Models",
           nameLabel: "Name",
           namePlaceholder: "My model plan",
@@ -931,6 +946,7 @@ export const en = {
             selectModel: "Select a model first."
           },
           removeModel: "Remove model",
+          setDefaultModel: "Set {{model}} as the default model",
           requiredFieldsMissing:
             "Fill in the name, API key, and Base URL first.",
           save: "Save",

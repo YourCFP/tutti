@@ -48,10 +48,25 @@ export type WorkspaceModelPlanStageStatus =
   | "skipped"
   | "pending";
 
+/**
+ * Billing metadata is optional: daemon plan contracts on this branch do not
+ * expose tier/pricing yet, but editor and draft-model helpers already treat
+ * them as pass-through metadata for when the contract adds them.
+ */
+export interface WorkspaceModelPlanPricing {
+  readonly currency: string;
+  readonly inputMicrosPerMillion: number;
+  readonly outputMicrosPerMillion: number;
+  readonly cacheReadMicrosPerMillion?: number;
+  readonly cacheWriteMicrosPerMillion?: number;
+}
+
 export interface WorkspaceModelPlanModel {
   readonly id: string;
   readonly name: string;
   readonly capabilities?: readonly string[] | null;
+  readonly pricing?: WorkspaceModelPlanPricing | null;
+  readonly tier?: string | null;
 }
 
 export interface WorkspaceModelPlanStageResult {
@@ -144,7 +159,6 @@ export interface WorkspaceModelPlanDraft {
 
 export interface WorkspaceModelPlanDraftSeed {
   baseUrl?: string;
-  models?: readonly WorkspaceModelPlanModel[];
   name?: string;
   protocol: WorkspaceModelPlanProtocol;
   templateId?: string | null;
@@ -154,7 +168,10 @@ export interface WorkspaceModelPlanDraftSeed {
 export type WorkspaceModelPlanFeedbackKind =
   | "detectFailed"
   | "deleteFailed"
+  | "detectionRequired"
   | "duplicateFailed"
+  | "fetchModelsEmpty"
+  | "fetchModelsFailed"
   | "requiredFields"
   | "saveFailed"
   | "toggleFailed";
@@ -164,6 +181,12 @@ export interface WorkspaceModelPlanFeedback {
 }
 
 export interface WorkspaceModelPlanDeleteBlock {
+  readonly planID: string;
+  readonly references: readonly WorkspaceModelPlanReference[];
+}
+
+/** All current consumers shown before committing a model-range edit. */
+export interface WorkspaceModelPlanSaveImpact {
   readonly planID: string;
   readonly references: readonly WorkspaceModelPlanReference[];
 }
@@ -187,7 +210,9 @@ export interface WorkspaceSettingsModelPlansMutableState {
   draftDetection: WorkspaceModelPlanDetection | null;
   draftDiscoveredModels: readonly WorkspaceModelPlanModel[];
   draftFeedback: WorkspaceModelPlanFeedback | null;
+  draftSaveImpact: WorkspaceModelPlanSaveImpact | null;
   duplicatingPlanID: string | null;
+  fetchingDraftModels: boolean;
   loading: boolean;
   planFeedback: Record<string, WorkspaceModelPlanFeedback>;
   plans: WorkspaceModelPlan[];
@@ -214,7 +239,9 @@ export interface WorkspaceSettingsModelPlansSnapshotState {
   readonly draftDetection: WorkspaceModelPlanDetection | null;
   readonly draftDiscoveredModels: readonly WorkspaceModelPlanModel[];
   readonly draftFeedback: Readonly<WorkspaceModelPlanFeedback> | null;
+  readonly draftSaveImpact: Readonly<WorkspaceModelPlanSaveImpact> | null;
   readonly duplicatingPlanID: string | null;
+  readonly fetchingDraftModels: boolean;
   readonly loading: boolean;
   readonly planFeedback: Readonly<
     Record<string, Readonly<WorkspaceModelPlanFeedback>>

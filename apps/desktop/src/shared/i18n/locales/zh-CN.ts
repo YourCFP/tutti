@@ -779,7 +779,6 @@ export const zhCN = {
         },
         appCatalogChannelSaveFailed: "暂时无法切换应用来源。",
         modelPlans: {
-          addDiscoveredModel: "添加 {{model}}",
           addModel: "添加模型",
           addPlan: "添加方案",
           agentRuntimePendingHint:
@@ -799,8 +798,7 @@ export const zhCN = {
             title: "Agent 绑定",
             unsupported: "暂不支持绑定"
           },
-          defaultModelLabel: "默认模型",
-          defaultModelNone: "未设置",
+          defaultMarker: "默认",
           delete: "删除",
           deleteBlockedDescription: "改绑或停用以下引用后才能删除。",
           deleteBlockedTitle: "该方案仍被引用，无法删除",
@@ -809,11 +807,12 @@ export const zhCN = {
           deleting: "删除中...",
           description:
             "配置具名的模型接入方案——官方订阅、Coding Plan、国内模型、中转服务或自定义接口，供工作区的 Agent 和应用使用",
+          confirmModelRangeImpact: "确认影响并保存",
           detect: "检测连接",
           detectFailed: "连接检测失败，请重试。",
           detecting: "检测中...",
+          detectionRequired: "保存方案前，请先完成并通过连接检测。",
           detectionTitle: "连接检测",
-          discoveredModels: "检测到的模型",
           duplicate: "复制",
           duplicateFailed: "复制失败，请重试。",
           edit: "编辑",
@@ -832,6 +831,11 @@ export const zhCN = {
             unauthorized: "接入点拒绝了凭证。",
             unknown: "检测失败。"
           },
+          fetchModels: "拉取模型",
+          fetchModelsEmpty: "接口未返回可选模型，你仍可手动输入模型 ID。",
+          fetchModelsFailed: "拉取模型失败，请检查凭证与 Base URL 后重试。",
+          fetchModelsResult: "已拉取 {{count}} 个可选模型",
+          fetchingModels: "拉取中...",
           getApiKey: "获取 {{provider}} API 密钥",
           hideApiKey: "隐藏密钥",
           keepExistingKey: "留空则继续使用已保存的密钥",
@@ -839,7 +843,15 @@ export const zhCN = {
           loadFailed: "暂时无法加载模型方案。",
           modelCount: "{{count}} 个模型",
           modelId: "模型 ID",
-          modelIdPlaceholder: "model-id",
+          modelPickerEmpty: "没有匹配的模型。",
+          modelPickerPlaceholder: "选择或输入模型 ID",
+          modelPickerSearchPlaceholder: "搜索模型 ID 或名称",
+          modelPickerUseCustom: "使用自定义 ID“{{model}}”",
+          nativeLoginHint:
+            "此方案使用本机 Codex 或 Claude Code 已有的登录状态。如尚未登录，请先前往 Agent 设置完成登录，再运行连接检测；方案不会保存 API 密钥或 Base URL。",
+          modelRangeImpactDescription:
+            "以下引用会在下一次调用时使用变更后的模型范围。请确认影响后再次保存；运行中的调用不会改变。",
+          modelRangeImpactTitle: "确认受影响的引用",
           models: "模型",
           nameLabel: "名称",
           namePlaceholder: "我的模型方案",
@@ -881,7 +893,9 @@ export const zhCN = {
             selectModel: "请先选择模型。"
           },
           removeModel: "移除模型",
-          requiredFieldsMissing: "请先填写名称、API 密钥和 Base URL。",
+          setDefaultModel: "将 {{model}} 设为默认模型",
+          requiredFieldsMissing:
+            "请填写名称和模型列表；接口方案还需要 API 密钥与 Base URL。",
           save: "保存",
           saveFailed: "保存失败，请重试",
           saving: "保存中...",
