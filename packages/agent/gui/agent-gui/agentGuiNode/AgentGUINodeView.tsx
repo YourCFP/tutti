@@ -128,6 +128,7 @@ export function AgentGUINodeView({
   selectProjectDirectory,
   workspaceFileReferenceCopy = null,
   onRequestGitBranches = null,
+  projectDirectorySourceAggregator = null,
   referenceSourceAggregator = null,
   resolveWorkspaceReferenceEntryIconUrl,
   resolveMentionReferenceTarget = null,
@@ -166,12 +167,16 @@ export function AgentGUINodeView({
     confirmWorkspaceReferenceBundles,
     confirmWorkspaceReferencePicker,
     isWorkspaceReferencePickerNodeSelectable,
+    requestProjectDirectory,
     requestWorkspaceReferences,
+    workspaceReferencePickerAggregator,
     workspaceReferencePickerOpen,
+    workspaceReferencePickerPurpose,
     workspaceReferencePickerTarget
   } = useAgentGUIWorkspaceReferencePicker({
     onWorkspaceFileReferencesAdded,
     previewMode,
+    projectDirectorySourceAggregator,
     referenceSourceAggregator,
     resolveMentionReferenceTarget,
     resolveWorkspaceReferenceInitialTarget,
@@ -179,6 +184,9 @@ export function AgentGUINodeView({
     workspaceFileReferenceAdapter,
     workspaceFileReferenceCopy
   });
+  const effectiveSelectProjectDirectory = projectDirectorySourceAggregator
+    ? requestProjectDirectory
+    : selectProjectDirectory;
   const createConversationDisabled =
     viewModel.rail.selectedAgentTarget.disabled === true;
   const createConversationAction = useStableEventCallback(
@@ -517,7 +525,7 @@ export function AgentGUINodeView({
       onConfirmDeleteConversation: confirmDeleteConversation,
       onOpenProjectFiles: openProjectFiles,
       onOpenConversationWindow: openConversationWindow,
-      selectProjectDirectory
+      selectProjectDirectory: effectiveSelectProjectDirectory
     }),
     [
       cancelDeleteConversation,
@@ -539,7 +547,7 @@ export function AgentGUINodeView({
       requestDeleteConversation,
       requestRenameConversation,
       selectConversation,
-      selectProjectDirectory,
+      effectiveSelectProjectDirectory,
       sectionAgentTargetFallbackId,
       viewModel.rail.agentTargets,
       viewModel.rail.agentTargetsLoading,
@@ -735,7 +743,7 @@ export function AgentGUINodeView({
               resolveExternalPromptEntries={resolveExternalPromptEntries}
               prepareExternalPromptFiles={prepareExternalPromptFiles}
               promptAssetLimit={promptAssetLimit}
-              selectProjectDirectory={selectProjectDirectory}
+              selectProjectDirectory={effectiveSelectProjectDirectory}
               onRequestGitBranches={onRequestGitBranches}
               onRequestComposerFocus={requestComposerFocus}
               workspaceAppIcons={effectiveWorkspaceAppIcons}
@@ -746,7 +754,7 @@ export function AgentGUINodeView({
           </section>
         </div>
         <AgentGUIReferencePickerSurface
-          aggregator={referenceSourceAggregator}
+          aggregator={workspaceReferencePickerAggregator}
           copy={
             workspaceFileReferenceCopy ?? fallbackWorkspaceFileReferenceCopy
           }
@@ -756,12 +764,17 @@ export function AgentGUINodeView({
           initialTarget={workspaceReferencePickerTarget}
           isNodeSelectable={isWorkspaceReferencePickerNodeSelectable}
           open={workspaceReferencePickerOpen}
+          purpose={workspaceReferencePickerPurpose}
           provenanceFilter={referenceProvenanceFilter}
           resolveEntryIconUrl={resolveWorkspaceReferenceEntryIconUrl}
           workspaceId={viewModel.shell.workspaceId}
           onClose={closeWorkspaceReferencePicker}
           onConfirm={confirmWorkspaceReferencePicker}
-          onConfirmBundles={confirmWorkspaceReferenceBundles}
+          onConfirmBundles={
+            workspaceReferencePickerPurpose === "reference"
+              ? confirmWorkspaceReferenceBundles
+              : undefined
+          }
         />
         <AgentGUIRenameConversationDialog
           conversation={renameConversationTarget}

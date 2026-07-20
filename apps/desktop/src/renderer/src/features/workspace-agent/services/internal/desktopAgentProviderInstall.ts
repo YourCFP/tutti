@@ -59,9 +59,7 @@ export function resolveAgentProviderInstallErrorMessage(
   return message;
 }
 
-export function resolveAgentProviderUpdateErrorMessage(
-  error: unknown
-): string {
+export function resolveAgentProviderUpdateErrorMessage(error: unknown): string {
   if (error instanceof AgentProviderInstallActionFailedError) {
     return summarizeAgentProviderUpdateFailureReason(error.reason);
   }

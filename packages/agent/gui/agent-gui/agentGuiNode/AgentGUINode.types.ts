@@ -67,6 +67,7 @@ export interface AgentGUINodeWorkspace {
   resolveExternalPromptEntries?: AgentComposerProps["resolveExternalPromptEntries"];
   prepareExternalPromptFiles?: AgentComposerProps["prepareExternalPromptFiles"];
   promptAssetLimit?: number | null;
+  projectDirectorySourceAggregator?: ReferenceSourceAggregator | null;
   referenceSourceAggregator?: ReferenceSourceAggregator | null;
   resolveReferenceEntryIconUrl?: (
     entry: WorkspaceFileEntry
@@ -324,6 +325,8 @@ export function areAgentGUINodePropsEqual(
     pw.resolveExternalPromptEntries === nw.resolveExternalPromptEntries &&
     pw.prepareExternalPromptFiles === nw.prepareExternalPromptFiles &&
     pw.promptAssetLimit === nw.promptAssetLimit &&
+    pw.projectDirectorySourceAggregator ===
+      nw.projectDirectorySourceAggregator &&
     pw.referenceSourceAggregator === nw.referenceSourceAggregator &&
     pw.resolveReferenceEntryIconUrl === nw.resolveReferenceEntryIconUrl &&
     pw.resolveMentionReferenceTarget === nw.resolveMentionReferenceTarget &&

@@ -626,6 +626,7 @@ export interface AgentGUINodeViewProps {
   selectProjectDirectory?: () => Promise<{ path: string } | null>;
   onRequestGitBranches?: AgentComposerGitBranchLoader | null;
   workspaceFileReferenceCopy?: WorkspaceFileReferenceCopy | null;
+  projectDirectorySourceAggregator?: ReferenceSourceAggregator | null;
   referenceSourceAggregator?: ReferenceSourceAggregator | null;
   resolveWorkspaceReferenceEntryIconUrl?: (
     entry: WorkspaceFileEntry
