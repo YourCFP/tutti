@@ -9,8 +9,15 @@ import {
 } from "@tutti-os/agent-activity-core";
 import type { AgentActivityRuntime } from "@tutti-os/agent-gui";
 import type {
+  Client,
+  ModelPlan,
   TuttidClient,
   TuttidEventStreamClient
+} from "@tutti-os/client-tuttid-ts";
+import {
+  createClient,
+  listModelPlans as listModelPlansRequest,
+  normalizeTuttidError
 } from "@tutti-os/client-tuttid-ts";
 import type { DesktopHostFilesApi, DesktopRuntimeApi } from "@preload/types";
 import type { IReporterService } from "../../../analytics/services/reporterService.interface.ts";
@@ -78,7 +85,8 @@ export interface WorkspaceAgentActivityServiceDependencies {
   tuttidClient: TuttidClient;
   reporterNow?: () => number;
   reporterService?: Pick<IReporterService, "trackEvents">;
-  runtimeApi: Pick<DesktopRuntimeApi, "logTerminalDiagnostic">;
+  runtimeApi: Pick<DesktopRuntimeApi, "logTerminalDiagnostic"> &
+    Partial<Pick<DesktopRuntimeApi, "getBackendConfig">>;
   agentProviderStatusService?: Pick<IAgentProviderStatusService, "refresh">;
   workspaceUserProjectService?: IWorkspaceUserProjectService;
 }
@@ -101,6 +109,15 @@ export class WorkspaceAgentActivityService
   >();
   private composerOptionsCommandSequence = 1;
   private sessionMutationSequence = 1;
+  // Collaboration-run/model-plan requests are not part of the TuttidClient
+  // wrapper yet, so they call the generated SDK directly. The client is
+  // re-resolved from the backend config on every call (cached per endpoint)
+  // because the managed daemon can restart onto a new ephemeral port.
+  private collaborationClientCache: {
+    accessToken: string;
+    baseUrl: string;
+    client: Client;
+  } | null = null;
   constructor(dependencies: WorkspaceAgentActivityServiceDependencies) {
     super(dependencies);
     this.dependencies = dependencies;
@@ -593,6 +610,54 @@ export class WorkspaceAgentActivityService
     );
   }
 
+  async listModelPlans(
+    input: Parameters<
+      NonNullable<IWorkspaceAgentActivityService["listModelPlans"]>
+    >[0]
+  ): ReturnType<NonNullable<IWorkspaceAgentActivityService["listModelPlans"]>> {
+    const workspaceId = normalizeWorkspaceId(input.workspaceId);
+    const client = await this.resolveCollaborationClient();
+    const response = await listModelPlansRequest({
+      client,
+      path: { workspaceID: workspaceId },
+      signal: input.signal
+    });
+    const plans = unwrapCollaborationData(
+      response,
+      "Model plans request failed."
+    ).plans;
+    return { plans: plans.map(agentActivityModelPlanSummaryFromTuttid) };
+  }
+
+  private async resolveCollaborationClient(): Promise<Client> {
+    const getBackendConfig = this.dependencies.runtimeApi.getBackendConfig;
+    if (!getBackendConfig) {
+      throw new Error(
+        "Collaboration requests are unavailable: backend config resolver is missing."
+      );
+    }
+    const config = await getBackendConfig();
+    const cached = this.collaborationClientCache;
+    if (
+      cached &&
+      cached.baseUrl === config.baseUrl &&
+      cached.accessToken === config.accessToken
+    ) {
+      return cached.client;
+    }
+    const client = createClient({
+      auth: config.accessToken,
+      baseUrl: config.baseUrl,
+      fetch: globalThis.fetch.bind(globalThis)
+    });
+    this.collaborationClientCache = {
+      accessToken: config.accessToken,
+      baseUrl: config.baseUrl,
+      client
+    };
+    return client;
+  }
+
   async goalControl(
     input: Parameters<AgentActivityAdapter["goalControl"]>[0]
   ): Promise<AgentActivityGoalControlResult> {
@@ -779,4 +844,42 @@ export class WorkspaceAgentActivityService
     const sequence = this.sessionMutationSequence++;
     return `${kind}:${Date.now()}:${sequence}`;
   }
+}
+
+// Local equivalent of the TuttidClient unwrap helper for direct generated-SDK
+// calls: normalize protocol errors, otherwise fall back to the caller message.
+function unwrapCollaborationData<TResult>(
+  response: { data?: TResult; error?: unknown; response?: Response },
+  fallback: string
+): TResult {
+  if (response.error !== undefined) {
+    throw (
+      normalizeTuttidError(response.error, response.response?.status ?? 0) ??
+      new Error(fallback)
+    );
+  }
+  if (response.data === undefined) {
+    throw new Error(fallback);
+  }
+  return response.data;
+}
+
+function agentActivityModelPlanSummaryFromTuttid(plan: ModelPlan): {
+  defaultModel: string | null;
+  enabled: boolean;
+  id: string;
+  models: Array<{ id: string; name: string }>;
+  name: string;
+  protocol: string;
+  status: string;
+} {
+  return {
+    defaultModel: plan.defaultModel ?? null,
+    enabled: plan.enabled,
+    id: plan.id,
+    models: plan.models.map((model) => ({ id: model.id, name: model.name })),
+    name: plan.name,
+    protocol: plan.protocol,
+    status: plan.status
+  };
 }

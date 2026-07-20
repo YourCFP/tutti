@@ -386,7 +386,7 @@ function createAgentTarget(
     enabled,
     iconKey: provider,
     id,
-    launchRef: { provider, type: "local_cli" },
+    launchRef: { provider, type: "builtin_local" },
     name: id,
     provider,
     sortOrder,
