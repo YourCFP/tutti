@@ -104,6 +104,7 @@ import {
   isFeatureEnabled,
   LAB_ENABLED_FLAG,
   LAB_WORKBENCH_SHORTCUTS_FLAG,
+  LAB_WORKSPACE_AGENTS_FLAG,
   resolveDesktopWorkspaceUiMode
 } from "../../../../../shared/featureFlags/catalog.ts";
 import { resolveWorkspaceAgentGuiLabel } from "../services/workspaceAgentProviderCatalog";
@@ -474,6 +475,10 @@ export function WorkspaceSettingsPanel({
                     }
                     defaultAgentProvider={
                       desktopPreferencesState.defaultAgentProvider
+                    }
+                    featureFlags={
+                      desktopPreferencesState.changingFeatureFlags ??
+                      desktopPreferencesState.featureFlags
                     }
                     focusedAnchor={settingsState.generalFocusAnchor}
                     focusRequestID={settingsState.generalFocusRequestID}
@@ -3141,6 +3146,7 @@ function WorkspaceAgentSettingsSection({
   changingDefaultAgentProvider,
   changingBrowserUseConnectionMode,
   defaultAgentProvider,
+  featureFlags,
   focusedAnchor,
   focusRequestID,
   onAgentConversationDetailModeChange,
@@ -3154,6 +3160,7 @@ function WorkspaceAgentSettingsSection({
   changingDefaultAgentProvider: DesktopDefaultAgentProvider | null;
   changingBrowserUseConnectionMode: DesktopBrowserUseConnectionMode | null;
   defaultAgentProvider: DesktopDefaultAgentProvider;
+  featureFlags: DesktopFeatureFlags;
   focusedAnchor: WorkspaceSettingsGeneralFocusAnchor | null;
   focusRequestID: number;
   onAgentConversationDetailModeChange: (
@@ -3396,7 +3403,9 @@ function WorkspaceAgentSettingsSection({
         }
       />
 
-      <WorkspaceAgentsSection />
+      {isFeatureEnabled(featureFlags, LAB_WORKSPACE_AGENTS_FLAG) ? (
+        <WorkspaceAgentsSection />
+      ) : null}
     </div>
   );
 }

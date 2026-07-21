@@ -15,7 +15,12 @@ import type { WorkspaceAgentProvider } from "@tutti-os/client-tuttid-ts";
 import { useTranslation } from "@renderer/i18n";
 import { cn } from "@renderer/lib/format";
 import type { DesktopFeatureFlags } from "@shared/preferences";
-import type { AgentExtensionActivationFlag } from "../../../../../shared/featureFlags/catalog.ts";
+import {
+  LAB_WORKSPACE_AGENTS_FLAG,
+  isFeatureEnabled,
+  type AgentExtensionActivationFlag
+} from "../../../../../shared/featureFlags/catalog.ts";
+import { WorkspaceAgentsSection } from "./WorkspaceAgentsSection";
 import type {
   AgentProviderStatusSnapshot,
   IAgentProviderStatusService
@@ -637,6 +642,9 @@ export function WorkspaceAgentsSettingsTab({
           );
         })}
       </div>
+      {isFeatureEnabled(featureFlags, LAB_WORKSPACE_AGENTS_FLAG) ? (
+        <WorkspaceAgentsSection />
+      ) : null}
     </div>
   );
 }

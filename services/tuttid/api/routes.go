@@ -316,8 +316,6 @@ func RegisterRoutes(mux *http.ServeMux, routes Routes) {
 		routes.SetAgentModelBinding(w, r, tuttigenerated.WorkspaceID(r.PathValue("workspaceID")), r.PathValue("agentTargetID"))
 	})
 
-=======
->>>>>>> 1547e9ef3 (feat(agent): add workspace agent directory substrate)
 	registerWorkspaceAgentRoutes(mux, routes, wrapper)
 	registerModelGovernanceRoutes(mux, routes, wrapper)
 

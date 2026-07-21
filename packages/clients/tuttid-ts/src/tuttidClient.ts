@@ -118,6 +118,7 @@ export function createTuttidClient(
   });
 
   return {
+    ...createWorkspaceAgentConfigurationClient(client),
     async listAgentQuickPrompts() {
       return unwrapData(
         await listAgentQuickPrompts({ client }),

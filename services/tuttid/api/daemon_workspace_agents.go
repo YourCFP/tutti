@@ -70,6 +70,11 @@ func (api DaemonAPI) GetWorkspaceAgent(ctx context.Context, request tuttigenerat
 }
 
 func (api DaemonAPI) CreateWorkspaceAgent(ctx context.Context, request tuttigenerated.CreateWorkspaceAgentRequestObject) (tuttigenerated.CreateWorkspaceAgentResponseObject, error) {
+	if !api.workspaceAgentsWritesEnabled(ctx) {
+		return tuttigenerated.CreateWorkspaceAgent400JSONResponse{
+			InvalidRequestErrorJSONResponse: workspaceAgentsWriteDisabledError(),
+		}, nil
+	}
 	if api.WorkspaceAgentService == nil {
 		return tuttigenerated.CreateWorkspaceAgent503JSONResponse{
 			ServiceUnavailableErrorJSONResponse: workspaceAgentServiceUnavailable(),
@@ -102,6 +107,11 @@ func (api DaemonAPI) CreateWorkspaceAgent(ctx context.Context, request tuttigene
 }
 
 func (api DaemonAPI) UpdateWorkspaceAgent(ctx context.Context, request tuttigenerated.UpdateWorkspaceAgentRequestObject) (tuttigenerated.UpdateWorkspaceAgentResponseObject, error) {
+	if !api.workspaceAgentsWritesEnabled(ctx) {
+		return tuttigenerated.UpdateWorkspaceAgent400JSONResponse{
+			InvalidRequestErrorJSONResponse: workspaceAgentsWriteDisabledError(),
+		}, nil
+	}
 	if api.WorkspaceAgentService == nil {
 		return tuttigenerated.UpdateWorkspaceAgent503JSONResponse{
 			ServiceUnavailableErrorJSONResponse: workspaceAgentServiceUnavailable(),
@@ -138,6 +148,11 @@ func (api DaemonAPI) UpdateWorkspaceAgent(ctx context.Context, request tuttigene
 }
 
 func (api DaemonAPI) DeleteWorkspaceAgent(ctx context.Context, request tuttigenerated.DeleteWorkspaceAgentRequestObject) (tuttigenerated.DeleteWorkspaceAgentResponseObject, error) {
+	if !api.workspaceAgentsWritesEnabled(ctx) {
+		return tuttigenerated.DeleteWorkspaceAgent400JSONResponse{
+			InvalidRequestErrorJSONResponse: workspaceAgentsWriteDisabledError(),
+		}, nil
+	}
 	if api.WorkspaceAgentService == nil {
 		return tuttigenerated.DeleteWorkspaceAgent503JSONResponse{
 			ServiceUnavailableErrorJSONResponse: workspaceAgentServiceUnavailable(),
