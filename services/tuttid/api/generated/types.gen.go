@@ -3232,8 +3232,9 @@ type CheckUserProjectPathRequest struct {
 
 // ClearWorkspaceAgentSessionsResponse defines model for ClearWorkspaceAgentSessionsResponse.
 type ClearWorkspaceAgentSessionsResponse struct {
-	RemovedMessages int `json:"removedMessages"`
-	RemovedSessions int `json:"removedSessions"`
+	CleanupFailedSessionIds []string `json:"cleanupFailedSessionIds"`
+	RemovedMessages         int      `json:"removedMessages"`
+	RemovedSessions         int      `json:"removedSessions"`
 }
 
 // CliCapabilitiesResponse defines model for CliCapabilitiesResponse.
@@ -3551,7 +3552,8 @@ type DeleteUserProjectRequest struct {
 
 // DeleteWorkspaceAgentSessionResponse defines model for DeleteWorkspaceAgentSessionResponse.
 type DeleteWorkspaceAgentSessionResponse struct {
-	Removed bool `json:"removed"`
+	CleanupFailed bool `json:"cleanupFailed"`
+	Removed       bool `json:"removed"`
 }
 
 // DeleteWorkspaceAgentSessionsBatchRequest defines model for DeleteWorkspaceAgentSessionsBatchRequest.
@@ -3561,9 +3563,10 @@ type DeleteWorkspaceAgentSessionsBatchRequest struct {
 
 // DeleteWorkspaceAgentSessionsBatchResponse defines model for DeleteWorkspaceAgentSessionsBatchResponse.
 type DeleteWorkspaceAgentSessionsBatchResponse struct {
-	RemovedMessages   int      `json:"removedMessages"`
-	RemovedSessionIds []string `json:"removedSessionIds"`
-	RemovedSessions   int      `json:"removedSessions"`
+	CleanupFailedSessionIds []string `json:"cleanupFailedSessionIds"`
+	RemovedMessages         int      `json:"removedMessages"`
+	RemovedSessionIds       []string `json:"removedSessionIds"`
+	RemovedSessions         int      `json:"removedSessions"`
 }
 
 // DeleteWorkspaceAppResponse defines model for DeleteWorkspaceAppResponse.

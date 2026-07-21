@@ -222,7 +222,8 @@ func (d *legacyHostConformanceDriver) Reset(_ context.Context, fixture hostconfo
 	steps := make([]string, 0)
 	d.recoverySteps = &steps
 	d.operationPort = &conformanceRuntimeOperationStore{runtimeOperationMemoryStore: d.operations, steps: &steps}
-	d.service = newTestService(d.runtime)
+	d.service = newUnconfiguredIsolatedAgentService(d.runtime)
+	d.service.AgentTargetStore = fakeAgentTargetStore{targets: defaultTestAgentTargets()}
 	d.commitObserver = &conformanceCommitObserver{fail: fixture.FailCommitObserver}
 	d.service.CommitObserver = d.commitObserver
 	d.service.SessionReader = d.sessions
@@ -277,6 +278,16 @@ func (d *legacyHostConformanceDriver) Reset(_ context.Context, fixture hostconfo
 			AgentSessionID: input.AgentSessionID, Goal: clonePayload(providerGoal),
 			Evidence: map[string]any{"confidence": "authoritative"},
 		}, nil
+	}
+	if fixture.LiveOnlySession != nil {
+		seed := *fixture.LiveOnlySession
+		settings := seed.Settings
+		d.runtime.sessions[seed.WorkspaceID+":"+seed.AgentSessionID] = ProviderRuntimeSession{
+			ID: seed.AgentSessionID, WorkspaceID: seed.WorkspaceID, Provider: seed.Provider,
+			ProviderSessionID: seed.ProviderSessionID, Cwd: seed.Cwd, Status: "ready",
+			Settings: &settings, Title: seed.Title, InitialTitleEstablished: seed.InitialTitleEstablished,
+			Visible: true, PinnedAtUnixMS: boolUnixMS(seed.Pinned), CreatedAtUnixMS: 1, UpdatedAtUnixMS: 2,
+		}
 	}
 
 	if fixture.Session == nil {
@@ -680,7 +691,7 @@ func (d *legacyHostConformanceDriver) DeleteSession(ctx context.Context, ref age
 	_, persisted := d.sessions.GetSession(ref.WorkspaceID, ref.AgentSessionID)
 	deleted, err := d.service.Delete(ctx, ref.WorkspaceID, ref.AgentSessionID)
 	return agenthost.DeleteSessionResult{
-		Deleted: deleted, RuntimeClosed: live && deleted, CanonicalRemoved: persisted && deleted,
+		Deleted: deleted.Removed, RuntimeClosed: live && deleted.Removed, CanonicalRemoved: persisted && deleted.Removed,
 	}, err
 }
 

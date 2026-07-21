@@ -44,6 +44,7 @@ type InteractionSeed struct {
 
 type Fixture struct {
 	Session                *SessionSeed
+	LiveOnlySession        *SessionSeed
 	AdditionalSessions     []SessionSeed
 	Turn                   *TurnSeed
 	AdditionalTurns        []TurnSeed

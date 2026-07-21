@@ -2137,6 +2137,7 @@ export type ExternalAgentImportResultResponse = {
 
 export type DeleteWorkspaceAgentSessionResponse = {
   removed: boolean;
+  cleanupFailed: boolean;
 };
 
 export type WorkspaceAgentSessionSectionDeletionCandidatesResponse = {
@@ -2155,11 +2156,13 @@ export type DeleteWorkspaceAgentSessionsBatchResponse = {
   removedMessages: number;
   removedSessions: number;
   removedSessionIds: Array<string>;
+  cleanupFailedSessionIds: Array<string>;
 };
 
 export type ClearWorkspaceAgentSessionsResponse = {
   removedMessages: number;
   removedSessions: number;
+  cleanupFailedSessionIds: Array<string>;
 };
 
 export type UpdateWorkspaceAgentSessionPinRequest = {

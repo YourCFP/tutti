@@ -78,6 +78,8 @@ func claudeCodeDescriptor() ProviderDescriptor {
 			ReasoningEffortOptions: ReasoningEffortOptionsStatic,
 			DefaultReasoningEffort: "high",
 			Speed:                  true,
+			SpeedValues:            []string{"standard", "fast"},
+			DefaultSpeed:           "standard",
 			Capabilities: []string{
 				"imageInput",
 				"skills",
