@@ -3550,6 +3550,7 @@ type CreateWorkspaceAgentSessionRequest struct {
 // CreateWorkspaceAppFactoryJobRequest defines model for CreateWorkspaceAppFactoryJobRequest.
 type CreateWorkspaceAppFactoryJobRequest struct {
 	AgentTargetId    string  `json:"agentTargetId"`
+	ClientSubmitId   string  `json:"clientSubmitId"`
 	Description      *string `json:"description,omitempty"`
 	DisplayName      string  `json:"displayName"`
 	Model            *string `json:"model,omitempty"`
