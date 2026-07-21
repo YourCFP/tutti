@@ -4,16 +4,15 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+
+	"github.com/tutti-os/tutti/packages/agent/daemon/modelcatalog"
 )
 
 type composerModelCatalogProjection struct {
-	DefaultModel               string
-	ModelOptions               []ComposerConfigOptionValue
-	ReasoningProfiles          map[string]composerModelReasoningProfile
-	DefaultReasoningEffort     string
-	ReasoningEfforts           []AgentModelReasoningEffortOption
-	ReasoningEffortsAdvertised bool
-	Source                     string
+	Selection         modelcatalog.ModelSelection
+	ModelOptions      []ComposerConfigOptionValue
+	ReasoningProfiles map[string]modelcatalog.ReasoningProfile
+	Source            string
 }
 
 func composerModelOptionsFromCatalog(ctx context.Context, catalog AgentModelCatalog, provider string, cwd string, selectedModel string) (composerModelCatalogProjection, bool) {
@@ -32,15 +31,11 @@ func composerModelOptionsFromCatalog(ctx context.Context, catalog AgentModelCata
 		return composerModelCatalogProjection{}, false
 	}
 	options := make([]ComposerConfigOptionValue, 0, len(result.Models)+1)
-	reasoningProfiles := make(map[string]composerModelReasoningProfile)
-	defaultModel := ""
+	catalogProjection := modelcatalog.ProjectComposerCatalog(result.Models, selectedModel)
 	for _, model := range result.Models {
 		id := strings.TrimSpace(model.ID)
 		if id == "" {
 			continue
-		}
-		if defaultModel == "" && model.IsDefault {
-			defaultModel = id
 		}
 		if containsModelOption(options, id) {
 			continue
@@ -56,32 +51,19 @@ func composerModelOptionsFromCatalog(ctx context.Context, catalog AgentModelCata
 			Description:        strings.TrimSpace(model.Description),
 			SupportsImageInput: model.SupportsImageInput,
 		})
-		if model.ReasoningEffortsAdvertised {
-			reasoningProfiles[id] = composerModelReasoningProfile{
-				DefaultReasoningEffort: strings.TrimSpace(model.DefaultReasoningEffort),
-				ReasoningEfforts: append(
-					[]AgentModelReasoningEffortOption(nil),
-					model.SupportedReasoningEfforts...,
-				),
-			}
-		}
 	}
-	selected := strings.TrimSpace(selectedModel)
-	if selected != "" && !containsModelOption(options, selected) {
-		options = append(options, ComposerConfigOptionValue{ID: selected, Label: selected, Value: selected})
+	selection := catalogProjection.Selection
+	if selection.Found && !containsModelOption(options, selection.Model.ID) {
+		options = append(options, ComposerConfigOptionValue{
+			ID: selection.Model.ID, Label: selection.Model.DisplayName, Value: selection.Model.ID,
+		})
 	}
-	projection := composerModelCatalogProjection{
-		DefaultModel:      defaultModel,
+	return composerModelCatalogProjection{
+		Selection:         selection,
 		ModelOptions:      options,
-		ReasoningProfiles: reasoningProfiles,
+		ReasoningProfiles: catalogProjection.ReasoningOptionsByModel,
 		Source:            strings.TrimSpace(result.Source),
-	}
-	if profile, ok := reasoningProfiles[selected]; ok {
-		projection.DefaultReasoningEffort = profile.DefaultReasoningEffort
-		projection.ReasoningEfforts = append([]AgentModelReasoningEffortOption(nil), profile.ReasoningEfforts...)
-		projection.ReasoningEffortsAdvertised = true
-	}
-	return projection, true
+	}, true
 }
 
 func containsModelOption(options []ComposerConfigOptionValue, value string) bool {
