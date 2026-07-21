@@ -143,6 +143,32 @@ export function resolveWorkbenchDockEntryClick(input: {
   return { kind: "launch" };
 }
 
+export function canCreateNewWindow(
+  entry: WorkbenchHostDockEntry,
+  instanceMode?: WorkbenchHostNodeInstanceStrategy["mode"]
+): boolean {
+  const stateKind = entry.state?.kind ?? "enabled";
+  if (
+    stateKind === "disabled" ||
+    stateKind === "loading" ||
+    stateKind === "unavailable" ||
+    (entry.launchBehavior ?? "enabled") !== "enabled"
+  ) {
+    return false;
+  }
+  return instanceMode === "multi" || entry.newWindowLaunchPayload !== undefined;
+}
+
+export function canCreateNewWindowInDockPopup(
+  entry: WorkbenchHostDockEntry,
+  instanceMode?: WorkbenchHostNodeInstanceStrategy["mode"]
+): boolean {
+  if (entry.allowNewWindowInDockPopup === false) {
+    return false;
+  }
+  return canCreateNewWindow(entry, instanceMode);
+}
+
 function isWorkbenchDockEntryBlocked(entry: WorkbenchHostDockEntry): boolean {
   const stateKind = entry.state?.kind ?? "enabled";
   return (

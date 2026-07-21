@@ -171,8 +171,14 @@ export function createBrowserDockEntry(
       }) ?? null,
     icon: input.dockIcon ?? null,
     id: input.id ?? defaultBrowserNodeTypeId,
+    // Browser windows are multi-instance, but dock clicks should focus the
+    // lone open window directly and only open the picker when 2+ are open.
+    instanceMode: "single",
     label: input.feature.i18n.t("dockLabel"),
     launchBehavior: "enabled",
+    newWindowLaunchPayload: {
+      openInNewWindow: true
+    },
     matchNode: (node) =>
       node.data.typeId === (input.typeId ?? defaultBrowserNodeTypeId),
     order: input.order,

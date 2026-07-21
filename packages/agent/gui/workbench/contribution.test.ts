@@ -254,6 +254,10 @@ describe("agent GUI workbench contribution copy", () => {
     expect(entry?.id).toBe(agentGuiWorkbenchUnifiedDockEntryId());
     expect(entry?.matchNode).toBeUndefined();
     expect(entry?.instanceMode).toBe("single");
+    expect(entry?.newWindowLaunchPayload).toMatchObject({
+      openInNewWindow: true
+    });
+    expect(entry?.allowNewWindowInDockPopup).toBe(false);
   });
 
   it("keeps unified launch payload provider priority when opening a session", () => {

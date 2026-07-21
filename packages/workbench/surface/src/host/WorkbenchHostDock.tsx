@@ -27,6 +27,8 @@ import {
   writeCachedWorkbenchNodePreviewImage
 } from "../react/useWorkbenchGenieAnimation.tsx";
 import {
+  canCreateNewWindow,
+  canCreateNewWindowInDockPopup,
   resolveWorkbenchDockEntries,
   resolveWorkbenchDockEntryClick,
   type ResolvedWorkbenchHostDockEntry
@@ -3093,30 +3095,6 @@ function resolveDockEntryInstanceMode(
   return (
     entry.instanceMode ?? nodeDefinitions.get(entry.typeId)?.instance?.mode
   );
-}
-
-function canCreateNewWindow(
-  entry: WorkbenchHostDockEntry,
-  instanceMode: WorkbenchHostNodeInstanceStrategy["mode"] | undefined
-): boolean {
-  const stateKind = entry.state?.kind ?? "enabled";
-  return (
-    instanceMode === "multi" &&
-    (entry.launchBehavior ?? "enabled") === "enabled" &&
-    stateKind !== "disabled" &&
-    stateKind !== "loading" &&
-    stateKind !== "unavailable"
-  );
-}
-
-function canCreateNewWindowInDockPopup(
-  entry: WorkbenchHostDockEntry,
-  instanceMode: WorkbenchHostNodeInstanceStrategy["mode"] | undefined
-): boolean {
-  if (entry.allowNewWindowInDockPopup === false) {
-    return false;
-  }
-  return canCreateNewWindow(entry, instanceMode);
 }
 
 function anchorKeyFromPopupEntry(
