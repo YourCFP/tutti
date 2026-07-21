@@ -1,4 +1,5 @@
 import type { DesktopI18nKey } from "@shared/i18n";
+import { resolveAgentGUIProviderCatalogIdentity } from "@tutti-os/agent-gui/provider-catalog";
 import type {
   WorkspaceModelPlanModel,
   WorkspaceModelPlanProtocol,
@@ -266,18 +267,12 @@ export function toWorkspaceModelPlanPresetModels(
 
 /**
  * Wire protocol a given agent target provider can consume through a bound
- * model plan. Providers without a compatible protocol cannot be bound yet.
+ * model plan, read from the canonical provider catalog identity. Providers
+ * without a compatible protocol cannot be bound yet.
  */
 export function modelPlanProtocolForAgentProvider(
   provider: string
 ): WorkspaceModelPlanProtocol | null {
-  switch (provider) {
-    case "codex":
-    case "tutti-agent":
-      return "openai";
-    case "claude-code":
-      return "anthropic";
-    default:
-      return null;
-  }
+  return (resolveAgentGUIProviderCatalogIdentity(provider)?.modelPlanProtocol ||
+    null) as WorkspaceModelPlanProtocol | null;
 }
