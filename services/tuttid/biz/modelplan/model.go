@@ -175,8 +175,13 @@ type Model struct {
 
 // Plan is the durable model access plan record.
 type Plan struct {
-	ID           string
-	WorkspaceID  string
+	ID          string
+	WorkspaceID string
+	// Revision is a monotonically increasing immutable configuration version.
+	// Runtime-facing consumers use it to pin the exact plan configuration a
+	// session started with. Zero means unspecified for records written
+	// before revisions were tracked.
+	Revision     uint64
 	Name         string
 	TemplateKind TemplateKind
 	Protocol     Protocol

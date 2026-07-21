@@ -450,3 +450,32 @@ test("Lab exposes independent default-off gates for experimental Agent features"
   );
   assert.match(source, /<WorkspaceLabFeatureGateRows/);
 });
+
+test("workspace Agent editor keeps only the simplified fields", () => {
+  const editorSource = readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      "WorkspaceAgentEditor.tsx"
+    ),
+    "utf8"
+  );
+
+  // Kept: name, Agent Runtime, model plan + default model, description
+  // (stored as purpose for now), instructions, and call conditions.
+  assert.match(editorSource, /draft\.name/);
+  assert.match(editorSource, /harnessAgentTargetId/);
+  assert.match(editorSource, /modelPlanId/);
+  assert.match(editorSource, /defaultModel/);
+  assert.match(editorSource, /draft\.purpose/);
+  assert.match(editorSource, /draft\.instructions/);
+  assert.match(editorSource, /draft\.callConditions/);
+  // Removed sections: generation, failover chain, capability selection,
+  // advanced IDs and permissions, and the new-conversation switch.
+  assert.doesNotMatch(editorSource, /generateTitle|generationRequirements/);
+  assert.doesNotMatch(editorSource, /modelFallback|onRecommendFallback/);
+  assert.doesNotMatch(editorSource, /WorkspaceAgentCapabilitySelection/);
+  assert.doesNotMatch(editorSource, /draft\.skills|draft\.tools/);
+  assert.doesNotMatch(editorSource, /draft\.permissions/);
+  assert.doesNotMatch(editorSource, /enabledLabel|<Switch/);
+  assert.doesNotMatch(editorSource, /executionRole|planningRole|reviewRole/);
+});

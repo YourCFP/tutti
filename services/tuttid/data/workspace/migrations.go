@@ -229,6 +229,9 @@ INSERT OR IGNORE INTO tuttid_schema_migrations (id, applied_at_unix_ms)
 	if err := s.applyModelPlansV1(ctx); err != nil {
 		return err
 	}
+	if err := s.applyAgentModelBindingsV1(ctx); err != nil {
+		return err
+	}
 	if err := s.applyWorkspaceAgentsV1(ctx); err != nil {
 		return err
 	}
@@ -248,6 +251,7 @@ INSERT OR IGNORE INTO tuttid_schema_migrations (id, applied_at_unix_ms)
 	if err := s.applyAgentModelBindingsV2(ctx); err != nil {
 		return err
 	}
+
 	if err := s.applyModelPoliciesV1(ctx); err != nil {
 		return err
 	}

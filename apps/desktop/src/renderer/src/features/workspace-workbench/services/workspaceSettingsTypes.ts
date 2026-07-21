@@ -3,11 +3,9 @@ import type {
   DesktopDeveloperLogsState
 } from "@shared/contracts/ipc";
 import type {
-  AgentProviderCapabilityOption,
   AutomationRule,
   WorkspaceAgent,
-  WorkspaceAgentProvider,
-  WorkspaceAgentGeneratedAutomationRule
+  WorkspaceAgentProvider
 } from "@tutti-os/client-tuttid-ts";
 
 type WorkspaceSettingsReadonly<T> = T extends readonly (infer Item)[]
@@ -141,14 +139,7 @@ export interface WorkspaceAgentHarnessTargetOption {
   readonly provider: WorkspaceAgentProvider;
 }
 
-export type WorkspaceAgentCapabilityOption =
-  WorkspaceSettingsReadonly<AgentProviderCapabilityOption>;
-
 export type WorkspaceAgentSource = WorkspaceAgent["source"];
-
-export type WorkspaceAgentModelRef = WorkspaceSettingsReadonly<
-  WorkspaceAgent["modelFallbacks"][number]
->;
 
 /**
  * One explicit selectable Agent configuration. Its id is also the opaque
@@ -158,6 +149,12 @@ export type WorkspaceAgentModelRef = WorkspaceSettingsReadonly<
 export type WorkspaceAgentDefinition =
   WorkspaceSettingsReadonly<WorkspaceAgent>;
 
+/**
+ * Local edit buffer for the simplified Agent editor: name, Agent Runtime,
+ * plan + default model, description, and behavior text. Dormant contract
+ * fields (fallback chain, capability allowlists, permission overrides) are
+ * no longer editable and always save back to their neutral values.
+ */
 export interface WorkspaceAgentDraft {
   agentId: string | null;
   name: string;
@@ -165,25 +162,13 @@ export interface WorkspaceAgentDraft {
   harnessAgentTargetId: string;
   modelPlanId: string;
   defaultModel: string;
-  modelFallbacks: readonly WorkspaceAgentModelRef[];
   instructions: string;
   callConditions: string;
-  capabilitiesExplicit: boolean;
-  skills: string;
-  tools: string;
-  permissions: string;
   enabled: boolean;
-  generationRequirements: string;
-  generatedAutomationRules: readonly WorkspaceAgentGeneratedAutomationRule[];
 }
 
 export type WorkspaceAgentFeedbackKind =
   | "deleteFailed"
-  | "generateFailed"
-  | "generationRequiresPlan"
-  | "generatedRulesSaveFailed"
-  | "noRecommendation"
-  | "recommendFailed"
   | "requiredFields"
   | "saveFailed";
 
@@ -197,15 +182,9 @@ export interface WorkspaceSettingsWorkspaceAgentsMutableState {
   deletingAgentID: string | null;
   draft: WorkspaceAgentDraft | null;
   feedback: WorkspaceAgentFeedback | null;
-  capabilityCatalog: WorkspaceAgentCapabilityOption[];
-  capabilityCatalogHarnessTargetID: string | null;
-  capabilityCatalogLoadFailed: boolean;
-  capabilityCatalogLoading: boolean;
   harnessTargets: WorkspaceAgentHarnessTargetOption[];
   loadFailed: boolean;
   loading: boolean;
-  generating: boolean;
-  recommendingFallback: boolean;
   saving: boolean;
 }
 
@@ -215,15 +194,9 @@ export interface WorkspaceSettingsWorkspaceAgentsSnapshotState {
   readonly deletingAgentID: string | null;
   readonly draft: Readonly<WorkspaceAgentDraft> | null;
   readonly feedback: WorkspaceAgentFeedback | null;
-  readonly capabilityCatalog: readonly WorkspaceAgentCapabilityOption[];
-  readonly capabilityCatalogHarnessTargetID: string | null;
-  readonly capabilityCatalogLoadFailed: boolean;
-  readonly capabilityCatalogLoading: boolean;
   readonly harnessTargets: readonly WorkspaceAgentHarnessTargetOption[];
   readonly loadFailed: boolean;
   readonly loading: boolean;
-  readonly generating: boolean;
-  readonly recommendingFallback: boolean;
   readonly saving: boolean;
 }
 
