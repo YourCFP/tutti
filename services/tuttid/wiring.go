@@ -47,6 +47,7 @@ import (
 	managedruntime "github.com/tutti-os/tutti/services/tuttid/service/managedruntime"
 	modelbindingservice "github.com/tutti-os/tutti/services/tuttid/service/modelbinding"
 	modelplanservice "github.com/tutti-os/tutti/services/tuttid/service/modelplan"
+	modelpolicyservice "github.com/tutti-os/tutti/services/tuttid/service/modelpolicy"
 	preferencesservice "github.com/tutti-os/tutti/services/tuttid/service/preferences"
 	reporterservice "github.com/tutti-os/tutti/services/tuttid/service/reporter"
 	tuttiagentservice "github.com/tutti-os/tutti/services/tuttid/service/tuttiagent"
@@ -329,15 +330,28 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		Store: managedCredentialsStore,
 	}
 	modelBindingsStore, _ := store.(workspacedata.AgentModelBindingsStore)
+	modelPolicyStore, _ := store.(modelpolicyservice.Store)
+	// Narrow cross-domain reads over biz types keep referential integrity
+	// bidirectional without any modelbinding <-> modelpolicy service cycle:
+	// bindings validate their policy link, and policy deletion checks bindings.
+	bindingPolicyLookup, _ := store.(modelbindingservice.PolicyLookup)
+	policyBindingReferences, _ := store.(modelpolicyservice.BindingReferenceReader)
 	modelBindings := &modelbindingservice.Service{
-		Store:   modelBindingsStore,
-		Plans:   modelPlansStore,
-		Targets: agentTargetStore,
+		Store:    modelBindingsStore,
+		Plans:    modelPlansStore,
+		Targets:  agentTargetStore,
+		Policies: bindingPolicyLookup,
+	}
+	modelPolicies := &modelpolicyservice.Service{
+		Store:             modelPolicyStore,
+		BindingReferences: policyBindingReferences,
 	}
 	modelPlans := &modelplanservice.Service{
 		Store:         modelPlansStore,
 		FirstUseStore: modelPlanFirstUseStore,
-		References:    modelBindings,
+		// Plan deletion stays blocked while any consumer domain still points at
+		// the plan: agent model bindings and model usage policies alike.
+		References: modelplanservice.CompositeReferenceResolver{modelBindings, modelPolicies},
 	}
 	events.RegisterIntentHandler(
 		eventstreamservice.TopicPreferencesDesktopUpdateRequested,
@@ -698,6 +712,7 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		ManagedCredentialsService: managedCredentials,
 		ModelPlanService:          modelPlans,
 		AgentModelBindingService:  modelBindings,
+		ModelPolicyService:        modelPolicies,
 		EventStreamService:        events,
 		WorkspaceService:          workspaceService,
 		WorkbenchService: workspaceservice.WorkbenchService{

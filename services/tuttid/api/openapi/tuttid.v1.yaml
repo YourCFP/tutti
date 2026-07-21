@@ -1430,6 +1430,262 @@ paths:
           $ref: "#/components/responses/WorkspaceOperationError"
         "503":
           $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/model-policies:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: listModelPolicies
+      deprecated: true
+      tags:
+        - model-plan
+      summary: List legacy role-based model policies
+      description: Compatibility-only. New workflows use WorkspaceAgent for runtime model configuration and AutomationRule for optional collaboration actions.
+      responses:
+        "200":
+          description: Model usage policies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListModelPoliciesResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+    post:
+      operationId: createModelPolicy
+      deprecated: true
+      tags:
+        - model-plan
+      summary: Create one legacy role-based model policy
+      description: Compatibility-only. The production daemon does not execute this policy's role map or fixed review runner; create a WorkspaceAgent and AutomationRule for new workflows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutModelPolicyRequest"
+      responses:
+        "200":
+          description: Created model usage policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelUsagePolicy"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/model-policies/{modelPolicyID}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/ModelPolicyID"
+    get:
+      operationId: getModelPolicy
+      deprecated: true
+      tags:
+        - model-plan
+      summary: Get one legacy role-based model policy
+      description: Compatibility-only. The policy is retained for persisted data and acceptance records.
+      responses:
+        "200":
+          description: Model usage policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelUsagePolicy"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+    put:
+      operationId: updateModelPolicy
+      deprecated: true
+      tags:
+        - model-plan
+      summary: Update one legacy role-based model policy
+      description: Compatibility-only. Changes do not drive the production Agent runtime or AutomationRule engine.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutModelPolicyRequest"
+      responses:
+        "200":
+          description: Updated model usage policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelUsagePolicy"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+    delete:
+      operationId: deleteModelPolicy
+      deprecated: true
+      tags:
+        - model-plan
+      summary: Delete one legacy role-based model policy
+      description: Deletion is blocked with a 409 while any agent binding still references the policy. Callers rebind or clear those bindings first.
+      responses:
+        "200":
+          description: Model usage policy deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteModelPolicyResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "409":
+          $ref: "#/components/responses/ModelPolicyReferencedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/model-policy-override:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/AgentSessionID"
+    get:
+      operationId: getAgentSessionModelPolicyOverride
+      deprecated: true
+      tags:
+        - model-plan
+      summary: Get the legacy session model-policy override
+      description: Compatibility-only. Use the AutomationRule session override for new workflows.
+      responses:
+        "200":
+          description: Session policy override; absent override returns disabled=false with no policy id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSessionModelPolicyOverride"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+    put:
+      operationId: setAgentSessionModelPolicyOverride
+      deprecated: true
+      tags:
+        - model-plan
+      summary: Set the legacy session model-policy override
+      description: Compatibility-only. The legacy review runner is not wired in production; use the AutomationRule session override to select or disable future actions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAgentSessionModelPolicyOverrideRequest"
+      responses:
+        "200":
+          description: Updated session policy override
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSessionModelPolicyOverride"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "404":
+          $ref: "#/components/responses/WorkspaceNotFoundError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+  /v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/acceptance:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/AgentSessionID"
+    get:
+      operationId: getAgentSessionAcceptance
+      tags:
+        - model-plan
+      summary: Get the session acceptance ladder state
+      description: States distinguish agent_claimed, auto_checked, and user_accepted. Only user_accepted may close work; automated review can reach auto_checked at most.
+      responses:
+        "200":
+          description: Session acceptance state; sessions never claimed complete return no state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSessionAcceptanceResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+    post:
+      operationId: acceptAgentSessionWork
+      tags:
+        - model-plan
+      summary: Record explicit user acceptance for the session's claimed work
+      responses:
+        "200":
+          description: Acceptance recorded as user_accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSessionAcceptanceResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "400":
+          $ref: "#/components/responses/InvalidRequestError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowedError"
+        "502":
+          $ref: "#/components/responses/WorkspaceOperationError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
   /v1/workspaces/{workspaceID}/apps:
     parameters:
       - $ref: "#/components/parameters/WorkspaceID"
@@ -4569,6 +4825,13 @@ components:
       schema:
         type: string
         minLength: 1
+    ModelPolicyID:
+      name: modelPolicyID
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
     WorkspaceFilePath:
       name: path
       in: query
@@ -4860,6 +5123,19 @@ components:
                   code: model_plan_referenced
                   reason: model_plan_referenced
                   developerMessage: model plan is still referenced; rebind or disable consumers first
+    ModelPolicyReferencedError:
+      description: Model usage policy is still referenced by agent bindings
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+          examples:
+            modelPolicyReferenced:
+              value:
+                error:
+                  code: model_policy_referenced
+                  reason: model_policy_referenced
+                  developerMessage: model usage policy is still referenced; rebind or clear the referencing bindings first
     PreferencesOperationError:
       description: Desktop preferences operation failed in an upstream adapter or command
       content:
@@ -5556,6 +5832,7 @@ components:
             - agent_target_not_found
             - model_plan_not_found
             - model_plan_referenced
+            - model_policy_referenced
         reason:
           type: string
         params:
@@ -6610,6 +6887,7 @@ components:
           type: string
           enum:
             - agent_target
+            - model_policy
         id:
           type: string
         name:
@@ -6618,7 +6896,7 @@ components:
         role:
           type: string
           nullable: true
-          description: How the agent target uses the plan, currently default.
+          description: How the consumer uses the plan. Agent target bindings report "default"; model usage policies report the bound role (execution, planning, or review).
     ModelPlanReferencesResponse:
       type: object
       additionalProperties: false
@@ -6655,6 +6933,9 @@ components:
         defaultModel:
           type: string
           nullable: true
+        modelPolicyId:
+          type: string
+          nullable: true
         updatedAt:
           type: string
           format: date-time
@@ -6680,6 +6961,184 @@ components:
           type: string
           nullable: true
           description: Must belong to the referenced plan's model list when a plan is set.
+        modelPolicyId:
+          type: string
+          nullable: true
+    PlanModelRef:
+      type: object
+      additionalProperties: false
+      properties:
+        modelPlanId:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+    ModelPolicyReviewRule:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+      properties:
+        enabled:
+          type: boolean
+        trigger:
+          type: string
+          enum:
+            - on_task_complete
+          nullable: true
+        maxRunsPerSession:
+          type: integer
+          nullable: true
+        maxTotalTokensPerSession:
+          type: integer
+          format: int64
+          nullable: true
+    ModelUsagePolicy:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - workspaceId
+        - name
+        - reviewRule
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        name:
+          type: string
+        execution:
+          allOf:
+            - $ref: "#/components/schemas/PlanModelRef"
+          nullable: true
+        planning:
+          allOf:
+            - $ref: "#/components/schemas/PlanModelRef"
+          nullable: true
+        review:
+          allOf:
+            - $ref: "#/components/schemas/PlanModelRef"
+          nullable: true
+        reviewRule:
+          $ref: "#/components/schemas/ModelPolicyReviewRule"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ListModelPoliciesResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - policies
+      properties:
+        policies:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelUsagePolicy"
+    PutModelPolicyRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+        execution:
+          allOf:
+            - $ref: "#/components/schemas/PlanModelRef"
+          nullable: true
+        planning:
+          allOf:
+            - $ref: "#/components/schemas/PlanModelRef"
+          nullable: true
+        review:
+          allOf:
+            - $ref: "#/components/schemas/PlanModelRef"
+          nullable: true
+        reviewRule:
+          allOf:
+            - $ref: "#/components/schemas/ModelPolicyReviewRule"
+          nullable: true
+    DeleteModelPolicyResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - modelPolicyId
+      properties:
+        modelPolicyId:
+          type: string
+    AgentSessionModelPolicyOverride:
+      type: object
+      additionalProperties: false
+      required:
+        - workspaceId
+        - agentSessionId
+        - disabled
+      properties:
+        workspaceId:
+          type: string
+        agentSessionId:
+          type: string
+        disabled:
+          type: boolean
+        modelPolicyId:
+          type: string
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+    SetAgentSessionModelPolicyOverrideRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - disabled
+      properties:
+        disabled:
+          type: boolean
+        modelPolicyId:
+          type: string
+          nullable: true
+    AgentSessionAcceptance:
+      type: object
+      additionalProperties: false
+      required:
+        - workspaceId
+        - agentSessionId
+        - state
+      properties:
+        workspaceId:
+          type: string
+        agentSessionId:
+          type: string
+        state:
+          type: string
+          enum:
+            - agent_claimed
+            - auto_checked
+            - user_accepted
+        reviewRunId:
+          type: string
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+    AgentSessionAcceptanceResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        acceptance:
+          allOf:
+            - $ref: "#/components/schemas/AgentSessionAcceptance"
+          nullable: true
     WorkspaceAppInstallUserPhase:
       type: string
       enum:

@@ -56,6 +56,7 @@ func (api DaemonAPI) SetAgentModelBinding(ctx context.Context, request tuttigene
 		AgentTargetID: request.AgentTargetID,
 		ModelPlanID:   stringValue(request.Body.ModelPlanId),
 		DefaultModel:  stringValue(request.Body.DefaultModel),
+		ModelPolicyID: stringValue(request.Body.ModelPolicyId),
 	})
 	if err != nil {
 		switch {
@@ -65,7 +66,9 @@ func (api DaemonAPI) SetAgentModelBinding(ctx context.Context, request tuttigene
 			}, nil
 		case errors.Is(err, modelbindingservice.ErrInvalidBindingInput),
 			errors.Is(err, modelbindingservice.ErrPlanNotUsable),
-			errors.Is(err, modelbindingservice.ErrModelNotInPlan):
+			errors.Is(err, modelbindingservice.ErrModelNotInPlan),
+			errors.Is(err, modelbindingservice.ErrPolicyNotUsable),
+			errors.Is(err, modelbindingservice.ErrBindingReferenceUnusable):
 			return tuttigenerated.SetAgentModelBinding400JSONResponse{
 				InvalidRequestErrorJSONResponse: invalidRequestError(apierrors.InvalidRequest("invalid_agent_model_binding", apierrors.WithDeveloperMessage(err.Error()))),
 			}, nil
@@ -87,6 +90,9 @@ func generatedAgentModelBinding(binding modelbindingbiz.Binding) tuttigenerated.
 	}
 	if binding.DefaultModel != "" {
 		result.DefaultModel = stringPointer(binding.DefaultModel)
+	}
+	if binding.ModelPolicyID != "" {
+		result.ModelPolicyId = stringPointer(binding.ModelPolicyID)
 	}
 	if !binding.UpdatedAt.IsZero() {
 		updatedAt := binding.UpdatedAt

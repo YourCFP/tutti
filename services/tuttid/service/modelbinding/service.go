@@ -1,7 +1,7 @@
-// Package modelbinding orchestrates per-workspace agent target model bindings:
-// which model access plan and default model an agent target uses for new
-// sessions. It also resolves plan references so plan mutations can show impact
-// and deletion stays guarded.
+// Package modelbinding orchestrates per-workspace agent target model
+// bindings: which model access plan, default model, and model usage policy an
+// agent target uses for new sessions. It also resolves plan references so
+// plan mutations can show impact and deletion stays guarded.
 package modelbinding
 
 import (
@@ -15,6 +15,7 @@ import (
 	agenttargetbiz "github.com/tutti-os/tutti/services/tuttid/biz/agenttarget"
 	modelbindingbiz "github.com/tutti-os/tutti/services/tuttid/biz/modelbinding"
 	modelplanbiz "github.com/tutti-os/tutti/services/tuttid/biz/modelplan"
+	modelpolicybiz "github.com/tutti-os/tutti/services/tuttid/biz/modelpolicy"
 	workspacedata "github.com/tutti-os/tutti/services/tuttid/data/workspace"
 )
 
@@ -22,6 +23,12 @@ var (
 	ErrInvalidBindingInput = errors.New("invalid agent model binding input")
 	ErrPlanNotUsable       = errors.New("model plan is not usable for binding")
 	ErrModelNotInPlan      = errors.New("model is not part of the referenced plan")
+	ErrPolicyNotUsable     = errors.New("model usage policy is not usable for binding")
+	// ErrBindingReferenceUnusable reports that a referenced plan or policy
+	// became unusable between validation and commit (the store's foreign keys
+	// reject the write). SQLite does not identify which reference failed, so the
+	// message stays neutral rather than claiming a specific one.
+	ErrBindingReferenceUnusable = errors.New("agent model binding reference became unusable")
 )
 
 // TargetResolver confirms an agent target id exists before binding it and
@@ -30,11 +37,19 @@ type TargetResolver interface {
 	GetAgentTarget(ctx context.Context, id string) (agenttargetbiz.Target, error)
 }
 
+// PolicyLookup confirms a model usage policy exists in the workspace before a
+// binding may reference it. It is a narrow read over biz types so binding
+// validation never takes a modelbinding -> modelpolicy service dependency.
+type PolicyLookup interface {
+	GetModelPolicy(ctx context.Context, workspaceID string, policyID string) (modelpolicybiz.Policy, error)
+}
+
 type Service struct {
-	Store   workspacedata.AgentModelBindingsStore
-	Plans   workspacedata.ModelPlansStore
-	Targets TargetResolver
-	Now     func() time.Time
+	Store    workspacedata.AgentModelBindingsStore
+	Plans    workspacedata.ModelPlansStore
+	Targets  TargetResolver
+	Policies PolicyLookup
+	Now      func() time.Time
 }
 
 type SetBindingInput struct {
@@ -42,6 +57,7 @@ type SetBindingInput struct {
 	AgentTargetID string
 	ModelPlanID   string
 	DefaultModel  string
+	ModelPolicyID string
 }
 
 // SetBinding stores or clears one agent target binding. An all-empty input
@@ -52,6 +68,7 @@ func (s *Service) SetBinding(ctx context.Context, input SetBindingInput) (modelb
 		AgentTargetID: input.AgentTargetID,
 		ModelPlanID:   input.ModelPlanID,
 		DefaultModel:  input.DefaultModel,
+		ModelPolicyID: input.ModelPolicyID,
 		UpdatedAt:     s.now(),
 	})
 	if err != nil {
@@ -92,9 +109,24 @@ func (s *Service) SetBinding(ctx context.Context, input SetBindingInput) (modelb
 			}
 		}
 	}
+	if binding.ModelPolicyID != "" {
+		if s.Policies == nil {
+			// Fail closed: never persist a policy link that cannot be validated.
+			return modelbindingbiz.Binding{}, errors.New("model usage policy validation is unavailable")
+		}
+		if _, err := s.Policies.GetModelPolicy(ctx, binding.WorkspaceID, binding.ModelPolicyID); err != nil {
+			if errors.Is(err, workspacedata.ErrModelPolicyNotFound) {
+				return modelbindingbiz.Binding{}, fmt.Errorf("%w: policy not found", ErrPolicyNotUsable)
+			}
+			return modelbindingbiz.Binding{}, err
+		}
+	}
 	if err := s.Store.PutAgentModelBinding(ctx, binding); err != nil {
 		if errors.Is(err, workspacedata.ErrAgentModelBindingReferenceInvalid) {
-			return modelbindingbiz.Binding{}, ErrPlanNotUsable
+			// A plan or policy referenced by this binding disappeared between the
+			// pre-validation above and the write; the store cannot say which, so
+			// surface a neutral, stable error rather than blaming the plan.
+			return modelbindingbiz.Binding{}, ErrBindingReferenceUnusable
 		}
 		return modelbindingbiz.Binding{}, err
 	}
