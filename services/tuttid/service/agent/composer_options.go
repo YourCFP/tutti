@@ -52,6 +52,12 @@ type ComposerConfigOptionValue struct {
 	ReasoningEffort            string
 	ReasoningEfforts           []AgentModelReasoningEffortOption
 	ReasoningEffortsAdvertised bool
+	// Requested marks an entry that mirrors the requested/current selection
+	// instead of the provider catalog (warm-catalog append of the requested
+	// model, selected-model bootstrap echo). Clients keep such entries
+	// selectable but must not treat them as proof the provider can run the
+	// model — create validation runs against the raw catalog only.
+	Requested bool
 }
 
 type ComposerSettings = agenthost.ComposerSettings
@@ -657,6 +663,7 @@ func composerModelConfig(provider string, selected string, options []ComposerCon
 			Value:              value,
 			Description:        strings.TrimSpace(option.Description),
 			SupportsImageInput: option.SupportsImageInput,
+			Requested:          option.Requested,
 		})
 	}
 	selected = strings.TrimSpace(selected)
@@ -673,7 +680,9 @@ func composerSelectedModelOptions(model string) []ComposerConfigOptionValue {
 	if model == "" {
 		return []ComposerConfigOptionValue{}
 	}
-	return []ComposerConfigOptionValue{{ID: model, Label: model, Value: model}}
+	// Bootstrap echo: the sole entry mirrors the requested/effective settings,
+	// so it carries the requested provenance marker.
+	return []ComposerConfigOptionValue{{ID: model, Label: model, Value: model, Requested: true}}
 }
 
 func reasoningConfigOptionID(provider string) string {

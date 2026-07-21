@@ -67,6 +67,11 @@ func composerConfigOptionValuesToRuntimeModelOptions(options []ComposerConfigOpt
 			}
 			entry["reasoningEfforts"] = efforts
 		}
+		// Provenance for requested-origin entries (warm-catalog append,
+		// bootstrap echo): clients must not count them as catalog testimony.
+		if option.Requested {
+			entry["requested"] = true
+		}
 		result = append(result, entry)
 	}
 	return result

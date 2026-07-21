@@ -1062,7 +1062,13 @@ test("desktop agent activity adapter ignores legacy runtime model and reasoning 
     provider: "codex"
   });
 
-  assert.deepEqual(options.models, [{ value: "gpt-5.4", label: "gpt-5.4" }]);
+  // This branch's daemon contract emits the legacy modelConfig shape; the
+  // runtimeContext.configOptions list stays ignored. The current value is not
+  // in the advertised list; the projection keeps it selectable but marks it
+  // requested-origin (not catalog testimony).
+  assert.deepEqual(options.models, [
+    { value: "gpt-5.4", label: "gpt-5.4", requested: true }
+  ]);
   assert.deepEqual(options.reasoningEfforts, [
     { value: "low", label: "Low" },
     { value: "ultra", label: "Ultra" }
