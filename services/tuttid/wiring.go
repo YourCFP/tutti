@@ -45,6 +45,7 @@ import (
 	managedruntime "github.com/tutti-os/tutti/services/tuttid/service/managedruntime"
 	modelbindingservice "github.com/tutti-os/tutti/services/tuttid/service/modelbinding"
 	modelplanservice "github.com/tutti-os/tutti/services/tuttid/service/modelplan"
+	modelpolicyservice "github.com/tutti-os/tutti/services/tuttid/service/modelpolicy"
 	preferencesservice "github.com/tutti-os/tutti/services/tuttid/service/preferences"
 	reporterservice "github.com/tutti-os/tutti/services/tuttid/service/reporter"
 	tuttiagentservice "github.com/tutti-os/tutti/services/tuttid/service/tuttiagent"
@@ -336,6 +337,10 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		Store:         modelPlansStore,
 		FirstUseStore: modelPlanFirstUseStore,
 		References:    modelBindings,
+	}
+	modelPolicyStore, _ := store.(modelpolicyservice.Store)
+	modelPolicies := &modelpolicyservice.Service{
+		Store: modelPolicyStore,
 	}
 	events.RegisterIntentHandler(
 		eventstreamservice.TopicPreferencesDesktopUpdateRequested,
@@ -681,6 +686,7 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		ManagedCredentialsService: managedCredentials,
 		ModelPlanService:          modelPlans,
 		AgentModelBindingService:  modelBindings,
+		ModelPolicyService:        modelPolicies,
 		EventStreamService:        events,
 		WorkspaceService:          workspaceService,
 		WorkbenchService: workspaceservice.WorkbenchService{

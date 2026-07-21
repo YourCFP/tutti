@@ -807,6 +807,7 @@ export type AgentModelBinding = {
   agentTargetId: string;
   modelPlanId?: string | null;
   defaultModel?: string | null;
+  modelPolicyId?: string | null;
   updatedAt?: string | null;
 };
 
@@ -820,6 +821,72 @@ export type SetAgentModelBindingRequest = {
    * Must belong to the referenced plan's model list when a plan is set.
    */
   defaultModel?: string | null;
+  modelPolicyId?: string | null;
+};
+
+export type PlanModelRef = {
+  modelPlanId?: string | null;
+  model?: string | null;
+};
+
+export type ModelPolicyReviewRule = {
+  enabled: boolean;
+  trigger?: "on_task_complete";
+  maxRunsPerSession?: number | null;
+  maxTotalTokensPerSession?: number | null;
+};
+
+export type ModelUsagePolicy = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  execution?: PlanModelRef | null;
+  planning?: PlanModelRef | null;
+  review?: PlanModelRef | null;
+  reviewRule: ModelPolicyReviewRule;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ListModelPoliciesResponse = {
+  policies: Array<ModelUsagePolicy>;
+};
+
+export type PutModelPolicyRequest = {
+  name: string;
+  execution?: PlanModelRef | null;
+  planning?: PlanModelRef | null;
+  review?: PlanModelRef | null;
+  reviewRule?: ModelPolicyReviewRule | null;
+};
+
+export type DeleteModelPolicyResponse = {
+  modelPolicyId: string;
+};
+
+export type AgentSessionModelPolicyOverride = {
+  workspaceId: string;
+  agentSessionId: string;
+  disabled: boolean;
+  modelPolicyId?: string | null;
+  updatedAt?: string | null;
+};
+
+export type SetAgentSessionModelPolicyOverrideRequest = {
+  disabled: boolean;
+  modelPolicyId?: string | null;
+};
+
+export type AgentSessionAcceptance = {
+  workspaceId: string;
+  agentSessionId: string;
+  state: "agent_claimed" | "auto_checked" | "user_accepted";
+  reviewRunId?: string | null;
+  updatedAt?: string | null;
+};
+
+export type AgentSessionAcceptanceResponse = {
+  acceptance?: AgentSessionAcceptance | null;
 };
 
 export type WorkspaceAppInstallUserPhase =
@@ -3053,6 +3120,8 @@ export type WorkspaceAppId = string;
 export type WorkspaceAppFactoryJobId = string;
 
 export type ModelPlanId = string;
+
+export type ModelPolicyId = string;
 
 /**
  * Omit to resolve the current workspace file root.
@@ -5332,6 +5401,434 @@ export type SetAgentModelBindingResponses = {
 
 export type SetAgentModelBindingResponse =
   SetAgentModelBindingResponses[keyof SetAgentModelBindingResponses];
+
+export type ListModelPoliciesData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/model-policies";
+};
+
+export type ListModelPoliciesErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type ListModelPoliciesError =
+  ListModelPoliciesErrors[keyof ListModelPoliciesErrors];
+
+export type ListModelPoliciesResponses = {
+  /**
+   * Model usage policies
+   */
+  200: ListModelPoliciesResponse;
+};
+
+export type ListModelPoliciesResponse2 =
+  ListModelPoliciesResponses[keyof ListModelPoliciesResponses];
+
+export type CreateModelPolicyData = {
+  body: PutModelPolicyRequest;
+  path: {
+    workspaceID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/model-policies";
+};
+
+export type CreateModelPolicyErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type CreateModelPolicyError =
+  CreateModelPolicyErrors[keyof CreateModelPolicyErrors];
+
+export type CreateModelPolicyResponses = {
+  /**
+   * Created model usage policy
+   */
+  200: ModelUsagePolicy;
+};
+
+export type CreateModelPolicyResponse =
+  CreateModelPolicyResponses[keyof CreateModelPolicyResponses];
+
+export type DeleteModelPolicyData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+    modelPolicyID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/model-policies/{modelPolicyID}";
+};
+
+export type DeleteModelPolicyErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type DeleteModelPolicyError =
+  DeleteModelPolicyErrors[keyof DeleteModelPolicyErrors];
+
+export type DeleteModelPolicyResponses = {
+  /**
+   * Model usage policy deleted
+   */
+  200: DeleteModelPolicyResponse;
+};
+
+export type DeleteModelPolicyResponse2 =
+  DeleteModelPolicyResponses[keyof DeleteModelPolicyResponses];
+
+export type GetModelPolicyData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+    modelPolicyID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/model-policies/{modelPolicyID}";
+};
+
+export type GetModelPolicyErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type GetModelPolicyError =
+  GetModelPolicyErrors[keyof GetModelPolicyErrors];
+
+export type GetModelPolicyResponses = {
+  /**
+   * Model usage policy
+   */
+  200: ModelUsagePolicy;
+};
+
+export type GetModelPolicyResponse =
+  GetModelPolicyResponses[keyof GetModelPolicyResponses];
+
+export type UpdateModelPolicyData = {
+  body: PutModelPolicyRequest;
+  path: {
+    workspaceID: string;
+    modelPolicyID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/model-policies/{modelPolicyID}";
+};
+
+export type UpdateModelPolicyErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type UpdateModelPolicyError =
+  UpdateModelPolicyErrors[keyof UpdateModelPolicyErrors];
+
+export type UpdateModelPolicyResponses = {
+  /**
+   * Updated model usage policy
+   */
+  200: ModelUsagePolicy;
+};
+
+export type UpdateModelPolicyResponse =
+  UpdateModelPolicyResponses[keyof UpdateModelPolicyResponses];
+
+export type GetAgentSessionModelPolicyOverrideData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+    agentSessionID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/model-policy-override";
+};
+
+export type GetAgentSessionModelPolicyOverrideErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type GetAgentSessionModelPolicyOverrideError =
+  GetAgentSessionModelPolicyOverrideErrors[keyof GetAgentSessionModelPolicyOverrideErrors];
+
+export type GetAgentSessionModelPolicyOverrideResponses = {
+  /**
+   * Session policy override; absent override returns disabled=false with no policy id
+   */
+  200: AgentSessionModelPolicyOverride;
+};
+
+export type GetAgentSessionModelPolicyOverrideResponse =
+  GetAgentSessionModelPolicyOverrideResponses[keyof GetAgentSessionModelPolicyOverrideResponses];
+
+export type SetAgentSessionModelPolicyOverrideData = {
+  body: SetAgentSessionModelPolicyOverrideRequest;
+  path: {
+    workspaceID: string;
+    agentSessionID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/model-policy-override";
+};
+
+export type SetAgentSessionModelPolicyOverrideErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type SetAgentSessionModelPolicyOverrideError =
+  SetAgentSessionModelPolicyOverrideErrors[keyof SetAgentSessionModelPolicyOverrideErrors];
+
+export type SetAgentSessionModelPolicyOverrideResponses = {
+  /**
+   * Updated session policy override
+   */
+  200: AgentSessionModelPolicyOverride;
+};
+
+export type SetAgentSessionModelPolicyOverrideResponse =
+  SetAgentSessionModelPolicyOverrideResponses[keyof SetAgentSessionModelPolicyOverrideResponses];
+
+export type GetAgentSessionAcceptanceData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+    agentSessionID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/acceptance";
+};
+
+export type GetAgentSessionAcceptanceErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type GetAgentSessionAcceptanceError =
+  GetAgentSessionAcceptanceErrors[keyof GetAgentSessionAcceptanceErrors];
+
+export type GetAgentSessionAcceptanceResponses = {
+  /**
+   * Session acceptance state; sessions never claimed complete return no state
+   */
+  200: AgentSessionAcceptanceResponse;
+};
+
+export type GetAgentSessionAcceptanceResponse =
+  GetAgentSessionAcceptanceResponses[keyof GetAgentSessionAcceptanceResponses];
+
+export type AcceptAgentSessionWorkData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+    agentSessionID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/acceptance";
+};
+
+export type AcceptAgentSessionWorkErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type AcceptAgentSessionWorkError =
+  AcceptAgentSessionWorkErrors[keyof AcceptAgentSessionWorkErrors];
+
+export type AcceptAgentSessionWorkResponses = {
+  /**
+   * Acceptance recorded as user_accepted
+   */
+  200: AgentSessionAcceptanceResponse;
+};
+
+export type AcceptAgentSessionWorkResponse =
+  AcceptAgentSessionWorkResponses[keyof AcceptAgentSessionWorkResponses];
 
 export type ListWorkspaceAppsData = {
   body?: never;

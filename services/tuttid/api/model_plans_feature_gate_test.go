@@ -140,3 +140,43 @@ func TestModelPlansWriteGateCoversBindingWrites(t *testing.T) {
 		t.Fatalf("SetAgentModelBinding() response = %T, want 400 rejection", bindingResponse)
 	}
 }
+
+func TestModelPlansWriteGateCoversPolicyWrites(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	api := DaemonAPI{PreferencesService: gateTestPreferences(map[string]bool{}, nil)}
+
+	createResponse, err := api.CreateModelPolicy(ctx, tuttigenerated.CreateModelPolicyRequestObject{WorkspaceID: "ws-1"})
+	if err != nil {
+		t.Fatalf("CreateModelPolicy() error = %v", err)
+	}
+	if _, ok := createResponse.(tuttigenerated.CreateModelPolicy400JSONResponse); !ok {
+		t.Fatalf("CreateModelPolicy() response = %T, want 400 rejection", createResponse)
+	}
+
+	overrideResponse, err := api.SetAgentSessionModelPolicyOverride(ctx, tuttigenerated.SetAgentSessionModelPolicyOverrideRequestObject{WorkspaceID: "ws-1", AgentSessionID: "session-1"})
+	if err != nil {
+		t.Fatalf("SetAgentSessionModelPolicyOverride() error = %v", err)
+	}
+	if _, ok := overrideResponse.(tuttigenerated.SetAgentSessionModelPolicyOverride400JSONResponse); !ok {
+		t.Fatalf("SetAgentSessionModelPolicyOverride() response = %T, want 400 rejection", overrideResponse)
+	}
+
+	acceptanceResponse, err := api.AcceptAgentSessionWork(ctx, tuttigenerated.AcceptAgentSessionWorkRequestObject{WorkspaceID: "ws-1", AgentSessionID: "session-1"})
+	if err != nil {
+		t.Fatalf("AcceptAgentSessionWork() error = %v", err)
+	}
+	if _, ok := acceptanceResponse.(tuttigenerated.AcceptAgentSessionWork400JSONResponse); !ok {
+		t.Fatalf("AcceptAgentSessionWork() response = %T, want 400 rejection", acceptanceResponse)
+	}
+
+	// Reads stay open while writes are gated.
+	listResponse, err := api.ListModelPolicies(ctx, tuttigenerated.ListModelPoliciesRequestObject{WorkspaceID: "ws-1"})
+	if err != nil {
+		t.Fatalf("ListModelPolicies() error = %v", err)
+	}
+	if _, ok := listResponse.(tuttigenerated.ListModelPolicies503JSONResponse); !ok {
+		t.Fatalf("ListModelPolicies() response = %T, want 503 passthrough (ungated read)", listResponse)
+	}
+}

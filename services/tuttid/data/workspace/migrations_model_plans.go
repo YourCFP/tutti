@@ -126,6 +126,36 @@ INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms)
 	return nil
 }
 
+// applyAgentModelBindingsV2 adds the model usage policy reference to the
+// bindings table created by v1. Kept additive so databases already migrated
+// by the model-plans release only gain the new column.
+func (s *SQLiteStore) applyAgentModelBindingsV2(ctx context.Context) error {
+	applied, err := s.hasMigration(ctx, schemaMigrationAgentModelBindingsV2)
+	if err != nil {
+		return err
+	}
+	if applied {
+		return nil
+	}
+
+	present, err := s.hasColumn(ctx, "agent_target_model_bindings", "model_policy_id")
+	if err != nil {
+		return err
+	}
+	if !present {
+		if _, err := s.writeDB.ExecContext(ctx, `ALTER TABLE agent_target_model_bindings ADD COLUMN model_policy_id TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("migrate agent model bindings v2: %w", err)
+		}
+	}
+	if _, err := s.writeDB.ExecContext(ctx, `
+INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms)
+  VALUES (?, ?);
+`, schemaMigrationAgentModelBindingsV2, unixMs(time.Now().UTC())); err != nil {
+		return fmt.Errorf("record agent model bindings v2 migration: %w", err)
+	}
+	return nil
+}
+
 // backfillModelPlansFromManagedCredentials copies every legacy managed model
 // provider credential row into a named model plan so existing configurations
 // keep working after the upgrade. The legacy tables stay in place for the

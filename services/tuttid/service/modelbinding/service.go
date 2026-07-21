@@ -1,7 +1,7 @@
-// Package modelbinding orchestrates per-workspace agent target model bindings:
-// which model access plan and default model an agent target uses for new
-// sessions. It also resolves plan references so plan mutations can show impact
-// and deletion stays guarded.
+// Package modelbinding orchestrates per-workspace agent target model
+// bindings: which model access plan, default model, and model usage policy an
+// agent target uses for new sessions. It also resolves plan references so
+// plan mutations can show impact and deletion stays guarded.
 package modelbinding
 
 import (
@@ -42,6 +42,7 @@ type SetBindingInput struct {
 	AgentTargetID string
 	ModelPlanID   string
 	DefaultModel  string
+	ModelPolicyID string
 }
 
 // SetBinding stores or clears one agent target binding. An all-empty input
@@ -52,6 +53,7 @@ func (s *Service) SetBinding(ctx context.Context, input SetBindingInput) (modelb
 		AgentTargetID: input.AgentTargetID,
 		ModelPlanID:   input.ModelPlanID,
 		DefaultModel:  input.DefaultModel,
+		ModelPolicyID: input.ModelPolicyID,
 		UpdatedAt:     s.now(),
 	})
 	if err != nil {

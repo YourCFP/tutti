@@ -7,6 +7,9 @@ import type {
 } from "./client/index.ts";
 import { client } from "./client.gen.ts";
 import type {
+  AcceptAgentSessionWorkData,
+  AcceptAgentSessionWorkErrors,
+  AcceptAgentSessionWorkResponses,
   AddWorkspaceIssueContextRefsData,
   AddWorkspaceIssueContextRefsErrors,
   AddWorkspaceIssueContextRefsResponses,
@@ -58,6 +61,9 @@ import type {
   CreateModelPlanData,
   CreateModelPlanErrors,
   CreateModelPlanResponses,
+  CreateModelPolicyData,
+  CreateModelPolicyErrors,
+  CreateModelPolicyResponses,
   CreateWorkspaceAgentSessionData,
   CreateWorkspaceAgentSessionErrors,
   CreateWorkspaceAgentSessionResponses,
@@ -100,6 +106,9 @@ import type {
   DeleteModelPlanData,
   DeleteModelPlanErrors,
   DeleteModelPlanResponses,
+  DeleteModelPolicyData,
+  DeleteModelPolicyErrors,
+  DeleteModelPolicyResponses,
   DeleteUserProjectData,
   DeleteUserProjectErrors,
   DeleteUserProjectResponses,
@@ -160,6 +169,12 @@ import type {
   GetAgentProviderStatusesData,
   GetAgentProviderStatusesErrors,
   GetAgentProviderStatusesResponses,
+  GetAgentSessionAcceptanceData,
+  GetAgentSessionAcceptanceErrors,
+  GetAgentSessionAcceptanceResponses,
+  GetAgentSessionModelPolicyOverrideData,
+  GetAgentSessionModelPolicyOverrideErrors,
+  GetAgentSessionModelPolicyOverrideResponses,
   GetAgentTargetSetupData,
   GetAgentTargetSetupErrors,
   GetAgentTargetSetupResponses,
@@ -172,6 +187,9 @@ import type {
   GetModelPlanData,
   GetModelPlanErrors,
   GetModelPlanResponses,
+  GetModelPolicyData,
+  GetModelPolicyErrors,
+  GetModelPolicyResponses,
   GetStartupWorkspaceData,
   GetStartupWorkspaceErrors,
   GetStartupWorkspaceResponses,
@@ -262,6 +280,9 @@ import type {
   ListModelPlansData,
   ListModelPlansErrors,
   ListModelPlansResponses,
+  ListModelPoliciesData,
+  ListModelPoliciesErrors,
+  ListModelPoliciesResponses,
   ListUserProjectsData,
   ListUserProjectsErrors,
   ListUserProjectsResponses,
@@ -442,6 +463,9 @@ import type {
   SetAgentModelBindingData,
   SetAgentModelBindingErrors,
   SetAgentModelBindingResponses,
+  SetAgentSessionModelPolicyOverrideData,
+  SetAgentSessionModelPolicyOverrideErrors,
+  SetAgentSessionModelPolicyOverrideResponses,
   SetModelPlanEnabledData,
   SetModelPlanEnabledErrors,
   SetModelPlanEnabledResponses,
@@ -478,6 +502,9 @@ import type {
   UpdateModelPlanData,
   UpdateModelPlanErrors,
   UpdateModelPlanResponses,
+  UpdateModelPolicyData,
+  UpdateModelPolicyErrors,
+  UpdateModelPolicyResponses,
   UpdateWorkspaceAgentSessionPinData,
   UpdateWorkspaceAgentSessionPinErrors,
   UpdateWorkspaceAgentSessionPinResponses,
@@ -1485,6 +1512,194 @@ export const setAgentModelBinding = <ThrowOnError extends boolean = false>(
       "Content-Type": "application/json",
       ...options.headers
     }
+  });
+
+/**
+ * List legacy role-based model policies
+ *
+ * Compatibility-only. New workflows use WorkspaceAgent for runtime model configuration and AutomationRule for optional collaboration actions.
+ *
+ * @deprecated
+ */
+export const listModelPolicies = <ThrowOnError extends boolean = false>(
+  options: Options<ListModelPoliciesData, ThrowOnError>
+) =>
+  (options.client ?? client).get<
+    ListModelPoliciesResponses,
+    ListModelPoliciesErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/model-policies",
+    ...options
+  });
+
+/**
+ * Create one legacy role-based model policy
+ *
+ * Compatibility-only. The production daemon does not execute this policy's role map or fixed review runner; create a WorkspaceAgent and AutomationRule for new workflows.
+ *
+ * @deprecated
+ */
+export const createModelPolicy = <ThrowOnError extends boolean = false>(
+  options: Options<CreateModelPolicyData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    CreateModelPolicyResponses,
+    CreateModelPolicyErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/model-policies",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
+ * Delete one legacy role-based model policy
+ *
+ * @deprecated
+ */
+export const deleteModelPolicy = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteModelPolicyData, ThrowOnError>
+) =>
+  (options.client ?? client).delete<
+    DeleteModelPolicyResponses,
+    DeleteModelPolicyErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/model-policies/{modelPolicyID}",
+    ...options
+  });
+
+/**
+ * Get one legacy role-based model policy
+ *
+ * Compatibility-only. The policy is retained for persisted data and acceptance records.
+ *
+ * @deprecated
+ */
+export const getModelPolicy = <ThrowOnError extends boolean = false>(
+  options: Options<GetModelPolicyData, ThrowOnError>
+) =>
+  (options.client ?? client).get<
+    GetModelPolicyResponses,
+    GetModelPolicyErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/model-policies/{modelPolicyID}",
+    ...options
+  });
+
+/**
+ * Update one legacy role-based model policy
+ *
+ * Compatibility-only. Changes do not drive the production Agent runtime or AutomationRule engine.
+ *
+ * @deprecated
+ */
+export const updateModelPolicy = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateModelPolicyData, ThrowOnError>
+) =>
+  (options.client ?? client).put<
+    UpdateModelPolicyResponses,
+    UpdateModelPolicyErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/model-policies/{modelPolicyID}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
+ * Get the legacy session model-policy override
+ *
+ * Compatibility-only. Use the AutomationRule session override for new workflows.
+ *
+ * @deprecated
+ */
+export const getAgentSessionModelPolicyOverride = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<GetAgentSessionModelPolicyOverrideData, ThrowOnError>
+) =>
+  (options.client ?? client).get<
+    GetAgentSessionModelPolicyOverrideResponses,
+    GetAgentSessionModelPolicyOverrideErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/model-policy-override",
+    ...options
+  });
+
+/**
+ * Set the legacy session model-policy override
+ *
+ * Compatibility-only. The legacy review runner is not wired in production; use the AutomationRule session override to select or disable future actions.
+ *
+ * @deprecated
+ */
+export const setAgentSessionModelPolicyOverride = <
+  ThrowOnError extends boolean = false
+>(
+  options: Options<SetAgentSessionModelPolicyOverrideData, ThrowOnError>
+) =>
+  (options.client ?? client).put<
+    SetAgentSessionModelPolicyOverrideResponses,
+    SetAgentSessionModelPolicyOverrideErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/model-policy-override",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers
+    }
+  });
+
+/**
+ * Get the session acceptance ladder state
+ *
+ * States distinguish agent_claimed, auto_checked, and user_accepted. Only user_accepted may close work; automated review can reach auto_checked at most.
+ */
+export const getAgentSessionAcceptance = <ThrowOnError extends boolean = false>(
+  options: Options<GetAgentSessionAcceptanceData, ThrowOnError>
+) =>
+  (options.client ?? client).get<
+    GetAgentSessionAcceptanceResponses,
+    GetAgentSessionAcceptanceErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/acceptance",
+    ...options
+  });
+
+/**
+ * Record explicit user acceptance for the session's claimed work
+ */
+export const acceptAgentSessionWork = <ThrowOnError extends boolean = false>(
+  options: Options<AcceptAgentSessionWorkData, ThrowOnError>
+) =>
+  (options.client ?? client).post<
+    AcceptAgentSessionWorkResponses,
+    AcceptAgentSessionWorkErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/workspaces/{workspaceID}/agent-sessions/{agentSessionID}/acceptance",
+    ...options
   });
 
 /**
