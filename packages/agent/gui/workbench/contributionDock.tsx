@@ -1,5 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import {
+  createMultiInstanceDockEntryOptions,
   getWorkbenchLayoutFrame,
   type WorkbenchDockPreviewContent,
   type WorkbenchFrame,
@@ -210,21 +211,15 @@ function createAgentGuiWorkbenchDockEntry(input: {
   sectionId: string;
   visibility: WorkbenchHostDockEntry["visibility"];
 }): WorkbenchHostDockEntry {
+  const launchPayload = input.launchPayload ?? { provider: input.provider };
   return {
-    allowNewWindowInDockPopup: false,
-    // Agent GUI windows are multi-instance, but dock clicks should focus the
-    // lone open window directly and only open the picker when 2+ are open.
-    instanceMode: "single",
+    ...createMultiInstanceDockEntryOptions(launchPayload, {
+      allowNewWindowInDockPopup: false
+    }),
     icon: input.icon,
     iconSize: "large",
     id: input.dockEntryId,
     label: input.label,
-    launchBehavior: "enabled",
-    launchPayload: input.launchPayload ?? { provider: input.provider },
-    newWindowLaunchPayload: {
-      ...(input.launchPayload ?? { provider: input.provider }),
-      openInNewWindow: true
-    },
     order: input.order,
     providePopupItemPreview: (item) =>
       input.renderPreview

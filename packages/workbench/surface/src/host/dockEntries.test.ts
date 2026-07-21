@@ -4,7 +4,9 @@ import type { WorkbenchNode } from "../core/types.ts";
 import {
   canCreateNewWindow,
   canCreateNewWindowInDockPopup,
+  createMultiInstanceDockEntryOptions,
   matchWorkbenchDockEntryNode,
+  resolveWorkbenchDockCountBadge,
   resolveWorkbenchDockEntries,
   resolveWorkbenchDockEntryClick
 } from "./dockEntries.ts";
@@ -358,6 +360,32 @@ test("dock new window commands stay available for explicit new-window payloads",
     canCreateNewWindow(browserEntry, browserEntry.instanceMode),
     true
   );
+});
+
+test("multi-instance dock helpers centralize focus-first click behavior", () => {
+  assert.deepEqual(createMultiInstanceDockEntryOptions(undefined), {
+    instanceMode: "single",
+    launchBehavior: "enabled",
+    newWindowLaunchPayload: { openInNewWindow: true }
+  });
+  assert.deepEqual(
+    createMultiInstanceDockEntryOptions(
+      { provider: "codex" },
+      { allowNewWindowInDockPopup: false }
+    ),
+    {
+      allowNewWindowInDockPopup: false,
+      instanceMode: "single",
+      launchBehavior: "enabled",
+      launchPayload: { provider: "codex" },
+      newWindowLaunchPayload: { provider: "codex", openInNewWindow: true }
+    }
+  );
+  assert.equal(resolveWorkbenchDockCountBadge(1), undefined);
+  assert.deepEqual(resolveWorkbenchDockCountBadge(2), {
+    kind: "count",
+    value: 2
+  });
 });
 
 function makeNode(

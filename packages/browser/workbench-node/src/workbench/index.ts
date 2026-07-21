@@ -10,6 +10,7 @@ import type {
   WorkbenchHostNodeHeaderContext,
   WorkbenchHostNodeDefinition
 } from "@tutti-os/workbench-surface";
+import { createMultiInstanceDockEntryOptions } from "@tutti-os/workbench-surface";
 import type { BrowserNodeFeature } from "../core/feature.ts";
 import type { BrowserNodeAutomationTargetMetadata } from "../core/types.ts";
 import { BrowserNode } from "../react/BrowserNode.tsx";
@@ -165,20 +166,14 @@ export function createBrowserDockEntry(
   input: CreateBrowserDockEntryInput
 ): WorkbenchHostDockEntry {
   return {
+    ...createMultiInstanceDockEntryOptions(),
     capturePopupItemPreview: ({ node }) =>
       input.feature.hostApi.capturePreview?.({
         nodeId: input.feature.tabsStore.getActiveNodeId(node.id)
       }) ?? null,
     icon: input.dockIcon ?? null,
     id: input.id ?? defaultBrowserNodeTypeId,
-    // Browser windows are multi-instance, but dock clicks should focus the
-    // lone open window directly and only open the picker when 2+ are open.
-    instanceMode: "single",
     label: input.feature.i18n.t("dockLabel"),
-    launchBehavior: "enabled",
-    newWindowLaunchPayload: {
-      openInNewWindow: true
-    },
     matchNode: (node) =>
       node.data.typeId === (input.typeId ?? defaultBrowserNodeTypeId),
     order: input.order,
