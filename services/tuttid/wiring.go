@@ -352,7 +352,6 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	modelPolicies := &modelpolicyservice.Service{
 		Store: modelPolicyStore,
 	}
-	workspaceAgents.Completer = modelPlans
 	events.RegisterIntentHandler(
 		eventstreamservice.TopicPreferencesDesktopUpdateRequested,
 		eventstreamservice.NewPreferencesDesktopUpdateRequestedHandler(preferences),

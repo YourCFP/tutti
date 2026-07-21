@@ -284,6 +284,44 @@ export function mapAgentTargetPresentationsToAgents(
     }));
 }
 
+export function mapWorkspaceAgentsToAgents(
+  agents: readonly WorkspaceAgent[],
+  options: {
+    isAgentTargetProviderGated?: (provider: string) => boolean;
+    resolveAgentTargetIconUrl?: (identity: {
+      iconKey: string | null;
+      provider: string;
+    }) => string;
+  } = {}
+): readonly AgentGUIAgent[] {
+  return agents.flatMap((agent) => {
+    const provider = agent.harness.provider;
+    if (!provider) {
+      return [];
+    }
+    const availability =
+      options.isAgentTargetProviderGated?.(provider) === true
+        ? ({ status: "coming_soon" } as const)
+        : !agent.harness.available || agent.harness.enabled === false
+          ? ({ status: "unavailable" } as const)
+          : ({ status: "ready" } as const);
+    return [
+      {
+        agentTargetId: agent.id,
+        availability,
+        description: agent.description || null,
+        iconUrl:
+          options.resolveAgentTargetIconUrl?.({
+            iconKey: agent.harness.iconKey?.trim() || null,
+            provider
+          }) ?? "",
+        name: agent.name,
+        provider: provider as AgentGUIProvider
+      }
+    ];
+  });
+}
+
 function compareAgentTargetsForDisplay(
   left: AgentTarget,
   right: AgentTarget

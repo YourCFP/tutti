@@ -7,15 +7,7 @@ import (
 	tuttitypes "github.com/tutti-os/tutti/services/tuttid/types"
 )
 
-func registerWorkspaceAgentRoutes(mux *http.ServeMux, routes Routes, wrapper *tuttigenerated.ServerInterfaceWrapper) {
-	mux.HandleFunc("/v1/workspaces/{workspaceID}/agents/generate-draft", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			tuttitypes.WriteMethodNotAllowed(w)
-			return
-		}
-		wrapper.GenerateWorkspaceAgentDraft(w, r)
-	})
-
+func registerWorkspaceAgentRoutes(mux *http.ServeMux, routes Routes, _ *tuttigenerated.ServerInterfaceWrapper) {
 	mux.HandleFunc("/v1/workspaces/{workspaceID}/agents", func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := tuttigenerated.WorkspaceID(r.PathValue("workspaceID"))
 		switch r.Method {

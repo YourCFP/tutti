@@ -2767,26 +2767,16 @@ export type DeleteWorkspaceAgentResponse = {
   workspaceAgentId: string;
 };
 
-export type GenerateWorkspaceAgentDraftRequest = {
-  harnessAgentTargetId: string;
-  modelPlanId: string;
-  /**
-   * Defaults to the selected ModelPlan default model.
-   */
-  model?: string | null;
-  /**
-   * Optional user guidance. An empty value asks for a generally useful configuration for the selected Harness.
-   */
-  requirements: string;
-};
-
 export type ListWorkspaceAgentsResponse = {
   agents: Array<WorkspaceAgent>;
 };
 
 export type PutWorkspaceAgentRequest = {
   name: string;
-  purpose: string;
+  /**
+   * Short human-readable description shown with the Agent in directories and cards.
+   */
+  description: string;
   harnessAgentTargetId: string;
   modelPlanId?: string | null;
   defaultModel?: string | null;
@@ -2802,8 +2792,6 @@ export type PutWorkspaceAgentRequest = {
   capabilitiesExplicit?: boolean;
   skills: Array<string>;
   tools: Array<string>;
-  permissions: Array<string>;
-  enabled: boolean;
 };
 
 /**
@@ -2820,12 +2808,15 @@ export type WorkspaceAgent = {
   agentTargetId: string;
   workspaceId: string;
   name: string;
-  purpose: string;
+  /**
+   * Short human-readable description shown with the Agent in directories and cards.
+   */
+  description: string;
   harness: WorkspaceAgentHarness;
   modelPlanId?: string | null;
   defaultModel?: string | null;
   /**
-   * Ordered, explicit fallback chain used only when starting a new session and the primary Plan/model is not usable. Credentials remain daemon-owned.
+   * Dormant contract field without an editor surface. Ordered, explicit fallback chain used only when starting a new session and the primary Plan/model is not usable. Credentials remain daemon-owned.
    */
   modelFallbacks: Array<WorkspaceAgentModelRef>;
   instructions: string;
@@ -2834,45 +2825,15 @@ export type WorkspaceAgent = {
    */
   callConditions: Array<string>;
   /**
-   * False keeps Skills and tools synchronized with all capabilities compatible with the selected Harness. True makes the Skills and tools arrays an explicit allowlist; empty arrays then mean none.
+   * Dormant contract field without an editor surface. False keeps Skills and tools synchronized with all capabilities compatible with the selected Harness. True makes the Skills and tools arrays an explicit allowlist; empty arrays then mean none.
    */
   capabilitiesExplicit: boolean;
   skills: Array<string>;
   tools: Array<string>;
-  permissions: Array<string>;
-  enabled: boolean;
   source: WorkspaceAgentSource;
   revision: number;
   createdAt: string;
   updatedAt: string;
-};
-
-export type WorkspaceAgentDraftGeneration = {
-  name: string;
-  purpose: string;
-  instructions: string;
-  callConditions: Array<string>;
-  skills: Array<string>;
-  automationRules: Array<WorkspaceAgentGeneratedAutomationRule>;
-  usedModelPlanId: string;
-  usedModel: string;
-  usage: WorkspaceAgentGenerationUsage;
-};
-
-export type WorkspaceAgentGeneratedAutomationRule = {
-  name: string;
-  trigger: AutomationRuleTrigger;
-  action: "consult";
-  modelPlanId: string;
-  model?: string | null;
-  prompt: string;
-  maxRunsPerSession: number;
-  maxTotalTokensPerSession: number;
-};
-
-export type WorkspaceAgentGenerationUsage = {
-  inputTokens: number;
-  outputTokens: number;
 };
 
 export type WorkspaceAgentHarness = {
@@ -10637,55 +10598,6 @@ export type CreateWorkspaceAgentResponses = {
 
 export type CreateWorkspaceAgentResponse =
   CreateWorkspaceAgentResponses[keyof CreateWorkspaceAgentResponses];
-
-export type GenerateWorkspaceAgentDraftData = {
-  body: GenerateWorkspaceAgentDraftRequest;
-  path: {
-    workspaceID: string;
-  };
-  query?: never;
-  url: "/v1/workspaces/{workspaceID}/agents/generate-draft";
-};
-
-export type GenerateWorkspaceAgentDraftErrors = {
-  /**
-   * Request payload or parameters are invalid
-   */
-  400: ApiErrorResponse;
-  /**
-   * Bearer token is missing or invalid
-   */
-  401: ApiErrorResponse;
-  /**
-   * Workspace id was not found
-   */
-  404: ApiErrorResponse;
-  /**
-   * HTTP method is not supported on this route
-   */
-  405: ApiErrorResponse;
-  /**
-   * Workspace operation failed in an upstream adapter or command
-   */
-  502: ApiErrorResponse;
-  /**
-   * Required daemon service dependency is unavailable
-   */
-  503: ApiErrorResponse;
-};
-
-export type GenerateWorkspaceAgentDraftError =
-  GenerateWorkspaceAgentDraftErrors[keyof GenerateWorkspaceAgentDraftErrors];
-
-export type GenerateWorkspaceAgentDraftResponses = {
-  /**
-   * Generated Agent configuration draft
-   */
-  200: WorkspaceAgentDraftGeneration;
-};
-
-export type GenerateWorkspaceAgentDraftResponse =
-  GenerateWorkspaceAgentDraftResponses[keyof GenerateWorkspaceAgentDraftResponses];
 
 export type DeleteWorkspaceAgentData = {
   body?: never;

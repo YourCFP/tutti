@@ -1441,9 +1441,6 @@ function createWorkspaceSettingsClient(
       throw new Error("not used");
     },
     listWorkspaceAgents: async () => [],
-    generateWorkspaceAgentDraft: async () => {
-      throw new Error("not used");
-    },
     createWorkspaceAgent: async () => {
       throw new Error("not used");
     },

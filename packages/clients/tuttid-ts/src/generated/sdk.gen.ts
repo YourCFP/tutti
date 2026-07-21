@@ -160,9 +160,6 @@ import type {
   FixWorkspaceAppFactoryJobData,
   FixWorkspaceAppFactoryJobErrors,
   FixWorkspaceAppFactoryJobResponses,
-  GenerateWorkspaceAgentDraftData,
-  GenerateWorkspaceAgentDraftErrors,
-  GenerateWorkspaceAgentDraftResponses,
   GetAccountLoginStatusData,
   GetAccountLoginStatusErrors,
   GetAccountLoginStatusResponses,
@@ -3469,7 +3466,7 @@ export const openWorkspace = <ThrowOnError extends boolean = false>(
 /**
  * List the configured Agent options for one workspace
  *
- * Returns explicit workspace Agent configurations. Each Agent maps one harness target to an optional model access plan and carries its own instructions, skills, tools, and permissions.
+ * Returns explicit workspace Agent configurations. Each Agent maps one harness target to an optional model access plan and carries its own description, instructions, and call conditions.
  */
 export const listWorkspaceAgents = <ThrowOnError extends boolean = false>(
   options: Options<ListWorkspaceAgentsData, ThrowOnError>
@@ -3499,30 +3496,6 @@ export const createWorkspaceAgent = <ThrowOnError extends boolean = false>(
   >({
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/workspaces/{workspaceID}/agents",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers
-    }
-  });
-
-/**
- * Generate a reviewable workspace Agent configuration draft
- *
- * Uses the explicitly selected ModelPlan/model for one tool-free generation call. The result is never persisted by this operation; generated automation suggestions are conservative consult rules that callers must save disabled and let the user review before enabling.
- */
-export const generateWorkspaceAgentDraft = <
-  ThrowOnError extends boolean = false
->(
-  options: Options<GenerateWorkspaceAgentDraftData, ThrowOnError>
-) =>
-  (options.client ?? client).post<
-    GenerateWorkspaceAgentDraftResponses,
-    GenerateWorkspaceAgentDraftErrors,
-    ThrowOnError
-  >({
-    security: [{ scheme: "bearer", type: "http" }],
-    url: "/v1/workspaces/{workspaceID}/agents/generate-draft",
     ...options,
     headers: {
       "Content-Type": "application/json",

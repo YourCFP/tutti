@@ -1,17 +1,14 @@
 import {
   createWorkspaceAgent,
   deleteWorkspaceAgent,
-  generateWorkspaceAgentDraft,
   listWorkspaceAgents,
   updateWorkspaceAgent,
   type AutomationRuleTrigger,
   type DeleteWorkspaceAgentResponse,
-  type GenerateWorkspaceAgentDraftRequest,
   type ListWorkspaceAgentsResponse,
   type ModelPlanStatus,
   type PutWorkspaceAgentRequest,
-  type WorkspaceAgent,
-  type WorkspaceAgentDraftGeneration
+  type WorkspaceAgent
 } from "./generated/index.ts";
 import type { Client } from "./generated/client/index.ts";
 import { unwrapData } from "./tuttidClientResponse.ts";
@@ -134,10 +131,6 @@ export interface WorkspaceAgentConfigurationClient {
     workspaceID: string,
     request: PutWorkspaceAgentRequest
   ): Promise<WorkspaceAgent>;
-  generateWorkspaceAgentDraft(
-    workspaceID: string,
-    request: GenerateWorkspaceAgentDraftRequest
-  ): Promise<WorkspaceAgentDraftGeneration>;
   updateWorkspaceAgent(
     workspaceID: string,
     workspaceAgentID: string,
@@ -167,16 +160,6 @@ export function createWorkspaceAgentConfigurationClient(
           path: { workspaceID }
         }),
         "Create workspace Agent request failed."
-      );
-    },
-    async generateWorkspaceAgentDraft(workspaceID, request) {
-      return unwrapData(
-        await generateWorkspaceAgentDraft({
-          body: request,
-          client,
-          path: { workspaceID }
-        }),
-        "Generate workspace Agent draft request failed."
       );
     },
     async updateWorkspaceAgent(workspaceID, workspaceAgentID, request) {

@@ -8,11 +8,9 @@ import type {
   AgentTarget,
   AutomationRule,
   DeletedAgentConversationPurgeResult,
-  GenerateWorkspaceAgentDraftRequest,
   PutAutomationRuleRequest,
   PutWorkspaceAgentRequest,
   TuttidClient,
-  WorkspaceAgentDraftGeneration,
   WorkspaceAgentProvider,
   WorkspaceModelRecommendation
 } from "@tutti-os/client-tuttid-ts";
@@ -112,10 +110,6 @@ export interface DesktopWorkspaceSettingsClient {
     agentTargetID: string
   ): Promise<AgentProviderComposerOptionsResponse>;
   listWorkspaceAgents(workspaceID: string): Promise<WorkspaceAgentDefinition[]>;
-  generateWorkspaceAgentDraft(
-    workspaceID: string,
-    input: GenerateWorkspaceAgentDraftRequest
-  ): Promise<WorkspaceAgentDraftGeneration>;
   createWorkspaceAgent(
     workspaceID: string,
     input: PutWorkspaceAgentInput
@@ -184,7 +178,6 @@ export function createDesktopWorkspaceSettingsClient(input: {
     TuttidClient,
     | "createWorkspaceAgent"
     | "deleteWorkspaceAgent"
-    | "generateWorkspaceAgentDraft"
     | "getAgentProviderComposerOptions"
     | "listAgentTargets"
     | "listWorkspaceAgents"
@@ -245,12 +238,6 @@ export function createDesktopWorkspaceSettingsClient(input: {
     },
     async listWorkspaceAgents(workspaceID) {
       return (await input.tuttidClient.listWorkspaceAgents(workspaceID)).agents;
-    },
-    async generateWorkspaceAgentDraft(workspaceID, body) {
-      return await input.tuttidClient.generateWorkspaceAgentDraft(
-        workspaceID,
-        body
-      );
     },
     async createWorkspaceAgent(workspaceID, body) {
       return await input.tuttidClient.createWorkspaceAgent(workspaceID, body);
