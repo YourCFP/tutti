@@ -56,6 +56,7 @@ func (api DaemonAPI) SetAgentModelBinding(ctx context.Context, request tuttigene
 		AgentTargetID: request.AgentTargetID,
 		ModelPlanID:   stringValue(request.Body.ModelPlanId),
 		DefaultModel:  stringValue(request.Body.DefaultModel),
+		ModelPolicyID: stringValue(request.Body.ModelPolicyId),
 	})
 	if err != nil {
 		switch {
@@ -87,6 +88,9 @@ func generatedAgentModelBinding(binding modelbindingbiz.Binding) tuttigenerated.
 	}
 	if binding.DefaultModel != "" {
 		result.DefaultModel = stringPointer(binding.DefaultModel)
+	}
+	if binding.ModelPolicyID != "" {
+		result.ModelPolicyId = stringPointer(binding.ModelPolicyID)
 	}
 	if !binding.UpdatedAt.IsZero() {
 		updatedAt := binding.UpdatedAt

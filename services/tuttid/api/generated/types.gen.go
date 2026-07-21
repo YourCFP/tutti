@@ -439,6 +439,27 @@ func (e AgentProviderUpdateSource) Valid() bool {
 	}
 }
 
+// Defines values for AgentSessionAcceptanceState.
+const (
+	AgentClaimed AgentSessionAcceptanceState = "agent_claimed"
+	AutoChecked  AgentSessionAcceptanceState = "auto_checked"
+	UserAccepted AgentSessionAcceptanceState = "user_accepted"
+)
+
+// Valid indicates whether the value is a known member of the AgentSessionAcceptanceState enum.
+func (e AgentSessionAcceptanceState) Valid() bool {
+	switch e {
+	case AgentClaimed:
+		return true
+	case AutoChecked:
+		return true
+	case UserAccepted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentSlashCommandEffect.
 const (
 	ActivateGoalMode AgentSlashCommandEffect = "activateGoalMode"
@@ -1495,6 +1516,21 @@ func (e ModelPlanTemplateKind) Valid() bool {
 	case OfficialSubscription:
 		return true
 	case Relay:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelPolicyReviewRuleTrigger.
+const (
+	OnTaskComplete ModelPolicyReviewRuleTrigger = "on_task_complete"
+)
+
+// Valid indicates whether the value is a known member of the ModelPolicyReviewRuleTrigger enum.
+func (e ModelPolicyReviewRuleTrigger) Valid() bool {
+	switch e {
+	case OnTaskComplete:
 		return true
 	default:
 		return false
@@ -2594,6 +2630,7 @@ type AgentModelBinding struct {
 	AgentTargetId string     `json:"agentTargetId"`
 	DefaultModel  *string    `json:"defaultModel,omitempty"`
 	ModelPlanId   *string    `json:"modelPlanId,omitempty"`
+	ModelPolicyId *string    `json:"modelPolicyId,omitempty"`
 	UpdatedAt     *time.Time `json:"updatedAt,omitempty"`
 	WorkspaceId   string     `json:"workspaceId"`
 }
@@ -2936,6 +2973,23 @@ type AgentQuickPromptResponse struct {
 	Prompt AgentQuickPrompt `json:"prompt"`
 }
 
+// AgentSessionAcceptance defines model for AgentSessionAcceptance.
+type AgentSessionAcceptance struct {
+	AgentSessionId string                      `json:"agentSessionId"`
+	ReviewRunId    *string                     `json:"reviewRunId,omitempty"`
+	State          AgentSessionAcceptanceState `json:"state"`
+	UpdatedAt      *time.Time                  `json:"updatedAt,omitempty"`
+	WorkspaceId    string                      `json:"workspaceId"`
+}
+
+// AgentSessionAcceptanceState defines model for AgentSessionAcceptance.State.
+type AgentSessionAcceptanceState string
+
+// AgentSessionAcceptanceResponse defines model for AgentSessionAcceptanceResponse.
+type AgentSessionAcceptanceResponse struct {
+	Acceptance *AgentSessionAcceptance `json:"acceptance,omitempty"`
+}
+
 // AgentSessionComposerSettings defines model for AgentSessionComposerSettings.
 type AgentSessionComposerSettings struct {
 	BrowserUse       *bool   `json:"browserUse,omitempty"`
@@ -2944,6 +2998,15 @@ type AgentSessionComposerSettings struct {
 	PlanMode         *bool   `json:"planMode,omitempty"`
 	ReasoningEffort  *string `json:"reasoningEffort,omitempty"`
 	Speed            *string `json:"speed,omitempty"`
+}
+
+// AgentSessionModelPolicyOverride defines model for AgentSessionModelPolicyOverride.
+type AgentSessionModelPolicyOverride struct {
+	AgentSessionId string     `json:"agentSessionId"`
+	Disabled       bool       `json:"disabled"`
+	ModelPolicyId  *string    `json:"modelPolicyId,omitempty"`
+	UpdatedAt      *time.Time `json:"updatedAt,omitempty"`
+	WorkspaceId    string     `json:"workspaceId"`
 }
 
 // AgentSlashCommandEffect defines model for AgentSlashCommandEffect.
@@ -3543,6 +3606,11 @@ type DeleteIssueManagerTopicResponse struct {
 // DeleteModelPlanResponse defines model for DeleteModelPlanResponse.
 type DeleteModelPlanResponse struct {
 	ModelPlanId string `json:"modelPlanId"`
+}
+
+// DeleteModelPolicyResponse defines model for DeleteModelPolicyResponse.
+type DeleteModelPolicyResponse struct {
+	ModelPolicyId string `json:"modelPolicyId"`
 }
 
 // DeleteUserProjectRequest defines model for DeleteUserProjectRequest.
@@ -4188,6 +4256,11 @@ type ListModelPlansResponse struct {
 	Plans []ModelPlan `json:"plans"`
 }
 
+// ListModelPoliciesResponse defines model for ListModelPoliciesResponse.
+type ListModelPoliciesResponse struct {
+	Policies []ModelUsagePolicy `json:"policies"`
+}
+
 // ListWorkspacesResponse defines model for ListWorkspacesResponse.
 type ListWorkspacesResponse struct {
 	TotalCount int                `json:"totalCount"`
@@ -4302,6 +4375,30 @@ type ModelPlanStatus string
 // ModelPlanTemplateKind Access-scheme template the plan was created from. Presentation and guidance hint; runtime behavior derives from protocol.
 type ModelPlanTemplateKind string
 
+// ModelPolicyReviewRule defines model for ModelPolicyReviewRule.
+type ModelPolicyReviewRule struct {
+	Enabled                  bool                          `json:"enabled"`
+	MaxRunsPerSession        *int                          `json:"maxRunsPerSession,omitempty"`
+	MaxTotalTokensPerSession *int64                        `json:"maxTotalTokensPerSession,omitempty"`
+	Trigger                  *ModelPolicyReviewRuleTrigger `json:"trigger,omitempty"`
+}
+
+// ModelPolicyReviewRuleTrigger defines model for ModelPolicyReviewRule.Trigger.
+type ModelPolicyReviewRuleTrigger string
+
+// ModelUsagePolicy defines model for ModelUsagePolicy.
+type ModelUsagePolicy struct {
+	CreatedAt   time.Time             `json:"createdAt"`
+	Execution   *PlanModelRef         `json:"execution,omitempty"`
+	Id          string                `json:"id"`
+	Name        string                `json:"name"`
+	Planning    *PlanModelRef         `json:"planning,omitempty"`
+	Review      *PlanModelRef         `json:"review,omitempty"`
+	ReviewRule  ModelPolicyReviewRule `json:"reviewRule"`
+	UpdatedAt   time.Time             `json:"updatedAt"`
+	WorkspaceId string                `json:"workspaceId"`
+}
+
 // MoveAgentQuickPromptRequest defines model for MoveAgentQuickPromptRequest.
 type MoveAgentQuickPromptRequest struct {
 	BeforePromptId  *string `json:"beforePromptId"`
@@ -4343,6 +4440,12 @@ type PermissionModeSemantic string
 type PinUserProjectRequest struct {
 	Pinned    bool   `json:"pinned"`
 	ProjectId string `json:"projectId"`
+}
+
+// PlanModelRef defines model for PlanModelRef.
+type PlanModelRef struct {
+	Model       *string `json:"model,omitempty"`
+	ModelPlanId *string `json:"modelPlanId,omitempty"`
 }
 
 // PreflightUploadWorkspaceFilesRequest defines model for PreflightUploadWorkspaceFilesRequest.
@@ -4398,6 +4501,15 @@ type PutModelPlanRequest struct {
 	// Protocol Wire protocol family used to call the plan's models.
 	Protocol     ModelPlanProtocol      `json:"protocol"`
 	TemplateKind *ModelPlanTemplateKind `json:"templateKind,omitempty"`
+}
+
+// PutModelPolicyRequest defines model for PutModelPolicyRequest.
+type PutModelPolicyRequest struct {
+	Execution  *PlanModelRef          `json:"execution,omitempty"`
+	Name       string                 `json:"name"`
+	Planning   *PlanModelRef          `json:"planning,omitempty"`
+	Review     *PlanModelRef          `json:"review,omitempty"`
+	ReviewRule *ModelPolicyReviewRule `json:"reviewRule,omitempty"`
 }
 
 // PutWorkspaceWorkbenchRequest defines model for PutWorkspaceWorkbenchRequest.
@@ -4481,8 +4593,15 @@ type SendWorkspaceAgentSessionInputTurnResponseKind string
 // SetAgentModelBindingRequest defines model for SetAgentModelBindingRequest.
 type SetAgentModelBindingRequest struct {
 	// DefaultModel Must belong to the referenced plan's model list when a plan is set.
-	DefaultModel *string `json:"defaultModel,omitempty"`
-	ModelPlanId  *string `json:"modelPlanId,omitempty"`
+	DefaultModel  *string `json:"defaultModel,omitempty"`
+	ModelPlanId   *string `json:"modelPlanId,omitempty"`
+	ModelPolicyId *string `json:"modelPolicyId,omitempty"`
+}
+
+// SetAgentSessionModelPolicyOverrideRequest defines model for SetAgentSessionModelPolicyOverrideRequest.
+type SetAgentSessionModelPolicyOverrideRequest struct {
+	Disabled      bool    `json:"disabled"`
+	ModelPolicyId *string `json:"modelPolicyId,omitempty"`
 }
 
 // SetModelPlanEnabledRequest defines model for SetModelPlanEnabledRequest.
@@ -5632,6 +5751,9 @@ type IssueManagerTopicIDQuery = string
 // ModelPlanID defines model for ModelPlanID.
 type ModelPlanID = string
 
+// ModelPolicyID defines model for ModelPolicyID.
+type ModelPolicyID = string
+
 // TerminalAfterSeq defines model for TerminalAfterSeq.
 type TerminalAfterSeq = int64
 
@@ -6006,6 +6128,9 @@ type SendWorkspaceAgentSessionInputJSONRequestBody = SendWorkspaceAgentSessionIn
 // SubmitWorkspaceAgentInteractiveJSONRequestBody defines body for SubmitWorkspaceAgentInteractive for application/json ContentType.
 type SubmitWorkspaceAgentInteractiveJSONRequestBody = SubmitWorkspaceAgentInteractiveRequest
 
+// SetAgentSessionModelPolicyOverrideJSONRequestBody defines body for SetAgentSessionModelPolicyOverride for application/json ContentType.
+type SetAgentSessionModelPolicyOverrideJSONRequestBody = SetAgentSessionModelPolicyOverrideRequest
+
 // UpdateWorkspaceAgentSessionPinJSONRequestBody defines body for UpdateWorkspaceAgentSessionPin for application/json ContentType.
 type UpdateWorkspaceAgentSessionPinJSONRequestBody = UpdateWorkspaceAgentSessionPinRequest
 
@@ -6155,6 +6280,12 @@ type DuplicateModelPlanJSONRequestBody = DuplicateModelPlanRequest
 
 // SetModelPlanEnabledJSONRequestBody defines body for SetModelPlanEnabled for application/json ContentType.
 type SetModelPlanEnabledJSONRequestBody = SetModelPlanEnabledRequest
+
+// CreateModelPolicyJSONRequestBody defines body for CreateModelPolicy for application/json ContentType.
+type CreateModelPolicyJSONRequestBody = PutModelPolicyRequest
+
+// UpdateModelPolicyJSONRequestBody defines body for UpdateModelPolicy for application/json ContentType.
+type UpdateModelPolicyJSONRequestBody = PutModelPolicyRequest
 
 // CreateWorkspaceTerminalJSONRequestBody defines body for CreateWorkspaceTerminal for application/json ContentType.
 type CreateWorkspaceTerminalJSONRequestBody = CreateWorkspaceTerminalRequest

@@ -1,6 +1,7 @@
 // Package modelbinding defines the per-workspace binding between an agent
-// target and its default model access plan and model. Bindings never duplicate
-// agent targets: switching plans or models rebinds the same target.
+// target and its default model access plan, default model, and model usage
+// policy. Bindings never duplicate agent targets: switching plans or models
+// rebinds the same target.
 package modelbinding
 
 import (
@@ -21,13 +22,15 @@ type Binding struct {
 	ModelPlanID string `json:"modelPlanId,omitempty"`
 	// DefaultModel is the model id used for new sessions unless overridden
 	// before send. It must belong to the referenced plan when a plan is set.
-	DefaultModel string    `json:"defaultModel,omitempty"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	DefaultModel string `json:"defaultModel,omitempty"`
+	// ModelPolicyID references a workspace model usage policy.
+	ModelPolicyID string    `json:"modelPolicyId,omitempty"`
+	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
 // IsZero reports whether the binding carries no configuration.
 func (b Binding) IsZero() bool {
-	return b.ModelPlanID == "" && b.DefaultModel == ""
+	return b.ModelPlanID == "" && b.DefaultModel == "" && b.ModelPolicyID == ""
 }
 
 // Normalize validates and canonicalizes a binding record.
@@ -36,6 +39,7 @@ func Normalize(binding Binding) (Binding, error) {
 	binding.AgentTargetID = strings.TrimSpace(binding.AgentTargetID)
 	binding.ModelPlanID = strings.TrimSpace(binding.ModelPlanID)
 	binding.DefaultModel = strings.TrimSpace(binding.DefaultModel)
+	binding.ModelPolicyID = strings.TrimSpace(binding.ModelPolicyID)
 	if binding.WorkspaceID == "" {
 		return Binding{}, fmt.Errorf("%w: workspace id is required", ErrInvalidBinding)
 	}
