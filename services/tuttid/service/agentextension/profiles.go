@@ -21,12 +21,8 @@ type ComposerProfile struct {
 		Permission ComposerConfigOptionReference `json:"permission"`
 		Reasoning  ComposerConfigOptionReference `json:"reasoning"`
 	} `json:"configOptions,omitempty"`
-	PermissionModes []struct {
-		RuntimeID         string `json:"runtimeId"`
-		Semantic          string `json:"semantic"`
-		AutomaticDecision string `json:"automaticDecision,omitempty"`
-	} `json:"permissionModes"`
-	LaunchSettings *struct {
+	PermissionModes []ComposerPermissionMode `json:"permissionModes"`
+	LaunchSettings  *struct {
 		Permission *struct {
 			Placeholder     string `json:"placeholder"`
 			DefaultSemantic string `json:"defaultSemantic"`
@@ -57,6 +53,12 @@ type ComposerProfile struct {
 			Path  string `json:"path"`
 		} `json:"roots"`
 	} `json:"skills,omitempty"`
+}
+
+type ComposerPermissionMode struct {
+	RuntimeID         string `json:"runtimeId"`
+	Semantic          string `json:"semantic"`
+	AutomaticDecision string `json:"automaticDecision,omitempty"`
 }
 
 const composerPermissionLaunchPlaceholder = "${permissionMode}"
@@ -279,6 +281,9 @@ func validateComposerProfile(profile ComposerProfile) error {
 	if profile.SchemaVersion != "tutti.agent.composer.v1" {
 		return errors.New("unsupported composer profile schema")
 	}
+	if err := validateComposerPermissionModes(profile.PermissionModes); err != nil {
+		return err
+	}
 	if profile.SlashCommands != nil {
 		if len(profile.SlashCommands.Commands) == 0 {
 			return errors.New("composer slashCommands requires at least one command")
@@ -351,6 +356,26 @@ func validateComposerProfile(profile ComposerProfile) error {
 		cleaned := filepath.Clean(strings.TrimSpace(root.Path))
 		if cleaned == "." || filepath.IsAbs(cleaned) || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
 			return errors.New("composer skill root path must be a safe relative path")
+		}
+	}
+	return nil
+}
+
+func validateComposerPermissionModes(modes []ComposerPermissionMode) error {
+	seenRuntimeIDs := make(map[string]struct{}, len(modes))
+	for _, mode := range modes {
+		runtimeID := strings.TrimSpace(mode.RuntimeID)
+		if runtimeID == "" {
+			return errors.New("composer permission runtimeId is required")
+		}
+		if _, duplicate := seenRuntimeIDs[runtimeID]; duplicate {
+			return errors.New("composer permission runtimeId must be unique")
+		}
+		seenRuntimeIDs[runtimeID] = struct{}{}
+		switch strings.TrimSpace(mode.Semantic) {
+		case "ask-before-write", "accept-edits", "auto", "locked-down", "full-access", "read-only":
+		default:
+			return errors.New("composer permission semantic is unsupported")
 		}
 	}
 	return nil

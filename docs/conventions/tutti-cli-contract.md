@@ -29,6 +29,12 @@ the daemon error `code` when no narrower reason exists. Optional daemon
 daemon invocation use stable CLI-owned reason codes such as `invalid_input`,
 `command_not_found`, and `daemon_unavailable`.
 
+Domain validation keeps its narrower daemon reason when one exists. For
+example, `unsupported_permission_mode_id` means a caller supplied a permission
+identifier that is not advertised for the selected Agent target. Automation
+must refresh Composer Options and pass one of its `modes[].id` values verbatim;
+it must not retry the same value or substitute `modes[].semantic`.
+
 Exit codes stay intentionally small and stable: `0` means success, `2` means
 the command invocation or input was invalid, and `1` means authentication,
 transport, domain, or runtime failure. A daemon HTTP 400 response is invalid

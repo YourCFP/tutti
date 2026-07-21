@@ -643,6 +643,14 @@ func TestValidateComposerProfileRejectsInvalidSignedCommandDeclarations(t *testi
 			raw:  `{"schemaVersion":"tutti.agent.composer.v1","launchSettings":{"permission":{"placeholder":"${permissionMode}"}},"permissionModes":[{"runtimeId":"ask","semantic":"ask-before-write"},{"runtimeId":"auto","semantic":"auto"},{"runtimeId":"all","semantic":"full-access"},{"runtimeId":"maybe","semantic":"maybe"}]}`,
 		},
 		{
+			name: "unknown runtime semantic",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","permissionModes":[{"runtimeId":"maybe","semantic":"maybe"}]}`,
+		},
+		{
+			name: "duplicate runtime permission id",
+			raw:  `{"schemaVersion":"tutti.agent.composer.v1","permissionModes":[{"runtimeId":"same","semantic":"ask-before-write"},{"runtimeId":"same","semantic":"full-access"}]}`,
+		},
+		{
 			name: "duplicate launch runtime value",
 			raw:  `{"schemaVersion":"tutti.agent.composer.v1","launchSettings":{"permission":{"placeholder":"${permissionMode}"}},"permissionModes":[{"runtimeId":"ask","semantic":"ask-before-write"},{"runtimeId":"ask","semantic":"auto"},{"runtimeId":"all","semantic":"full-access"}]}`,
 		},

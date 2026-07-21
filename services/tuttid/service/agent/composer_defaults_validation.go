@@ -139,7 +139,15 @@ func (s *Service) validateExtensionComposerSettingsForCreate(
 	if settings.PermissionModeID != "" &&
 		(!options.PermissionConfig.Configurable ||
 			!permissionModeConfigHasModeID(options.PermissionConfig, settings.PermissionModeID)) {
-		return fmt.Errorf("%w: permission mode is not supported by agent target", ErrInvalidArgument)
+		available := make([]string, 0, len(options.PermissionConfig.Modes))
+		for _, mode := range options.PermissionConfig.Modes {
+			available = append(available, strings.TrimSpace(mode.ID))
+		}
+		return &UnsupportedPermissionModeIDError{
+			AgentTargetID:              strings.TrimSpace(input.AgentTargetID),
+			PermissionModeID:           settings.PermissionModeID,
+			AvailablePermissionModeIDs: available,
+		}
 	}
 	reasoningConfig := composerReasoningConfigForSelectedModel(options)
 	if err := validateExtensionComposerOption(

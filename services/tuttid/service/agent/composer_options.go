@@ -201,18 +201,18 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 	locale := normalizeComposerLocale(input.Locale)
 	permissionConfig := composerPermissionConfig(provider, effectiveSettings.PermissionModeID, locale)
 	if providerTargetRefKind(input.providerTargetRef) == "agent_extension" {
-		var err error
-		permissionConfig, err = s.extensionComposerPermissionConfig(
-			ctx,
-			input.providerTargetRef,
-			effectiveSettings.PermissionModeID,
-		)
+		permissionProjection, err := projectExtensionPermissionConfig(extensionPermissionProjectionInput{
+			AgentTargetID: input.AgentTargetID,
+			Locale:        locale,
+			Profile:       extensionProfile,
+			Provider:      provider,
+			SelectedID:    effectiveSettings.PermissionModeID,
+		})
 		if err != nil {
 			return ComposerOptions{}, err
 		}
-		if effectiveSettings.PermissionModeID == "" {
-			effectiveSettings.PermissionModeID = permissionConfig.DefaultValue
-		}
+		permissionConfig = permissionProjection.Config
+		effectiveSettings.PermissionModeID = permissionProjection.CurrentID
 	}
 	modelOptions := s.enrichModelCapabilityOptions(ctx, provider, composerSelectedModelOptions(effectiveSettings.Model))
 	if composerProfileFor(provider).Behavior.ModelOptionsAuthoritative {
@@ -312,7 +312,11 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 		}
 	}
 	if providerTargetRefKind(input.providerTargetRef) == "agent_extension" {
-		options = s.mergeRuntimeComposerContextForComposerOptions(input, effectiveSettings, locale, extensionProfile, options)
+		var err error
+		options, err = s.mergeRuntimeComposerContextForComposerOptions(input, effectiveSettings, locale, extensionProfile, options)
+		if err != nil {
+			return ComposerOptions{}, err
+		}
 		options = applyExtensionComposerCapabilities(options, extensionProfile)
 	}
 	return options, nil
