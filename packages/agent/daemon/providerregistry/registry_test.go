@@ -115,6 +115,9 @@ func TestMigratedCodexDescriptorIsComplete(t *testing.T) {
 	if descriptor.ComposerProfile.ConfigOptionIDs.Speed != "service_tier" {
 		t.Fatalf("Speed config option = %q", descriptor.ComposerProfile.ConfigOptionIDs.Speed)
 	}
+	if !slices.Equal(descriptor.ComposerProfile.SpeedValues, []string{"standard", "fast"}) || descriptor.ComposerProfile.DefaultSpeed != "standard" {
+		t.Fatalf("Speed profile = %#v, default %q", descriptor.ComposerProfile.SpeedValues, descriptor.ComposerProfile.DefaultSpeed)
+	}
 	if descriptor.Status.MinVersion != CodexMinVersion {
 		t.Fatalf("Status.MinVersion = %q", descriptor.Status.MinVersion)
 	}

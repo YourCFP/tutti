@@ -5,6 +5,7 @@ export {
 } from "./sessionNormalization.ts";
 export {
   AGENT_CAPABILITY_KEYS,
+  agentActivitySessionCapabilitiesFromIds,
   hasAgentCapability,
   resolveAgentActivityCapability,
   type AgentActivityCapabilityInput,
@@ -284,6 +285,7 @@ export type {
   AgentActivitySessionCapabilities,
   AgentActivitySessionGoal,
   AgentActivitySessionPermissionConfig,
+  AgentActivitySessionUsage,
   AgentActivitySessionSettings,
   AgentActivitySessionKind,
   AgentActivitySessionEventEnvelope,

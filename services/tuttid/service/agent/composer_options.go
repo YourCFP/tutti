@@ -408,10 +408,7 @@ func resolveComposerEffectiveSettings(
 // composerDefaultSpeed returns the default speed tier for providers that expose
 // the speed dimension; an empty string for providers that do not.
 func composerDefaultSpeed(provider string) string {
-	if speedProviderSupportsSpeed(provider) {
-		return speedTierStandard
-	}
-	return ""
+	return strings.TrimSpace(composerProfileFor(provider).DefaultSpeed)
 }
 
 func composerDefaultReasoningEffort(provider string) string {
@@ -693,11 +690,6 @@ func reasoningConfigOptionID(provider string) string {
 	return strings.TrimSpace(composerProfileFor(provider).ReasoningConfigOptionID)
 }
 
-const (
-	speedTierStandard = "standard"
-	speedTierFast     = "fast"
-)
-
 // speedProviderSupportsSpeed reports whether the provider exposes the speed
 // dimension. Speed combines orthogonally with model and reasoning effort.
 //
@@ -716,10 +708,7 @@ func speedConfigOptionID(provider string) string {
 }
 
 func speedTierValuesForProvider(provider string) []string {
-	if speedProviderSupportsSpeed(provider) {
-		return []string{speedTierStandard, speedTierFast}
-	}
-	return nil
+	return append([]string(nil), composerProfileFor(provider).SpeedValues...)
 }
 
 func normalizeSpeedForProvider(provider string, value string) string {
@@ -732,7 +721,7 @@ func normalizeSpeedForProvider(provider string, value string) string {
 			return normalized
 		}
 	}
-	return speedTierStandard
+	return strings.TrimSpace(composerProfileFor(provider).DefaultSpeed)
 }
 
 func composerSpeedOptionValues(provider string, locale string) []ComposerConfigOptionValue {

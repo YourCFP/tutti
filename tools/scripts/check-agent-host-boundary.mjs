@@ -59,6 +59,18 @@ export function findBoundaryViolations(path, source) {
 
   const violations = [];
 
+  for (const forbidden of [
+    "type serviceHostStore struct",
+    "type serviceHostRuntime struct",
+    "func NewApplicationHost("
+  ]) {
+    if (source.includes(forbidden)) {
+      violations.push(
+        `${path}: production adapter must not reintroduce ${forbidden}; use shared Host composition ports`
+      );
+    }
+  }
+
   if (ORCHESTRATION_FILENAME.test(path)) {
     violations.push(
       `${path}: filename declares an agent application-core orchestration surface ` +

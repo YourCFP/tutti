@@ -11,7 +11,7 @@ import (
 type composerModelCatalogProjection struct {
 	Selection         modelcatalog.ModelSelection
 	ModelOptions      []ComposerConfigOptionValue
-	ReasoningProfiles map[string]composerModelReasoningProfile
+	ReasoningProfiles map[string]modelcatalog.ReasoningProfile
 	Source            string
 }
 
@@ -31,7 +31,7 @@ func composerModelOptionsFromCatalog(ctx context.Context, catalog AgentModelCata
 		return composerModelCatalogProjection{}, false
 	}
 	options := make([]ComposerConfigOptionValue, 0, len(result.Models)+1)
-	reasoningProfiles := make(map[string]composerModelReasoningProfile)
+	catalogProjection := modelcatalog.ProjectComposerCatalog(result.Models, selectedModel)
 	for _, model := range result.Models {
 		id := strings.TrimSpace(model.ID)
 		if id == "" {
@@ -51,17 +51,8 @@ func composerModelOptionsFromCatalog(ctx context.Context, catalog AgentModelCata
 			Description:        strings.TrimSpace(model.Description),
 			SupportsImageInput: model.SupportsImageInput,
 		})
-		if model.ReasoningEffortsAdvertised {
-			reasoningProfiles[id] = composerModelReasoningProfile{
-				DefaultReasoningEffort: strings.TrimSpace(model.DefaultReasoningEffort),
-				ReasoningEfforts: append(
-					[]AgentModelReasoningEffortOption(nil),
-					model.SupportedReasoningEfforts...,
-				),
-			}
-		}
 	}
-	selection := modelcatalog.SelectModel(result.Models, selectedModel)
+	selection := catalogProjection.Selection
 	if selection.Found && !containsModelOption(options, selection.Model.ID) {
 		options = append(options, ComposerConfigOptionValue{
 			ID: selection.Model.ID, Label: selection.Model.DisplayName, Value: selection.Model.ID,
@@ -70,7 +61,7 @@ func composerModelOptionsFromCatalog(ctx context.Context, catalog AgentModelCata
 	return composerModelCatalogProjection{
 		Selection:         selection,
 		ModelOptions:      options,
-		ReasoningProfiles: reasoningProfiles,
+		ReasoningProfiles: catalogProjection.ReasoningOptionsByModel,
 		Source:            strings.TrimSpace(result.Source),
 	}, true
 }

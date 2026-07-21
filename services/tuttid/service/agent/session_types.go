@@ -76,6 +76,7 @@ type Service struct {
 	sessionSettingsLocks           map[string]*serviceSessionSettingsLock
 	applicationHostMu              sync.Mutex
 	applicationHost                *agenthost.Host
+	applicationHostProvider        func() *agenthost.Host
 	worktreeIsolationMu            sync.RWMutex
 	generatedFilesCacheMu          sync.Mutex
 	generatedFilesCache            map[string]generatedFilesCacheEntry

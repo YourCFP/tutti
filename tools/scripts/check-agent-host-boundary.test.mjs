@@ -18,6 +18,21 @@ test("requires production wiring to consume shared Host adapters", () => {
   assert.equal(findProductionCompositionViolations("legacy wiring").length, 3);
 });
 
+test("rejects service-local Host store/runtime composition in production", () => {
+  const source = [
+    "type serviceHostStore struct {}",
+    "type serviceHostRuntime struct {}",
+    "func NewApplicationHost() {}"
+  ].join("\n");
+  assert.equal(
+    findBoundaryViolations(
+      "services/tuttid/service/agent/host_adapters.go",
+      source
+    ).length,
+    3
+  );
+});
+
 test("flags a new *Coordinator production type declaration", () => {
   const source = [
     "package agent",

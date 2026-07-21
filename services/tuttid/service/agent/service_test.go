@@ -99,8 +99,7 @@ func TestServiceCreateInheritsTargetComposerDefaultsAndExplicitOverridesWin(t *t
 
 func TestServiceApplicationHostUsesConfiguredSingleton(t *testing.T) {
 	service := newTestService(newFakeRuntime())
-	host := NewApplicationHost(service)
-	service.SetApplicationHost(host)
+	host := service.ApplicationHost()
 
 	if got := service.ApplicationHost(); got != host {
 		t.Fatalf("ApplicationHost() = %p, want configured host %p", got, host)
@@ -4163,6 +4162,7 @@ func TestServiceUpdateSettingsPreservesAdvertisedReasoningEffort(t *testing.T) {
 				},
 			}
 
+			configureTestApplicationHost(service)
 			session, err := service.UpdateSettings(context.Background(), "ws-1", "session-1", ComposerSettingsPatch{
 				ReasoningEffort: stringRef(effort),
 			})
@@ -4216,6 +4216,7 @@ func TestServiceUpdateSettingsDefersModelChangeReasoningClampToLiveRuntime(t *te
 			},
 		},
 	}
+	configureTestApplicationHost(service)
 	model := "gpt-5.6-luna"
 
 	session, err := service.UpdateSettings(context.Background(), "ws-1", "session-1", ComposerSettingsPatch{
@@ -6901,6 +6902,7 @@ func TestServiceResumeClampsPersistedReasoningToSelectedModelCatalog(t *testing.
 		},
 	}
 
+	configureTestApplicationHost(service)
 	if _, err := service.SendInput(
 		context.Background(),
 		"ws-1",
@@ -7124,7 +7126,7 @@ func (isolatedComposerCapabilityLister) ListComposerCapabilityOptions(
 
 // newIsolatedAgentService keeps package tests hermetic. Tests that exercise
 // capability discovery replace CapabilityLister with an explicit fixture.
-func newIsolatedAgentService(runtime RuntimeController) *Service {
+func newUnconfiguredIsolatedAgentService(runtime RuntimeController) *Service {
 	service := NewService(runtime)
 	service.CapabilityLister = isolatedComposerCapabilityLister{}
 	installFakeCanonicalSessionStore(service)
@@ -7142,6 +7144,12 @@ func newIsolatedAgentService(runtime RuntimeController) *Service {
 			}
 		}
 	}
+	return service
+}
+
+func newIsolatedAgentService(runtime RuntimeController) *Service {
+	service := newUnconfiguredIsolatedAgentService(runtime)
+	configureTestApplicationHost(service)
 	return service
 }
 

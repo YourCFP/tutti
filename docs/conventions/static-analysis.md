@@ -242,7 +242,10 @@ The same check also verifies production reachability: `services/tuttid/wiring.go
 must compose Host with `daemon/hostadapter.RuntimeController`,
 `host.SQLiteWorkspaceStore`, and `NewApplicationHostWithPorts`. This prevents
 shared lifecycle adapters from existing only in tests while production keeps a
-parallel service implementation.
+parallel service implementation. Production agent service files also reject
+service-local `serviceHostStore` / `serviceHostRuntime` composition and lazy
+`NewApplicationHost` factories; isolated in-memory adapters may exist only in
+`_test.go` fixtures.
 
 ## Agent GUI Degradation Ratchet
 

@@ -222,7 +222,8 @@ func (d *legacyHostConformanceDriver) Reset(_ context.Context, fixture hostconfo
 	steps := make([]string, 0)
 	d.recoverySteps = &steps
 	d.operationPort = &conformanceRuntimeOperationStore{runtimeOperationMemoryStore: d.operations, steps: &steps}
-	d.service = newTestService(d.runtime)
+	d.service = newUnconfiguredIsolatedAgentService(d.runtime)
+	d.service.AgentTargetStore = fakeAgentTargetStore{targets: defaultTestAgentTargets()}
 	d.commitObserver = &conformanceCommitObserver{fail: fixture.FailCommitObserver}
 	d.service.CommitObserver = d.commitObserver
 	d.service.SessionReader = d.sessions
