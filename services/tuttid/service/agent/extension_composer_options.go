@@ -47,6 +47,7 @@ type extensionPermissionRuntimeState struct {
 
 type extensionPermissionProjectionInput struct {
 	AgentTargetID string
+	FallbackID    string
 	Locale        string
 	Profile       ExtensionComposerProfile
 	Provider      string
@@ -88,15 +89,22 @@ func projectExtensionPermissionConfig(input extensionPermissionProjectionInput) 
 
 	declarations := make([]extensionPermissionDeclaration, 0, len(input.Profile.PermissionModes))
 	byRuntimeID := make(map[string]extensionPermissionDeclaration, len(input.Profile.PermissionModes))
+	seenRuntimeIDs := make(map[string]string, len(input.Profile.PermissionModes))
 	publicIDs := make(map[string]struct{}, len(input.Profile.PermissionModes))
 	for _, mode := range input.Profile.PermissionModes {
 		runtimeID := strings.TrimSpace(mode.RuntimeID)
 		if runtimeID == "" {
 			return extensionPermissionProjection{}, fmt.Errorf("extension composer permission runtime id is required")
 		}
-		if _, duplicate := byRuntimeID[runtimeID]; duplicate {
-			return extensionPermissionProjection{}, fmt.Errorf("extension composer permission runtime id %q must be unique", runtimeID)
+		normalizedRuntimeID := strings.ToLower(runtimeID)
+		if existing, duplicate := seenRuntimeIDs[normalizedRuntimeID]; duplicate {
+			return extensionPermissionProjection{}, fmt.Errorf(
+				"extension composer permission runtime id %q conflicts with %q; runtime ids must be unique ignoring case",
+				runtimeID,
+				existing,
+			)
 		}
+		seenRuntimeIDs[normalizedRuntimeID] = runtimeID
 		semantic, supported := normalizeExtensionPermissionModeSemantic(mode.Semantic)
 		if !supported {
 			return extensionPermissionProjection{}, fmt.Errorf(
@@ -192,6 +200,17 @@ func projectExtensionPermissionConfig(input extensionPermissionProjectionInput) 
 		}
 	}
 	if currentID == "" {
+		fallbackID := strings.TrimSpace(input.FallbackID)
+		if _, supported := publicIDs[fallbackID]; fallbackID != "" && supported {
+			currentID = fallbackID
+		} else if fallbackID != "" {
+			diagnostics = append(diagnostics, extensionPermissionProjectionDiagnostic{
+				Reason:    "permission_configured_default_unsupported",
+				RuntimeID: fallbackID,
+			})
+		}
+	}
+	if currentID == "" {
 		defaultID := strings.TrimSpace(input.Profile.DefaultPermissionModeID)
 		if defaultID != "" {
 			if _, supported := publicIDs[defaultID]; !supported {
@@ -246,5 +265,19 @@ func disambiguateExtensionPermissionLabels(
 			continue
 		}
 		modes[index].Label = fmt.Sprintf("%s (%s)", modes[index].Label, declarations[index].RuntimeID)
+	}
+}
+
+func logExtensionPermissionProjectionDiagnostics(
+	projection extensionPermissionProjection,
+	agentTargetID string,
+	provider string,
+) {
+	for _, diagnostic := range projection.Diagnostics {
+		logAgentExtensionComposerDebug(diagnostic.Reason, map[string]any{
+			"agentTargetId": strings.TrimSpace(agentTargetID),
+			"provider":      strings.TrimSpace(provider),
+			"runtimeId":     diagnostic.RuntimeID,
+		})
 	}
 }

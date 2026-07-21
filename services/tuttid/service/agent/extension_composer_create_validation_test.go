@@ -145,6 +145,88 @@ func TestServiceGetComposerOptionsRejectsSemanticAliasBeforeRuntimeDiscovery(t *
 	}
 }
 
+func TestServiceGetComposerOptionsIgnoresStalePersistedPermissionDefault(t *testing.T) {
+	runtime, service := newExtensionComposerValidationService(t)
+	cwd := t.TempDir()
+	service.AgentComposerDefaultsReader = fakeAgentComposerDefaultsReader{
+		extensionComposerValidationTargetID: {PermissionModeID: "full-access"},
+	}
+	service.ExtensionComposerProfiles = extensionComposerProfileResolverStub{
+		profile: ExtensionComposerProfile{
+			DefaultPermissionModeID: "default",
+			PermissionModeIDPolicy:  ExtensionPermissionModeIDPolicyRuntime,
+			PermissionModes: []ExtensionComposerPermissionMode{
+				{RuntimeID: "default", Semantic: PermissionModeSemanticAskBeforeWrite},
+				{RuntimeID: "bypassPermissions", Semantic: PermissionModeSemanticFullAccess},
+				{RuntimeID: "fullAccess", Semantic: PermissionModeSemanticFullAccess},
+			},
+		},
+	}
+
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		AgentTargetID: extensionComposerValidationTargetID,
+		WorkspaceID:   "workspace-extension",
+		Cwd:           cwd,
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions() error = %v", err)
+	}
+	if options.EffectiveSettings.PermissionModeID != "default" ||
+		!slices.Equal(permissionModeIDs(options.PermissionConfig), []string{"default", "bypassPermissions", "fullAccess"}) {
+		t.Fatalf("options = %#v, want stale default ignored and current contract advertised", options)
+	}
+	if len(runtime.startCalls) == 0 {
+		t.Fatal("runtime discovery did not run")
+	}
+	if _, err := service.Create(context.Background(), "workspace-extension", CreateSessionInput{
+		AgentTargetID: extensionComposerValidationTargetID,
+		Cwd:           &cwd,
+	}); err != nil {
+		t.Fatalf("Create() with stale persisted default error = %v", err)
+	}
+	visibleStarts := visibleRuntimeStarts(runtime.startCalls)
+	if len(visibleStarts) != 1 || visibleStarts[0].PermissionModeID != "default" {
+		t.Fatalf("visible starts = %#v, want recovered profile default", visibleStarts)
+	}
+}
+
+func TestServiceGetComposerOptionsUsesRuntimeCurrentBeforeSemanticProfileDefault(t *testing.T) {
+	runtime, service := newExtensionComposerValidationService(t)
+	runtime.startHook = func(input RuntimeStartInput, session ProviderRuntimeSession) ProviderRuntimeSession {
+		if input.Visible != nil && !*input.Visible {
+			session.RuntimeContext = map[string]any{"configOptions": []any{map[string]any{
+				"id": "approval-mode", "currentValue": "all", "options": []any{
+					map[string]any{"value": "ask", "name": "Ask"},
+					map[string]any{"value": "all", "name": "Full access"},
+				},
+			}}}
+		}
+		return session
+	}
+	service.ExtensionComposerProfiles = extensionComposerProfileResolverStub{
+		profile: ExtensionComposerProfile{
+			DefaultPermissionModeID:  "ask-before-write",
+			PermissionConfigOptionID: "approval-mode",
+			PermissionModeIDPolicy:   ExtensionPermissionModeIDPolicySemantic,
+			PermissionModes: []ExtensionComposerPermissionMode{
+				{RuntimeID: "ask", Semantic: PermissionModeSemanticAskBeforeWrite},
+				{RuntimeID: "all", Semantic: PermissionModeSemanticFullAccess},
+			},
+		},
+	}
+	options, err := service.GetComposerOptions(context.Background(), ComposerOptionsInput{
+		AgentTargetID: extensionComposerValidationTargetID,
+		WorkspaceID:   "workspace-extension",
+		Cwd:           t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("GetComposerOptions() error = %v", err)
+	}
+	if options.EffectiveSettings.PermissionModeID != "full-access" {
+		t.Fatalf("effective permission = %q, want runtime current", options.EffectiveSettings.PermissionModeID)
+	}
+}
+
 func TestServiceCreateRejectsExtensionSettingsOutsideDescriptor(t *testing.T) {
 	tests := []struct {
 		name     string

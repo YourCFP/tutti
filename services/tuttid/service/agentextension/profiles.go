@@ -190,13 +190,19 @@ func loadComposerModes(installation Installation) (map[string]string, string, er
 	}
 	modes := map[string]string{}
 	planMode := ""
+	// Runtime IDs are the exact public launch contract. Register every exact
+	// ID before compatibility aliases so an alias can never redirect an
+	// advertised ID to a different permission tier.
+	for _, mode := range profile.PermissionModes {
+		runtimeID := strings.TrimSpace(mode.RuntimeID)
+		modes[strings.ToLower(runtimeID)] = runtimeID
+	}
 	for _, mode := range profile.PermissionModes {
 		runtimeID := strings.TrimSpace(mode.RuntimeID)
 		if runtimeID == "" {
 			return nil, "", errors.New("composer permission runtimeId is required")
 		}
 		semantic := strings.TrimSpace(mode.Semantic)
-		modes[strings.ToLower(runtimeID)] = runtimeID
 		setComposerModeAlias(modes, semantic, runtimeID)
 		switch semantic {
 		case "ask-before-write":
@@ -205,7 +211,7 @@ func loadComposerModes(installation Installation) (map[string]string, string, er
 			setComposerModeAlias(modes, "accept-edits", runtimeID)
 			setComposerModeAlias(modes, "auto", runtimeID)
 		case "auto":
-			modes["auto"] = runtimeID
+			setComposerModeAlias(modes, "auto", runtimeID)
 			setComposerModeAlias(modes, "agent", runtimeID)
 		case "locked-down":
 			setComposerModeAlias(modes, "locked-down", runtimeID)
@@ -213,7 +219,7 @@ func loadComposerModes(installation Installation) (map[string]string, string, er
 		case "full-access":
 			setComposerModeAlias(modes, "full-access", runtimeID)
 		case "read-only":
-			modes["plan"] = runtimeID
+			setComposerModeAlias(modes, "plan", runtimeID)
 			planMode = runtimeID
 		default:
 			return nil, "", errors.New("composer permission semantic is unsupported")
@@ -362,20 +368,30 @@ func validateComposerProfile(profile ComposerProfile) error {
 }
 
 func validateComposerPermissionModes(modes []ComposerPermissionMode) error {
-	seenRuntimeIDs := make(map[string]struct{}, len(modes))
+	seenRuntimeIDs := make(map[string]string, len(modes))
 	for _, mode := range modes {
 		runtimeID := strings.TrimSpace(mode.RuntimeID)
 		if runtimeID == "" {
 			return errors.New("composer permission runtimeId is required")
 		}
-		if _, duplicate := seenRuntimeIDs[runtimeID]; duplicate {
-			return errors.New("composer permission runtimeId must be unique")
+		normalizedRuntimeID := strings.ToLower(runtimeID)
+		if existing, duplicate := seenRuntimeIDs[normalizedRuntimeID]; duplicate {
+			return fmt.Errorf(
+				"composer permission runtimeId %q conflicts with %q; runtime IDs must be unique ignoring case",
+				runtimeID,
+				existing,
+			)
 		}
-		seenRuntimeIDs[runtimeID] = struct{}{}
-		switch strings.TrimSpace(mode.Semantic) {
+		seenRuntimeIDs[normalizedRuntimeID] = runtimeID
+		semantic := strings.TrimSpace(mode.Semantic)
+		switch semantic {
 		case "ask-before-write", "accept-edits", "auto", "locked-down", "full-access", "read-only":
 		default:
-			return errors.New("composer permission semantic is unsupported")
+			return fmt.Errorf(
+				"composer permission runtimeId %q has unsupported semantic %q",
+				runtimeID,
+				semantic,
+			)
 		}
 	}
 	return nil

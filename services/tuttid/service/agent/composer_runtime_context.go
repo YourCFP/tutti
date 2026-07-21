@@ -14,6 +14,7 @@ func (s *Service) mergeRuntimeComposerContextForComposerOptions(
 	requestSettings ComposerSettings,
 	locale string,
 	extensionProfile ExtensionComposerProfile,
+	requestedPermissionModeID string,
 	options ComposerOptions,
 ) (ComposerOptions, error) {
 	// The discovery cache signature belongs to the request that created the
@@ -53,6 +54,7 @@ func (s *Service) mergeRuntimeComposerContextForComposerOptions(
 	if permissionOption, ok := runtimeConfigOptionByID(configOptions, extensionProfile.PermissionConfigOptionID); ok {
 		projection, err := projectExtensionPermissionConfig(extensionPermissionProjectionInput{
 			AgentTargetID: input.AgentTargetID,
+			FallbackID:    requestSettings.PermissionModeID,
 			Locale:        locale,
 			Profile:       extensionProfile,
 			Provider:      input.Provider,
@@ -60,18 +62,12 @@ func (s *Service) mergeRuntimeComposerContextForComposerOptions(
 				CurrentRuntimeID: runtimeConfigOptionCurrentValue(permissionOption, configValues),
 				Options:          composerConfigOptionValuesFromAny(permissionOption["options"]),
 			},
-			SelectedID: options.EffectiveSettings.PermissionModeID,
+			SelectedID: requestedPermissionModeID,
 		})
 		if err != nil {
 			return ComposerOptions{}, err
 		}
-		for _, diagnostic := range projection.Diagnostics {
-			logAgentExtensionComposerDebug(diagnostic.Reason, map[string]any{
-				"agentTargetId": input.AgentTargetID,
-				"provider":      input.Provider,
-				"runtimeId":     diagnostic.RuntimeID,
-			})
-		}
+		logExtensionPermissionProjectionDiagnostics(projection, input.AgentTargetID, input.Provider)
 		options.PermissionConfig = projection.Config
 		options.EffectiveSettings.PermissionModeID = projection.CurrentID
 		options.RuntimeContext["permissionModeId"] = nullableString(projection.CurrentID)

@@ -613,6 +613,31 @@ func TestLoadComposerModesKeepsDistinctGenericRuntimeModes(t *testing.T) {
 	}
 }
 
+func TestLoadComposerModesExactRuntimeIDWinsOverSemanticAlias(t *testing.T) {
+	packageDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(packageDir, "profiles"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "profiles", "composer.json"), []byte(`{
+		"schemaVersion":"tutti.agent.composer.v1",
+		"permissionModes":[
+			{"runtimeId":"auto","semantic":"ask-before-write"},
+			{"runtimeId":"danger","semantic":"auto"}
+		]
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest := Manifest{}
+	manifest.Profiles.Composer = "profiles/composer.json"
+	modes, _, err := loadComposerModes(Installation{PackageDir: packageDir, Manifest: manifest})
+	if err != nil {
+		t.Fatalf("loadComposerModes() error = %v", err)
+	}
+	if modes["auto"] != "auto" || modes["danger"] != "danger" {
+		t.Fatalf("composer modes = %#v, want exact runtime ids to win over aliases", modes)
+	}
+}
+
 func TestValidateComposerProfileRejectsInvalidSignedCommandDeclarations(t *testing.T) {
 	tests := []struct {
 		name string
@@ -683,6 +708,41 @@ func TestValidateComposerProfileRejectsInvalidSignedCommandDeclarations(t *testi
 			}
 			if err := validateComposerProfile(profile); err == nil {
 				t.Fatal("validateComposerProfile() error = nil, want signed profile rejection")
+			}
+		})
+	}
+}
+
+func TestValidateComposerPermissionModeErrorsIdentifyConflictingDeclaration(t *testing.T) {
+	tests := []struct {
+		name  string
+		modes []ComposerPermissionMode
+		want  []string
+	}{
+		{
+			name: "case-insensitive runtime id conflict",
+			modes: []ComposerPermissionMode{
+				{RuntimeID: "Auto", Semantic: "ask-before-write"},
+				{RuntimeID: "auto", Semantic: "full-access"},
+			},
+			want: []string{`"Auto"`, `"auto"`, "ignoring case"},
+		},
+		{
+			name:  "unsupported semantic",
+			modes: []ComposerPermissionMode{{RuntimeID: "danger", Semantic: "root"}},
+			want:  []string{`"danger"`, `"root"`},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateComposerPermissionModes(test.modes)
+			if err == nil {
+				t.Fatal("validateComposerPermissionModes() error = nil")
+			}
+			for _, want := range test.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("error = %q, want substring %q", err, want)
+				}
 			}
 		})
 	}

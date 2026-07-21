@@ -123,6 +123,7 @@ type ComposerOptions struct {
 }
 
 func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsInput) (ComposerOptions, error) {
+	requestedPermissionModeID := strings.TrimSpace(input.Settings.PermissionModeID)
 	provider := agentprovider.Normalize(input.Provider)
 	agentTargetID := strings.TrimSpace(input.AgentTargetID)
 	if agentTargetID != "" {
@@ -203,14 +204,16 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 	if providerTargetRefKind(input.providerTargetRef) == "agent_extension" {
 		permissionProjection, err := projectExtensionPermissionConfig(extensionPermissionProjectionInput{
 			AgentTargetID: input.AgentTargetID,
+			FallbackID:    effectiveSettings.PermissionModeID,
 			Locale:        locale,
 			Profile:       extensionProfile,
 			Provider:      provider,
-			SelectedID:    effectiveSettings.PermissionModeID,
+			SelectedID:    requestedPermissionModeID,
 		})
 		if err != nil {
 			return ComposerOptions{}, err
 		}
+		logExtensionPermissionProjectionDiagnostics(permissionProjection, input.AgentTargetID, provider)
 		permissionConfig = permissionProjection.Config
 		effectiveSettings.PermissionModeID = permissionProjection.CurrentID
 	}
@@ -313,7 +316,14 @@ func (s *Service) GetComposerOptions(ctx context.Context, input ComposerOptionsI
 	}
 	if providerTargetRefKind(input.providerTargetRef) == "agent_extension" {
 		var err error
-		options, err = s.mergeRuntimeComposerContextForComposerOptions(input, effectiveSettings, locale, extensionProfile, options)
+		options, err = s.mergeRuntimeComposerContextForComposerOptions(
+			input,
+			effectiveSettings,
+			locale,
+			extensionProfile,
+			requestedPermissionModeID,
+			options,
+		)
 		if err != nil {
 			return ComposerOptions{}, err
 		}

@@ -95,6 +95,39 @@ func TestProjectExtensionPermissionConfigExplicitSelectionWinsOverRuntimeCurrent
 	}
 }
 
+func TestProjectExtensionPermissionConfigUsesRuntimeBeforeConfiguredAndProfileDefaults(t *testing.T) {
+	profile := ExtensionComposerProfile{
+		DefaultPermissionModeID: "default",
+		PermissionModes: []ExtensionComposerPermissionMode{
+			{RuntimeID: "default", Semantic: PermissionModeSemanticAskBeforeWrite},
+			{RuntimeID: "bypassPermissions", Semantic: PermissionModeSemanticFullAccess},
+		},
+	}
+	projection, err := projectExtensionPermissionConfig(extensionPermissionProjectionInput{
+		FallbackID: "default",
+		Profile:    profile,
+		Runtime:    &extensionPermissionRuntimeState{CurrentRuntimeID: "bypassPermissions"},
+	})
+	if err != nil {
+		t.Fatalf("projectExtensionPermissionConfig() error = %v", err)
+	}
+	if projection.CurrentID != "bypassPermissions" {
+		t.Fatalf("current id = %q, want runtime current before configured default", projection.CurrentID)
+	}
+
+	projection, err = projectExtensionPermissionConfig(extensionPermissionProjectionInput{
+		FallbackID: "stale-semantic-id",
+		Profile:    profile,
+	})
+	if err != nil {
+		t.Fatalf("projectExtensionPermissionConfig() stale fallback error = %v", err)
+	}
+	if projection.CurrentID != "default" || len(projection.Diagnostics) != 1 ||
+		projection.Diagnostics[0].Reason != "permission_configured_default_unsupported" {
+		t.Fatalf("projection = %#v, want stale fallback ignored before profile default", projection)
+	}
+}
+
 func TestProjectExtensionPermissionConfigRejectsUnsupportedExplicitID(t *testing.T) {
 	_, err := projectExtensionPermissionConfig(extensionPermissionProjectionInput{
 		AgentTargetID: "extension:codebuddy",
@@ -140,6 +173,13 @@ func TestProjectExtensionPermissionConfigRejectsInvalidProfileModes(t *testing.T
 			modes: []ExtensionComposerPermissionMode{
 				{RuntimeID: "same", Semantic: PermissionModeSemanticAskBeforeWrite},
 				{RuntimeID: "same", Semantic: PermissionModeSemanticFullAccess},
+			},
+		},
+		{
+			name: "case-insensitive duplicate runtime id",
+			modes: []ExtensionComposerPermissionMode{
+				{RuntimeID: "Auto", Semantic: PermissionModeSemanticAskBeforeWrite},
+				{RuntimeID: "auto", Semantic: PermissionModeSemanticFullAccess},
 			},
 		},
 		{

@@ -968,12 +968,17 @@ file or directory`. If the CLI path exists but `codex app-server` cannot
   hard-code a provider permission alias or collapse modes by semantic. Extension
   implementations keep the signed Composer profile as the launch contract;
   runtime config options may enrich current state and labels but cannot rewrite
-  ids.
+  ids. Composer Options ignores a persisted default that is no longer in the
+  signed profile and falls back to live runtime state, then the profile default;
+  an explicit obsolete id still fails. Exact runtime ids also take precedence
+  over semantic and historical aliases in the Standard ACP lookup.
 - Validation:
   Confirm Composer Options preserves every declared runtime id in profile order,
   including multiple ids with the same semantic, and that the exact selected id
-  reaches the runtime start input. An invalid semantic alias must fail before
-  hidden discovery or visible session creation.
+  reaches the runtime start input and final Standard ACP mapping. Test an exact
+  runtime id that collides with another mode's semantic alias, plus an obsolete
+  persisted default. An invalid explicitly supplied semantic alias must fail
+  before hidden discovery or visible session creation.
 - References:
   [extension_composer_options.go](../../../services/tuttid/service/agent/extension_composer_options.go)
   [composer_runtime_context.go](../../../services/tuttid/service/agent/composer_runtime_context.go)

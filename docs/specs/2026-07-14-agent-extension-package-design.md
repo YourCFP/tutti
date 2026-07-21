@@ -796,6 +796,11 @@ semantic back to a runtime value. Clients must round-trip the advertised `id`
 verbatim; `semantic` is classification metadata and is never a portable
 provider permission id.
 
+Runtime ids are compared case-insensitively at the Standard ACP command
+boundary and therefore must be unique ignoring case. Exact declared runtime ids
+are registered before semantic and historical aliases; an alias can never
+redirect an advertised id to another permission tier.
+
 Runtime permission config options may enrich the current selection, label, and
 description for a signed runtime id. They cannot collapse modes by semantic,
 rewrite public ids, admit unsigned values, or make permission availability
