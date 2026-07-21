@@ -20,6 +20,7 @@ type RuntimeBackend interface {
 	Start(context.Context, agentruntime.StartInput) (agentruntime.StartResult, error)
 	Resume(context.Context, agentruntime.ResumeInput) (agentruntime.Session, error)
 	Session(string, string) (agentruntime.Session, bool)
+	State(string, string) (agentruntime.SessionStateSnapshot, error)
 	CanResume(agentruntime.ResumeInput) bool
 	Exec(context.Context, agentruntime.ExecInput) (agentruntime.ExecResult, error)
 	ValidatePromptContent(context.Context, agentruntime.ExecInput) error
@@ -80,7 +81,7 @@ func (a *RuntimeController) Start(ctx context.Context, input host.RuntimeStartIn
 	if err != nil {
 		return host.ProviderRuntimeSession{}, mapRuntimeError(err)
 	}
-	session := a.fromSession(result.Session)
+	session := a.sessionWithState(result.Session)
 	session.Provisional = input.Provisional
 	return session, nil
 }
@@ -90,7 +91,10 @@ func (a *RuntimeController) Resume(ctx context.Context, input host.RuntimeResume
 		return host.ProviderRuntimeSession{}, err
 	}
 	session, err := a.Backend.Resume(ctx, runtimeResumeInput(input))
-	return a.fromSession(session), mapRuntimeError(err)
+	if err != nil {
+		return host.ProviderRuntimeSession{}, mapRuntimeError(err)
+	}
+	return a.sessionWithState(session), nil
 }
 
 func (a *RuntimeController) Session(workspaceID, sessionID string) (host.ProviderRuntimeSession, bool) {
@@ -98,7 +102,10 @@ func (a *RuntimeController) Session(workspaceID, sessionID string) (host.Provide
 		return host.ProviderRuntimeSession{}, false
 	}
 	session, found := a.Backend.Session(workspaceID, sessionID)
-	return a.fromSession(session), found
+	if !found {
+		return host.ProviderRuntimeSession{}, false
+	}
+	return a.sessionWithState(session), true
 }
 
 func (a *RuntimeController) CanResume(input host.RuntimeResumeInput) bool {
@@ -192,7 +199,10 @@ func (a *RuntimeController) SetTitle(ctx context.Context, input host.RuntimeSetT
 		return host.ProviderRuntimeSession{}, err
 	}
 	session, err := a.Backend.SetTitle(ctx, input.WorkspaceID, input.AgentSessionID, input.Title)
-	return a.fromSession(session), mapRuntimeError(err)
+	if err != nil {
+		return host.ProviderRuntimeSession{}, mapRuntimeError(err)
+	}
+	return a.sessionWithState(session), nil
 }
 
 func (a *RuntimeController) SetVisible(ctx context.Context, input host.RuntimeSetVisibleInput) (host.ProviderRuntimeSession, error) {
@@ -200,7 +210,10 @@ func (a *RuntimeController) SetVisible(ctx context.Context, input host.RuntimeSe
 		return host.ProviderRuntimeSession{}, err
 	}
 	session, err := a.Backend.SetVisible(ctx, input.WorkspaceID, input.AgentSessionID, input.Visible)
-	return a.fromSession(session), mapRuntimeError(err)
+	if err != nil {
+		return host.ProviderRuntimeSession{}, mapRuntimeError(err)
+	}
+	return a.sessionWithState(session), nil
 }
 
 func (a *RuntimeController) Close(ctx context.Context, input host.RuntimeCloseInput) error {
@@ -283,6 +296,42 @@ func (a *RuntimeController) fromSession(session agentruntime.Session) host.Provi
 		Visible: session.Visible, Title: session.Title, InitialTitleEstablished: session.InitialTitleEstablished,
 		LastError: session.LastError, CreatedAtUnixMS: session.CreatedAtUnixMS, UpdatedAtUnixMS: session.UpdatedAtUnixMS,
 	}
+}
+
+// sessionWithState preserves the daemon runtime's provider-enriched live
+// observation. The base Session owns process identity and lifecycle fields;
+// State overlays provider-computed settings and runtime context such as model
+// catalogs, usage, rate limits, account details, and commands.
+func (a *RuntimeController) sessionWithState(session agentruntime.Session) host.ProviderRuntimeSession {
+	result := a.fromSession(session)
+	if a == nil || a.Backend == nil {
+		return result
+	}
+	state, err := a.Backend.State(session.RoomID, session.AgentSessionID)
+	if err != nil {
+		return result
+	}
+	if state.ProviderSessionID != "" {
+		result.ProviderSessionID = state.ProviderSessionID
+	}
+	if state.Status != "" {
+		result.Status = state.Status
+	}
+	if state.TurnLifecycle != nil {
+		result.TurnLifecycle = hostTurnLifecyclePointer(state.TurnLifecycle)
+	}
+	if state.SubmitAvailability != nil {
+		result.SubmitAvailability = hostSubmitAvailability(state.SubmitAvailability)
+	}
+	if state.Settings != nil {
+		settings := hostSettings(*state.Settings)
+		result.Settings = &settings
+	}
+	result.RuntimeContext = cloneMap(state.RuntimeContext)
+	if state.UpdatedAtUnixMS > 0 {
+		result.UpdatedAtUnixMS = state.UpdatedAtUnixMS
+	}
+	return result
 }
 
 func (a *RuntimeController) currentUserID() string {

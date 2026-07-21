@@ -177,12 +177,15 @@ func (h *Host) DeleteSessions(ctx context.Context, input DeleteSessionsInput) (D
 		if err != nil {
 			return DeleteSessionsResult{}, err
 		}
-		if len(plan.SessionIDs) == 0 {
-			break
-		}
-		err = h.withSessionMutationActors(ctx, workspaceID, plan.SessionIDs, func(commandCtx context.Context) error {
-			releases := make([]func(), 0, len(plan.SessionIDs))
-			for _, sessionID := range plan.SessionIDs {
+		// Requested sessions can be live before their first canonical report is
+		// committed (for example, short-lived hidden discovery sessions). Keep
+		// those runtimes inside the same deletion coordinator even when the
+		// canonical plan is empty; the canonical plan remains the exact fence for
+		// rows that do exist.
+		mutationSessionIDs := normalizedUniqueSessionIDs(append(append([]string(nil), plan.SessionIDs...), sessionIDs...))
+		err = h.withSessionMutationActors(ctx, workspaceID, mutationSessionIDs, func(commandCtx context.Context) error {
+			releases := make([]func(), 0, len(mutationSessionIDs))
+			for _, sessionID := range mutationSessionIDs {
 				release, acquireErr := h.acquireSession(commandCtx, SessionRef{WorkspaceID: workspaceID, AgentSessionID: sessionID})
 				if acquireErr != nil {
 					releaseSessionLocks(releases)
@@ -191,7 +194,7 @@ func (h *Host) DeleteSessions(ctx context.Context, input DeleteSessionsInput) (D
 				releases = append(releases, release)
 			}
 			defer releaseSessionLocks(releases)
-			for _, sessionID := range plan.SessionIDs {
+			for _, sessionID := range mutationSessionIDs {
 				if _, live := h.runtime.Session(workspaceID, sessionID); !live {
 					continue
 				}
@@ -199,6 +202,9 @@ func (h *Host) DeleteSessions(ctx context.Context, input DeleteSessionsInput) (D
 					return closeErr
 				}
 				runtimeClosedIDs = append(runtimeClosedIDs, sessionID)
+			}
+			if len(plan.SessionIDs) == 0 {
+				return nil
 			}
 			var deleteErr error
 			deleted, deleteErr = h.sessionBatchManagement.DeleteSessionsBatch(commandCtx, storesqlite.DeleteSessionsBatchInput{

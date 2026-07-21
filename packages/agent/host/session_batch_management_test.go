@@ -26,11 +26,12 @@ func (r *batchRuntime) Close(_ context.Context, input RuntimeCloseInput) error {
 }
 
 type batchManagementStore struct {
-	runtime *batchRuntime
-	plan    []string
-	input   storesqlite.DeleteSessionsBatchInput
-	changes int
-	calls   int
+	runtime      *batchRuntime
+	plan         []string
+	input        storesqlite.DeleteSessionsBatchInput
+	changes      int
+	calls        int
+	useExactPlan bool
 }
 
 type batchCleanup struct {
@@ -56,10 +57,32 @@ func (c *batchCleanup) Cleanup(_ context.Context, input RuntimeCleanupInput) err
 
 func (s *batchManagementStore) PlanDeleteSessions(_ context.Context, input storesqlite.DeleteSessionsBatchInput) (storesqlite.DeleteSessionsPlan, error) {
 	plan := s.plan
-	if len(plan) == 0 {
+	if len(plan) == 0 && !s.useExactPlan {
 		plan = input.SessionIDs
 	}
 	return storesqlite.DeleteSessionsPlan{WorkspaceID: input.WorkspaceID, SessionIDs: append([]string(nil), plan...)}, nil
+}
+
+func TestDeleteSessionClosesLiveRuntimeBeforeFirstCanonicalReport(t *testing.T) {
+	runtime := &batchRuntime{live: map[string]bool{"session-live-only": true}}
+	store := &batchManagementStore{runtime: runtime, useExactPlan: true}
+	host := New(Config{Runtime: runtime, SessionBatchManagement: store})
+
+	result, err := host.DeleteSession(t.Context(), SessionRef{
+		WorkspaceID: "workspace-1", AgentSessionID: "session-live-only",
+	})
+	if err != nil {
+		t.Fatalf("DeleteSession() error = %v", err)
+	}
+	if !result.Deleted || !result.RuntimeClosed || result.CanonicalRemoved {
+		t.Fatalf("DeleteSession() result = %#v", result)
+	}
+	if !reflect.DeepEqual(runtime.closeOrder, []string{"session-live-only"}) {
+		t.Fatalf("runtime close order = %#v", runtime.closeOrder)
+	}
+	if store.calls != 0 {
+		t.Fatalf("canonical delete calls = %d, want none without a canonical row", store.calls)
+	}
 }
 
 func (s *batchManagementStore) DeleteSessionsBatch(_ context.Context, input storesqlite.DeleteSessionsBatchInput) (storesqlite.DeleteSessionsBatchResult, error) {

@@ -279,6 +279,16 @@ func (d *legacyHostConformanceDriver) Reset(_ context.Context, fixture hostconfo
 			Evidence: map[string]any{"confidence": "authoritative"},
 		}, nil
 	}
+	if fixture.LiveOnlySession != nil {
+		seed := *fixture.LiveOnlySession
+		settings := seed.Settings
+		d.runtime.sessions[seed.WorkspaceID+":"+seed.AgentSessionID] = ProviderRuntimeSession{
+			ID: seed.AgentSessionID, WorkspaceID: seed.WorkspaceID, Provider: seed.Provider,
+			ProviderSessionID: seed.ProviderSessionID, Cwd: seed.Cwd, Status: "ready",
+			Settings: &settings, Title: seed.Title, InitialTitleEstablished: seed.InitialTitleEstablished,
+			Visible: true, PinnedAtUnixMS: boolUnixMS(seed.Pinned), CreatedAtUnixMS: 1, UpdatedAtUnixMS: 2,
+		}
+	}
 
 	if fixture.Session == nil {
 		return nil

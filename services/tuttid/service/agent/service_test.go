@@ -4000,6 +4000,18 @@ func TestGetComposerOptionsClaudeCodeStartsHiddenDiscoveryOnceAcrossWorkspacesAn
 		runtime.startCalls[0].ProviderTargetRef["targetId"] != agenttargetbiz.IDLocalClaudeCode {
 		t.Fatalf("discovery target = %q / %#v", runtime.startCalls[0].AgentTargetID, runtime.startCalls[0].ProviderTargetRef)
 	}
+	discoverySessionID := runtime.startCalls[0].AgentSessionID
+	persisted := &fakeSessionReader{sessions: map[string]PersistedSession{
+		"ws-1:" + discoverySessionID: {
+			ID: discoverySessionID, WorkspaceID: "ws-1", Provider: "claude-code",
+			Metadata:               agentactivitybiz.SessionMetadata{Visible: false},
+			InternalRuntimeContext: map[string]any{"hiddenLiveModelDiscovery": true},
+		},
+	}}
+	// Model discovery sessions are reported asynchronously in production. Seed
+	// the canonical observation after startup so the delayed cleanup must close
+	// the runtime and remove the canonical row through Host.
+	service.SessionReader = persisted
 	select {
 	case input := <-closed:
 		t.Fatalf("unexpected immediate hidden discovery cleanup: %#v", input)
@@ -4035,6 +4047,16 @@ func TestGetComposerOptionsClaudeCodeStartsHiddenDiscoveryOnceAcrossWorkspacesAn
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for delayed hidden discovery cleanup")
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		if _, exists := persisted.sessions["ws-1:"+discoverySessionID]; !exists {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("hidden discovery session still persisted after delayed cleanup")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

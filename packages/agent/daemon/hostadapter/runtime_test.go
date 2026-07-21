@@ -10,6 +10,21 @@ import (
 	host "github.com/tutti-os/tutti/packages/agent/host"
 )
 
+type stateRuntimeBackend struct {
+	RuntimeBackend
+	session  agentruntime.Session
+	state    agentruntime.SessionStateSnapshot
+	stateErr error
+}
+
+func (b *stateRuntimeBackend) Session(_, _ string) (agentruntime.Session, bool) {
+	return b.session, true
+}
+
+func (b *stateRuntimeBackend) State(_, _ string) (agentruntime.SessionStateSnapshot, error) {
+	return b.state, b.stateErr
+}
+
 func TestMapRuntimeErrorPreservesProviderDiagnostics(t *testing.T) {
 	cause := errors.New("provider process rejected request")
 	runtimeErr := &agentruntime.AppError{
@@ -69,6 +84,63 @@ func TestRuntimeControllerProjectsSessionWithoutAliasingMutableInputs(t *testing
 	}
 	if projected.Settings == nil || projected.Settings.Model != "gpt-5.6" || projected.Settings.ReasoningEffort != "max" || projected.Settings.Speed != "standard" {
 		t.Fatalf("projected settings = %#v", projected.Settings)
+	}
+}
+
+func TestRuntimeControllerProjectsProviderEnrichedLiveState(t *testing.T) {
+	backend := &stateRuntimeBackend{
+		session: agentruntime.Session{
+			RoomID: "workspace-1", AgentSessionID: "session-1", Provider: "codex",
+			ProviderSessionID: "base-provider-session", Status: "starting",
+			RuntimeContext:  map[string]any{"base": true},
+			Settings:        &agentruntime.SessionSettings{Model: "base-model"},
+			UpdatedAtUnixMS: 10,
+		},
+		state: agentruntime.SessionStateSnapshot{
+			ProviderSessionID: "live-provider-session",
+			Status:            "ready",
+			Settings: &agentruntime.SessionSettings{
+				Model: "gpt-5.6", ReasoningEffort: "max", Speed: "fast",
+			},
+			RuntimeContext: map[string]any{
+				"account":    map[string]any{"email": "agent@example.com"},
+				"rateLimits": map[string]any{"primary": 42},
+				"usage":      map[string]any{"usedTokens": 1200},
+				"commands":   []string{"compact", "status"},
+			},
+			UpdatedAtUnixMS: 20,
+		},
+	}
+	controller := &RuntimeController{Backend: backend}
+
+	projected, found := controller.Session("workspace-1", "session-1")
+	if !found {
+		t.Fatal("Session() found = false")
+	}
+	if projected.ProviderSessionID != "live-provider-session" || projected.Status != "ready" || projected.UpdatedAtUnixMS != 20 {
+		t.Fatalf("projected live identity/status = %#v", projected)
+	}
+	if projected.Settings == nil || projected.Settings.Model != "gpt-5.6" || projected.Settings.ReasoningEffort != "max" || projected.Settings.Speed != "fast" {
+		t.Fatalf("projected live settings = %#v", projected.Settings)
+	}
+	if projected.RuntimeContext["account"] == nil || projected.RuntimeContext["rateLimits"] == nil || projected.RuntimeContext["usage"] == nil || projected.RuntimeContext["commands"] == nil {
+		t.Fatalf("projected live runtime context = %#v", projected.RuntimeContext)
+	}
+}
+
+func TestRuntimeControllerFallsBackToBaseSessionWhenLiveStateFails(t *testing.T) {
+	backend := &stateRuntimeBackend{
+		session: agentruntime.Session{
+			RoomID: "workspace-1", AgentSessionID: "session-1", Provider: "codex",
+			Status: "starting", RuntimeContext: map[string]any{"base": true},
+		},
+		stateErr: errors.New("state unavailable"),
+	}
+	controller := &RuntimeController{Backend: backend}
+
+	projected, found := controller.Session("workspace-1", "session-1")
+	if !found || projected.Status != "starting" || projected.RuntimeContext["base"] != true {
+		t.Fatalf("Session() = %#v found=%v, want base observation", projected, found)
 	}
 }
 

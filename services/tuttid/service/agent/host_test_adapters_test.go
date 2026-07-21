@@ -95,7 +95,7 @@ func (a serviceHostStore) DeleteSessionsBatch(ctx context.Context, input storesq
 func (a serviceHostStore) PlanDeleteSessions(ctx context.Context, input storesqlite.DeleteSessionsBatchInput) (storesqlite.DeleteSessionsPlan, error) {
 	deleter, ok := a.service.SessionReader.(SessionBatchDeleter)
 	if !ok {
-		return storesqlite.DeleteSessionsPlan{}, agenthost.ErrInvalidArgument
+		return storesqlite.DeleteSessionsPlan{WorkspaceID: input.WorkspaceID}, nil
 	}
 	return deleter.PlanDeleteSessions(ctx, input)
 }
