@@ -15,7 +15,7 @@ type goalCommandCanonicalStore struct {
 	session storesqlite.Session
 }
 
-func (s goalCommandCanonicalStore) SessionDeleted(context.Context, string, string) (bool, error) {
+func (goalCommandCanonicalStore) SessionDeleted(context.Context, string, string) (bool, error) {
 	return false, nil
 }
 

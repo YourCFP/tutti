@@ -7359,11 +7359,11 @@ func (f *fakeSectionReader) DeleteSessionsBatch(_ context.Context, input agentac
 	return f.batchDeleteResult, f.batchDeleteErr
 }
 
-func (f *fakeSectionReader) PlanDeleteSessions(_ context.Context, input agentactivitybiz.DeleteSessionsBatchInput) (agentactivitybiz.DeleteSessionsPlan, error) {
+func (*fakeSectionReader) PlanDeleteSessions(_ context.Context, input agentactivitybiz.DeleteSessionsBatchInput) (agentactivitybiz.DeleteSessionsPlan, error) {
 	return agentactivitybiz.DeleteSessionsPlan{WorkspaceID: input.WorkspaceID, SessionIDs: input.SessionIDs}, nil
 }
 
-func (f *fakeSectionReader) PlanClearSessions(_ context.Context, workspaceID string) (agentactivitybiz.DeleteSessionsPlan, error) {
+func (*fakeSectionReader) PlanClearSessions(_ context.Context, workspaceID string) (agentactivitybiz.DeleteSessionsPlan, error) {
 	return agentactivitybiz.DeleteSessionsPlan{WorkspaceID: workspaceID}, nil
 }
 
