@@ -145,9 +145,8 @@ describe("new-conversation home draft lifecycle", () => {
     const empty = { [draftKey]: draft("") };
     const changed = { [draftKey]: draft("second") };
     const failure = {
-      agentSessionId: "session-1",
-      content: [{ type: "text" as const, text: "first" }],
-      draftKey
+      draftKey,
+      submittedDraft: draft("first")
     };
 
     expect(
