@@ -79,6 +79,7 @@ import {
 } from "./workspaceFeatureFlagSettings.ts";
 import { WorkspaceModelPlansController } from "./workspaceModelPlansController.ts";
 import { WorkspaceAgentsController } from "./workspaceAgentsController.ts";
+import { WorkspaceAutomationRulesController } from "./workspaceAutomationRulesController.ts";
 
 export interface WorkspaceSettingsServiceDependencies {
   client: DesktopWorkspaceSettingsClient;
@@ -101,6 +102,7 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
   readonly _serviceBrand: undefined;
   readonly store = createWorkspaceSettingsStore();
   readonly agents: WorkspaceAgentsController;
+  readonly automationRules: WorkspaceAutomationRulesController;
   readonly modelPlans: WorkspaceModelPlansController;
 
   private readonly dependencies: WorkspaceSettingsServiceDependencies;
@@ -148,6 +150,10 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     this.agents = new WorkspaceAgentsController({
       client: dependencies.client,
       onWorkspaceAgentsChanged: dependencies.onAgentTargetsChanged,
+      store: this.store
+    });
+    this.automationRules = new WorkspaceAutomationRulesController({
+      client: dependencies.client,
       store: this.store
     });
     this.scheduleTuttiAgentSwitchInitialization();
@@ -266,6 +272,7 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       this.store.generalFocusRequestID = 0;
       this.modelPlans.reset();
       this.agents.reset();
+      this.automationRules.reset();
     }
   }
 
@@ -974,6 +981,7 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
   private refreshAgentSettings(): void {
     this.refreshModelPlansSurface();
     void this.agents.refresh();
+    void this.automationRules.refresh();
   }
 
   private refreshModelPlansSurface(): void {

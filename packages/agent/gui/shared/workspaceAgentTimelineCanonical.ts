@@ -1,9 +1,6 @@
 import type { WorkspaceAgentActivityTimelineItem } from "./workspaceAgentTimelineTypes";
 import { appendWorkspaceAgentGoalControl } from "./workspaceAgentGoalControlProjection";
-import {
-  isWorkspaceAgentToolCallItem,
-  resolveWorkspaceAgentToolName
-} from "./workspaceAgentToolCallDisplay";
+import { isWorkspaceAgentToolCallItem } from "./workspaceAgentToolCallDisplay";
 import type {
   BuildWorkspaceAgentSessionDetailInput,
   WorkspaceAgentSessionDetailAgentItem,
@@ -24,6 +21,7 @@ import {
   thinkingStatusKind,
   userMessageProjectionKey
 } from "./workspaceAgentTimelineMessageHelpers";
+import { isCollaborationTimelineItem } from "./agentConversation/projection/agentCollaborationProjection";
 import {
   compareToolCallsAscending,
   delegatedToolStepFromCall,
@@ -41,6 +39,11 @@ import {
   withSourceTimelineItems
 } from "./workspaceAgentTimelineProjectionHelpers";
 import { projectCanonicalTurnErrors } from "./workspaceAgentTurnErrorProjection";
+import {
+  normalizeToolName,
+  shouldSuppressToolCall,
+  suppressedUnavailableAskUserQuestionCallIds
+} from "./workspaceAgentTimelineSuppression";
 
 export function buildCanonicalWorkspaceAgentDetailView({
   activity,
@@ -109,6 +112,33 @@ export function buildCanonicalWorkspaceAgentDetailView({
     const turnId =
       explicitTurnId || activeSequenceTurnId || `seq:${item.seq || item.id}`;
     const turn = getTurn(turns, turnId);
+
+    // Collaboration runs render as a dedicated card. Unlike ordinary agent
+    // messages they must stay visible while their body (resultText) is still
+    // empty — a running consult has no output yet — so this branch does not
+    // require a non-empty body.
+    if (isCollaborationTimelineItem(item)) {
+      const status = firstPresentString(
+        item.status,
+        stringRecordValue(item.payload, "status")
+      );
+      const statusKind = messageStatusKind(status);
+      const message = withSourceTimelineItems(
+        {
+          id: itemId(item),
+          body,
+          ...(status ? { status } : {}),
+          ...(statusKind ? { statusKind } : {}),
+          turnId,
+          occurredAtUnixMs:
+            item.occurredAtUnixMs ?? item.createdAtUnixMs ?? null
+        },
+        [item]
+      );
+      turn.agentMessages.push(message);
+      turn.agentItems.push({ kind: "message", message });
+      continue;
+    }
 
     if (isWorkspaceAgentToolCallItem(item)) {
       if (shouldSuppressToolCall(item, suppressedToolCallIds)) {
@@ -301,72 +331,6 @@ function upsertToolCall(
     (existing) => existing.statusKind === "failed"
   );
   upsertToolCallAgentItem(turn, call, itemId(item));
-}
-
-function suppressedUnavailableAskUserQuestionCallIds(
-  items: readonly WorkspaceAgentActivityTimelineItem[]
-): Set<string> {
-  const suppressed = new Set<string>();
-  for (const item of items) {
-    if (
-      normalizeToolName(toolNameFromItem(item)) !== "askuserquestion" ||
-      !isUnavailableAskUserQuestionFailure(item)
-    ) {
-      continue;
-    }
-    const callId = toolCallSuppressionId(item);
-    if (callId) {
-      suppressed.add(callId);
-    }
-  }
-  return suppressed;
-}
-
-function shouldSuppressToolCall(
-  item: WorkspaceAgentActivityTimelineItem,
-  suppressedToolCallIds: ReadonlySet<string>
-): boolean {
-  const callId = toolCallSuppressionId(item);
-  return callId ? suppressedToolCallIds.has(callId) : false;
-}
-
-function toolCallSuppressionId(
-  item: WorkspaceAgentActivityTimelineItem
-): string | null {
-  return firstPresentString(
-    item.callId,
-    stringRecordValue(item.payload, "callId"),
-    stringRecordValue(item.payload, "toolCallId")
-  );
-}
-
-function isUnavailableAskUserQuestionFailure(
-  item: WorkspaceAgentActivityTimelineItem
-): boolean {
-  const status = firstPresentString(
-    item.status,
-    stringRecordValue(item.payload, "status")
-  );
-  if (status !== "failed") {
-    return false;
-  }
-  const payload = normalizedPayload(item.payload);
-  const output = normalizedPayload(
-    payload?.output as WorkspaceAgentActivityTimelineItem["payload"]
-  );
-  const error = normalizedPayload(
-    payload?.error as WorkspaceAgentActivityTimelineItem["payload"]
-  );
-  const message = firstPresentString(
-    stringRecordValue(output, "output"),
-    stringRecordValue(output, "text"),
-    stringRecordValue(output, "message"),
-    stringRecordValue(error, "error"),
-    stringRecordValue(error, "message"),
-    stringRecordValue(payload, "error"),
-    stringRecordValue(payload, "message")
-  );
-  return message?.includes("No such tool available: AskUserQuestion") ?? false;
 }
 
 function upsertToolCallAgentItem(
@@ -782,17 +746,4 @@ function appendDelegatedToolSteps(
   nextMetadata.steps = existingSteps;
   nextPayload.metadata = nextMetadata;
   parentCall.payload = nextPayload;
-}
-
-function toolNameFromItem(
-  item: WorkspaceAgentActivityTimelineItem
-): string | null {
-  return resolveWorkspaceAgentToolName(item);
-}
-
-function normalizeToolName(name: string | null): string {
-  return (name ?? "")
-    .trim()
-    .replace(/[_\s-]+/g, "")
-    .toLowerCase();
 }

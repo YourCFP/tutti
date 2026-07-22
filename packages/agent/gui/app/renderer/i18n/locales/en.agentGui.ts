@@ -5,6 +5,7 @@ import { enAgentGuiRuntimeNotices } from "./en.agentGuiRuntimeNotices.ts";
 import { enAgentGuiModelPlans } from "./en.agentGuiModelPlans.ts";
 import { enAgentGuiSlashPalette } from "./en.agentGuiSlashPalette.ts";
 import { enAgentGuiSessionActions } from "./en.agentGuiSessionActions.ts";
+import { enAgentGuiCollaboration } from "./en.agentGuiCollaboration.ts";
 
 export const enAgentGui = {
   initialPlaceholder: "Type @ to reference sessions, files, tasks, and apps",
@@ -712,7 +713,6 @@ export const enAgentGui = {
   provenanceFilterMembers: "Members",
   provenanceFilterReset: "Reset",
   mentionFilterSession: "Sessions",
-  mentionFilterCollab: "Collaboration",
   mentionFilterIssue: "Tasks",
   mentionKindAgent: "Agent",
   mentionKindApp: "App",
@@ -727,10 +727,8 @@ export const enAgentGui = {
   mentionGroupApps: "Apps",
   mentionGroupAgents: "Agents",
   mentionGroupMySessions: "My sessions",
-  mentionGroupCollabSessions: "Collaboration sessions",
   mentionGroupIssues: "Tasks",
   mentionEmptyMySessions: "No sessions yet",
-  mentionEmptyCollabSessions: "No collaboration sessions yet",
   mentionEmptyApps: "No apps yet",
   mentionEmptyAgents: "No agents available",
   mentionEmptyIssues: "No tasks yet",
@@ -761,8 +759,8 @@ export const enAgentGui = {
     taskContentLabel: "Task content",
     taskTitleLabel: "Task title"
   },
-  mentionCollaboratorFallback: "Collaborator",
   syncPending: "Saved locally, syncing to cloud",
   syncSynced: "Synced to cloud",
-  syncFailed: "Cloud sync failed"
+  syncFailed: "Cloud sync failed",
+  ...enAgentGuiCollaboration
 } as const;

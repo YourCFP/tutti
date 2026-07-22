@@ -610,6 +610,7 @@ export interface AgentActivitySetSessionPinnedInput {
   signal?: AbortSignal;
 }
 
+export * from "./collaboration.types.ts";
 export type {
   AgentActivityModelPlanModel,
   AgentActivityModelPlanSummary

@@ -2597,3 +2597,171 @@ function planDecisionResponse(
     }
   };
 }
+test("WorkspaceAgentActivityService exposes durable AutomationRule session overrides", async () => {
+  const calls: unknown[] = [];
+  const service = new WorkspaceAgentActivityService({
+    tuttidClient: {
+      async listAutomationRules(workspaceId: string) {
+        calls.push(["list", workspaceId]);
+        return {
+          rules: [
+            {
+              id: "rule-review",
+              name: "Review completed work",
+              enabled: true,
+              trigger: "on_task_complete"
+            }
+          ]
+        };
+      },
+      async getAgentSessionAutomationRuleOverride(
+        workspaceId: string,
+        agentSessionId: string
+      ) {
+        calls.push(["get", workspaceId, agentSessionId]);
+        return {
+          agentSessionId,
+          workspaceId,
+          disabled: false,
+          ruleIds: ["rule-review"]
+        };
+      },
+      async setAgentSessionAutomationRuleOverride(
+        workspaceId: string,
+        agentSessionId: string,
+        request: { disabled: boolean; ruleIds: string[] }
+      ) {
+        calls.push(["set", workspaceId, agentSessionId, request]);
+        return { agentSessionId, workspaceId, ...request };
+      }
+    } as unknown as TuttidClient,
+    runtimeApi: { logTerminalDiagnostic: async () => {} }
+  });
+
+  assert.deepEqual(
+    await service.listAutomationRules({ workspaceId: " ws-1 " }),
+    {
+      rules: [
+        {
+          // The retired action split no longer travels on the daemon
+          // contract; the runtime summary keeps an empty placeholder.
+          action: "",
+          enabled: true,
+          id: "rule-review",
+          name: "Review completed work",
+          trigger: "on_task_complete"
+        }
+      ]
+    }
+  );
+  assert.deepEqual(
+    await service.getAutomationRuleOverride({
+      agentSessionId: "session-1",
+      workspaceId: " ws-1 "
+    }),
+    {
+      agentSessionId: "session-1",
+      workspaceId: "ws-1",
+      disabled: false,
+      ruleIds: ["rule-review"]
+    }
+  );
+  assert.deepEqual(
+    await service.setAutomationRuleOverride({
+      agentSessionId: "session-1",
+      workspaceId: " ws-1 ",
+      disabled: true,
+      ruleIds: []
+    }),
+    {
+      agentSessionId: "session-1",
+      workspaceId: "ws-1",
+      disabled: true,
+      ruleIds: []
+    }
+  );
+  assert.deepEqual(calls, [
+    ["list", "ws-1"],
+    ["get", "ws-1", "session-1"],
+    ["set", "ws-1", "session-1", { disabled: true, ruleIds: [] }]
+  ]);
+});
+
+function createCollaborationService(
+  fetchStub: typeof fetch
+): WorkspaceAgentActivityService {
+  // The collaboration/model-plan requests call the generated SDK directly with
+  // a client built from getBackendConfig; the stubbed global fetch observes
+  // the raw HTTP request.
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = fetchStub;
+  test.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  return new WorkspaceAgentActivityService({
+    tuttidClient: {} as TuttidClient,
+    runtimeApi: {
+      getBackendConfig: async () => ({
+        accessToken: "token-1",
+        baseUrl: "http://127.0.0.1:7777"
+      }),
+      logTerminalDiagnostic: async () => {}
+    }
+  });
+}
+
+function collaborationRunResponseBody(
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    id: "run-1",
+    workspaceId: "ws-1",
+    mode: "consult",
+    triggerSource: "user",
+    triggerReason: "composer_consult",
+    sourceSessionId: "session-1",
+    modelPlanId: "plan-1",
+    model: "kimi-k2",
+    status: "completed",
+    adoption: "pending",
+    usage: { inputTokens: 812, outputTokens: 96 },
+    durationMs: 5200,
+    startedAt: "2026-07-12T00:00:00.000Z",
+    completedAt: "2026-07-12T00:00:05.200Z",
+    createdAt: "2026-07-12T00:00:00.000Z",
+    updatedAt: "2026-07-12T00:00:05.200Z",
+    ...overrides
+  };
+}
+
+test("WorkspaceAgentActivityService.setCollaborationAdoption posts the adoption decision", async () => {
+  const observedRequests: Array<{ body: unknown; url: string }> = [];
+  const service = createCollaborationService((async (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ) => {
+    const request = new Request(input, init);
+    observedRequests.push({ body: await request.json(), url: request.url });
+    return new Response(
+      JSON.stringify(collaborationRunResponseBody({ adoption: "adopted" })),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 200
+      }
+    );
+  }) as typeof fetch);
+
+  const run = await service.setCollaborationAdoption({
+    adoption: "adopted",
+    agentSessionId: "session-1",
+    runId: "run-1",
+    workspaceId: "ws-1"
+  });
+
+  assert.equal(
+    observedRequests[0]?.url,
+    "http://127.0.0.1:7777/v1/workspaces/ws-1/collaboration-runs/run-1/adoption"
+  );
+  assert.deepEqual(observedRequests[0]?.body, { adoption: "adopted" });
+  assert.equal(run.adoption, "adopted");
+});

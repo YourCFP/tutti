@@ -694,6 +694,8 @@ const (
 	AgentQuickPromptNotFound        ApiErrorDetailsCode = "agent_quick_prompt_not_found"
 	AgentQuickPromptOperationFailed ApiErrorDetailsCode = "agent_quick_prompt_operation_failed"
 	AgentTargetNotFound             ApiErrorDetailsCode = "agent_target_not_found"
+	AutomationRuleNotFound          ApiErrorDetailsCode = "automation_rule_not_found"
+	CollaborationRunNotFound        ApiErrorDetailsCode = "collaboration_run_not_found"
 	InvalidRequest                  ApiErrorDetailsCode = "invalid_request"
 	MethodNotAllowed                ApiErrorDetailsCode = "method_not_allowed"
 	ModelPlanNotFound               ApiErrorDetailsCode = "model_plan_not_found"
@@ -722,6 +724,10 @@ func (e ApiErrorDetailsCode) Valid() bool {
 	case AgentQuickPromptOperationFailed:
 		return true
 	case AgentTargetNotFound:
+		return true
+	case AutomationRuleNotFound:
+		return true
+	case CollaborationRunNotFound:
 		return true
 	case InvalidRequest:
 		return true
@@ -820,6 +826,39 @@ func (e AppReferenceListReferenceItemType) Valid() bool {
 	}
 }
 
+// Defines values for AutomationRuleTargetKind.
+const (
+	AutomationRuleTargetKindAgent AutomationRuleTargetKind = "agent"
+)
+
+// Valid indicates whether the value is a known member of the AutomationRuleTargetKind enum.
+func (e AutomationRuleTargetKind) Valid() bool {
+	switch e {
+	case AutomationRuleTargetKindAgent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AutomationRuleTrigger.
+const (
+	AutomationRuleTriggerOnTaskComplete AutomationRuleTrigger = "on_task_complete"
+	AutomationRuleTriggerOnTaskFailed   AutomationRuleTrigger = "on_task_failed"
+)
+
+// Valid indicates whether the value is a known member of the AutomationRuleTrigger enum.
+func (e AutomationRuleTrigger) Valid() bool {
+	switch e {
+	case AutomationRuleTriggerOnTaskComplete:
+		return true
+	case AutomationRuleTriggerOnTaskFailed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CliCapabilitySourceKind.
 const (
 	App     CliCapabilitySourceKind = "app"
@@ -904,6 +943,99 @@ func (e CliOutputMode) Valid() bool {
 	case Plain:
 		return true
 	case Table:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CollaborationRunAdoption.
+const (
+	CollaborationRunAdoptionAdopted       CollaborationRunAdoption = "adopted"
+	CollaborationRunAdoptionNotApplicable CollaborationRunAdoption = "not_applicable"
+	CollaborationRunAdoptionPending       CollaborationRunAdoption = "pending"
+	CollaborationRunAdoptionRejected      CollaborationRunAdoption = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the CollaborationRunAdoption enum.
+func (e CollaborationRunAdoption) Valid() bool {
+	switch e {
+	case CollaborationRunAdoptionAdopted:
+		return true
+	case CollaborationRunAdoptionNotApplicable:
+		return true
+	case CollaborationRunAdoptionPending:
+		return true
+	case CollaborationRunAdoptionRejected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CollaborationRunMode.
+const (
+	Consult  CollaborationRunMode = "consult"
+	Delegate CollaborationRunMode = "delegate"
+	Fork     CollaborationRunMode = "fork"
+	Handoff  CollaborationRunMode = "handoff"
+)
+
+// Valid indicates whether the value is a known member of the CollaborationRunMode enum.
+func (e CollaborationRunMode) Valid() bool {
+	switch e {
+	case Consult:
+		return true
+	case Delegate:
+		return true
+	case Fork:
+		return true
+	case Handoff:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CollaborationRunStatus.
+const (
+	CollaborationRunStatusCanceled  CollaborationRunStatus = "canceled"
+	CollaborationRunStatusCompleted CollaborationRunStatus = "completed"
+	CollaborationRunStatusFailed    CollaborationRunStatus = "failed"
+	CollaborationRunStatusRunning   CollaborationRunStatus = "running"
+)
+
+// Valid indicates whether the value is a known member of the CollaborationRunStatus enum.
+func (e CollaborationRunStatus) Valid() bool {
+	switch e {
+	case CollaborationRunStatusCanceled:
+		return true
+	case CollaborationRunStatusCompleted:
+		return true
+	case CollaborationRunStatusFailed:
+		return true
+	case CollaborationRunStatusRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CollaborationRunTriggerSource.
+const (
+	CollaborationRunTriggerSourceAgent  CollaborationRunTriggerSource = "agent"
+	CollaborationRunTriggerSourcePolicy CollaborationRunTriggerSource = "policy"
+	CollaborationRunTriggerSourceUser   CollaborationRunTriggerSource = "user"
+)
+
+// Valid indicates whether the value is a known member of the CollaborationRunTriggerSource enum.
+func (e CollaborationRunTriggerSource) Valid() bool {
+	switch e {
+	case CollaborationRunTriggerSourceAgent:
+		return true
+	case CollaborationRunTriggerSourcePolicy:
+		return true
+	case CollaborationRunTriggerSourceUser:
 		return true
 	default:
 		return false
@@ -1536,13 +1668,13 @@ func (e ModelPlanTemplateKind) Valid() bool {
 
 // Defines values for ModelPolicyReviewRuleTrigger.
 const (
-	OnTaskComplete ModelPolicyReviewRuleTrigger = "on_task_complete"
+	ModelPolicyReviewRuleTriggerOnTaskComplete ModelPolicyReviewRuleTrigger = "on_task_complete"
 )
 
 // Valid indicates whether the value is a known member of the ModelPolicyReviewRuleTrigger enum.
 func (e ModelPolicyReviewRuleTrigger) Valid() bool {
 	switch e {
-	case OnTaskComplete:
+	case ModelPolicyReviewRuleTriggerOnTaskComplete:
 		return true
 	default:
 		return false
@@ -3023,6 +3155,15 @@ type AgentSessionAcceptanceResponse struct {
 	Acceptance *AgentSessionAcceptance `json:"acceptance,omitempty"`
 }
 
+// AgentSessionAutomationRuleOverride defines model for AgentSessionAutomationRuleOverride.
+type AgentSessionAutomationRuleOverride struct {
+	AgentSessionId string     `json:"agentSessionId"`
+	Disabled       bool       `json:"disabled"`
+	RuleIds        []string   `json:"ruleIds"`
+	UpdatedAt      *time.Time `json:"updatedAt,omitempty"`
+	WorkspaceId    string     `json:"workspaceId"`
+}
+
 // AgentSessionComposerSettings defines model for AgentSessionComposerSettings.
 type AgentSessionComposerSettings struct {
 	BrowserUse       *bool   `json:"browserUse,omitempty"`
@@ -3321,6 +3462,65 @@ type AuthenticateAgentTargetRuntimeRequest struct {
 	MethodId       string `json:"methodId"`
 }
 
+// AutomationRule One workspace automation rule. A triggered rule launches a new target-Agent session whose first message carries the rule prompt, a source-session mention, and a short event note.
+type AutomationRule struct {
+	// Budget Independent per-source-session limit. Zero uses the daemon safety default and never means unlimited.
+	Budget    AutomationRuleBudget `json:"budget"`
+	CreatedAt time.Time            `json:"createdAt"`
+	Enabled   bool                 `json:"enabled"`
+	Id        string               `json:"id"`
+	Name      string               `json:"name"`
+
+	// Permissions Authority narrowing applied to the automatically launched target session. The option catalogs follow the selected target Agent's capability directory.
+	Permissions AutomationRulePermissions `json:"permissions"`
+	Prompt      string                    `json:"prompt"`
+
+	// SourceWorkspaceAgentId Optional source-session Agent filter. Empty means all non-automation-origin sessions.
+	SourceWorkspaceAgentId *string              `json:"sourceWorkspaceAgentId,omitempty"`
+	Target                 AutomationRuleTarget `json:"target"`
+
+	// Trigger Lifecycle outcome that evaluates the rule. A failed-turn rule can delegate to a stronger WorkspaceAgent as a bounded escalation attempt; automated outcomes never final-accept the source task.
+	Trigger     AutomationRuleTrigger `json:"trigger"`
+	UpdatedAt   time.Time             `json:"updatedAt"`
+	WorkspaceId string                `json:"workspaceId"`
+}
+
+// AutomationRuleBudget Independent per-source-session limit. Zero uses the daemon safety default and never means unlimited.
+type AutomationRuleBudget struct {
+	MaxRunsPerSession        int   `json:"maxRunsPerSession"`
+	MaxTotalTokensPerSession int64 `json:"maxTotalTokensPerSession"`
+}
+
+// AutomationRulePermissions Authority narrowing applied to the automatically launched target session. The option catalogs follow the selected target Agent's capability directory.
+type AutomationRulePermissions struct {
+	AllowedTools     []string `json:"allowedTools"`
+	PermissionModeId *string  `json:"permissionModeId,omitempty"`
+}
+
+// AutomationRuleTarget defines model for AutomationRuleTarget.
+type AutomationRuleTarget struct {
+	// Kind Every rule targets a launchable Agent. The legacy model kind retired with the consult action and no longer appears.
+	Kind AutomationRuleTargetKind `json:"kind"`
+
+	// Model Retired consult-era field; always empty.
+	Model *string `json:"model,omitempty"`
+
+	// ModelPlanId Retired consult-era field; always empty. Launches inherit the target Agent's model configuration.
+	ModelPlanId *string `json:"modelPlanId,omitempty"`
+
+	// RequiredCapabilities Retired consult-era field; always empty.
+	RequiredCapabilities []string `json:"requiredCapabilities"`
+
+	// WorkspaceAgentId Target Agent that receives the automated follow-up session. Accepts a WorkspaceAgent id or a built-in Harness AgentTarget id; the Agent must be enabled and launchable.
+	WorkspaceAgentId *string `json:"workspaceAgentId,omitempty"`
+}
+
+// AutomationRuleTargetKind Every rule targets a launchable Agent. The legacy model kind retired with the consult action and no longer appears.
+type AutomationRuleTargetKind string
+
+// AutomationRuleTrigger Lifecycle outcome that evaluates the rule. A failed-turn rule can delegate to a stronger WorkspaceAgent as a bounded escalation attempt; automated outcomes never final-accept the source task.
+type AutomationRuleTrigger string
+
 // CheckUserProjectPathRequest defines model for CheckUserProjectPathRequest.
 type CheckUserProjectPathRequest struct {
 	Path string `json:"path"`
@@ -3475,6 +3675,61 @@ type CliTableOutput struct {
 	Columns []CliTableColumn `json:"columns"`
 }
 
+// CollaborationRun One recorded collaboration run with full accounting. Credentials never appear on run records; consults resolve the plan credential at call time only.
+type CollaborationRun struct {
+	// Adoption Whether the run outcome was taken up by the source task. Fork and handoff runs report not_applicable.
+	Adoption    CollaborationRunAdoption `json:"adoption"`
+	CompletedAt *time.Time               `json:"completedAt,omitempty"`
+
+	// ContextScope How much source context was carried over, for example none, summary, or full.
+	ContextScope *string   `json:"contextScope,omitempty"`
+	CreatedAt    time.Time `json:"createdAt"`
+	DurationMs   int64     `json:"durationMs"`
+
+	// FailureReason Machine-readable failure code such as unauthorized, model_rejected, or canceled.
+	FailureReason *string `json:"failureReason,omitempty"`
+	Id            string  `json:"id"`
+
+	// Mode Collaboration kind. consult is a daemon-side advisory completion (advice only, no tools, ownership never changes); fork, delegate, and handoff link to a target session created through the session-create path.
+	Mode        CollaborationRunMode `json:"mode"`
+	Model       *string              `json:"model,omitempty"`
+	ModelPlanId *string              `json:"modelPlanId,omitempty"`
+
+	// Prompt Stored consult input (context plus question).
+	Prompt *string `json:"prompt,omitempty"`
+
+	// ResultText Consult output text.
+	ResultText          *string                       `json:"resultText,omitempty"`
+	SourceSessionId     *string                       `json:"sourceSessionId,omitempty"`
+	StartedAt           *time.Time                    `json:"startedAt,omitempty"`
+	Status              CollaborationRunStatus        `json:"status"`
+	TargetAgentTargetId *string                       `json:"targetAgentTargetId,omitempty"`
+	TargetSessionId     *string                       `json:"targetSessionId,omitempty"`
+	TriggerReason       *string                       `json:"triggerReason,omitempty"`
+	TriggerSource       CollaborationRunTriggerSource `json:"triggerSource"`
+	UpdatedAt           time.Time                     `json:"updatedAt"`
+	Usage               CollaborationRunUsage         `json:"usage"`
+	WorkspaceId         string                        `json:"workspaceId"`
+}
+
+// CollaborationRunAdoption Whether the run outcome was taken up by the source task. Fork and handoff runs report not_applicable.
+type CollaborationRunAdoption string
+
+// CollaborationRunMode Collaboration kind. consult is a daemon-side advisory completion (advice only, no tools, ownership never changes); fork, delegate, and handoff link to a target session created through the session-create path.
+type CollaborationRunMode string
+
+// CollaborationRunStatus defines model for CollaborationRunStatus.
+type CollaborationRunStatus string
+
+// CollaborationRunTriggerSource defines model for CollaborationRunTriggerSource.
+type CollaborationRunTriggerSource string
+
+// CollaborationRunUsage defines model for CollaborationRunUsage.
+type CollaborationRunUsage struct {
+	InputTokens  int64 `json:"inputTokens"`
+	OutputTokens int64 `json:"outputTokens"`
+}
+
 // CompleteIssueManagerRunOutputItem defines model for CompleteIssueManagerRunOutputItem.
 type CompleteIssueManagerRunOutputItem struct {
 	DisplayName *string `json:"displayName,omitempty"`
@@ -3506,6 +3761,36 @@ type CopyWorkspaceFileEntryRequest struct {
 type CreateAgentQuickPromptRequest struct {
 	Content string `json:"content"`
 	Title   string `json:"title"`
+}
+
+// CreateCollaborationRunRequest defines model for CreateCollaborationRunRequest.
+type CreateCollaborationRunRequest struct {
+	ContextScope *string `json:"contextScope,omitempty"`
+
+	// ContextText Optional prepared context prepended to the consult question.
+	ContextText *string `json:"contextText,omitempty"`
+
+	// MaxTokens Consult completion output token cap.
+	MaxTokens *int `json:"maxTokens,omitempty"`
+
+	// Mode Collaboration kind. consult is a daemon-side advisory completion (advice only, no tools, ownership never changes); fork, delegate, and handoff link to a target session created through the session-create path.
+	Mode CollaborationRunMode `json:"mode"`
+
+	// Model Defaults to the plan default model for consult runs.
+	Model *string `json:"model,omitempty"`
+
+	// ModelPlanId Required for consult runs; the plan must exist and be enabled.
+	ModelPlanId *string `json:"modelPlanId,omitempty"`
+
+	// Question Consult question; required for consult runs.
+	Question *string `json:"question,omitempty"`
+
+	// SourceSessionId Required for consult runs; consults are capped per source session.
+	SourceSessionId     *string                       `json:"sourceSessionId,omitempty"`
+	TargetAgentTargetId *string                       `json:"targetAgentTargetId,omitempty"`
+	TargetSessionId     *string                       `json:"targetSessionId,omitempty"`
+	TriggerReason       *string                       `json:"triggerReason,omitempty"`
+	TriggerSource       CollaborationRunTriggerSource `json:"triggerSource"`
 }
 
 // CreateIssueManagerIssueRequest defines model for CreateIssueManagerIssueRequest.
@@ -3615,6 +3900,11 @@ type CreateWorkspaceTerminalRequest struct {
 // DeleteAgentQuickPromptRequest defines model for DeleteAgentQuickPromptRequest.
 type DeleteAgentQuickPromptRequest struct {
 	ExpectedVersion int64 `json:"expectedVersion"`
+}
+
+// DeleteAutomationRuleResponse defines model for DeleteAutomationRuleResponse.
+type DeleteAutomationRuleResponse struct {
+	AutomationRuleId string `json:"automationRuleId"`
 }
 
 // DeleteIssueManagerContextRefResponse defines model for DeleteIssueManagerContextRefResponse.
@@ -4290,6 +4580,16 @@ type ListAgentTargetsResponse struct {
 	Targets []AgentTarget `json:"targets"`
 }
 
+// ListAutomationRulesResponse defines model for ListAutomationRulesResponse.
+type ListAutomationRulesResponse struct {
+	Rules []AutomationRule `json:"rules"`
+}
+
+// ListCollaborationRunsResponse defines model for ListCollaborationRunsResponse.
+type ListCollaborationRunsResponse struct {
+	Runs []CollaborationRun `json:"runs"`
+}
+
 // ListModelPlansResponse defines model for ListModelPlansResponse.
 type ListModelPlansResponse struct {
 	Plans []ModelPlan `json:"plans"`
@@ -4333,6 +4633,7 @@ type ModelPlan struct {
 
 	// Protocol Wire protocol family used to call the plan's models.
 	Protocol ModelPlanProtocol `json:"protocol"`
+	Revision int64             `json:"revision"`
 
 	// Status Derived plan lifecycle status. pending_first_use means detection passed but no real agent call has completed yet; only ready plans are fully usable.
 	Status ModelPlanStatus `json:"status"`
@@ -4527,6 +4828,23 @@ type PublishWorkspaceAppFactoryJobResponse struct {
 	WorkspaceId string                 `json:"workspaceId"`
 }
 
+// PutAutomationRuleRequest defines model for PutAutomationRuleRequest.
+type PutAutomationRuleRequest struct {
+	// Budget Independent per-source-session limit. Zero uses the daemon safety default and never means unlimited.
+	Budget  AutomationRuleBudget `json:"budget"`
+	Enabled bool                 `json:"enabled"`
+	Name    string               `json:"name"`
+
+	// Permissions Authority narrowing applied to the automatically launched target session. The option catalogs follow the selected target Agent's capability directory.
+	Permissions            AutomationRulePermissions `json:"permissions"`
+	Prompt                 string                    `json:"prompt"`
+	SourceWorkspaceAgentId *string                   `json:"sourceWorkspaceAgentId,omitempty"`
+	Target                 AutomationRuleTarget      `json:"target"`
+
+	// Trigger Lifecycle outcome that evaluates the rule. A failed-turn rule can delegate to a stronger WorkspaceAgent as a bounded escalation attempt; automated outcomes never final-accept the source task.
+	Trigger AutomationRuleTrigger `json:"trigger"`
+}
+
 // PutDesktopPreferencesRequest defines model for PutDesktopPreferencesRequest.
 type PutDesktopPreferencesRequest struct {
 	Preferences DesktopPreferences `json:"preferences"`
@@ -4663,10 +4981,22 @@ type SetAgentModelBindingRequest struct {
 	ModelPolicyId *string `json:"modelPolicyId,omitempty"`
 }
 
+// SetAgentSessionAutomationRuleOverrideRequest defines model for SetAgentSessionAutomationRuleOverrideRequest.
+type SetAgentSessionAutomationRuleOverrideRequest struct {
+	Disabled bool     `json:"disabled"`
+	RuleIds  []string `json:"ruleIds"`
+}
+
 // SetAgentSessionModelPolicyOverrideRequest defines model for SetAgentSessionModelPolicyOverrideRequest.
 type SetAgentSessionModelPolicyOverrideRequest struct {
 	Disabled      bool    `json:"disabled"`
 	ModelPolicyId *string `json:"modelPolicyId,omitempty"`
+}
+
+// SetCollaborationRunAdoptionRequest defines model for SetCollaborationRunAdoptionRequest.
+type SetCollaborationRunAdoptionRequest struct {
+	// Adoption Whether the run outcome was taken up by the source task. Fork and handoff runs report not_applicable.
+	Adoption CollaborationRunAdoption `json:"adoption"`
 }
 
 // SetModelPlanEnabledRequest defines model for SetModelPlanEnabledRequest.
@@ -5842,8 +6172,14 @@ type AgentSessionID = string
 // AgentTurnID defines model for AgentTurnID.
 type AgentTurnID = string
 
+// AutomationRuleID defines model for AutomationRuleID.
+type AutomationRuleID = string
+
 // CliCommandID defines model for CliCommandID.
 type CliCommandID = string
+
+// CollaborationRunID defines model for CollaborationRunID.
+type CollaborationRunID = string
 
 // IssueManagerContextRefID defines model for IssueManagerContextRefID.
 type IssueManagerContextRefID = string
@@ -6106,6 +6442,13 @@ type GetWorkspaceAppAgentProviderStatusesParams struct {
 	Refresh *bool `form:"refresh,omitempty" json:"refresh,omitempty"`
 }
 
+// ListCollaborationRunsParams defines parameters for ListCollaborationRuns.
+type ListCollaborationRunsParams struct {
+	// SourceSessionId Narrow to runs started from one source agent session.
+	SourceSessionId *string `form:"sourceSessionId,omitempty" json:"sourceSessionId,omitempty"`
+	Limit           *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListWorkspaceFileDirectoryParams defines parameters for ListWorkspaceFileDirectory.
 type ListWorkspaceFileDirectoryParams struct {
 	// Path Omit to resolve the current workspace file root.
@@ -6249,6 +6592,9 @@ type ImportWorkspaceExternalAgentSessionsJSONRequestBody = ImportExternalAgentSe
 // ScanWorkspaceExternalAgentSessionImportsJSONRequestBody defines body for ScanWorkspaceExternalAgentSessionImports for application/json ContentType.
 type ScanWorkspaceExternalAgentSessionImportsJSONRequestBody = ExternalAgentImportScanRequest
 
+// SetAgentSessionAutomationRuleOverrideJSONRequestBody defines body for SetAgentSessionAutomationRuleOverride for application/json ContentType.
+type SetAgentSessionAutomationRuleOverrideJSONRequestBody = SetAgentSessionAutomationRuleOverrideRequest
+
 // GoalControlWorkspaceAgentSessionJSONRequestBody defines body for GoalControlWorkspaceAgentSession for application/json ContentType.
 type GoalControlWorkspaceAgentSessionJSONRequestBody = WorkspaceAgentSessionGoalControlRequest
 
@@ -6329,6 +6675,18 @@ type RollbackWorkspaceAppJSONRequestBody = RollbackWorkspaceAppRequest
 
 // PrepareWorkspaceAppUploadJSONRequestBody defines body for PrepareWorkspaceAppUpload for application/json ContentType.
 type PrepareWorkspaceAppUploadJSONRequestBody = PrepareWorkspaceAppUploadRequest
+
+// CreateAutomationRuleJSONRequestBody defines body for CreateAutomationRule for application/json ContentType.
+type CreateAutomationRuleJSONRequestBody = PutAutomationRuleRequest
+
+// UpdateAutomationRuleJSONRequestBody defines body for UpdateAutomationRule for application/json ContentType.
+type UpdateAutomationRuleJSONRequestBody = PutAutomationRuleRequest
+
+// CreateCollaborationRunJSONRequestBody defines body for CreateCollaborationRun for application/json ContentType.
+type CreateCollaborationRunJSONRequestBody = CreateCollaborationRunRequest
+
+// SetCollaborationRunAdoptionJSONRequestBody defines body for SetCollaborationRunAdoption for application/json ContentType.
+type SetCollaborationRunAdoptionJSONRequestBody = SetCollaborationRunAdoptionRequest
 
 // CreateWorkspaceFileDirectoryJSONRequestBody defines body for CreateWorkspaceFileDirectory for application/json ContentType.
 type CreateWorkspaceFileDirectoryJSONRequestBody = CreateWorkspaceFileDirectoryRequest

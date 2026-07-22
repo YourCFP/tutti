@@ -30,6 +30,7 @@ import (
 	agentquickpromptservice "github.com/tutti-os/tutti/services/tuttid/service/agentquickprompt"
 	agentstatusservice "github.com/tutti-os/tutti/services/tuttid/service/agentstatus"
 	agenttargetservice "github.com/tutti-os/tutti/services/tuttid/service/agenttarget"
+	automationruleservice "github.com/tutti-os/tutti/services/tuttid/service/automationrule"
 	browsersvc "github.com/tutti-os/tutti/services/tuttid/service/browser"
 	cliservice "github.com/tutti-os/tutti/services/tuttid/service/cli"
 	appclicli "github.com/tutti-os/tutti/services/tuttid/service/cli/appcli"
@@ -41,6 +42,7 @@ import (
 	managedmodelscli "github.com/tutti-os/tutti/services/tuttid/service/cli/providers/managedmodels"
 	referencescli "github.com/tutti-os/tutti/services/tuttid/service/cli/providers/references"
 	workbenchappscli "github.com/tutti-os/tutti/services/tuttid/service/cli/providers/workbenchapps"
+	collabrunservice "github.com/tutti-os/tutti/services/tuttid/service/collabrun"
 	computersvc "github.com/tutti-os/tutti/services/tuttid/service/computer"
 	eventstreamservice "github.com/tutti-os/tutti/services/tuttid/service/eventstream"
 	managedcredentialsservice "github.com/tutti-os/tutti/services/tuttid/service/managedcredentials"
@@ -356,6 +358,14 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		Workspaces: store,
 		Publisher:  modelConfigurationPublisher,
 	}
+	automationRulesStore, _ := store.(workspacedata.AutomationRulesStore)
+	automationRules := &automationruleservice.Service{
+		Store:     automationRulesStore,
+		Agents:    workspaceAgents,
+		Targets:   agentTargetStore,
+		Usage:     automationRulesStore,
+		Publisher: eventstreamservice.AgentAutomationRulesPublisher{Service: events},
+	}
 	modelPlans := &modelplanservice.Service{
 		Store:         modelPlansStore,
 		FirstUseStore: modelPlanFirstUseStore,
@@ -363,6 +373,14 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		// the plan: agent model bindings, model usage policies, and workspace agents.
 		References: modelplanservice.CompositeReferenceResolver{modelBindings, modelPolicies, workspaceAgents},
 	}
+	collabRunsStore, _ := store.(workspacedata.CollaborationRunsStore)
+	collabRuns := &collabrunservice.Service{
+		Store:     collabRunsStore,
+		Plans:     modelPlansStore,
+		Completer: modelPlans,
+		Publisher: eventstreamservice.AgentCollaborationPublisher{Service: events},
+	}
+	modelPolicies.ConfigureReviewAutomation(modelBindingsStore, nil, collabRuns, collabRuns)
 	events.RegisterIntentHandler(
 		eventstreamservice.TopicPreferencesDesktopUpdateRequested,
 		eventstreamservice.NewPreferencesDesktopUpdateRequestedHandler(preferences),
@@ -372,6 +390,8 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		eventstreamservice.NewPreferencesAgentComposerDefaultsPatchRequestedHandler(preferences),
 	)
 	agentActivityProjection := agentservice.NewActivityProjection(agentActivityRepo)
+	modelPolicies.Sessions = modelPolicySessionTargetResolver{projection: agentActivityProjection}
+	collabRuns.Timeline = agentservice.CollaborationTimelineReporter{Projection: agentActivityProjection}
 	agentActivityProjection.SetAnalyticsReporter(analyticsReporter)
 	agentActivityProjection.SetPublisher(eventstreamservice.AgentActivityPublisher{Service: events})
 	if agentTargetResolver, ok := store.(agentservice.AgentTargetResolver); ok {
@@ -519,6 +539,10 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	agentSessionService.AvailabilityChecker = agentservice.AgentStatusProviderAvailabilityChecker{
 		Service: &agentStatusService,
 	}
+	automationExecutor := &automationruleservice.DaemonExecutor{Agents: agentSessionService, Ledger: automationRulesStore}
+	automationRules.Executor = automationExecutor
+	automationRules.Sources = automationExecutor
+
 	canonicalStoreProvider, ok := store.(interface {
 		AgentCanonicalStore() *agentstoresqlite.Store
 	})
@@ -633,7 +657,15 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		Publisher:             eventstreamservice.WorkspaceAppFactoryPublisher{Service: events},
 	}
 	agentActivityProjection.SetSessionMessageObserver(appFactoryService)
-	agentActivityProjection.SetSessionStateObserver(agentservice.SessionStateObservers{appFactoryService, agentSessionService})
+	agentActivityProjection.SetSessionStateObserver(agentservice.SessionStateObservers{appFactoryService, agentSessionService, modelPolicies, automationRules})
+	// Canonical root-turn settlements (root-provider aggregation, child-drain
+	// reconcile, cancel) fan out at-least-once to this dedicated opt-in list
+	// only. Automation rules are the only consumer cleared for it today: the
+	// general session-state observers historically never received live turn
+	// settles, and each needs its own semantic ruling before opting in
+	// (W4③-11 — the Issue-run observer, for example, would complete
+	// multi-turn runs on their first settled turn).
+	agentActivityProjection.SetRootTurnSettleStateObserver(agentservice.SessionStateObservers{automationRules})
 	if _, err := appFactoryService.ReconcileInterruptedJobs(ctx); err != nil {
 		agentRuntime.Close()
 		return tuttiapi.DaemonAPI{}, nil, nil, nil, fmt.Errorf("reconcile interrupted app factory jobs: %w", err)
@@ -724,8 +756,11 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		WorkspaceAgentService:     workspaceAgents,
 		AgentModelBindingService:  modelBindings,
 		ModelPolicyService:        modelPolicies,
-		EventStreamService:        events,
-		WorkspaceService:          workspaceService,
+		CollaborationRunService:   collabRuns,
+		AutomationRuleService:     automationRules,
+
+		EventStreamService: events,
+		WorkspaceService:   workspaceService,
 		WorkbenchService: workspaceservice.WorkbenchService{
 			Store: workspaceStore,
 			SnapshotReconciler: workspaceservice.TerminalWorkbenchSnapshotReconciler{
@@ -790,4 +825,22 @@ func (w *tuttiWiring) Close() error {
 		closeErr = err
 	}
 	return closeErr
+}
+
+// modelPolicySessionTargetResolver lets the review engine resolve a session's
+// agent target from the persisted activity projection when a state report
+// does not carry it.
+type modelPolicySessionTargetResolver struct {
+	projection *agentservice.ActivityProjection
+}
+
+func (r modelPolicySessionTargetResolver) ResolveSessionAgentTarget(workspaceID string, agentSessionID string) (string, bool) {
+	if r.projection == nil {
+		return "", false
+	}
+	session, ok := r.projection.GetSession(workspaceID, agentSessionID)
+	if !ok {
+		return "", false
+	}
+	return session.AgentTargetID, session.AgentTargetID != ""
 }

@@ -14,6 +14,7 @@ import (
 const (
 	TopicAnalyticsDebugReported                         = "analytics.debug.reported"
 	TopicAgentActivityUpdated                           = "agent.activity.updated"
+	TopicAgentCollaborationUpdated                      = "agent.collaboration.updated"
 	TopicAgentModelCatalogInvalidated                   = "agent.model.catalog.invalidated"
 	TopicAgentQuickPromptUpdated                        = "agent.quickprompt.updated"
 	TopicPreferencesAgentComposerDefaultsChanged        = "preferences.agent.composer.defaults.changed"
@@ -107,6 +108,16 @@ func DefaultCatalog() StaticCatalog {
 			},
 		},
 		{
+			Name:               TopicAgentCollaborationUpdated,
+			ClientCanPublish:   false,
+			ClientCanSubscribe: true,
+			Version:            1,
+			directions:         []Direction{DirectionServerToClient},
+			validators: map[Direction]PayloadValidator{
+				DirectionServerToClient: validateAgentCollaborationUpdatedPayload,
+			},
+		},
+		{
 			Name:               TopicAgentModelCatalogInvalidated,
 			ClientCanPublish:   false,
 			ClientCanSubscribe: true,
@@ -128,17 +139,9 @@ func DefaultCatalog() StaticCatalog {
 		},
 	}
 	definitions = append(definitions, preferencesTopicDefinitions()...)
+	definitions = append(definitions, modelGovernanceTopicDefinitions()...)
+	definitions = append(definitions, collaborationTopicDefinitions()...)
 	definitions = append(definitions, []TopicDefinition{
-		{
-			Name:               TopicAgentModelConfigurationChanged,
-			ClientCanPublish:   false,
-			ClientCanSubscribe: true,
-			Version:            1,
-			directions:         []Direction{DirectionServerToClient},
-			validators: map[Direction]PayloadValidator{
-				DirectionServerToClient: validateAgentModelConfigurationChangedPayload,
-			},
-		},
 		{
 			Name:               TopicUserProjectUpdated,
 			ClientCanPublish:   false,
@@ -286,13 +289,6 @@ type agentActivityUpdatedPayload struct {
 type agentModelCatalogInvalidatedPayload struct {
 	Providers        []string `json:"providers"`
 	OccurredAtUnixMS int64    `json:"occurredAtUnixMs"`
-}
-
-type agentQuickPromptUpdatedPayload struct {
-	PromptID         string `json:"promptId"`
-	ChangeKind       string `json:"changeKind"`
-	Version          int64  `json:"version"`
-	OccurredAtUnixMS int64  `json:"occurredAtUnixMs"`
 }
 
 type workbenchNodeLaunchRequestedPayload struct {
@@ -543,28 +539,6 @@ func validateAgentActivityUpdatedPayload(payload []byte) error {
 		return fmt.Errorf("data is required")
 	}
 	return validateAgentActivityUpdatedData(decoded)
-}
-
-func validateAgentQuickPromptUpdatedPayload(payload []byte) error {
-	var decoded agentQuickPromptUpdatedPayload
-	if err := decodeJSONStrict(payload, &decoded); err != nil {
-		return fmt.Errorf("decode payload: %w", err)
-	}
-	if strings.TrimSpace(decoded.PromptID) == "" {
-		return fmt.Errorf("promptId is required")
-	}
-	switch decoded.ChangeKind {
-	case "created", "updated", "deleted":
-	default:
-		return fmt.Errorf("changeKind is unsupported")
-	}
-	if decoded.Version < 1 {
-		return fmt.Errorf("version must be positive")
-	}
-	if decoded.OccurredAtUnixMS < 1 {
-		return fmt.Errorf("occurredAtUnixMs must be positive")
-	}
-	return nil
 }
 
 func validateAgentModelCatalogInvalidatedPayload(payload []byte) error {

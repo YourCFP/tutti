@@ -7,9 +7,9 @@ import {
 } from "react";
 import type {
   AgentActivityActivateSessionResult,
+  AgentActivityCollaborationRun,
   AgentActivityGoalControlInput,
   AgentActivityGoalControlResult,
-  AgentActivityInitialGoalControl,
   AgentActivityCreateSessionInput,
   AgentActivityDeleteSessionInput,
   AgentActivityDeleteSessionResult,
@@ -20,6 +20,7 @@ import type {
   AgentActivitySendInputResult,
   AgentActivitySession,
   AgentActivitySessionSettings,
+  AgentActivitySetCollaborationAdoptionInput,
   AgentActivitySnapshot,
   AgentActivitySnapshotListener,
   AgentActivitySubmitInteractiveInput,
@@ -213,13 +214,11 @@ export type AgentActivityRuntimeActivateSessionInput =
   | (AgentActivityRuntimeActivateSessionInputBase & {
       agentTargetId: string;
       clientSubmitId: string;
-      initialGoalControl?: AgentActivityInitialGoalControl;
       mode: "new";
     })
   | (AgentActivityRuntimeActivateSessionInputBase & {
       agentTargetId?: string | null;
       clientSubmitId?: never;
-      initialGoalControl?: never;
       mode: "existing";
     });
 
@@ -433,6 +432,13 @@ export interface AgentActivityRuntime {
   renameSession(
     input: AgentActivityRenameSessionInput
   ): Promise<AgentActivitySession>;
+  /**
+   * Record whether a collaboration outcome was adopted.
+   * Optional; hosts without support omit it and adoption controls stay hidden.
+   */
+  setCollaborationAdoption?(
+    input: AgentActivitySetCollaborationAdoptionInput
+  ): Promise<AgentActivityCollaborationRun>;
   setSessionPinned(
     input: AgentActivityRuntimeSetSessionPinnedInput
   ): Promise<AgentActivitySession>;

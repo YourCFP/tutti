@@ -9,8 +9,15 @@ import {
 } from "@tutti-os/agent-activity-core";
 import type { AgentActivityRuntime } from "@tutti-os/agent-gui";
 import type {
+  Client,
+  CollaborationRun,
   TuttidClient,
   TuttidEventStreamClient
+} from "@tutti-os/client-tuttid-ts";
+import {
+  createClient,
+  normalizeTuttidError,
+  setCollaborationRunAdoption
 } from "@tutti-os/client-tuttid-ts";
 import type { DesktopHostFilesApi, DesktopRuntimeApi } from "@preload/types";
 import type { IReporterService } from "../../../analytics/services/reporterService.interface.ts";
@@ -102,6 +109,15 @@ export class WorkspaceAgentActivityService
   >();
   private composerOptionsCommandSequence = 1;
   private sessionMutationSequence = 1;
+  // Collaboration-run/model-plan requests are not part of the TuttidClient
+  // wrapper yet, so they call the generated SDK directly. The client is
+  // re-resolved from the backend config on every call (cached per endpoint)
+  // because the managed daemon can restart onto a new ephemeral port.
+  private collaborationClientCache: {
+    accessToken: string;
+    baseUrl: string;
+    client: Client;
+  } | null = null;
   constructor(dependencies: WorkspaceAgentActivityServiceDependencies) {
     super(dependencies);
     this.dependencies = dependencies;
@@ -597,6 +613,141 @@ export class WorkspaceAgentActivityService
     );
   }
 
+  async setCollaborationAdoption(
+    input: Parameters<
+      NonNullable<IWorkspaceAgentActivityService["setCollaborationAdoption"]>
+    >[0]
+  ): ReturnType<
+    NonNullable<IWorkspaceAgentActivityService["setCollaborationAdoption"]>
+  > {
+    const workspaceId = normalizeWorkspaceId(input.workspaceId);
+    const client = await this.resolveCollaborationClient();
+    const response = await setCollaborationRunAdoption({
+      body: { adoption: input.adoption },
+      client,
+      path: {
+        collaborationRunID: input.runId,
+        workspaceID: workspaceId
+      },
+      signal: input.signal
+    });
+    return agentActivityCollaborationRunFromTuttid(
+      unwrapCollaborationData(
+        response,
+        "Collaboration adoption request failed."
+      )
+    );
+  }
+
+  private async resolveCollaborationClient(): Promise<Client> {
+    const getBackendConfig = this.dependencies.runtimeApi.getBackendConfig;
+    if (!getBackendConfig) {
+      throw new Error(
+        "Collaboration requests are unavailable: backend config resolver is missing."
+      );
+    }
+    const config = await getBackendConfig();
+    const cached = this.collaborationClientCache;
+    if (
+      cached &&
+      cached.baseUrl === config.baseUrl &&
+      cached.accessToken === config.accessToken
+    ) {
+      return cached.client;
+    }
+    const client = createClient({
+      auth: config.accessToken,
+      baseUrl: config.baseUrl,
+      fetch: globalThis.fetch.bind(globalThis)
+    });
+    this.collaborationClientCache = {
+      accessToken: config.accessToken,
+      baseUrl: config.baseUrl,
+      client
+    };
+    return client;
+  }
+
+  async listAutomationRules(input: {
+    workspaceId: string;
+    signal?: AbortSignal;
+  }): Promise<{
+    rules: {
+      id: string;
+      name: string;
+      enabled: boolean;
+      trigger: string;
+      action: string;
+    }[];
+  }> {
+    const workspaceId = normalizeWorkspaceId(input.workspaceId);
+    const response =
+      await this.dependencies.tuttidClient.listAutomationRules(workspaceId);
+    return {
+      rules: response.rules.map((rule) => ({
+        id: rule.id,
+        name: rule.name,
+        enabled: rule.enabled,
+        trigger: rule.trigger,
+        // The automation domain retired its action split; every rule
+        // launches a follow-up session. The runtime summary field stays for
+        // contract stability and is no longer populated from the daemon.
+        action: ""
+      }))
+    };
+  }
+
+  async getAutomationRuleOverride(input: {
+    agentSessionId: string;
+    workspaceId: string;
+    signal?: AbortSignal;
+  }): Promise<{
+    agentSessionId: string;
+    workspaceId: string;
+    disabled: boolean;
+    ruleIds: string[];
+  }> {
+    const workspaceId = normalizeWorkspaceId(input.workspaceId);
+    const override =
+      await this.dependencies.tuttidClient.getAgentSessionAutomationRuleOverride(
+        workspaceId,
+        input.agentSessionId
+      );
+    return {
+      agentSessionId: override.agentSessionId,
+      workspaceId: override.workspaceId,
+      disabled: override.disabled,
+      ruleIds: [...override.ruleIds]
+    };
+  }
+
+  async setAutomationRuleOverride(input: {
+    agentSessionId: string;
+    disabled: boolean;
+    ruleIds: string[];
+    workspaceId: string;
+    signal?: AbortSignal;
+  }): Promise<{
+    agentSessionId: string;
+    workspaceId: string;
+    disabled: boolean;
+    ruleIds: string[];
+  }> {
+    const workspaceId = normalizeWorkspaceId(input.workspaceId);
+    const override =
+      await this.dependencies.tuttidClient.setAgentSessionAutomationRuleOverride(
+        workspaceId,
+        input.agentSessionId,
+        { disabled: input.disabled, ruleIds: [...input.ruleIds] }
+      );
+    return {
+      agentSessionId: override.agentSessionId,
+      workspaceId: override.workspaceId,
+      disabled: override.disabled,
+      ruleIds: [...override.ruleIds]
+    };
+  }
+
   async goalControl(
     input: Parameters<AgentActivityAdapter["goalControl"]>[0]
   ): Promise<AgentActivityGoalControlResult> {
@@ -786,4 +937,82 @@ export class WorkspaceAgentActivityService
     const sequence = this.sessionMutationSequence++;
     return `${kind}:${Date.now()}:${sequence}`;
   }
+}
+
+// Local equivalent of the TuttidClient unwrap helper for direct generated-SDK
+// calls: normalize protocol errors, otherwise fall back to the caller message.
+function unwrapCollaborationData<TResult>(
+  response: { data?: TResult; error?: unknown; response?: Response },
+  fallback: string
+): TResult {
+  if (response.error !== undefined) {
+    throw (
+      normalizeTuttidError(response.error, response.response?.status ?? 0) ??
+      new Error(fallback)
+    );
+  }
+  if (response.data === undefined) {
+    throw new Error(fallback);
+  }
+  return response.data;
+}
+
+function agentActivityCollaborationRunFromTuttid(run: CollaborationRun): {
+  adoption: CollaborationRun["adoption"];
+  completedAtUnixMs: number | null;
+  contextScope: string | null;
+  durationMs: number | null;
+  failureReason: string | null;
+  id: string;
+  mode: CollaborationRun["mode"];
+  model: string | null;
+  modelPlanId: string | null;
+  resultText: string | null;
+  sourceSessionId: string | null;
+  startedAtUnixMs: number | null;
+  status: CollaborationRun["status"];
+  targetAgentTargetId: string | null;
+  targetSessionId: string | null;
+  triggerReason: string | null;
+  triggerSource: CollaborationRun["triggerSource"];
+  usage: { inputTokens: number; outputTokens: number } | null;
+  workspaceId: string;
+} {
+  return {
+    adoption: run.adoption,
+    completedAtUnixMs: unixMsFromIsoTimestamp(run.completedAt),
+    contextScope: run.contextScope ?? null,
+    durationMs: run.durationMs ?? null,
+    failureReason: run.failureReason ?? null,
+    id: run.id,
+    mode: run.mode,
+    model: run.model ?? null,
+    modelPlanId: run.modelPlanId ?? null,
+    resultText: run.resultText ?? null,
+    sourceSessionId: run.sourceSessionId ?? null,
+    startedAtUnixMs: unixMsFromIsoTimestamp(run.startedAt),
+    status: run.status,
+    targetAgentTargetId: run.targetAgentTargetId ?? null,
+    targetSessionId: run.targetSessionId ?? null,
+    triggerReason: run.triggerReason ?? null,
+    triggerSource: run.triggerSource,
+    usage: run.usage
+      ? {
+          inputTokens: run.usage.inputTokens,
+          outputTokens: run.usage.outputTokens
+        }
+      : null,
+    workspaceId: run.workspaceId
+  };
+}
+
+function unixMsFromIsoTimestamp(
+  value: string | null | undefined
+): number | null {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) {
+    return null;
+  }
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 }

@@ -35,6 +35,7 @@ import {
 import { AgentHandoffMenu } from "./AgentHandoffMenu";
 
 interface Props {
+  workspaceId: string;
   labels: AgentComposerProps["labels"];
   provider: AgentComposerProps["provider"];
   composerSettings: AgentComposerProps["composerSettings"];
@@ -71,9 +72,11 @@ interface Props {
   onSettingsChange: AgentComposerProps["onSettingsChange"];
   onSubmit: AgentComposerProps["onSubmit"];
   onClearGoalMode: () => void;
+  draftPrompt: string;
 }
 
 export function ComposerFooter({
+  workspaceId: _workspaceId,
   labels,
   provider,
   composerSettings,
@@ -109,7 +112,8 @@ export function ComposerFooter({
   onMentionPaletteButton: handleMentionPaletteButton,
   onSettingsChange,
   onSubmit,
-  onClearGoalMode: clearGoalModeBadge
+  onClearGoalMode: clearGoalModeBadge,
+  draftPrompt: _draftPrompt
 }: Props) {
   const showSettingsLoadingPlaceholders = composerSettings.isSettingsLoading;
   return (

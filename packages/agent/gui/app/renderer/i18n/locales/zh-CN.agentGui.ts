@@ -5,6 +5,7 @@ import { zhCNAgentGuiModelPlans } from "./zh-CN.agentGuiModelPlans.ts";
 import { zhCNAgentGuiRuntimeNotices } from "./zh-CN.agentGuiRuntimeNotices.ts";
 import { zhCNAgentGuiSlashPalette } from "./zh-CN.agentGuiSlashPalette.ts";
 import { zhCNAgentGuiSessionActions } from "./zh-CN.agentGuiSessionActions.ts";
+import { zhCNAgentGuiCollaboration } from "./zh-CN.agentGuiCollaboration.ts";
 
 export const zhCNAgentGui = {
   initialPlaceholder: "输入 @ 引用会话、文件、任务和应用",
@@ -661,7 +662,6 @@ export const zhCNAgentGui = {
   provenanceFilterMembers: "成员",
   provenanceFilterReset: "重置",
   mentionFilterSession: "会话",
-  mentionFilterCollab: "协作",
   mentionFilterIssue: "任务",
   mentionKindAgent: "智能体",
   mentionKindApp: "应用",
@@ -676,10 +676,8 @@ export const zhCNAgentGui = {
   mentionGroupApps: "应用",
   mentionGroupAgents: "智能体",
   mentionGroupMySessions: "我的会话",
-  mentionGroupCollabSessions: "协作会话",
   mentionGroupIssues: "任务",
   mentionEmptyMySessions: "暂无会话",
-  mentionEmptyCollabSessions: "暂无协作会话",
   mentionEmptyApps: "暂无应用",
   mentionEmptyAgents: "暂无可用智能体",
   mentionEmptyIssues: "暂无任务",
@@ -708,8 +706,8 @@ export const zhCNAgentGui = {
     taskContentLabel: "任务内容",
     taskTitleLabel: "任务标题"
   },
-  mentionCollaboratorFallback: "协作者",
   syncPending: "已保存到本地，正在同步到云端",
   syncSynced: "已同步到云端",
-  syncFailed: "云端同步失败"
+  syncFailed: "云端同步失败",
+  ...zhCNAgentGuiCollaboration
 } as const;

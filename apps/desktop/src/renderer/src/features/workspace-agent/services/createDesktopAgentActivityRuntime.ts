@@ -483,6 +483,15 @@ export function createDesktopAgentActivityRuntime(
       : {}),
     renameSession: (input) =>
       workspaceAgentActivityService.renameSession(input),
+    ...(workspaceAgentActivityService.setCollaborationAdoption
+      ? {
+          setCollaborationAdoption: (
+            input: Parameters<
+              NonNullable<AgentActivityRuntime["setCollaborationAdoption"]>
+            >[0]
+          ) => workspaceAgentActivityService.setCollaborationAdoption!(input)
+        }
+      : {}),
     async setSessionPinned(input) {
       const session =
         await workspaceAgentActivityService.setSessionPinned(input);

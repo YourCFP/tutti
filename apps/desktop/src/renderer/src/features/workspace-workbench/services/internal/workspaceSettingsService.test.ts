@@ -971,6 +971,18 @@ function createWorkspaceSettingsClient(
       throw new Error("not used");
     },
     deleteWorkspaceAgent: async () => {},
+    listAutomationRules: async () => [],
+    getAutomationTargetCatalog: async () => ({
+      permissionModes: [],
+      tools: []
+    }),
+    createAutomationRule: async () => {
+      throw new Error("not used");
+    },
+    updateAutomationRule: async () => {
+      throw new Error("not used");
+    },
+    deleteAutomationRule: async () => {},
     setSystemAgentTargetEnabled: async () => {
       throw new Error("not used");
     },

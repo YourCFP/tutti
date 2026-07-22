@@ -40,7 +40,17 @@ func TestSQLiteStoreModelPlanRoundTrip(t *testing.T) {
 		APIKey:       "sk-secret-value",
 		BaseURL:      "https://open.volcengineapi.example/v1",
 		Models: []modelplanbiz.Model{
-			{ID: "doubao-seed-code", Name: "Doubao Seed Code"},
+			{
+				ID:   "doubao-seed-code",
+				Name: "Doubao Seed Code",
+				Pricing: &modelplanbiz.ModelPricing{
+					Currency:                   "USD",
+					InputMicrosPerMillion:      100,
+					OutputMicrosPerMillion:     200,
+					CacheReadMicrosPerMillion:  30,
+					CacheWriteMicrosPerMillion: 40,
+				},
+			},
 		},
 		DefaultModel: "doubao-seed-code",
 		Enabled:      true,
@@ -66,11 +76,17 @@ func TestSQLiteStoreModelPlanRoundTrip(t *testing.T) {
 	if loaded.APIKey != "sk-secret-value" {
 		t.Fatalf("GetModelPlan() api key = %q, want decrypted secret", loaded.APIKey)
 	}
+	if loaded.Revision != 1 {
+		t.Fatalf("GetModelPlan() revision = %d, want 1", loaded.Revision)
+	}
 	if loaded.Protocol != modelplanbiz.ProtocolAnthropic || loaded.TemplateKind != modelplanbiz.TemplateCodingPlan {
 		t.Fatalf("GetModelPlan() protocol/template = %q/%q", loaded.Protocol, loaded.TemplateKind)
 	}
 	if len(loaded.Models) != 1 || loaded.Models[0].ID != "doubao-seed-code" {
 		t.Fatalf("GetModelPlan() models = %#v", loaded.Models)
+	}
+	if loaded.Models[0].Pricing == nil || loaded.Models[0].Pricing.OutputMicrosPerMillion != 200 {
+		t.Fatalf("GetModelPlan() pricing = %#v, want persisted pricing", loaded.Models[0].Pricing)
 	}
 	if outcome, ok := loaded.Detection.StageOutcome(modelplanbiz.StageNetwork); !ok || outcome.Status != modelplanbiz.StagePassed {
 		t.Fatalf("GetModelPlan() detection = %#v", loaded.Detection)
@@ -93,11 +109,43 @@ func TestSQLiteStoreModelPlanRoundTrip(t *testing.T) {
 		t.Fatalf("ListModelPlans() len = %d, want 1", len(plans))
 	}
 
+	loaded.Revision = 2
+	loaded.APIKey = "sk-rotated-value"
+	loaded.BaseURL = "https://rotated.example/v1"
+	loaded.UpdatedAt = now.Add(time.Minute)
+	if err := store.PutModelPlan(ctx, loaded); err != nil {
+		t.Fatalf("PutModelPlan(revision 2) error = %v", err)
+	}
+	current, err := store.GetModelPlan(ctx, "ws-plans", "mp-test")
+	if err != nil {
+		t.Fatalf("GetModelPlan(revision 2) error = %v", err)
+	}
+	if current.Revision != 2 || current.APIKey != "sk-rotated-value" || current.BaseURL != "https://rotated.example/v1" {
+		t.Fatalf("current plan = revision %d key %q url %q", current.Revision, current.APIKey, current.BaseURL)
+	}
+	historical, err := store.GetModelPlanRevision(ctx, "ws-plans", "mp-test", 1)
+	if err != nil {
+		t.Fatalf("GetModelPlanRevision(1) error = %v", err)
+	}
+	if historical.Revision != 1 || historical.APIKey != "sk-secret-value" || historical.BaseURL != "https://open.volcengineapi.example/v1" {
+		t.Fatalf("historical plan = revision %d key %q url %q", historical.Revision, historical.APIKey, historical.BaseURL)
+	}
+	var historicalCiphertext string
+	if err := store.readDB.QueryRowContext(ctx, `SELECT api_key_ciphertext FROM model_plan_revisions WHERE plan_id = 'mp-test' AND revision = 1`).Scan(&historicalCiphertext); err != nil {
+		t.Fatalf("read historical ciphertext error = %v", err)
+	}
+	if historicalCiphertext == "" || historicalCiphertext == "sk-secret-value" {
+		t.Fatalf("historical ciphertext = %q, want encrypted value", historicalCiphertext)
+	}
+
 	if err := store.DeleteModelPlan(ctx, "ws-plans", "mp-test"); err != nil {
 		t.Fatalf("DeleteModelPlan() error = %v", err)
 	}
 	if _, err := store.GetModelPlan(ctx, "ws-plans", "mp-test"); !errors.Is(err, ErrModelPlanNotFound) {
 		t.Fatalf("GetModelPlan() after delete error = %v, want ErrModelPlanNotFound", err)
+	}
+	if preserved, err := store.GetModelPlanRevision(ctx, "ws-plans", "mp-test", 1); err != nil || preserved.APIKey != "sk-secret-value" {
+		t.Fatalf("GetModelPlanRevision() after current delete = %#v, %v", preserved, err)
 	}
 	if err := store.DeleteModelPlan(ctx, "ws-plans", "mp-test"); !errors.Is(err, ErrModelPlanNotFound) {
 		t.Fatalf("DeleteModelPlan() second delete error = %v, want ErrModelPlanNotFound", err)
@@ -130,6 +178,9 @@ INSERT INTO managed_model_provider_credentials (
 	if err := store.applyAgentModelBindingsV1(ctx); err != nil {
 		t.Fatalf("applyAgentModelBindingsV1() error = %v", err)
 	}
+	if err := store.applyModelPlanRevisionsV1(ctx); err != nil {
+		t.Fatalf("applyModelPlanRevisionsV1() error = %v", err)
+	}
 
 	plan, err := store.GetModelPlan(ctx, "ws-legacy", "mp-migrated-anthropic")
 	if err != nil {
@@ -152,6 +203,13 @@ INSERT INTO managed_model_provider_credentials (
 	}
 	if plan.FirstUse.Status != modelplanbiz.FirstUsePending {
 		t.Fatalf("migrated plan first use = %q, want pending", plan.FirstUse.Status)
+	}
+	if plan.Revision != 1 {
+		t.Fatalf("migrated plan revision = %d, want 1", plan.Revision)
+	}
+	historical, err := store.GetModelPlanRevision(ctx, "ws-legacy", "mp-migrated-anthropic", 1)
+	if err != nil || historical.APIKey != "legacy-key" {
+		t.Fatalf("migrated plan revision = %#v, %v", historical, err)
 	}
 	if plan.Status() != modelplanbiz.StatusUndetected {
 		t.Fatalf("migrated plan status = %q, want undetected", plan.Status())
@@ -207,6 +265,9 @@ WHERE workspace_id = 'ws-retry' AND provider_id = 'openai'
 	}
 	if err := store.applyAgentModelBindingsV1(ctx); err != nil {
 		t.Fatalf("retry applyAgentModelBindingsV1() error = %v", err)
+	}
+	if err := store.applyModelPlanRevisionsV1(ctx); err != nil {
+		t.Fatalf("retry applyModelPlanRevisionsV1() error = %v", err)
 	}
 	if _, err := store.GetModelPlan(ctx, "ws-retry", "mp-migrated-openai"); err != nil {
 		t.Fatalf("GetModelPlan(retried migration) error = %v", err)
@@ -315,6 +376,7 @@ func resetModelPlanMigrations(t *testing.T, store *SQLiteStore) {
 	for _, statement := range []string{
 		`DROP TABLE agent_target_model_bindings`,
 		`DROP TABLE model_plan_first_use_candidates`,
+		`DROP TABLE model_plan_revisions`,
 		`DROP TABLE model_plans`,
 	} {
 		if _, err := store.writeDB.ExecContext(ctx, statement); err != nil {
@@ -324,7 +386,7 @@ func resetModelPlanMigrations(t *testing.T, store *SQLiteStore) {
 	if _, err := store.writeDB.ExecContext(ctx, `
 DELETE FROM tuttid_schema_migrations
 WHERE id IN (?, ?)
-`, schemaMigrationModelPlansV1, schemaMigrationAgentModelBindingsV1); err != nil {
+`, schemaMigrationModelPlansV1, schemaMigrationAgentModelBindingsV1, schemaMigrationModelPlanRevisionsV1); err != nil {
 		t.Fatalf("reset model plan migration markers error = %v", err)
 	}
 }

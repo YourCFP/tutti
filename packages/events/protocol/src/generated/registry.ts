@@ -10,6 +10,10 @@ import type {
 
 export const businessEventTopicAgentActivityUpdated =
   "agent.activity.updated" as const;
+export const businessEventTopicAgentAutomationRulesChanged =
+  "agent.automation.rules.changed" as const;
+export const businessEventTopicAgentCollaborationUpdated =
+  "agent.collaboration.updated" as const;
 export const businessEventTopicAgentModelCatalogInvalidated =
   "agent.model.catalog.invalidated" as const;
 export const businessEventTopicAgentModelConfigurationChanged =
@@ -45,12 +49,26 @@ export interface BusinessEventDefinition {
   scope: BusinessEventScopeName;
 }
 
-export const businessEventCatalogRevision = "sha256:2ae80992d01fdabf" as const;
+export const businessEventCatalogRevision = "sha256:e235d56c79f0ab66" as const;
 
 export const businessEventDefinitions = [
   {
     topic: "agent.activity.updated",
     version: 2,
+    direction: "server->client",
+    owner: "agent",
+    scope: "workspace"
+  },
+  {
+    topic: "agent.automation.rules.changed",
+    version: 1,
+    direction: "server->client",
+    owner: "agent",
+    scope: "workspace"
+  },
+  {
+    topic: "agent.collaboration.updated",
+    version: 1,
     direction: "server->client",
     owner: "agent",
     scope: "workspace"
@@ -152,6 +170,20 @@ export const businessEventDefinitionByTopic = {
   "agent.activity.updated": {
     topic: "agent.activity.updated",
     version: 2,
+    direction: "server->client",
+    owner: "agent",
+    scope: "workspace"
+  },
+  "agent.automation.rules.changed": {
+    topic: "agent.automation.rules.changed",
+    version: 1,
+    direction: "server->client",
+    owner: "agent",
+    scope: "workspace"
+  },
+  "agent.collaboration.updated": {
+    topic: "agent.collaboration.updated",
+    version: 1,
     direction: "server->client",
     owner: "agent",
     scope: "workspace"

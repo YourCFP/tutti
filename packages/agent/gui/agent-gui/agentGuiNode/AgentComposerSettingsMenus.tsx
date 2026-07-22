@@ -27,6 +27,7 @@ import { requiresFullAccessSafetyConfirmation } from "./model/agentPermissionMod
 import { acknowledgeCodexFullAccessWarning } from "./view/agentFullAccessWarningPreference";
 import type { AgentComposerSettingsMenuLabels } from "./model/composerSettingsMenuModel";
 import styles from "./AgentGUINode.styles";
+import { ComposerOptionInfoTooltip } from "./AgentComposerModelReasoningDropdown";
 
 export type { AgentComposerSettingsMenuLabels } from "./model/composerSettingsMenuModel";
 
@@ -36,7 +37,6 @@ export {
   type AgentProjectPathChangeMetadata
 } from "./AgentComposerProjectMenu";
 export { AgentModelReasoningDropdown } from "./AgentComposerModelReasoningDropdown";
-import { ComposerOptionInfoTooltip } from "./AgentComposerModelReasoningDropdown";
 export function AgentPermissionModeDropdown({
   composerSettings,
   disabled = false,

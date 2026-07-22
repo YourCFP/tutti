@@ -5,7 +5,9 @@ import type {
 } from "@preload/types";
 import type {
   AgentTarget,
+  AutomationRule,
   DeletedAgentConversationPurgeResult,
+  PutAutomationRuleRequest,
   PutWorkspaceAgentRequest,
   TuttidClient
 } from "@tutti-os/client-tuttid-ts";
@@ -52,6 +54,16 @@ interface ClearWorkspaceAgentSessionsResponse {
 }
 
 export type PutWorkspaceAgentInput = PutWorkspaceAgentRequest;
+export type PutAutomationRuleInput = PutAutomationRuleRequest;
+
+/**
+ * Permission-mode and tool option catalogs resolved from one target Agent's
+ * composer capability directory.
+ */
+export interface AutomationTargetCatalogResult {
+  permissionModes: { id: string; label: string }[];
+  tools: { id: string; label: string }[];
+}
 
 export interface PutModelPlanInput {
   /** Omitted keeps the stored credential on update. */
@@ -157,6 +169,25 @@ export interface DesktopWorkspaceSettingsClient {
     workspaceID: string,
     workspaceAgentID: string
   ): Promise<void>;
+  listAutomationRules(workspaceID: string): Promise<AutomationRule[]>;
+  getAutomationTargetCatalog(
+    workspaceID: string,
+    provider: string,
+    agentTargetID: string
+  ): Promise<AutomationTargetCatalogResult>;
+  updateAutomationRule(
+    workspaceID: string,
+    automationRuleID: string,
+    input: PutAutomationRuleInput
+  ): Promise<AutomationRule>;
+  createAutomationRule(
+    workspaceID: string,
+    input: PutAutomationRuleInput
+  ): Promise<AutomationRule>;
+  deleteAutomationRule(
+    workspaceID: string,
+    automationRuleID: string
+  ): Promise<void>;
   listModelPlans(workspaceID: string): Promise<WorkspaceModelPlan[]>;
   createModelPlan(
     workspaceID: string,
@@ -201,12 +232,17 @@ export function createDesktopWorkspaceSettingsClient(input: {
   runtimeApi: DesktopRuntimeApi;
   tuttidClient: Pick<
     TuttidClient,
+    | "createAutomationRule"
     | "createWorkspaceAgent"
+    | "deleteAutomationRule"
     | "deleteWorkspaceAgent"
+    | "getAgentProviderComposerOptions"
     | "listAgentTargets"
+    | "listAutomationRules"
     | "listWorkspaceAgents"
     | "purgeDeletedAgentConversations"
     | "setSystemAgentTargetEnabled"
+    | "updateAutomationRule"
     | "updateWorkspaceAgent"
   >;
 }): DesktopWorkspaceSettingsClient {
@@ -264,6 +300,43 @@ export function createDesktopWorkspaceSettingsClient(input: {
       await input.tuttidClient.deleteWorkspaceAgent(
         workspaceID,
         workspaceAgentID
+      );
+    },
+    async listAutomationRules(workspaceID) {
+      return (await input.tuttidClient.listAutomationRules(workspaceID)).rules;
+    },
+    async getAutomationTargetCatalog(workspaceID, provider, agentTargetID) {
+      const options = await input.tuttidClient.getAgentProviderComposerOptions(
+        provider as AgentTarget["provider"],
+        { agentTargetId: agentTargetID, workspaceId: workspaceID }
+      );
+      return {
+        permissionModes: options.permissionConfig.modes.map((mode) => ({
+          id: mode.id,
+          label: mode.label
+        })),
+        tools: options.capabilityCatalog
+          .filter(
+            (option) =>
+              option.kind !== "skill" && option.status !== "unsupported"
+          )
+          .map((option) => ({ id: option.id, label: option.label }))
+      };
+    },
+    async createAutomationRule(workspaceID, body) {
+      return await input.tuttidClient.createAutomationRule(workspaceID, body);
+    },
+    async updateAutomationRule(workspaceID, automationRuleID, body) {
+      return await input.tuttidClient.updateAutomationRule(
+        workspaceID,
+        automationRuleID,
+        body
+      );
+    },
+    async deleteAutomationRule(workspaceID, automationRuleID) {
+      await input.tuttidClient.deleteAutomationRule(
+        workspaceID,
+        automationRuleID
       );
     },
     setSystemAgentTargetEnabled(agentTargetID, enabled) {

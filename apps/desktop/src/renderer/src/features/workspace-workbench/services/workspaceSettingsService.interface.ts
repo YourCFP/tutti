@@ -34,6 +34,7 @@ import type {
   WorkspaceSettingsGeneralFocusAnchor,
   WorkspaceSettingsSectionID,
   WorkspaceAgentDraft,
+  WorkspaceAutomationRuleDraft,
   WorkspaceModelPlanDraft,
   WorkspaceModelPlanDraftSeed
 } from "./workspaceSettingsTypes";
@@ -71,6 +72,20 @@ export interface IWorkspaceAgentsController {
  * Model access plan operations exposed by the settings service. All state
  * lives on the settings store's `modelPlans` slice.
  */
+export interface IWorkspaceAutomationRulesController {
+  beginDraft(): void;
+  beginEditRule(automationRuleID: string): void;
+  cancelDeleteRule(): void;
+  cancelDraft(): void;
+  confirmDeleteRule(automationRuleID: string): Promise<void>;
+  refresh(): Promise<void>;
+  requestDeleteRule(automationRuleID: string): void;
+  retryTargetCatalog(): Promise<void>;
+  saveDraft(): Promise<void>;
+  selectDraftTarget(targetAgentID: string): Promise<void>;
+  updateDraft(patch: Partial<WorkspaceAutomationRuleDraft>): void;
+}
+
 export interface IWorkspaceModelPlansController {
   beginDraft(seed: WorkspaceModelPlanDraftSeed): void;
   beginEditPlan(planID: string): void;
@@ -103,6 +118,7 @@ export interface WorkspaceSettingsOpenOptions {
 export interface IWorkspaceSettingsService {
   readonly _serviceBrand: undefined;
   readonly agents: IWorkspaceAgentsController;
+  readonly automationRules: IWorkspaceAutomationRulesController;
   readonly modelPlans: IWorkspaceModelPlansController;
   readonly store: WorkspaceSettingsReadableStoreState;
 

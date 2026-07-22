@@ -2,7 +2,8 @@ import { proxy } from "valtio";
 import type {
   WorkspaceSettingsModelPlansMutableState,
   WorkspaceSettingsStoreState,
-  WorkspaceSettingsWorkspaceAgentsMutableState
+  WorkspaceSettingsWorkspaceAgentsMutableState,
+  WorkspaceSettingsAutomationRulesMutableState
 } from "../workspaceSettingsTypes";
 import { readDeveloperPanelVisible } from "./developerPanelVisibility.ts";
 
@@ -17,6 +18,21 @@ export function createWorkspaceSettingsAgentsState(): WorkspaceSettingsWorkspace
     loadFailed: false,
     loading: false,
     saving: false
+  };
+}
+
+export function createWorkspaceSettingsAutomationRulesState(): WorkspaceSettingsAutomationRulesMutableState {
+  return {
+    confirmingDeleteRuleID: null,
+    deletingRuleID: null,
+    draft: null,
+    feedback: null,
+    loadFailed: false,
+    loading: false,
+    rules: [],
+    saving: false,
+    targetCatalog: null,
+    targetOptions: []
   };
 }
 
@@ -56,6 +72,7 @@ export function createWorkspaceSettingsStore(): WorkspaceSettingsStoreState {
     agentFocusProvider: null,
     agentFocusRequestID: 0,
     agents: createWorkspaceSettingsAgentsState(),
+    automationRules: createWorkspaceSettingsAutomationRulesState(),
     developerPanelVisible: readDeveloperPanelVisible(),
     developerLogs: {
       clearing: false,

@@ -40,6 +40,8 @@ type DaemonAPI struct {
 	WorkspaceAgentService     WorkspaceAgentService
 	AgentModelBindingService  AgentModelBindingService
 	ModelPolicyService        ModelPolicyService
+	CollaborationRunService   CollaborationRunService
+	AutomationRuleService     AutomationRuleService
 	AccountService            AccountService
 	EventStreamService        EventStreamService
 	WorkspaceService          workspaceapi.CatalogService
