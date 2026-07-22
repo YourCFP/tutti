@@ -37,6 +37,7 @@ function hasInlineOverflow(element: HTMLElement | null): boolean {
 interface UseComposerLayoutInput {
   isHeroLayout: boolean;
   inputDisabled: boolean;
+  projectMissingProbeEnabled: boolean;
   showFileMentionPalette: boolean;
   showFloatingCommandMenu: boolean;
   previewMode: boolean;
@@ -62,6 +63,7 @@ interface UseComposerLayoutInput {
 export function useComposerLayout({
   isHeroLayout,
   inputDisabled,
+  projectMissingProbeEnabled,
   showFileMentionPalette,
   showFloatingCommandMenu,
   previewMode,
@@ -90,6 +92,7 @@ export function useComposerLayout({
   const showHeroProjectSelector = isHeroLayout;
   const showProjectRow = isHeroLayout;
   const showProjectMissingProbe =
+    projectMissingProbeEnabled &&
     !showProjectRow &&
     Boolean(composerSettings.projectLocked) &&
     selectedProjectPath !== "" &&

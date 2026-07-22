@@ -220,6 +220,49 @@ test("reference source picker renders shared folder icons and content errors", a
       null
     );
 
+    (
+      globalThis as { __referenceSourcePickerView?: unknown }
+    ).__referenceSourcePickerView = {
+      ...createFolderOnlyView(folderNode),
+      isConfirming: true
+    };
+    await act(async () => {
+      root?.render(
+        createElement(ReferenceSourcePicker, {
+          aggregator: {},
+          copy: createCopy(),
+          onClose() {
+            pickerCloseCount += 1;
+          },
+          onConfirm() {},
+          open: true,
+          workspaceId: "workspace-reference-confirming-close-test"
+        } as unknown as ReferenceSourcePickerProps)
+      );
+    });
+
+    const pickerBackdrop =
+      dom.window.document.querySelector('[role="dialog"]')?.parentElement;
+    assert.ok(pickerBackdrop);
+    await act(async () => {
+      pickerBackdrop.dispatchEvent(
+        new dom.window.MouseEvent("click", { bubbles: true })
+      );
+      dom.window.document.dispatchEvent(
+        new dom.window.KeyboardEvent("keydown", {
+          bubbles: true,
+          key: "Escape"
+        })
+      );
+    });
+    assert.equal(pickerCloseCount, 0);
+    assert.equal(
+      dom.window.document.querySelector<HTMLButtonElement>(
+        'button[aria-label="actions.cancel"]'
+      )?.disabled,
+      true
+    );
+
     const focusedFolderNode = folder("focused-folder", "Focused folder");
     const fileNode = file("workspace-file", "Workspace file");
     const createdDirectoryParents: Array<ReferenceNode | null> = [];

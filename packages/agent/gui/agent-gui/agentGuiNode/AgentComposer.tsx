@@ -32,6 +32,7 @@ import {
 } from "./composer/AgentComposerChrome";
 import { useAgentMentionSearchController } from "./composer/useAgentMentionSearchController";
 import { useAgentQuickPromptLibrary } from "./composer/quickPrompts/useAgentQuickPromptLibrary";
+import { useScopedProjectMissingState } from "./composer/useScopedProjectMissingState";
 import type { AgentComposerProps } from "./composer/AgentComposer.types";
 import {
   agentComposerDraftAttachmentProjection,
@@ -110,6 +111,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     isInterrupting,
     isSendingTurn,
     isSubmittingPrompt,
+    projectMissingProbeEnabled = true,
     uiLanguage = "en",
     isActive = true,
     previewMode = false,
@@ -187,7 +189,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
   const [fileMentionSuggestion, setFileMentionSuggestion] =
     useState<AgentFileMentionSuggestionState | null>(null);
   const [isSelectedProjectMissing, setIsSelectedProjectMissing] =
-    useState(false);
+    useScopedProjectMissingState(draftScopeKey);
   const [isSlashStatusPanelOpen, setIsSlashStatusPanelOpen] = useState(false);
   const slashStatusAgentSessionId = slashStatus?.agentSessionId ?? null;
   const previousSlashStatusAgentSessionIdRef = useRef<string | null>(
@@ -546,6 +548,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
   const layout = useComposerLayout({
     isHeroLayout,
     inputDisabled,
+    projectMissingProbeEnabled,
     showFileMentionPalette,
     showFloatingCommandMenu,
     previewMode,

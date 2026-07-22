@@ -58,7 +58,10 @@ is unknown and must remain recoverable.
 historical sessions persist settings only, while live sessions update the
 runtime first and persist the resulting settings only after the runtime
 accepts the change. Provider-specific model, reasoning, and speed normalization
-stays behind `SettingsPolicy`. `UpdatePin` mutates canonical metadata only.
+stays behind `SettingsPolicy`. A model change invalidates the previous model's
+context-window usage in both the live observation and canonical metadata;
+provider quotas remain valid and are preserved. `UpdatePin` mutates canonical
+metadata only.
 `DeleteSession` and `DeleteSessions` enter one deletion coordinator. The
 canonical store first resolves the complete root/child closure; Host acquires
 the shared session-mutation actor and session locks in stable order, closes

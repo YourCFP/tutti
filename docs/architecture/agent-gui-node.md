@@ -298,6 +298,14 @@ The busy-session prompt queue is ephemeral durable-intent coordination in the wo
 
 The Rail query cache stores section metadata, ordered Session IDs, cursors, and totals only. Session entities always come from the engine.
 
+Hosts install the complete query/mutation cohort from
+`@tutti-os/agent-gui/conversation-rail-runtime`; the shared factory owns the
+workspace-scoped cache lifetime while transport adapters own only protocol
+mapping and authorization. Batch deletion requires both authoritative section
+candidate lookup and the batch mutation. AgentGUI fails that paired capability
+closed when either method is absent, so the view cannot expose an action that
+will resolve to an empty optional-method path.
+
 Presentation-invisible Sessions remain canonical engine entities and stay
 available through exact Session selectors for trusted open, reconcile, and
 command flows. Plural consumer selectors exclude them before Rail and Message
@@ -429,6 +437,12 @@ durable default only while that intent is unresolved. Entering the unscoped
 conversation section resolves the intent to no project, so remounting the hero
 composer or refreshing the project list cannot restore a previous project.
 
+A locked Session cwd existence check is UI-local observation, not Session
+truth. AgentGUI starts it only after pending creation has resolved, scopes its
+result to the exact Session composer identity, and discards callbacks from a
+previous selection. A host probe failure leaves existence unknown; only a
+successful check that confirms absence may render missing-project chrome.
+
 The empty-home carousel may measure its placeholder synchronously when live
 alignment first activates. Later React updates coalesce alignment into the next
 animation frame; ResizeObserver and MutationObserver keep layout roots current.
@@ -442,7 +456,7 @@ duplicate global resize measurement source.
 
 External OS file paste and drop enter one host-injected classification boundary before draft attachment creation. The synchronous `resolveExternalPromptEntries` port classifies each source index as a live `WorkspaceFileReference` or a snapshot requiring preparation. AgentGUI owns ordered mention insertion and draft reconciliation: references become ordinary file/folder mentions and never consume prompt-asset slots, while only `prepare` entries create pending attachment state and enter `prepareExternalPromptFiles`. A host without the resolver prepares every external entry. The preparer owns native-path or byte lookup, size enforcement, persistence, and remote transport; each prepared input has one `sourceIndex` result, one failure must not fail siblings, successful results include a provider-readable `path` or `url`, and failures carry typed error codes. Hosts that classify path-backed entries as references must reject any such entry that unexpectedly reaches preparation, so classification failure cannot silently create a duplicate snapshot.
 
-Workspace picker results and internal workspace-reference drags remain live references. They enter the rich-text document as mentions and never pass through external-file preparation. Removing an inline external-file mention removes its draft intent; a later async result must not revive it or lose its error reason when the draft is in another scope.
+Workspace picker results and internal workspace-reference drags remain live references. They enter the rich-text document as mentions and never pass through external-file preparation. A picker source whose selected locator is not yet consumer-readable may perform source-owned confirmation preparation before the mention is inserted; the picker waits in a loading state, publishes no partial result on failure, and remains open for retry. This confirmation transaction belongs to the reference source contract and is distinct from the external OS file preparation pipeline. Removing an inline external-file mention removes its draft intent; a later async result must not revive it or lose its error reason when the draft is in another scope.
 
 ### 6.2 Public node contract
 

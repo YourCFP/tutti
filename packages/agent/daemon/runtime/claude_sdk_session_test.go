@@ -203,6 +203,17 @@ func TestClaudeCodeSDKAdapterProviderLaunchPrepareMutatesSpecAndCleansUpOnClose(
 	if !containsString(transport.spec.Env, "SESSION_ENV=1") || !containsString(transport.spec.Env, "HOOK_ENV=1") {
 		t.Fatalf("Env = %#v, want session and hook env", transport.spec.Env)
 	}
+	requests := conn.sentRequests()
+	if len(requests) != 1 || requests[0].Type != "start" {
+		t.Fatalf("sidecar requests = %#v, want start", requests)
+	}
+	if requests[0].Payload["cwd"] != "/prepared/claude-sdk" {
+		t.Fatalf("start payload cwd = %#v, want prepared cwd", requests[0].Payload["cwd"])
+	}
+	startEnv := payloadMap(requests[0].Payload, "env")
+	if startEnv["SESSION_ENV"] != "1" || startEnv["HOOK_ENV"] != "1" {
+		t.Fatalf("start payload env = %#v, want session and hook env", startEnv)
+	}
 
 	if err := adapter.Close(context.Background(), session); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -210,7 +221,7 @@ func TestClaudeCodeSDKAdapterProviderLaunchPrepareMutatesSpecAndCleansUpOnClose(
 	if cleanupCalls != 1 {
 		t.Fatalf("cleanup calls after close = %d, want 1", cleanupCalls)
 	}
-	requests := conn.sentRequests()
+	requests = conn.sentRequests()
 	if len(requests) == 0 || requests[len(requests)-1].Type != "close" {
 		t.Fatalf("last sidecar request = %#v, want close handshake", requests)
 	}
@@ -299,11 +310,17 @@ func TestClaudeCodeSDKAdapterStartSendsClaudeProviderMeta(t *testing.T) {
 		}},
 	}
 	adapter := NewClaudeCodeSDKAdapter(&recordingClaudeSDKTransport{conn: conn})
+	adapter.SetProviderLaunchPreparer(func(_ context.Context, input ProviderLaunchPrepareInput) (ProviderLaunchPrepareResult, error) {
+		return ProviderLaunchPrepareResult{
+			Command: input.Command,
+			Env: append(append([]string(nil), input.Env...),
+				claudeSystemPromptFileEnv+"="+systemPromptPath,
+				claudePluginDirEnv+"="+pluginDir,
+			),
+			CWD: input.CWD,
+		}, nil
+	})
 	session := standardTestSession(ProviderClaudeCode)
-	session.Env = []string{
-		claudeSystemPromptFileEnv + "=" + systemPromptPath,
-		claudePluginDirEnv + "=" + pluginDir,
-	}
 	session.Settings = &SessionSettings{
 		Model:            "MiniMax-M2.7",
 		PermissionModeID: "default",
@@ -364,14 +381,29 @@ func TestClaudeCodeSDKAdapterStartSendsClaudeProviderMeta(t *testing.T) {
 func TestClaudeCodeSDKAdapterStartFailsBeforeProcessForMissingClaudeMetaFiles(t *testing.T) {
 	transport := &recordingClaudeSDKTransport{conn: &scriptedClaudeSDKConnection{}}
 	adapter := NewClaudeCodeSDKAdapter(transport)
+	missingSystemPromptPath := filepath.Join(t.TempDir(), "missing.md")
+	cleanupCalls := 0
+	adapter.SetProviderLaunchPreparer(func(_ context.Context, input ProviderLaunchPrepareInput) (ProviderLaunchPrepareResult, error) {
+		return ProviderLaunchPrepareResult{
+			Command: input.Command,
+			Env:     append(append([]string(nil), input.Env...), claudeSystemPromptFileEnv+"="+missingSystemPromptPath),
+			CWD:     input.CWD,
+			Cleanup: func(context.Context) error {
+				cleanupCalls++
+				return nil
+			},
+		}, nil
+	})
 	session := standardTestSession(ProviderClaudeCode)
-	session.Env = []string{claudeSystemPromptFileEnv + "=" + filepath.Join(t.TempDir(), "missing.md")}
 
 	if _, err := adapter.Start(context.Background(), session); err == nil {
 		t.Fatal("Start error = nil, want missing system prompt error")
 	}
 	if transport.spec.Command != nil {
 		t.Fatalf("process spec = %#v, want no sidecar process start on invalid meta", transport.spec)
+	}
+	if cleanupCalls != 1 {
+		t.Fatalf("cleanup calls = %d, want 1 after prepared metadata validation fails", cleanupCalls)
 	}
 
 	pluginTransport := &recordingClaudeSDKTransport{conn: &scriptedClaudeSDKConnection{}}

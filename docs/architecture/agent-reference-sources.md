@@ -48,6 +48,7 @@ desktop source registry
   -> ReferenceSourceAggregator
   -> ReferenceSourcePicker controller/state
   -> shared picker UI
+  -> optional source-owned confirm preparation
   -> selected file or ReferenceHandle
   -> composer mention
   -> workspace-reference runtime resolution when required
@@ -57,6 +58,15 @@ List-style app and issue sources adapt their backend responses through the
 shared `ReferenceListBackend` / `createReferenceListSource` protocol. Local
 files wrap `WorkspaceFileReferenceAdapter` directly. Open, reveal, open-with,
 and preview operations remain source-owned and are delegated back to the host.
+
+A source may implement `prepareSelection()` when `resolveSelection()` returns a
+source-owned locator that the final consumer cannot read directly. Confirmation
+is then an asynchronous transaction: the picker keeps its confirm action in a
+loading state, waits for every selected node to prepare, and publishes the
+prepared references only after all preparations succeed. A failure publishes no
+partial selection, leaves the picker open for retry, and surfaces an error. The
+source owns transport, materialization, and the resulting consumer-readable
+locator; the shared picker must not interpret a host path or capability handle.
 
 The picker source heading is the source-root navigation target. When a source
 does not provide explicit sidebar groups, its root folders may appear as
@@ -254,6 +264,8 @@ cache expires; they do not claim exhaustive history.
   do not present a failed request as an empty artifact set.
 - Keep source-specific transport and absolute host paths outside the shared UI
   package.
+- Never submit a source-owned staging locator as a consumer-readable reference;
+  sources that require materialization must complete it during confirmation.
 - Use `ReferenceHandle` for app/issue groups that should resolve lazily at agent
   execution time; do not expand an entire artifact bundle into prompt text.
 

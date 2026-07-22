@@ -92,7 +92,7 @@ interface Props {
   isSlashStatusPanelOpen: boolean;
   isReviewPickerOpen: boolean;
   isSelectedProjectMissing: boolean;
-  setIsSelectedProjectMissing: Dispatch<SetStateAction<boolean>>;
+  setIsSelectedProjectMissing: (value: boolean) => void;
   setIsPaletteOpen: Dispatch<SetStateAction<boolean>>;
   setHighlightedIndex: Dispatch<SetStateAction<number>>;
   isGoalModeActive: boolean;

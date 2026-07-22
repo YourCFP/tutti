@@ -8,6 +8,23 @@ afterEach(() => {
 });
 
 describe("useComposerLayout", () => {
+  it("does not probe a locked project while its session is still being created", () => {
+    const { result } = renderHook(() =>
+      useComposerLayout(
+        createComposerLayoutInput({
+          projectMissingProbeEnabled: false,
+          composerSettings: {
+            ...createComposerLayoutInput({}).composerSettings,
+            projectLocked: true
+          },
+          selectedProjectPath: "/workspace/project"
+        })
+      )
+    );
+
+    expect(result.current.showProjectMissingProbe).toBe(false);
+  });
+
   it("measures prompt-tip overflow only after ResizeObserver delivers layout", () => {
     const resizeObservers: ResizeObserverMock[] = [];
     class ResizeObserverMock implements ResizeObserver {
@@ -163,6 +180,7 @@ function createComposerLayoutInput(
   return {
     isHeroLayout: false,
     inputDisabled: false,
+    projectMissingProbeEnabled: true,
     showFileMentionPalette: false,
     showFloatingCommandMenu: false,
     previewMode: false,

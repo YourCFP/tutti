@@ -23,6 +23,187 @@ type JsdomModule = {
 const require = createRequire(import.meta.url);
 const { JSDOM } = require("jsdom") as JsdomModule;
 
+test("reference source picker keeps confirming until selection preparation completes", async () => {
+  const dom = new JSDOM('<!doctype html><div id="root"></div>');
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  const previousHTMLElement = globalThis.HTMLElement;
+  const previousActEnvironment = (
+    globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+  ).IS_REACT_ACT_ENVIRONMENT;
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  (
+    globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+  ).IS_REACT_ACT_ENVIRONMENT = true;
+
+  let root: Root | null = null;
+  try {
+    const container = dom.window.document.getElementById("root");
+    assert.ok(container);
+    let resolvePreparation!: () => void;
+    const preparation = new Promise<void>((resolve) => {
+      resolvePreparation = resolve;
+    });
+    let preparationCount = 0;
+    const baseAggregator = createOpenWithAggregator(async () => []);
+    const aggregator: ReferenceSourceAggregator = {
+      ...baseAggregator,
+      async prepareSelection(_scope, node) {
+        preparationCount += 1;
+        await preparation;
+        return {
+          kind: node.kind,
+          path: "/var/cache/tsh/local-assets/workspace/photo.png",
+          sourceId: node.ref.sourceId
+        };
+      }
+    };
+    let closeCount = 0;
+    let confirmedPaths: string[] = [];
+    let latestView: PickerView | null = null;
+
+    function Harness() {
+      latestView = useReferenceSourcePickerView({
+        aggregator,
+        onClose() {
+          closeCount += 1;
+        },
+        onConfirm(references) {
+          confirmedPaths = references.map((reference) => reference.path);
+        },
+        open: true,
+        workspaceId: "workspace-reference-confirm-preparation"
+      });
+      return null;
+    }
+
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(createElement(Harness));
+      await flushEffects();
+    });
+    const selected = file("opaque-host-handle", "photo.png");
+    await act(async () => {
+      requireLatestView(latestView).toggleSelection(selected);
+    });
+
+    let confirmation!: Promise<void>;
+    let duplicateConfirmation!: Promise<void>;
+    await act(async () => {
+      confirmation = requireLatestView(latestView).confirm();
+      duplicateConfirmation = requireLatestView(latestView).confirm();
+      await Promise.resolve();
+    });
+    assert.equal(requireLatestView(latestView).isConfirming, true);
+    assert.equal(preparationCount, 1);
+    assert.equal(closeCount, 0);
+    assert.deepEqual(confirmedPaths, []);
+
+    await act(async () => {
+      resolvePreparation();
+      await Promise.all([confirmation, duplicateConfirmation]);
+    });
+    assert.equal(requireLatestView(latestView).isConfirming, false);
+    assert.equal(closeCount, 1);
+    assert.deepEqual(confirmedPaths, [
+      "/var/cache/tsh/local-assets/workspace/photo.png"
+    ]);
+  } finally {
+    if (root) {
+      await act(async () => {
+        root?.unmount();
+      });
+    }
+    globalThis.window = previousWindow;
+    globalThis.document = previousDocument;
+    globalThis.HTMLElement = previousHTMLElement;
+    (
+      globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = previousActEnvironment;
+  }
+});
+
+test("reference source picker keeps the dialog open after preparation failure", async () => {
+  const dom = new JSDOM('<!doctype html><div id="root"></div>');
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  const previousHTMLElement = globalThis.HTMLElement;
+  const previousActEnvironment = (
+    globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+  ).IS_REACT_ACT_ENVIRONMENT;
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  (
+    globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+  ).IS_REACT_ACT_ENVIRONMENT = true;
+
+  let root: Root | null = null;
+  try {
+    const container = dom.window.document.getElementById("root");
+    assert.ok(container);
+    const baseAggregator = createOpenWithAggregator(async () => []);
+    const aggregator: ReferenceSourceAggregator = {
+      ...baseAggregator,
+      async prepareSelection() {
+        throw new Error("selection preparation failed");
+      }
+    };
+    let closeCount = 0;
+    let confirmCount = 0;
+    let latestView: PickerView | null = null;
+
+    function Harness() {
+      latestView = useReferenceSourcePickerView({
+        aggregator,
+        onClose() {
+          closeCount += 1;
+        },
+        onConfirm() {
+          confirmCount += 1;
+        },
+        open: true,
+        workspaceId: "workspace-reference-confirm-error"
+      });
+      return null;
+    }
+
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(createElement(Harness));
+      await flushEffects();
+    });
+    await act(async () => {
+      requireLatestView(latestView).toggleSelection(
+        file("opaque-host-handle", "photo.png")
+      );
+    });
+    await act(async () => {
+      await requireLatestView(latestView).confirm();
+    });
+
+    const view = requireLatestView(latestView);
+    assert.equal(view.isConfirming, false);
+    assert.equal(view.confirmError?.message, "selection preparation failed");
+    assert.equal(closeCount, 0);
+    assert.equal(confirmCount, 0);
+  } finally {
+    if (root) {
+      await act(async () => {
+        root?.unmount();
+      });
+    }
+    globalThis.window = previousWindow;
+    globalThis.document = previousDocument;
+    globalThis.HTMLElement = previousHTMLElement;
+    (
+      globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = previousActEnvironment;
+  }
+});
+
 test("reference source picker caches open-with applications by file type", async () => {
   const dom = new JSDOM('<!doctype html><div id="root"></div>');
   const previousWindow = globalThis.window;
@@ -347,6 +528,9 @@ function createOpenWithAggregator(
     resolveSelection(node) {
       return { kind: node.kind, path: node.ref.nodeId };
     },
+    async prepareSelection(_scope, node) {
+      return { kind: node.kind, path: node.ref.nodeId };
+    },
     reveal: async () => {},
     search: async () => ({ entries: [], nextCursor: null })
   };
@@ -386,6 +570,9 @@ function createSidebarAggregator(
     openWithOtherApplication: async () => {},
     readPreview: async () => null,
     resolveSelection(node) {
+      return { kind: node.kind, path: node.ref.nodeId };
+    },
+    async prepareSelection(_scope, node) {
       return { kind: node.kind, path: node.ref.nodeId };
     },
     reveal: async () => {},
