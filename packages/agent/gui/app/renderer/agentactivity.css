@@ -6366,6 +6366,8 @@ button.agent-gui-node__conversation-section-toggle:hover
 
 .agent-gui-node__conversation-item {
   --agent-gui-conversation-actions-width: 72px;
+  --agent-gui-conversation-actions-inset: 4px;
+  --agent-gui-conversation-actions-gap: 8px;
 
   position: relative;
   display: block;
@@ -6410,7 +6412,7 @@ button.agent-gui-node__conversation-section-toggle:hover
   display: grid;
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: var(--agent-gui-conversation-actions-gap);
   align-items: center;
   width: 100%;
   max-width: 100%;
@@ -6452,7 +6454,10 @@ button.agent-gui-node__conversation-section-toggle:hover
   )
   .agent-gui-node__conversation-select {
   grid-template-columns: minmax(0, 1fr) 0;
-  padding-right: calc(var(--agent-gui-conversation-actions-width) + 24px);
+  padding-right: calc(
+    var(--agent-gui-conversation-actions-width) +
+      var(--agent-gui-conversation-actions-inset)
+  );
 }
 
 .agent-gui-node__conversation-item[data-pending-delete="true"]
@@ -6486,7 +6491,7 @@ button.agent-gui-node__conversation-section-toggle:hover
 .agent-gui-node__conversation-actions {
   position: absolute;
   top: 50%;
-  right: 4px;
+  right: var(--agent-gui-conversation-actions-inset);
   z-index: 1;
   display: inline-flex;
   align-items: center;
@@ -9493,6 +9498,7 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   color: var(--text-tertiary);
   transition:
     border-color 140ms ease,
+    outline-color 140ms ease,
     background-color 140ms ease,
     color 140ms ease,
     opacity 140ms ease,
@@ -9504,11 +9510,12 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   opacity: 0.38;
 }
 
-/* "Beta" tag straddling the selected icon's bottom border: its centerline sits
-   on the selected-state stroke, horizontally centered on the icon. */
+/* "Beta" tag straddling the selected icon's stroke: its centerline sits on
+   the avatar's outer edge (the stroke is centered there with a -1px
+   outline offset), horizontally centered on the icon. */
 .agent-gui-node__provider-rail-beta-badge {
   position: absolute;
-  top: calc(100% - 1px);
+  top: 100%;
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 2;
@@ -9527,11 +9534,15 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   color: var(--text-primary);
 }
 
+/* Selected stroke floats 1px outside the 28px icon container: a 2px outline
+   centered on the avatar's outer edge (-1px offset) leaves exactly 1px of
+   transparent gap between the container and the stroke's inner edge. */
 .agent-gui-node__provider-rail-tile[data-selected="true"]
   .agent-gui-node__provider-rail-avatar {
-  border-color: var(--brand-primary, var(--tutti-purple));
+  border-color: transparent;
   background: color-mix(in srgb, var(--background-fronted) 80%, white);
-  box-shadow: 0 0 0 1px color-mix(in srgb, white 45%, transparent);
+  outline: 2px solid var(--brand-primary, var(--tutti-purple));
+  outline-offset: -1px;
   color: var(--brand-primary, var(--tutti-purple));
 }
 

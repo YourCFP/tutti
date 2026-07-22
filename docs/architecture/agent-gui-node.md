@@ -421,6 +421,12 @@ A controller may compose flows but cannot become a second lifecycle state machin
 
 Activation and existing-Session submit share a canonical prompt envelope. Submit eligibility includes text and renderable structured content; an individual composer does not redefine it.
 
+Home-composer project state distinguishes an unresolved durable default from an
+explicit selection whose path may be null. The project selector may apply the
+durable default only while that intent is unresolved. Entering the unscoped
+conversation section resolves the intent to no project, so remounting the hero
+composer or refreshing the project list cannot restore a previous project.
+
 Composer text transactions may publish the current draft, but the draft value
 must not drive synchronous pre-paint geometry reads. The dock observes the
 actual editor, input area, and attachment containers; its initial and
@@ -448,6 +454,12 @@ Workspace picker results and internal workspace-reference drags remain live refe
 | `renderSlots`      | narrow product-neutral presentation slots |
 
 Do not restore flat compatibility props or hide workflow inside a render slot.
+Hosts that render capabilities owned by another device set
+`hostCapabilities.capabilityControlsReadOnly`; AgentGUI keeps owner-supported
+Browser/Computer entries visible but disables their mutation and setup actions.
+Unsupported capabilities remain absent according to the authoritative composer
+capability descriptor. A caller host must not open its local device settings as
+a fallback for a remote owner.
 Host chrome that aligns to AgentGUI's internal layout must consume explicit
 package signals such as `hostActions.onConversationRailLayoutChange`; it must
 not observe package DOM, CSS variables, or class names with

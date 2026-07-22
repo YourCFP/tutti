@@ -299,6 +299,13 @@ invalid desktop protocol data, not a signal to infer membership from cwd or a
 resolved project. Hosts without this optional query may keep a
 loaded-row-only local title filter for previews, but desktop hosts must pass the
 backend query and pagination fields through unchanged.
+The canonical SQLite repository owns the shared root-session query semantics
+for conversation search, target filtering, visibility, stable ordering, and
+cursor pagination. A composing host may pass an explicit authorized Session-id
+set into that repository query; the repository applies it before pagination,
+section totals, and batch-deletion candidate selection. Service and host
+adapters may hydrate or authorize the returned entities, but must not copy the
+filter/sort/page algorithm into transport-specific code.
 Activating a conversation must not by itself call `listSessionSections` again.
 Likewise, active detail provider changes should not reload section first pages.
 Page sessions must be upserted into the workspace engine, while the rail query

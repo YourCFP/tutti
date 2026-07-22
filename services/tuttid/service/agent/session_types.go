@@ -366,6 +366,16 @@ type SessionReader interface {
 	SessionDeleted(ctx context.Context, workspaceID string, agentSessionID string) (bool, error)
 }
 
+type PersistedSessionListPage struct {
+	Sessions   []PersistedSession
+	HasMore    bool
+	NextCursor string
+}
+
+type SessionPageReader interface {
+	ListSessionsPage(context.Context, agentactivitybiz.ListSessionsPageInput) (PersistedSessionListPage, bool, error)
+}
+
 // SessionInitializer synchronously persists the canonical session shell that
 // every successful Create response must expose. In particular, it assigns the
 // immutable railSectionKey before the response leaves the daemon.
