@@ -9528,7 +9528,7 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
 
 .agent-gui-node__provider-rail-tile:not([data-selected="true"])
   .agent-gui-node__provider-rail-avatar {
-  opacity: 0.38;
+  opacity: 1;
 }
 
 /* "Beta" tag straddling the selected icon's stroke: its centerline sits on
