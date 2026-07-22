@@ -7,11 +7,10 @@ import {
   useState,
   type CSSProperties
 } from "react";
-import { ScrollArea } from "@tutti-os/ui-system/components";
+import { Button, ScrollArea } from "@tutti-os/ui-system/components";
 import type { WorkspaceUserProjectI18nRuntime } from "@tutti-os/workspace-user-project/i18n";
 import type { WorkspaceLinkAction } from "../../../actions/workspaceLinkActions";
 import type { UiLanguage } from "../../../contexts/settings/domain/agentSettings";
-import type { AgentPromptContentBlock } from "../../../shared/contracts/dto";
 import type { AgentMessageMarkdownWorkspaceAppIcon } from "../../../shared/AgentMessageMarkdown";
 import { AGENT_GUI_WORKBENCH_OPEN_EXTERNAL_IMPORT_EVENT } from "../../../workbench/contribution";
 import { resolveAgentGuiWorkbenchProviderLabel } from "../../../workbench/providerCatalog";
@@ -36,9 +35,7 @@ import type {
 } from "../AgentGUINodeView";
 import {
   buildAgentConversationHandoffPrompt,
-  commandAppSource,
-  handoffProjectPathForConversation,
-  workspaceAppIconKey
+  handoffProjectPathForConversation
 } from "./agentGUIDetailModelHelpers";
 import { AgentGUIBottomDockPane } from "./AgentGUIBottomDockPane";
 import {
@@ -49,14 +46,15 @@ import {
 import { AgentGUIContentToast } from "./AgentGUIContentToast";
 import { AgentGUIConversationTimelinePane } from "./AgentGUIConversationTimelinePane";
 import {
-  stringValue,
   useOptionalStableEventCallback,
   useStableEventCallback
 } from "./agentGUIViewUtils";
 import styles from "../AgentGUINode.styles";
 import { useAgentGUIDetailScroll } from "./useAgentGUIDetailScroll";
 import { useAgentGUIDetailModel } from "./useAgentGUIDetailModel";
+import { useAgentGUIPlanReviewControls } from "./useAgentGUIPlanReviewControls";
 import type { AgentGUIComposerEngagement } from "../engagement/agentGUIEngagement.types";
+import { TuttiModePlanPanel } from "../../../workspaceWorkflow";
 
 const AGENT_GUI_TIMELINE_SCROLL_AREA_CONTENT_STYLE: CSSProperties = {
   width: "100%",
@@ -106,52 +104,6 @@ export interface AgentGUIDetailPaneProps {
   onRequestComposerFocus: () => void;
   workspaceAppIcons?: readonly AgentMessageMarkdownWorkspaceAppIcon[];
   renderProviderUnavailableState?: AgentGUIProviderUnavailableStateRenderer;
-}
-
-export function mergeWorkspaceAppIconsFromCommands(input: {
-  commands: AgentGUINodeViewModel["composer"]["availableCommands"];
-  workspaceAppIcons: readonly AgentMessageMarkdownWorkspaceAppIcon[];
-  workspaceId: string;
-}): readonly AgentMessageMarkdownWorkspaceAppIcon[] {
-  const seen = new Set(
-    input.workspaceAppIcons.flatMap((icon) => {
-      const appId = icon.appId.trim();
-      const iconUrl = icon.iconUrl?.trim() ?? "";
-      if (!appId || !iconUrl) {
-        return [];
-      }
-      return [
-        workspaceAppIconKey(appId, icon.workspaceId?.trim() ?? ""),
-        workspaceAppIconKey(appId, "")
-      ];
-    })
-  );
-  let next: AgentMessageMarkdownWorkspaceAppIcon[] | null = null;
-  for (const command of input.commands) {
-    const source = commandAppSource(command);
-    if (!source) {
-      continue;
-    }
-    const appId = stringValue(source.appId).trim();
-    const iconUrl = stringValue(source.iconUrl).trim();
-    if (!appId || !iconUrl) {
-      continue;
-    }
-    const key = workspaceAppIconKey(appId, input.workspaceId);
-    if (seen.has(key)) {
-      continue;
-    }
-    if (!next) {
-      next = [...input.workspaceAppIcons];
-    }
-    next.push({
-      appId,
-      iconUrl,
-      workspaceId: input.workspaceId
-    });
-    seen.add(key);
-  }
-  return next ?? input.workspaceAppIcons;
 }
 
 export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
@@ -247,6 +199,27 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     viewModel
   });
   const slashStatus = slashStatusOverride ?? derivedSlashStatus;
+  const {
+    acceptPendingPlan,
+    cancelPendingPlan,
+    handlePlanAssignmentDraftChange,
+    pendingPlanPanel,
+    pendingPlanSubmitting,
+    planAssignmentDrafts,
+    planReviewIntensityDiverged,
+    planReviewSendActive,
+    setTuttiModeActiveAndSettleReview,
+    submitGuidancePromptAndScrollToBottom,
+    submitPromptOrDecidePlan,
+    tuttiModePlanPanels
+  } = useAgentGUIPlanReviewControls({
+    actions,
+    labels,
+    pendingPrependScrollAnchorRef,
+    previewMode,
+    submittedPromptScrollConversationRef,
+    viewModel
+  });
   const handleInterruptCurrentTurn = useCallback(() => {
     actions.interruptCurrentTurn(labels.noRunningResponse);
   }, [actions.interruptCurrentTurn, labels.noRunningResponse]);
@@ -254,6 +227,13 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     actions.submitApprovalOption
   );
   const retryActivation = useStableEventCallback(actions.retryActivation);
+  const retryTuttiModeActivation = useStableEventCallback(
+    actions.retryTuttiModeActivation
+  );
+  const retryInlineNotice =
+    viewModel.composer.tuttiModeUpdateStatus === "failed"
+      ? retryTuttiModeActivation
+      : retryActivation;
   const continueInNewConversation = useStableEventCallback(
     actions.continueInNewConversation
   );
@@ -263,6 +243,9 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   );
   const updateComposerSettings = useStableEventCallback(
     actions.updateComposerSettings
+  );
+  const setTuttiModeOrchestrationIntensity = useStableEventCallback(
+    actions.setTuttiModeOrchestrationIntensity
   );
   const selectHomeComposerAgentTarget = useStableEventCallback(
     actions.selectHomeComposerAgentTarget
@@ -295,45 +278,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     },
     []
   );
-  const submitPrompt = useStableEventCallback(actions.submitPrompt);
   const goalControl = useStableEventCallback(actions.goalControl);
-  const submitGuidancePrompt = useStableEventCallback(
-    actions.submitGuidancePrompt
-  );
-  const requestSubmittedPromptScrollToBottom = useCallback(() => {
-    const activeConversationId = viewModel.rail.activeConversationId;
-    if (!activeConversationId) {
-      return;
-    }
-    submittedPromptScrollConversationRef.current = activeConversationId;
-    pendingPrependScrollAnchorRef.current = null;
-  }, [viewModel.rail.activeConversationId]);
-  const submitPromptAndScrollToBottom = useCallback(
-    (
-      content: AgentPromptContentBlock[],
-      displayPrompt?: string,
-      options?: Parameters<AgentComposerProps["onSubmit"]>[2]
-    ): void => {
-      requestSubmittedPromptScrollToBottom();
-      if (displayPrompt === undefined) {
-        submitPrompt(content, undefined, options);
-        return;
-      }
-      submitPrompt(content, displayPrompt, options);
-    },
-    [requestSubmittedPromptScrollToBottom, submitPrompt]
-  );
-  const submitGuidancePromptAndScrollToBottom = useCallback(
-    (content: AgentPromptContentBlock[], displayPrompt?: string): void => {
-      requestSubmittedPromptScrollToBottom();
-      if (displayPrompt === undefined) {
-        submitGuidancePrompt(content);
-        return;
-      }
-      submitGuidancePrompt(content, displayPrompt);
-    },
-    [requestSubmittedPromptScrollToBottom, submitGuidancePrompt]
-  );
   const showPromptImagesUnsupported = useStableEventCallback(
     actions.showPromptImagesUnsupported
   );
@@ -450,6 +395,8 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       disabled: composerDisabled || timelineInteractionLocked,
       disabledReason: composerDisabledReason,
       submitDisabled: submitDisabled || timelineInteractionLocked,
+      tuttiModeActive: viewModel.composer.isTuttiModeActive,
+      tuttiModeUpdating: viewModel.composer.isTuttiModeUpdating,
       composerSettings: viewModel.composer.composerSettings,
       queueStatus: viewModel.composer.queueStatus,
       queuedPrompts: viewModel.composer.queuedPrompts,
@@ -486,7 +433,13 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       onDraftContentChange: updateDraftContent,
       onProjectPathChange: updateSelectedProjectPath,
       onSettingsChange: updateComposerSettings,
-      onSubmit: submitPromptAndScrollToBottom,
+      onTuttiModeChange: setTuttiModeActiveAndSettleReview,
+      onSubmit: submitPromptOrDecidePlan,
+      onSubmitEmpty: planReviewSendActive ? acceptPendingPlan : undefined,
+      emptySubmitLabel:
+        planReviewSendActive && planReviewIntensityDiverged
+          ? labels.tuttiModePlanSendRequestChanges
+          : undefined,
       onSubmitGuidance: submitGuidancePromptAndScrollToBottom,
       onPromptImagesUnsupported: showPromptImagesUnsupported,
       onSendQueuedPromptNext: sendQueuedPromptNext,
@@ -546,8 +499,13 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       showStopButton,
       slashStatus,
       submitDisabled,
+      setTuttiModeActiveAndSettleReview,
       submitInteractivePrompt,
-      submitPromptAndScrollToBottom,
+      submitPromptOrDecidePlan,
+      planReviewSendActive,
+      planReviewIntensityDiverged,
+      labels.tuttiModePlanSendRequestChanges,
+      acceptPendingPlan,
       submitGuidancePromptAndScrollToBottom,
       uiLanguage,
       stableLinkAction,
@@ -571,6 +529,8 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       viewModel.detail.hasSentUserMessage,
       viewModel.composer.isInterrupting,
       viewModel.composer.isCreatingConversation,
+      viewModel.composer.isTuttiModeActive,
+      viewModel.composer.isTuttiModeUpdating,
       viewModel.interaction.isRespondingApproval,
       viewModel.interaction.isRuntimeBlocked,
       viewModel.composer.promptImagesSupported,
@@ -719,19 +679,53 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
             />
           )
         ) : (
-          <AgentGUIConversationTimelinePane
-            conversation={conversation}
-            isLoading={showTimelineSkeleton}
-            isLoadingOlderMessages={viewModel.detail.isLoadingOlderMessages}
-            loadingLabel={labels.loadingConversation}
-            empty={conversationFlowEmpty}
-            onLinkAction={stableLinkAction}
-            onAuthLogin={authLogin}
-            availableSkills={viewModel.composer.availableSkills}
-            workspaceAppIcons={workspaceAppIcons}
-            previewMode={previewMode}
-            labels={conversationFlowLabels}
-          />
+          <>
+            <AgentGUIConversationTimelinePane
+              conversation={conversation}
+              isLoading={showTimelineSkeleton}
+              isLoadingOlderMessages={viewModel.detail.isLoadingOlderMessages}
+              loadingLabel={labels.loadingConversation}
+              empty={conversationFlowEmpty}
+              onLinkAction={stableLinkAction}
+              onAuthLogin={authLogin}
+              availableSkills={viewModel.composer.availableSkills}
+              workspaceAppIcons={workspaceAppIcons}
+              previewMode={previewMode}
+              labels={conversationFlowLabels}
+            />
+            {tuttiModePlanPanels.panels.map((panel) => (
+              <TuttiModePlanPanel
+                key={panel.id}
+                assignmentCatalog={tuttiModePlanPanels.assignmentCatalog}
+                assignmentDrafts={planAssignmentDrafts[panel.id] ?? {}}
+                labels={labels.tuttiModePlanPanel}
+                panel={panel}
+                submitting={
+                  tuttiModePlanPanels.submittingCheckpointId ===
+                  panel.checkpoint.id
+                }
+                onAssignmentDraftChange={(taskId, patch) =>
+                  handlePlanAssignmentDraftChange(panel.id, taskId, patch)
+                }
+              />
+            ))}
+            {tuttiModePlanPanels.error ? (
+              <div
+                className="mx-auto flex w-full max-w-[860px] items-center justify-between gap-3 rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground"
+                role="alert"
+              >
+                <span>{labels.tuttiModePlanLoadFailed}</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={tuttiModePlanPanels.retry}
+                >
+                  {labels.tuttiModePlanRetry}
+                </Button>
+              </div>
+            ) : null}
+          </>
         )}
       </ScrollArea>
       {hasActiveConversation ? (
@@ -752,6 +746,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
           promptLabels={interactivePromptLabels}
           onSubmitApprovalOption={submitApprovalOption}
           onRetryActivation={retryActivation}
+          onRetryInlineNotice={retryInlineNotice}
           onAuthLogin={authLogin}
           onContinueInNewConversation={continueInNewConversation}
           onSubmitBottomDockInteractivePrompt={
@@ -759,6 +754,19 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
           }
           onGoalControl={goalControl}
           goalPauseSupported={viewModel.composer.goalPauseSupported}
+          tuttiPlanReview={
+            pendingPlanPanel
+              ? {
+                  planTitle: pendingPlanPanel.title,
+                  submitting: pendingPlanSubmitting,
+                  intensity: viewModel.composer.tuttiModeOrchestrationIntensity,
+                  intensityDiverged: planReviewIntensityDiverged
+                }
+              : null
+          }
+          tuttiPlanReviewLabels={labels.tuttiModePlanBanner}
+          onCancelTuttiPlanReview={cancelPendingPlan}
+          onTuttiPlanReviewIntensityChange={setTuttiModeOrchestrationIntensity}
         />
       ) : null}
     </main>

@@ -66,6 +66,7 @@ type Props = Pick<
   | "onDraftContentChange"
   | "onSettingsChange"
   | "onSubmit"
+  | "onSubmitEmpty"
   | "onSubmitGuidance"
   | "onCapabilitySettingsRequest"
   | "onSlashStatusOpen"
@@ -75,6 +76,7 @@ type Props = Pick<
 >;
 
 interface UseComposerSlashActionsInput extends Props {
+  onTuttiModeActivate?: () => void;
   draftContent: AgentComposerDraft;
   selectedProjectPath: string;
   slashStatusAgentSessionId: string | null;
@@ -126,8 +128,10 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
     onDraftContentChange,
     onSettingsChange,
     onSubmit,
+    onSubmitEmpty,
     onSubmitGuidance,
     onCapabilitySettingsRequest,
+    onTuttiModeActivate,
     onSlashStatusOpen,
     onSlashStatusClose,
     onPromptImagesUnsupported,
@@ -282,11 +286,16 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         );
         return;
       }
-      if (effect.kind === "togglePlanMode") {
+      if (effect.kind === "enablePlanMode") {
         clearSlashCommandDraft();
-        onSettingsChange({
-          planMode: !composerSettings.draftSettings.planMode
-        });
+        if (!settingsControlsDisabled) {
+          onSettingsChange({ planMode: true });
+        }
+        return;
+      }
+      if (effect.kind === "activateTuttiMode") {
+        clearSlashCommandDraft();
+        onTuttiModeActivate?.();
         return;
       }
       if (effect.kind === "enableBrowserUse") {
@@ -346,6 +355,7 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
       isSlashStatusPanelOpen,
       onDraftContentChange,
       onSlashStatusClose,
+      onTuttiModeActivate,
       onSlashStatusOpen,
       onSettingsChange,
       onSubmit,
@@ -396,7 +406,9 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
       if (capabilityControlsReadOnly) {
         return;
       }
-      onCapabilitySettingsRequest?.(capability.capability);
+      if (capability.capability !== "tutti") {
+        onCapabilitySettingsRequest?.(capability.capability);
+      }
       setIsPaletteOpen(false);
     },
     [capabilityControlsReadOnly, onCapabilitySettingsRequest]
@@ -473,6 +485,12 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         largeTexts: currentDraftLargeTexts
       });
       if (!agentComposerDraftHasContent(nextDraftContent)) {
+        // Empty-send override (e.g. plan review accept): only for a plain
+        // send, never for guidance, and only after the guards above agreed
+        // a submit is currently allowed at all.
+        if (options?.guidance !== true) {
+          onSubmitEmpty?.();
+        }
         return;
       }
       if (currentDraftImages.length > 0 && !promptImagesSupported) {
@@ -483,6 +501,7 @@ export function useComposerSlashActions(input: UseComposerSlashActionsInput) {
         const slashCommandEffect = resolveSlashCommandSubmitEffect({
           browserSupported: Boolean(composerSettings.supportsBrowser),
           computerSupported: Boolean(composerSettings.supportsComputerUse),
+          tuttiSupported: true,
           commands: resolvedSlashCommands,
           draft: nextPrompt,
           provider,

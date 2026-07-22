@@ -33,12 +33,28 @@ type Service struct {
 }
 
 type CreateIssueInput struct {
-	IssueID     string
-	TopicID     string
-	WorkspaceID string
-	ActorUserID string
-	Title       string
-	Content     string
+	IssueID             string
+	TopicID             string
+	WorkspaceID         string
+	ActorUserID         string
+	Title               string
+	Content             string
+	PlanningSource      string
+	SourceSessionID     string
+	SequentialExecution bool
+	ParallelExecution   bool
+	ExecutionProfile    ExecutionProfile
+	HasExecutionProfile bool
+	Budget              Budget
+	HasBudget           bool
+	// AutoTokenBudgetHistoryHint is the summed observed usage of comparable
+	// completed task runs. It is ignored for fixed budgets.
+	AutoTokenBudgetHistoryHint int64
+}
+
+type CreateIssueWithTasksInput struct {
+	Issue CreateIssueInput
+	Tasks []CreateTaskItemInput
 }
 
 type CreateTopicInput struct {
@@ -74,22 +90,38 @@ type UpdateIssueInput struct {
 }
 
 type CreateTaskInput struct {
-	TaskID      string
-	IssueID     string
-	WorkspaceID string
-	ActorUserID string
-	Title       string
-	Content     string
-	Priority    string
-	DueAtUnixMS int64
+	TaskID             string
+	IssueID            string
+	WorkspaceID        string
+	ActorUserID        string
+	Title              string
+	Content            string
+	Priority           string
+	DueAtUnixMS        int64
+	AgentTargetID      string
+	ModelPlanID        string
+	Model              string
+	PermissionModeID   string
+	ReasoningEffort    string
+	ExecutionDirectory string
+	DependencyTaskIDs  []string
+	Parallelizable     bool
 }
 
 type CreateTaskItemInput struct {
-	TaskID      string
-	Title       string
-	Content     string
-	Priority    string
-	DueAtUnixMS int64
+	TaskID             string
+	Title              string
+	Content            string
+	Priority           string
+	DueAtUnixMS        int64
+	AgentTargetID      string
+	ModelPlanID        string
+	Model              string
+	PermissionModeID   string
+	ReasoningEffort    string
+	ExecutionDirectory string
+	DependencyTaskIDs  []string
+	Parallelizable     bool
 }
 
 type CreateTasksInput struct {
@@ -100,22 +132,24 @@ type CreateTasksInput struct {
 }
 
 type UpdateTaskInput struct {
-	TaskID       string
-	IssueID      string
-	WorkspaceID  string
-	ActorUserID  string
-	Title        string
-	HasTitle     bool
-	Content      string
-	HasContent   bool
-	Status       string
-	HasStatus    bool
-	Priority     string
-	HasPriority  bool
-	DueAtUnixMS  int64
-	HasDueAt     bool
-	SortIndex    int
-	HasSortIndex bool
+	TaskID            string
+	IssueID           string
+	WorkspaceID       string
+	ActorUserID       string
+	Title             string
+	HasTitle          bool
+	Content           string
+	HasContent        bool
+	Status            string
+	HasStatus         bool
+	Priority          string
+	HasPriority       bool
+	DueAtUnixMS       int64
+	HasDueAt          bool
+	SortIndex         int
+	HasSortIndex      bool
+	Parallelizable    bool
+	HasParallelizable bool
 }
 
 type CreateRunInput struct {

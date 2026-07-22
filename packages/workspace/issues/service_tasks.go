@@ -38,11 +38,19 @@ func (s Service) CreateTask(ctx context.Context, input CreateTaskInput) (Task, e
 		WorkspaceID: input.WorkspaceID,
 		ActorUserID: input.ActorUserID,
 		Tasks: []CreateTaskItemInput{{
-			TaskID:      input.TaskID,
-			Title:       input.Title,
-			Content:     input.Content,
-			Priority:    input.Priority,
-			DueAtUnixMS: input.DueAtUnixMS,
+			TaskID:             input.TaskID,
+			Title:              input.Title,
+			Content:            input.Content,
+			Priority:           input.Priority,
+			DueAtUnixMS:        input.DueAtUnixMS,
+			AgentTargetID:      input.AgentTargetID,
+			ModelPlanID:        input.ModelPlanID,
+			Model:              input.Model,
+			PermissionModeID:   input.PermissionModeID,
+			ReasoningEffort:    input.ReasoningEffort,
+			ExecutionDirectory: input.ExecutionDirectory,
+			DependencyTaskIDs:  input.DependencyTaskIDs,
+			Parallelizable:     input.Parallelizable,
 		}},
 	})
 	if err != nil {
@@ -69,43 +77,80 @@ func (s Service) CreateTasks(ctx context.Context, input CreateTasksInput) ([]Tas
 	if err != nil {
 		return nil, err
 	}
+	tasks, err := s.buildTasks(issue, actorUserID, input.Tasks)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := store.ListTasks(ctx, TaskListFilter{WorkspaceID: workspaceID, IssueID: issueID, ReturnAll: true})
+	if err != nil {
+		return nil, err
+	}
+	graph := append(append([]Task(nil), existing.Items...), tasks...)
+	if !ValidateTaskDependencyGraph(graph) {
+		return nil, ErrInvalidArgument
+	}
+	created, err := store.AppendTasks(ctx, tasks)
+	if err != nil {
+		return nil, err
+	}
+	projected, err := store.RecalculateIssueProjection(ctx, workspaceID, issueID)
+	if err != nil {
+		return nil, err
+	}
+	if projected.Budget.Mode == BudgetModeAuto {
+		projected.Budget.TokenLimit = CompileAutoTokenBudget(projected.TaskCount, projected.ExecutionProfile)
+		if _, err := store.UpdateIssue(ctx, projected); err != nil {
+			return nil, err
+		}
+	}
+	if err := store.TouchTopicActivity(ctx, workspaceID, issue.TopicID, s.nowUnixMS()); err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
+func (s Service) buildTasks(issue Issue, actorUserID string, items []CreateTaskItemInput) ([]Task, error) {
 	now := s.nowUnixMS()
-	tasks := make([]Task, 0, len(input.Tasks))
-	for _, item := range input.Tasks {
+	tasks := make([]Task, 0, len(items))
+	for _, item := range items {
 		title := strings.TrimSpace(item.Title)
 		if title == "" {
 			return nil, ErrInvalidArgument
 		}
+		agentTargetID := strings.TrimSpace(item.AgentTargetID)
+		modelPlanID := strings.TrimSpace(item.ModelPlanID)
+		model := strings.TrimSpace(item.Model)
+		if agentTargetID == "" && (modelPlanID != "" || model != "") {
+			return nil, ErrInvalidArgument
+		}
 		task := Task{
-			TaskID:          s.resolveID(IDKindTask, item.TaskID),
-			IssueID:         issueID,
-			WorkspaceID:     workspaceID,
-			Title:           title,
-			Content:         strings.TrimSpace(item.Content),
-			SearchText:      TrimSearchText(item.Content),
-			Status:          StatusNotStarted,
-			Priority:        NormalizePriority(item.Priority),
-			DueAtUnixMS:     maxInt64(item.DueAtUnixMS, 0),
-			CreatorUserID:   actorUserID,
-			CreatedAtUnixMS: now,
-			UpdatedAtUnixMS: now,
+			TaskID:             s.resolveID(IDKindTask, item.TaskID),
+			IssueID:            issue.IssueID,
+			WorkspaceID:        issue.WorkspaceID,
+			Title:              title,
+			Content:            strings.TrimSpace(item.Content),
+			SearchText:         TrimSearchText(item.Content),
+			Status:             StatusNotStarted,
+			Priority:           NormalizePriority(item.Priority),
+			DueAtUnixMS:        maxInt64(item.DueAtUnixMS, 0),
+			AgentTargetID:      agentTargetID,
+			ModelPlanID:        modelPlanID,
+			Model:              model,
+			PermissionModeID:   strings.TrimSpace(item.PermissionModeID),
+			ReasoningEffort:    strings.TrimSpace(item.ReasoningEffort),
+			ExecutionDirectory: strings.TrimSpace(item.ExecutionDirectory),
+			DependencyTaskIDs:  NormalizeDependencyTaskIDs(item.DependencyTaskIDs),
+			Parallelizable:     item.Parallelizable,
+			CreatorUserID:      actorUserID,
+			CreatedAtUnixMS:    now,
+			UpdatedAtUnixMS:    now,
 		}
 		if task.TaskID == "" {
 			return nil, ErrInvalidArgument
 		}
 		tasks = append(tasks, task)
 	}
-	created, err := store.AppendTasks(ctx, tasks)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := store.RecalculateIssueProjection(ctx, workspaceID, issueID); err != nil {
-		return nil, err
-	}
-	if err := store.TouchTopicActivity(ctx, workspaceID, issue.TopicID, now); err != nil {
-		return nil, err
-	}
-	return created, nil
+	return tasks, nil
 }
 
 func (s Service) UpdateTask(ctx context.Context, input UpdateTaskInput) (Task, error) {
@@ -156,6 +201,9 @@ func (s Service) UpdateTask(ctx context.Context, input UpdateTaskInput) (Task, e
 			return Task{}, ErrInvalidArgument
 		}
 		task.SortIndex = input.SortIndex
+	}
+	if input.HasParallelizable {
+		task.Parallelizable = input.Parallelizable
 	}
 	task.UpdatedAtUnixMS = s.nowUnixMS()
 	updated, err := store.UpdateTask(ctx, task)

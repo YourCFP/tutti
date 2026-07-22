@@ -1,4 +1,20 @@
 import type { AgentActivityComposerModelConfiguration } from "./composerModelConfiguration.types.ts";
+import type {
+  AgentActivityCapabilityReference,
+  AgentActivityInitialTuttiModeActivation,
+  AgentActivityTuttiModeActivation
+} from "./tuttiMode.types.ts";
+
+export type {
+  AgentActivityCapabilityReference,
+  AgentActivityInitialTuttiModeActivation,
+  AgentActivityTuttiModeActivation,
+  AgentActivityTuttiModeActivationRevision,
+  AgentActivityTuttiModeActivationSource,
+  AgentActivityTuttiModeActivationStatus,
+  AgentActivityUpdateTuttiModeActivationInput,
+  AgentActivityUpdateTuttiModeActivationResult
+} from "./tuttiMode.types.ts";
 
 export type AgentActivityDisplayStatus =
   | "working"
@@ -39,6 +55,12 @@ export interface AgentActivitySession {
   capabilities: AgentActivitySessionCapabilities | null;
   usage: AgentActivitySessionUsage | null;
   goal: AgentActivitySessionGoal | null;
+  /**
+   * Read projection of the independent daemon-owned TuttiModeActivation.
+   * The session does not own this lifecycle; activity-core normalizes it into
+   * its dedicated activation slice.
+   */
+  tuttiModeActivation: AgentActivityTuttiModeActivation | null;
   imported: boolean;
   visible: boolean;
   resumable: boolean;
@@ -131,12 +153,7 @@ export interface AgentActivityComposerSettingOption {
   label: string;
   description?: string;
   supportsImageInput?: boolean;
-  /**
-   * True when the entry mirrors the requested/current selection instead of
-   * the provider catalog (daemon warm-catalog append, selected-model
-   * bootstrap echo, GUI current-value append). Requested-origin entries stay
-   * selectable but are not testimony that the provider can run the model.
-   */
+  /** True when the entry mirrors the requested/current selection, not the provider catalog. */
   requested?: boolean;
 }
 
@@ -416,6 +433,7 @@ export interface AgentActivityTurnUpdatedEvent {
 export interface AgentActivityEventTurn {
   turnId: string;
   agentSessionId: string;
+  capabilityRefs?: readonly AgentActivityCapabilityReference[];
   phase: AgentActivityTurnPhase;
   origin: AgentActivityTurnOrigin;
   sourceGoalOperationId?: string | null;
@@ -461,6 +479,8 @@ export interface AgentActivityCreateSessionInput {
   agentTargetId: string;
   cwd?: string | null;
   noProject?: boolean | null;
+  capabilityRefs?: readonly AgentActivityCapabilityReference[] | null;
+  initialTuttiModeActivation?: AgentActivityInitialTuttiModeActivation | null;
   initialContent?: AgentPromptContentBlock[] | null;
   /** 仅展示用的首轮文本(bundle 折叠成一个 chip);initialContent 仍带展开后的文件。 */
   initialDisplayPrompt?: string | null;
@@ -479,6 +499,7 @@ export interface AgentActivitySendInput {
   clientSubmitId: string;
   workspaceId: string;
   agentSessionId: string;
+  capabilityRefs?: readonly AgentActivityCapabilityReference[] | null;
   content: AgentPromptContentBlock[];
   /** 仅展示用文本(bundle 折叠成一个 chip);content 仍带展开后的文件。 */
   displayPrompt?: string | null;
@@ -539,25 +560,11 @@ export interface AgentPromptContentBlock {
   sizeBytes?: number;
 }
 
-export type AgentActivityGoalControlAction =
-  | "pause"
-  | "resume"
-  | "clear"
-  | "set";
-
-export interface AgentActivityInitialGoalControl {
-  action: AgentActivityGoalControlAction;
-  objective?: string;
-}
-
-export interface AgentActivityGoalControlInput {
-  workspaceId: string;
-  agentSessionId: string;
-  action: AgentActivityGoalControlAction;
-  clientSubmitId?: string;
-  objective?: string;
-  signal?: AbortSignal;
-}
+export type {
+  AgentActivityGoalControlAction,
+  AgentActivityGoalControlInput,
+  AgentActivityInitialGoalControl
+} from "./goalControl.types.ts";
 
 export interface AgentActivityGoalControlResult {
   session: AgentActivitySession;
@@ -664,6 +671,8 @@ export interface AgentActivityCompletedCommand {
 
 export interface AgentActivityTurn {
   agentSessionId: string;
+  /** Audit-only capability provenance for the turn; never current mode state. */
+  capabilityRefs?: readonly AgentActivityCapabilityReference[];
   completedCommand?: AgentActivityCompletedCommand | null;
   error?: { code?: string; message: string } | null;
   fileChanges?: Record<string, unknown> | null;

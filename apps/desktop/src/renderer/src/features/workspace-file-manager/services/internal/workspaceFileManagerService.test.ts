@@ -852,6 +852,7 @@ function createDependenciesStub(): {
       deleteAutomationRule: fail,
       getAgentSessionAutomationRuleOverride: fail,
       setAgentSessionAutomationRuleOverride: fail,
+      listModelPlans: fail,
       listWorkspaceAgents: fail,
       createWorkspaceAgent: fail,
       updateWorkspaceAgent: fail,
@@ -987,6 +988,8 @@ function createDependenciesStub(): {
       listWorkspaceGitBranches: fail,
       resolveWorkspaceGitPatchSupport: fail,
       updateWorkspaceAgentSessionSettings: fail,
+      getWorkspaceAgentSessionTuttiModeActivation: fail,
+      updateWorkspaceAgentSessionTuttiModeActivation: fail,
       updateWorkspaceAgentSessionPin: fail,
       submitWorkspaceAgentInteractive: fail,
       searchWorkspaceFiles: fail,
@@ -1001,7 +1004,10 @@ function createDependenciesStub(): {
       updateWorkspaceIssueTask: fail,
       updateWorkspace: fail,
       uploadWorkspaceFiles: fail,
-      useUserProject: fail
+      useUserProject: fail,
+      listPendingWorkspaceWorkflows: fail,
+      listWorkspaceWorkflows: fail,
+      decideWorkspaceWorkflowCheckpoint: fail
     },
     platformApi: {
       homeDirectory: "/Users/local",

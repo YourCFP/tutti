@@ -37,6 +37,12 @@ function createTransportClient(
     async moveAgentQuickPrompt() {
       throw new Error("not used");
     },
+    async getWorkspaceAgentSessionTuttiModeActivation() {
+      throw new Error("not used");
+    },
+    async updateWorkspaceAgentSessionTuttiModeActivation() {
+      throw new Error("not used");
+    },
     async listAgentTargets() {
       throw new Error("not used");
     },
@@ -56,6 +62,9 @@ function createTransportClient(
       throw new Error("not used");
     },
     async setAgentSessionAutomationRuleOverride() {
+      throw new Error("not used");
+    },
+    async listModelPlans() {
       throw new Error("not used");
     },
     async listWorkspaceAgents() {
@@ -504,6 +513,15 @@ function createTransportClient(
     },
     async trackEvents() {},
     async useUserProject() {
+      throw new Error("not used");
+    },
+    async listPendingWorkspaceWorkflows() {
+      throw new Error("not used");
+    },
+    async listWorkspaceWorkflows() {
+      throw new Error("not used");
+    },
+    async decideWorkspaceWorkflowCheckpoint() {
       throw new Error("not used");
     }
   };

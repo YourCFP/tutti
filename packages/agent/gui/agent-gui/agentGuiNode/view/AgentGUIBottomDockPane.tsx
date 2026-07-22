@@ -10,6 +10,10 @@ import {
   isGoalBannerVisible,
   type AgentGoalBannerLabels
 } from "../AgentGoalBanner";
+import {
+  TuttiPlanReviewBanner,
+  type TuttiPlanReviewBannerLabels
+} from "../TuttiPlanReviewBanner";
 import type {
   AgentGUINodeViewModel,
   AgentGUISessionChrome
@@ -47,10 +51,21 @@ interface AgentGUIBottomDockPaneProps {
   onSubmitApprovalOption: AgentGUINodeViewProps["actions"]["submitApprovalOption"];
   onAuthLogin?: (provider?: string | null) => void;
   onRetryActivation: AgentGUINodeViewProps["actions"]["retryActivation"];
+  onRetryInlineNotice: () => void;
   onContinueInNewConversation: AgentGUINodeViewProps["actions"]["continueInNewConversation"];
   onSubmitBottomDockInteractivePrompt: AgentGUINodeViewProps["actions"]["submitInteractivePrompt"];
   onGoalControl: AgentGUINodeViewProps["actions"]["goalControl"];
   goalPauseSupported: boolean;
+  /** Pending Tutti plan review shown as a banner directly above the composer. */
+  tuttiPlanReview: {
+    planTitle: string;
+    submitting: boolean;
+    intensity: number;
+    intensityDiverged: boolean;
+  } | null;
+  tuttiPlanReviewLabels: TuttiPlanReviewBannerLabels;
+  onCancelTuttiPlanReview: () => void;
+  onTuttiPlanReviewIntensityChange: (value: number) => void;
 }
 
 export const AgentGUIBottomDockPane = memo(function AgentGUIBottomDockPane({
@@ -71,10 +86,15 @@ export const AgentGUIBottomDockPane = memo(function AgentGUIBottomDockPane({
   onSubmitApprovalOption,
   onAuthLogin,
   onRetryActivation,
+  onRetryInlineNotice,
   onContinueInNewConversation,
   onSubmitBottomDockInteractivePrompt,
   onGoalControl,
-  goalPauseSupported
+  goalPauseSupported,
+  tuttiPlanReview,
+  tuttiPlanReviewLabels,
+  onCancelTuttiPlanReview,
+  onTuttiPlanReviewIntensityChange
 }: AgentGUIBottomDockPaneProps): React.JSX.Element {
   "use memo";
   const previewMode = composerProps.previewMode === true;
@@ -135,7 +155,7 @@ export const AgentGUIBottomDockPane = memo(function AgentGUIBottomDockPane({
           isRespondingApproval={isRespondingApproval}
           onSubmitApprovalOption={onSubmitApprovalOption}
           onAuthLogin={onAuthLogin}
-          onRetryActivation={onRetryActivation}
+          onRetryActivation={onRetryInlineNotice}
           onContinueInNewConversation={onContinueInNewConversation}
           labels={chromeLabels}
         />
@@ -165,6 +185,25 @@ export const AgentGUIBottomDockPane = memo(function AgentGUIBottomDockPane({
             goalPauseSupported ? () => onGoalControl("resume") : undefined
           }
           onClearGoal={() => onGoalControl("clear")}
+        />
+      ) : null}
+      {tuttiPlanReview ? (
+        <TuttiPlanReviewBanner
+          labels={tuttiPlanReviewLabels}
+          planTitle={tuttiPlanReview.planTitle}
+          submitting={tuttiPlanReview.submitting}
+          intensity={tuttiPlanReview.intensity}
+          intensityDiverged={tuttiPlanReview.intensityDiverged}
+          intensityPopoverLabels={{
+            title: composerProps.labels.tuttiBudgetTitle,
+            intensityLabel: composerProps.labels.tuttiBudgetIntensityLabel,
+            intensityMin: composerProps.labels.tuttiBudgetIntensityMin,
+            intensityMax: composerProps.labels.tuttiBudgetIntensityMax,
+            confirm: composerProps.labels.tuttiBudgetConfirm,
+            cancel: composerProps.labels.tuttiBudgetCancel
+          }}
+          onIntensityChange={onTuttiPlanReviewIntensityChange}
+          onCancel={onCancelTuttiPlanReview}
         />
       ) : null}
       {bottomDockReplacementPrompt ? (

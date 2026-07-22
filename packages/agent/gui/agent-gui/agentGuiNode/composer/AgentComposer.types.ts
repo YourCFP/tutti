@@ -37,6 +37,12 @@ export interface AgentComposerReferenceProvenanceFilter {
 
 export interface AgentComposerSubmitOptions {
   requiredSettingsPatch?: AgentActivitySubmitSettingsPatch;
+  capabilityRefs?: readonly AgentComposerCapabilityReference[];
+}
+
+export interface AgentComposerCapabilityReference {
+  capability: "tutti";
+  source: "slash_command";
 }
 
 export interface AgentComposerProps {
@@ -57,6 +63,10 @@ export interface AgentComposerProps {
   disabled: boolean;
   disabledReason?: string | null;
   submitDisabled: boolean;
+  /** Canonical engine projection of the independent TuttiModeActivation. */
+  tuttiModeActive?: boolean;
+  /** Blocks submission/removal while activation CAS or creation is unresolved. */
+  tuttiModeUpdating?: boolean;
   placeholder: string;
   composerSettings: AgentGUIComposerSettingsVM;
   queueStatus?: AgentGUIQueueStatus;
@@ -96,6 +106,13 @@ export interface AgentComposerProps {
   handoffMenuLabel?: string;
   labels: {
     send: string;
+    /**
+     * Plan-review send copy: with an empty-send override active the send
+     * button reads sendAccept on an empty draft and sendRequestChanges once
+     * feedback is typed, so the composer decision semantics stay legible.
+     */
+    sendAccept?: string;
+    sendRequestChanges?: string;
     modelLabel: string;
     modelSelectionLabel: string;
     modelContextWindowSuffix: string;
@@ -134,6 +151,15 @@ export interface AgentComposerProps {
       professionalLongRunning: string;
     };
     planModeLabel: string;
+    tuttiModeLabel: string;
+    tuttiModeDescription: string;
+    tuttiBudgetTitle: string;
+    tuttiBudgetIntensityLabel: string;
+    tuttiBudgetIntensityMin: string;
+    tuttiBudgetIntensityMax: string;
+    tuttiBudgetConfirm: string;
+    tuttiBudgetCancel: string;
+    planModeDescription?: string;
     planModeOnLabel: string;
     planModeOffLabel: string;
     planUnavailable: string;
@@ -290,6 +316,7 @@ export interface AgentComposerProps {
     computerUse?: boolean;
     permissionModeId?: string | null;
   }) => void;
+  onTuttiModeChange?: (active: boolean) => void;
   capabilityMenuState?: AgentComposerCapabilityMenuState;
   capabilityControlsReadOnly?: boolean;
   onCapabilitySettingsRequest?: (
@@ -303,9 +330,22 @@ export interface AgentComposerProps {
     displayPrompt?: string,
     options?: AgentComposerSubmitOptions
   ) => void;
+  /**
+   * When set, an empty-draft send is enabled and routed here instead of being
+   * blocked (e.g. Tutti plan review: empty send = accept). Typed sends keep
+   * flowing through onSubmit.
+   */
+  onSubmitEmpty?: () => void;
+  /**
+   * Overrides the empty-draft send button copy while the empty-send override
+   * is active (e.g. plan review with a diverged intensity reads "Request
+   * changes" instead of "Accept plan"). Falls back to labels.sendAccept.
+   */
+  emptySubmitLabel?: string;
   onSubmitGuidance?: (
     content: AgentPromptContentBlock[],
-    displayPrompt?: string
+    displayPrompt?: string,
+    options?: AgentComposerSubmitOptions
   ) => void;
   onSendQueuedPromptNext: (queuedPromptId: string) => void;
   onRemoveQueuedPrompt: (queuedPromptId: string) => void;
@@ -332,8 +372,10 @@ export interface AgentComposerProps {
   referenceProvenanceFilter?: AgentComposerReferenceProvenanceFilter | null;
 }
 
-export type AgentComposerCapabilitySettingsTarget =
-  AgentSlashCommandCapability["capability"];
+export type AgentComposerCapabilitySettingsTarget = Exclude<
+  AgentSlashCommandCapability["capability"],
+  "tutti"
+>;
 
 export interface AgentComposerCapabilityMenuState {
   browserUse?: {
@@ -342,6 +384,9 @@ export interface AgentComposerCapabilityMenuState {
   computerUse?: {
     authorization?: AgentComposerComputerUseAuthorizationState | null;
     installed?: boolean | null;
+  };
+  tuttiMode?: {
+    enabled?: boolean | null;
   };
 }
 

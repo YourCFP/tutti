@@ -365,6 +365,64 @@ After a successful claim, an authoritative terminal runtime disposition still
 wins; for example, a runtime `superseded` result must not be rewritten to
 `answered` merely because the durable claim already marked the Interaction.
 
+## Tutti Mode Plan Commands
+
+`tutti plan` is the Agent-callable observation and proposal surface for the
+Tutti-owned workspace workflow. It is available independently of the current
+Tutti Mode activation badge and independently of a provider's Default or Plan
+collaboration mode. The badge is host preference state; it is not CLI
+authorization and it is not evidence that a workflow exists.
+
+The flow is single-shot: one `propose` submits the complete plan and opens the
+single user review checkpoint. There is no separate configuration phase and no
+daemon-derived decomposition turn.
+
+The public command set is deliberately narrow:
+
+- `tutti plan propose --file <absolute-path> --request-id <stable-id>` creates
+  the initial revision and the single review checkpoint. The document must be
+  one complete `tutti-mode-plan/v1` Markdown file: the plan narrative in the
+  body plus the full task graph in the `tasks` frontmatter (at least one task
+  is required). `phase` may be omitted; it defaults to `task_graph`.
+  Configuration-only documents are rejected. When the Tutti Host Context is
+  active, read its `orchestrationIntensity` (0-100) to choose decomposition
+  granularity: low values mean few coarse tasks, high values mean many
+  fine-grained tasks;
+- `tutti plan revise --workflow-id <id> --file <absolute-path> --request-id
+<stable-id>` appends a complete replacement plan document (narrative plus full
+  task graph) after the user requests changes. When the user rejects the
+  review, the daemon also proactively starts a feedback turn on the source
+  session instructing the Agent to revise, so the Agent does not have to poll;
+- `tutti plan get --workflow-id <id>` returns the caller-session-scoped
+  authoritative snapshot;
+- `tutti plan wait --workflow-id <id> --checkpoint-id <id>` performs a bounded
+  wait for a durable user decision or operation outcome.
+
+Tasks may carry optional `agentTargetId`, `modelPlanId`, `model`,
+`permissionModeId`, and `reasoningEffort` assignments. The user can override
+these per task in the review panel; overrides are recorded with the accepted
+decision and win over the document values at Issue materialization.
+
+There is no Agent CLI approval command. Accept, reject, feedback, and cancel
+remain user-owned daemon interactions. The Agent may only observe the committed
+result and continue with the returned next action.
+
+`propose` and `revise` require caller-generated request IDs because response
+loss must not cause an unintentional second mutation. The durable identity is
+`(workspace, source session, mutation kind, workflow scope, request ID)`.
+Retrying the same key with the same exact Markdown bytes returns the original
+workflow, revision, and checkpoint and reports `replayed: true`. Reusing that
+key with different bytes is a conflict. A new request ID is an intentional new
+mutation even when the bytes and content-addressed file are identical; a
+content digest is integrity evidence, not user intent.
+
+Workflow lookup is isolated to the Agent session supplied by the daemon CLI
+runtime context. A workflow created by another source session is reported as
+not found. App CLI parent-command identity is not Agent Turn or tool-call
+provenance and must never be stored as such. Proposal input files must be
+absolute, bounded in size, parsed by the daemon, and retained as immutable
+Markdown content; CLI clients must not implement the workflow state machine.
+
 `agent turn-resources --json` is the narrow helper for looking up resources from
 one explicit session turn. It requires `--session-id` and `--turn-id`, filters at
 the message query layer, and returns resource-bearing user messages with images
@@ -463,6 +521,7 @@ Workspace apps must not claim these scopes:
 - `agent`
 - `help`
 - `issue`
+- `plan`
 - `status`
 
 ## Input Schema

@@ -16,6 +16,14 @@ export type {
   AgentGUIProps,
   AgentGUIReferenceProvenanceFilterCatalog
 } from "./AgentGUI";
+export type {
+  TuttiModePlanAssignmentAgentDetail,
+  TuttiModePlanAssignmentAgentOption,
+  TuttiModePlanAssignmentOptionsSource,
+  TuttiModePlanReviewSnapshot,
+  TuttiModePlanReviewRuntime,
+  TuttiModePlanTaskAssignmentInput
+} from "./workspaceWorkflow";
 export type { AgentGUIComposerAppendRequest } from "./agent-gui/agentGuiNode/controller/useAgentGUIComposerAppendRequest";
 export {
   createAgentStatusController,

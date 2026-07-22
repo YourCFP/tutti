@@ -1,0 +1,27 @@
+export const zhCNTuttiModePlan = {
+  mode: "Tutti mode plan",
+  taskReview: "计划确认",
+  pending: "待确认",
+  cancel: "取消计划",
+  reviewHint: "直接发送即接受 · 输入反馈后发送即请求修改",
+  reviewHintReplan: "强度已调整 · 发送即按新强度重新规划",
+  sendAccept: "接受计划",
+  sendRequestChanges: "请求修改",
+  replanFeedback:
+    "强度已从 {{from}} 调整为 {{to}}。请按新强度重新规划：调整任务拆解粒度与各任务的模型/推理档位。",
+  replanFeedbackSuffix: "（强度已调整为 {{to}}，请一并按新强度重新规划。）",
+  tasks: "任务",
+  priority: "优先级",
+  priorityHigh: "高",
+  priorityMedium: "中",
+  priorityLow: "低",
+  agentTarget: "Agent",
+  model: "模型",
+  permissionMode: "权限模式",
+  reasoningEffort: "推理强度",
+  parallelizable: "可并行",
+  assignmentOptionsLoading: "选项加载中...",
+  notSpecified: "未指定",
+  loadFailed: "无法加载 Tutti mode plan",
+  retry: "重试"
+} as const;

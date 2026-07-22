@@ -48,6 +48,10 @@ interface Input {
   onInterruptCurrentTurn: () => void;
   isSelectedProjectMissing: boolean;
   submitDisabled: boolean;
+  /** Keeps the send button live on an empty draft (empty-send override). */
+  allowEmptySubmit: boolean;
+  /** Overrides the empty-draft send copy (falls back to labels.sendAccept). */
+  emptySubmitLabel?: string;
   labels: AgentComposerProps["labels"];
   activePromptTip: AgentComposerPromptTip | null;
   promptTipRef: RefObject<HTMLSpanElement | null>;
@@ -82,6 +86,8 @@ export function useComposerPresentation(input: Input) {
     onInterruptCurrentTurn,
     isSelectedProjectMissing,
     submitDisabled,
+    allowEmptySubmit,
+    emptySubmitLabel,
     labels,
     activePromptTip,
     promptTipRef,
@@ -120,10 +126,11 @@ export function useComposerPresentation(input: Input) {
         ? "loading"
         : "send";
   const sendButtonBusy = isSendingTurn && !isQueueMode;
+  const emptyDraftBlocksSend = !hasDraftContent && !allowEmptySubmit;
   const sendDisabledReasons = [
     isSelectedProjectMissing ? "project_missing" : null,
     submitDisabled ? "submit_disabled" : null,
-    !hasDraftContent ? "draft_empty" : null,
+    emptyDraftBlocksSend ? "draft_empty" : null,
     hasUploadingDraftImages ? "image_uploading" : null,
     hasFailedDraftImages ? "image_upload_failed" : null,
     hasUploadingDraftFiles ? "file_uploading" : null,
@@ -233,6 +240,14 @@ export function useComposerPresentation(input: Input) {
     [onSubmitInteractivePrompt]
   );
 
+  // While the empty-send override is active (plan review) the send button
+  // carries explicit decision copy: an empty draft accepts, typed feedback
+  // requests changes. Icon-only otherwise.
+  const planReviewSendLabel = allowEmptySubmit
+    ? ((hasDraftContent
+        ? labels.sendRequestChanges
+        : (emptySubmitLabel ?? labels.sendAccept)) ?? null)
+    : null;
   const composerActionButton = shouldShowStopButton ? (
     <button
       type="button"
@@ -261,10 +276,11 @@ export function useComposerPresentation(input: Input) {
       className={styles.composerSendButton}
       data-state={sendButtonState}
       data-disabled-reason={sendDisabledReasonKey || undefined}
+      data-plan-review-label={planReviewSendLabel ? "true" : undefined}
       disabled={
         isSelectedProjectMissing ||
         submitDisabled ||
-        !hasDraftContent ||
+        emptyDraftBlocksSend ||
         hasUploadingDraftImages ||
         hasFailedDraftImages ||
         hasUploadingDraftFiles ||
@@ -273,8 +289,8 @@ export function useComposerPresentation(input: Input) {
         hasFailedDraftLargeTexts ||
         sendButtonBusy
       }
-      aria-label={labels.send}
-      title={labels.send}
+      aria-label={planReviewSendLabel ?? labels.send}
+      title={planReviewSendLabel ?? labels.send}
       aria-busy={sendButtonBusy}
     >
       {sendButtonBusy ? (
@@ -285,6 +301,16 @@ export function useComposerPresentation(input: Input) {
           trackColor="var(--transparency-hover)"
           testId="agent-gui-composer-send-spinner"
         />
+      ) : planReviewSendLabel ? (
+        <>
+          <span
+            className="min-w-0 truncate"
+            data-testid="agent-gui-composer-send-label"
+          >
+            {planReviewSendLabel}
+          </span>
+          <SendFilledIcon />
+        </>
       ) : (
         <SendFilledIcon />
       )}

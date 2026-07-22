@@ -1001,6 +1001,120 @@ components:
         - IssueManagerPriorityHigh
         - IssueManagerPriorityMedium
         - IssueManagerPriorityLow
+    IssueManagerPlanningSource:
+      type: string
+      description: How the issue entered the durable execution workflow.
+      enum:
+        - manual
+        - tutti_mode_plan
+        - traditional_plan
+    IssueManagerBudgetMode:
+      type: string
+      enum:
+        - auto
+        - fixed
+    IssueManagerBudgetStatus:
+      type: string
+      description: soft_limited pauses future dispatch without canceling in-flight runs.
+      enum:
+        - active
+        - soft_limited
+    IssueManagerExecutionProfile:
+      type: object
+      additionalProperties: false
+      required:
+        - reasoningIntensity
+        - orchestrationIntensity
+      properties:
+        reasoningIntensity:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Issue-owned reasoning strength inherited by every task and run.
+        orchestrationIntensity:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Issue-owned decomposition, dependency, review, and retry strength.
+    IssueManagerBudget:
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+        - tokenLimit
+        - consumedTokens
+        - quotaWaterlinePercent
+        - status
+      properties:
+        mode:
+          $ref: "#/components/schemas/IssueManagerBudgetMode"
+        tokenLimit:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Compiled token soft limit. In auto mode the daemon owns this value; zero means no token gate is currently available.
+        consumedTokens:
+          type: integer
+          format: int64
+          minimum: 0
+        quotaWaterlinePercent:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+          description: Subscription plans gate on the remaining-quota waterline instead of fake monetary cost.
+        remainingQuotaPercent:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+          description: Last provider-reported subscription quota percentage. Omitted when the provider cannot report quota.
+        status:
+          $ref: "#/components/schemas/IssueManagerBudgetStatus"
+    IssueManagerTokenUsage:
+      type: object
+      additionalProperties: false
+      required:
+        - inputTokens
+        - outputTokens
+        - cacheReadTokens
+        - cacheWriteTokens
+      properties:
+        inputTokens:
+          type: integer
+          format: int64
+          minimum: 0
+        outputTokens:
+          type: integer
+          format: int64
+          minimum: 0
+        cacheReadTokens:
+          type: integer
+          format: int64
+          minimum: 0
+        cacheWriteTokens:
+          type: integer
+          format: int64
+          minimum: 0
+    IssueManagerCost:
+      type: object
+      additionalProperties: false
+      required:
+        - currency
+        - estimatedMicros
+        - actualMicros
+      properties:
+        currency:
+          type: string
+          description: ISO 4217 currency code. USD is used when a ModelPlan publishes API prices.
+        estimatedMicros:
+          type: integer
+          format: int64
+          minimum: 0
+        actualMicros:
+          type: integer
+          format: int64
+          minimum: 0
     IssueManagerStatusCounts:
       type: object
       additionalProperties: false
@@ -1084,6 +1198,12 @@ components:
         - title
         - content
         - status
+        - planningSource
+        - sourceSessionId
+        - sequentialExecution
+        - parallelExecution
+        - executionProfile
+        - budget
         - taskCount
         - notStartedCount
         - runningCount
@@ -1109,6 +1229,21 @@ components:
           type: string
         status:
           $ref: "#/components/schemas/IssueManagerStatus"
+        planningSource:
+          $ref: "#/components/schemas/IssueManagerPlanningSource"
+        sourceSessionId:
+          type: string
+          description: Optional Agent session that produced the plan. Empty for manually created issues.
+        sequentialExecution:
+          type: boolean
+          description: When true, the daemon dispatches the next eligible task after each user acceptance while budget remains active.
+        parallelExecution:
+          type: boolean
+          description: When true, the daemon dispatches every dependency-ready task whose execution directory is isolated; dependencies still require user acceptance.
+        executionProfile:
+          $ref: "#/components/schemas/IssueManagerExecutionProfile"
+        budget:
+          $ref: "#/components/schemas/IssueManagerBudget"
         taskCount:
           type: integer
           minimum: 0
@@ -1157,6 +1292,12 @@ components:
         - priority
         - sortIndex
         - dueAtUnix
+        - agentTargetId
+        - modelPlanId
+        - model
+        - executionDirectory
+        - dependencyTaskIds
+        - parallelizable
         - creatorUserId
         - creatorDisplayName
         - creatorAvatarUrl
@@ -1185,6 +1326,28 @@ components:
           type: integer
           format: int64
           minimum: 0
+        agentTargetId:
+          type: string
+          description: Opaque WorkspaceAgent assignment. Empty means not assigned yet.
+        modelPlanId:
+          type: string
+          description: Explicit Plan assignment. Empty delegates to the WorkspaceAgent default.
+        model:
+          type: string
+          description: Explicit model assignment. Empty delegates to the assigned Agent/Plan default.
+        executionDirectory:
+          type: string
+        dependencyTaskIds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        parallelizable:
+          type: boolean
+          description: >-
+            Opts this task out of the Issue's sequential default so it may run
+            alongside other dependency-ready tasks. False keeps strict
+            sequential ordering.
         creatorUserId:
           type: string
         creatorDisplayName:
@@ -1649,6 +1812,20 @@ components:
           minLength: 1
         content:
           type: string
+        planningSource:
+          $ref: "#/components/schemas/IssueManagerPlanningSource"
+        sourceSessionId:
+          type: string
+        sequentialExecution:
+          type: boolean
+          description: Persist the user's Create-and-Start choice so successor dispatch survives desktop restarts.
+        parallelExecution:
+          type: boolean
+          description: Persist the user's parallel Create-and-Start choice. Mutually exclusive with sequentialExecution.
+        executionProfile:
+          $ref: "#/components/schemas/IssueManagerExecutionProfile"
+        budget:
+          $ref: "#/components/schemas/IssueManagerBudget"
     CreateIssueManagerTopicRequest:
       type: object
       additionalProperties: false
@@ -1701,6 +1878,21 @@ components:
           type: integer
           format: int64
           minimum: 0
+        agentTargetId:
+          type: string
+        modelPlanId:
+          type: string
+        model:
+          type: string
+        executionDirectory:
+          type: string
+        dependencyTaskIds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        parallelizable:
+          type: boolean
     CreateIssueManagerTasksRequest:
       type: object
       additionalProperties: false
@@ -1731,6 +1923,8 @@ components:
         sortIndex:
           type: integer
           minimum: 0
+        parallelizable:
+          type: boolean
     AddIssueManagerContextRefItem:
       type: object
       additionalProperties: false

@@ -146,8 +146,14 @@ func TestServiceCreateSynchronouslyPersistsRailSectionKey(t *testing.T) {
 		t.Fatalf("CreateWithResult returned error: %v", err)
 	}
 	session := created.Session
-	if created.TurnID != "turn-1" {
-		t.Fatalf("CreateWithResult turnId = %q, want turn-1", created.TurnID)
+	if created.TurnID == "" {
+		t.Fatal("CreateWithResult returned an empty turnId")
+	}
+	if len(runtime.execCalls) != 1 {
+		t.Fatalf("runtime exec calls = %d, want 1", len(runtime.execCalls))
+	}
+	if runtime.execCalls[0].TurnID != created.TurnID {
+		t.Fatalf("runtime exec turnId = %q, CreateWithResult turnId = %q", runtime.execCalls[0].TurnID, created.TurnID)
 	}
 	wantKey := userprojectbiz.SectionKeyFromPath(projectPath)
 	if session.RailSectionKey != wantKey {
@@ -2446,20 +2452,25 @@ func TestServiceUpdateVisibleUpdatesRuntimeSession(t *testing.T) {
 func TestServiceSendInputPassesDisplayPromptToRuntime(t *testing.T) {
 	runtime := newFakeRuntime()
 	service := newIsolatedAgentService(runtime)
+	activeTurnID := "turn-1"
 	runtime.sessions["ws-1:session-1"] = ProviderRuntimeSession{
 		ID:          "session-1",
 		WorkspaceID: "ws-1",
 		Provider:    "codex",
 		Status:      "ready",
 		Visible:     true,
+		TurnLifecycle: &TurnLifecycle{
+			ActiveTurnID: &activeTurnID,
+			Phase:        "running",
+		},
 	}
 
 	_, err := service.SendInput(context.Background(), "ws-1", "session-1", SendInput{
-		Content:       TextPromptContent("real repair prompt"),
-		DisplayPrompt: "Fix the app",
-		Guidance:      true,
+		Content:        TextPromptContent("real repair prompt"),
+		DisplayPrompt:  "Fix the app",
+		Guidance:       true,
+		ClientSubmitID: "submit-1",
 		Metadata: map[string]any{
-			"clientSubmitId":             "submit-1",
 			"clientSubmittedAtUnixMs":    int64(1234),
 			" ignoredBlankKeyIsRemoved ": true,
 			"":                           "drop",
@@ -6450,7 +6461,9 @@ func TestServiceSendInputReturnsRuntimeExecStatusOverStalePersistedStatus(t *tes
 		},
 	}
 
-	result, err := service.SendInput(context.Background(), "ws-1", "session-1", SendInput{Content: TextPromptContent("hello")})
+	result, err := service.SendInput(context.Background(), "ws-1", "session-1", SendInput{
+		TurnID: "turn-1", Content: TextPromptContent("hello"),
+	})
 	if err != nil {
 		t.Fatalf("SendInput returned error: %v", err)
 	}
@@ -6961,7 +6974,11 @@ type fakeRuntime struct {
 	closeErr               error
 	closeCalls             []RuntimeCloseInput
 	execErr                error
+	execHook               func(RuntimeExecInput) (RuntimeExecResult, error)
 	execCalls              []RuntimeExecInput
+	provenanceErr          error
+	provenanceHook         func(RuntimeSubmitProvenanceInput) error
+	provenanceCalls        []RuntimeSubmitProvenanceInput
 	goalControlCalls       []RuntimeGoalControlInput
 	goalControlHook        func(context.Context, RuntimeGoalControlInput) (RuntimeGoalControlResult, error)
 	goalReconcileCalls     []RuntimeGoalControlInput
@@ -7448,6 +7465,9 @@ func (f *fakeRuntime) CanResume(input RuntimeResumeInput) bool {
 
 func (f *fakeRuntime) Exec(_ context.Context, input RuntimeExecInput) (RuntimeExecResult, error) {
 	f.execCalls = append(f.execCalls, input)
+	if f.execHook != nil {
+		return f.execHook(input)
+	}
 	if f.execErr != nil {
 		return RuntimeExecResult{}, f.execErr
 	}
@@ -7462,14 +7482,26 @@ func (f *fakeRuntime) Exec(_ context.Context, input RuntimeExecInput) (RuntimeEx
 		session.UpdatedAtUnixMS = time.Now().UnixMilli()
 		f.sessions[key] = session
 	}
+	turnID := strings.TrimSpace(input.TurnID)
+	if turnID == "" {
+		turnID = "turn-1"
+	}
 	return RuntimeExecResult{
 		AgentSessionID: input.AgentSessionID,
 		Status:         "started",
 		Accepted:       true,
 		SessionStatus:  "working",
-		TurnID:         "turn-1",
+		TurnID:         turnID,
 		TurnLifecycle:  TurnLifecycle{Phase: "submitted"},
 	}, nil
+}
+
+func (f *fakeRuntime) DurablyReportSubmitProvenance(_ context.Context, input RuntimeSubmitProvenanceInput) error {
+	f.provenanceCalls = append(f.provenanceCalls, input)
+	if f.provenanceHook != nil {
+		return f.provenanceHook(input)
+	}
+	return f.provenanceErr
 }
 
 func (f *fakeRuntime) ValidatePromptContent(_ context.Context, input RuntimeExecInput) error {

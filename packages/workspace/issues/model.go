@@ -19,6 +19,60 @@ const (
 	PriorityLow    Priority = "low"
 )
 
+type PlanningSource string
+
+const (
+	PlanningSourceManual          PlanningSource = "manual"
+	PlanningSourceTuttiModePlan   PlanningSource = "tutti_mode_plan"
+	PlanningSourceTraditionalPlan PlanningSource = "traditional_plan"
+)
+
+type BudgetMode string
+
+const (
+	BudgetModeAuto  BudgetMode = "auto"
+	BudgetModeFixed BudgetMode = "fixed"
+)
+
+type BudgetStatus string
+
+const (
+	BudgetStatusActive      BudgetStatus = "active"
+	BudgetStatusSoftLimited BudgetStatus = "soft_limited"
+)
+
+type ExecutionProfile struct {
+	ReasoningIntensity     int
+	OrchestrationIntensity int
+}
+
+type Budget struct {
+	Mode                  BudgetMode
+	TokenLimit            int64
+	ConsumedTokens        int64
+	QuotaWaterlinePercent float64
+	RemainingQuotaPercent float64
+	HasRemainingQuota     bool
+	Status                BudgetStatus
+}
+
+type TokenUsage struct {
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+}
+
+func (u TokenUsage) Total() int64 {
+	return u.InputTokens + u.OutputTokens + u.CacheReadTokens + u.CacheWriteTokens
+}
+
+type Cost struct {
+	Currency        string
+	EstimatedMicros int64
+	ActualMicros    int64
+}
+
 type ContextRefParentKind string
 
 const (
@@ -60,6 +114,12 @@ type Issue struct {
 	CreatorUserID          string
 	CreatorDisplayName     string
 	CreatorAvatarURL       string
+	PlanningSource         PlanningSource
+	SourceSessionID        string
+	SequentialExecution    bool
+	ParallelExecution      bool
+	ExecutionProfile       ExecutionProfile
+	Budget                 Budget
 	CreatedAtUnixMS        int64
 	UpdatedAtUnixMS        int64
 }
@@ -80,8 +140,23 @@ type Task struct {
 	CreatorDisplayName string
 	CreatorAvatarURL   string
 	LatestRunID        string
-	CreatedAtUnixMS    int64
-	UpdatedAtUnixMS    int64
+	AgentTargetID      string
+	ModelPlanID        string
+	Model              string
+	// PermissionModeID and ReasoningEffort are task-level launch overrides
+	// recorded from the Tutti Mode plan review. Empty inherits the target's
+	// composer default (permission mode) or the Issue-level reasoning
+	// intensity compilation (reasoning effort).
+	PermissionModeID   string
+	ReasoningEffort    string
+	ExecutionDirectory string
+	DependencyTaskIDs  []string
+	// Parallelizable marks a task that may run alongside other ready tasks
+	// even when the Issue executes sequentially. False keeps the sequential
+	// default: the task waits for its predecessors in sort order.
+	Parallelizable  bool
+	CreatedAtUnixMS int64
+	UpdatedAtUnixMS int64
 }
 
 type Run struct {

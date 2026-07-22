@@ -115,6 +115,10 @@ function createViewModel(): AgentGUINodeViewModel {
       compactSupported: false,
       goalPauseSupported: false,
       canSubmit: false,
+      isTuttiModeActive: false,
+      isTuttiModeUpdating: false,
+      tuttiModeOrchestrationIntensity: 50,
+      tuttiModeUpdateStatus: "idle",
       composerSettings:
         {} as AgentGUINodeViewModel["composer"]["composerSettings"],
       queuedPrompts: [],

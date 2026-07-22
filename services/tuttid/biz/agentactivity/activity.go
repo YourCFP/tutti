@@ -19,6 +19,7 @@ type SessionSectionDeletionCandidates = agentstore.SessionSectionDeletionCandida
 type DeleteSessionsBatchInput = agentstore.DeleteSessionsBatchInput
 type DeleteSessionsPlan = agentstore.DeleteSessionsPlan
 type DeleteSessionsBatchResult = agentstore.DeleteSessionsBatchResult
+type DeleteSessionResult = agentstore.DeleteSessionResult
 type TransactionDelta = agentstore.TransactionDelta
 type TransactionMutation = agentstore.TransactionMutation
 
@@ -90,6 +91,7 @@ type SessionTurnCursor = agentstore.SessionTurnCursor
 type ListSessionTurnSummariesInput = agentstore.ListSessionTurnSummariesInput
 type SessionTurnSummary = agentstore.SessionTurnSummary
 type SessionTurnSummaryPage = agentstore.SessionTurnSummaryPage
+type CapabilityReference = agentstore.CapabilityReference
 
 type TurnTransition = agentstore.TurnTransition
 type RootProviderTurnTransition = agentstore.RootProviderTurnTransition

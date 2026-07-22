@@ -18,7 +18,10 @@ import type {
 } from "@tutti-os/agent-gui/workbench/types";
 import { isAgentGuiWorkbenchProvider } from "@tutti-os/agent-gui/workbench/providerCatalog";
 import type { I18nRuntime } from "@tutti-os/ui-i18n-runtime";
-import type { TuttidClient } from "@tutti-os/client-tuttid-ts";
+import type {
+  TuttidClient,
+  TuttidEventStreamClient
+} from "@tutti-os/client-tuttid-ts";
 import type {
   WorkbenchContribution,
   WorkbenchDockPreviewCache
@@ -27,6 +30,7 @@ import { WorkbenchDockComponentPreviewFrame } from "@tutti-os/workbench-surface"
 import type {
   DesktopComputerUseApi,
   DesktopHostFilesApi,
+  DesktopHostWindowApi,
   DesktopPlatformApi,
   DesktopRuntimeApi
 } from "@preload/types";
@@ -73,6 +77,7 @@ export function createWorkspaceAgentGuiContribution(input: {
   >[0]["unifiedDockIconUrl"];
   defaultAgentProvider?: string | null;
   hostFilesApi: DesktopHostFilesApi;
+  hostWindowApi: Pick<DesktopHostWindowApi, "openAgentWindow">;
   i18n: WorkspaceWorkbenchDesktopI18nRuntime;
   onCapabilitySettingsRequest?: DesktopAgentGUIWorkbenchBodyProps["onCapabilitySettingsRequest"];
   agentsService: Pick<IAgentsService, "getSnapshot" | "subscribe">;
@@ -80,6 +85,7 @@ export function createWorkspaceAgentGuiContribution(input: {
   renderAgentsEmpty?: AgentGUIAgentsEmptyRenderer;
   comingSoonAgentProviders?: readonly AgentGUIProvider[];
   tuttidClient: TuttidClient;
+  eventStreamClient?: TuttidEventStreamClient;
   platformApi: Pick<
     DesktopPlatformApi,
     "homeDirectory" | "os" | "resolveDroppedEntries" | "resolveDroppedPaths"
@@ -103,6 +109,7 @@ export function createWorkspaceAgentGuiContribution(input: {
   const agentGUIWorkbenchHostInput = createDesktopAgentGUIWorkbenchHostInput({
     agentQuickPromptService: input.agentQuickPromptService,
     hostFilesApi: input.hostFilesApi,
+    eventStreamClient: input.eventStreamClient,
     tuttidClient: input.tuttidClient,
     platformApi: input.platformApi,
     reporterService: input.reporterService,
@@ -154,6 +161,8 @@ export function createWorkspaceAgentGuiContribution(input: {
     return createElement(DesktopWorkspaceAgentGUIWorkbenchBody, {
       agentActivityRuntime: agentGUIWorkbenchHostInput.agentActivityRuntime,
       agentHostApi: agentGUIWorkbenchHostInput.agentHostApi,
+      tuttiModePlanReviewRuntime:
+        agentGUIWorkbenchHostInput.tuttiModePlanReviewRuntime,
       appCenterService: input.appCenterService,
       agentProviderStatusService: input.agentProviderStatusService,
       context,

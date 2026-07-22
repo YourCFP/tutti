@@ -86,6 +86,10 @@ type RuntimeController interface {
 	Close(context.Context, RuntimeCloseInput) error
 }
 
+type RuntimeSubmitProvenanceReporter interface {
+	DurablyReportSubmitProvenance(context.Context, RuntimeSubmitProvenanceInput) error
+}
+
 // RuntimeOperationStore is the complete durable coordinator boundary. Keeping
 // every transition on one port prevents adapters from reimplementing only the
 // transport-facing half of the state machine.
@@ -199,6 +203,9 @@ type RuntimeCleanupInput struct {
 	WorkspaceID    string
 	AgentSessionID string
 	Provider       string
+	// OrphanActivationCleanup requests Tutti Mode activation cleanup for
+	// runtime-only session state that never received a canonical tombstone.
+	OrphanActivationCleanup bool
 }
 
 type RuntimePreparationPort interface {

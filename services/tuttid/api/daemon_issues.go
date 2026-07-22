@@ -104,12 +104,7 @@ func (api DaemonAPI) CreateWorkspaceIssue(ctx context.Context, request tuttigene
 		return tuttigenerated.CreateWorkspaceIssue400JSONResponse{InvalidRequestErrorJSONResponse: issueManagerEmptyBodyError()}, nil
 	}
 
-	issue, err := api.IssueService.CreateIssue(ctx, string(request.WorkspaceID), workspaceservice.CreateIssueManagerIssueInput{
-		IssueID: optionalString(request.Body.IssueId),
-		TopicID: request.Body.TopicId,
-		Title:   request.Body.Title,
-		Content: optionalString(request.Body.Content),
-	})
+	issue, err := api.IssueService.CreateIssue(ctx, string(request.WorkspaceID), issueManagerCreateIssueInputFromGenerated(*request.Body))
 	if err != nil {
 		return writeCreateWorkspaceIssueError(err), nil
 	}
@@ -340,18 +335,20 @@ func (api DaemonAPI) UpdateWorkspaceIssueTask(ctx context.Context, request tutti
 	}
 
 	task, err := api.IssueService.UpdateTask(ctx, string(request.WorkspaceID), string(request.IssueID), string(request.TaskID), workspaceservice.UpdateIssueManagerTaskInput{
-		Title:        optionalString(request.Body.Title),
-		HasTitle:     request.Body.Title != nil,
-		Content:      optionalString(request.Body.Content),
-		HasContent:   request.Body.Content != nil,
-		Status:       optionalIssueManagerStatus(request.Body.Status),
-		HasStatus:    request.Body.Status != nil,
-		Priority:     optionalIssueManagerPriority(request.Body.Priority),
-		HasPriority:  request.Body.Priority != nil,
-		DueAtUnixMS:  optionalUnixMillis(request.Body.DueAtUnix),
-		HasDueAt:     request.Body.DueAtUnix != nil,
-		SortIndex:    optionalInt(request.Body.SortIndex),
-		HasSortIndex: request.Body.SortIndex != nil,
+		Title:             optionalString(request.Body.Title),
+		HasTitle:          request.Body.Title != nil,
+		Content:           optionalString(request.Body.Content),
+		HasContent:        request.Body.Content != nil,
+		Status:            optionalIssueManagerStatus(request.Body.Status),
+		HasStatus:         request.Body.Status != nil,
+		Priority:          optionalIssueManagerPriority(request.Body.Priority),
+		HasPriority:       request.Body.Priority != nil,
+		DueAtUnixMS:       optionalUnixMillis(request.Body.DueAtUnix),
+		HasDueAt:          request.Body.DueAtUnix != nil,
+		SortIndex:         optionalInt(request.Body.SortIndex),
+		HasSortIndex:      request.Body.SortIndex != nil,
+		Parallelizable:    request.Body.Parallelizable != nil && *request.Body.Parallelizable,
+		HasParallelizable: request.Body.Parallelizable != nil,
 	})
 	if err != nil {
 		return writeUpdateWorkspaceIssueTaskError(err), nil
@@ -562,6 +559,51 @@ func issueManagerTaskListInputFromGenerated(params tuttigenerated.ListWorkspaceI
 		input.SearchQuery = string(*params.SearchQuery)
 	}
 	return input
+}
+
+func issueManagerCreateIssueInputFromGenerated(item tuttigenerated.CreateIssueManagerIssueRequest) workspaceservice.CreateIssueManagerIssueInput {
+	return workspaceservice.CreateIssueManagerIssueInput{
+		IssueID:             optionalString(item.IssueId),
+		TopicID:             item.TopicId,
+		Title:               item.Title,
+		Content:             optionalString(item.Content),
+		PlanningSource:      optionalPlanningSource(item.PlanningSource),
+		SourceSessionID:     optionalString(item.SourceSessionId),
+		SequentialExecution: optionalBool(item.SequentialExecution),
+		ParallelExecution:   optionalBool(item.ParallelExecution),
+		ExecutionProfile:    issueManagerExecutionProfileFromGenerated(item.ExecutionProfile),
+		HasExecutionProfile: item.ExecutionProfile != nil,
+		Budget:              issueManagerBudgetFromGenerated(item.Budget),
+		HasBudget:           item.Budget != nil,
+	}
+}
+
+func issueManagerExecutionProfileFromGenerated(value *tuttigenerated.IssueManagerExecutionProfile) workspaceissues.ExecutionProfile {
+	if value == nil {
+		return workspaceissues.ExecutionProfile{}
+	}
+	return workspaceissues.ExecutionProfile{ReasoningIntensity: value.ReasoningIntensity, OrchestrationIntensity: value.OrchestrationIntensity}
+}
+
+func issueManagerBudgetFromGenerated(value *tuttigenerated.IssueManagerBudget) workspaceissues.Budget {
+	if value == nil {
+		return workspaceissues.Budget{}
+	}
+	return workspaceissues.Budget{Mode: workspaceissues.BudgetMode(value.Mode), TokenLimit: value.TokenLimit, ConsumedTokens: value.ConsumedTokens, QuotaWaterlinePercent: value.QuotaWaterlinePercent, RemainingQuotaPercent: optionalFloat64(value.RemainingQuotaPercent), HasRemainingQuota: value.RemainingQuotaPercent != nil, Status: workspaceissues.BudgetStatus(value.Status)}
+}
+
+func optionalFloat64(value *float64) float64 {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+func optionalPlanningSource(value *tuttigenerated.IssueManagerPlanningSource) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
 }
 
 func issueManagerContextRefsInputFromGenerated(items []tuttigenerated.AddIssueManagerContextRefItem) []workspaceissues.AddContextRefInput {

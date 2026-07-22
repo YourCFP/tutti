@@ -2,7 +2,6 @@ package workspace
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
@@ -23,6 +22,9 @@ const schemaMigrationWorkspaceAgentsV1 = "workspace_agents_v1"
 const schemaMigrationWorkspaceAgentsV2 = "workspace_agents_model_fallbacks_v1"
 const schemaMigrationWorkspaceAgentsV3 = "workspace_agents_call_conditions_v1"
 const schemaMigrationWorkspaceAgentsV4 = "workspace_agents_capability_selection_v1"
+const schemaMigrationWorkspaceIssuesV12 = "workspace_issue_tasks_launch_overrides_v1"
+const schemaMigrationWorkspaceIssuesV13 = "workspace_issue_tasks_parallelizable_v1"
+const schemaMigrationWorkspaceIssuesV14 = "workspace_issues_plan_origin_v1"
 const schemaMigrationDesktopPreferencesV1 = "desktop_preferences_v1"
 const schemaMigrationDesktopPreferencesAgentDockLayoutV1 = "desktop_preferences_agent_dock_layout_v1"
 const schemaMigrationDesktopPreferencesSleepPreventionModeV1 = "desktop_preferences_sleep_prevention_mode_v1"
@@ -63,6 +65,13 @@ const schemaMigrationModelPlanRevisionsV1 = "model_plan_revisions_v1"
 const schemaMigrationAppFactoryJobsV1 = "app_factory_jobs_v1"
 const schemaMigrationAppFactoryJobsV2 = "app_factory_jobs_v2"
 const schemaMigrationAppFactoryJobsV3 = "app_factory_jobs_v3"
+const schemaMigrationWorkspaceWorkflowsV1 = "workspace_workflows_v1"
+const schemaMigrationWorkspaceWorkflowMutationsV2 = "workspace_workflow_mutations_v2"
+const schemaMigrationWorkspaceWorkflowRevisionPathReuseV3 = "workspace_workflow_revision_path_reuse_v3"
+const schemaMigrationTuttiModeActivationsV1 = "tutti_mode_activations_v1"
+const schemaMigrationTuttiModeTurnDispatchV2 = "tutti_mode_turn_dispatch_v2"
+const schemaMigrationTuttiModeOrchestrationIntensityV3 = "tutti_mode_orchestration_intensity_v3"
+const schemaMigrationWorkspaceWorkflowTaskAssignmentsV4 = "workspace_workflow_task_assignments_v4"
 
 func (s *SQLiteStore) Migrate(ctx context.Context) error {
 	if s == nil || s.writeDB == nil {
@@ -125,6 +134,16 @@ INSERT OR IGNORE INTO tuttid_schema_migrations (id, applied_at_unix_ms)
 	}
 
 	if err := s.applyWorkspaceIssuesV5(ctx); err != nil {
+		return err
+	}
+
+	if err := s.applyWorkspaceIssuesV12(ctx); err != nil {
+		return err
+	}
+	if err := s.applyWorkspaceIssuesV13(ctx); err != nil {
+		return err
+	}
+	if err := s.applyWorkspaceIssuesV14(ctx); err != nil {
 		return err
 	}
 
@@ -282,6 +301,27 @@ INSERT OR IGNORE INTO tuttid_schema_migrations (id, applied_at_unix_ms)
 		return err
 	}
 	if err := s.applyAppFactoryJobsV3(ctx); err != nil {
+		return err
+	}
+	if err := s.applyWorkspaceWorkflowsV1(ctx); err != nil {
+		return err
+	}
+	if err := s.applyWorkspaceWorkflowMutationsV2(ctx); err != nil {
+		return err
+	}
+	if err := s.applyWorkspaceWorkflowRevisionPathReuseV3(ctx); err != nil {
+		return err
+	}
+	if err := s.applyTuttiModeActivationsV1(ctx); err != nil {
+		return err
+	}
+	if err := s.applyTuttiModeTurnDispatchV2(ctx); err != nil {
+		return err
+	}
+	if err := s.applyTuttiModeOrchestrationIntensityV3(ctx); err != nil {
+		return err
+	}
+	if err := s.applyWorkspaceWorkflowTaskAssignmentsV4(ctx); err != nil {
 		return err
 	}
 	return s.openReadPool(ctx)
@@ -666,150 +706,79 @@ INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms)
 	return nil
 }
 
-func (s *SQLiteStore) applyUserProjectsV1(ctx context.Context) error {
-	applied, err := s.hasMigration(ctx, schemaMigrationUserProjectsV1)
+// applyWorkspaceIssuesV12 introduces the task-level assignment and launch
+// override fields recorded from the Tutti Mode plan review: per-task agent
+// target, model plan, model, execution directory, dependency graph, permission
+// mode, and reasoning effort. Empty values inherit the target default and the
+// Issue-level intensity. The migration is additive so existing local Issue
+// Manager data remains valid.
+func (s *SQLiteStore) applyWorkspaceIssuesV12(ctx context.Context) error {
+	applied, err := s.hasMigration(ctx, schemaMigrationWorkspaceIssuesV12)
 	if err != nil {
 		return err
 	}
 	if applied {
 		return nil
 	}
-
-	now := unixMs(time.Now().UTC())
-	_, err = s.writeDB.ExecContext(ctx, `
-CREATE TABLE IF NOT EXISTS user_projects (
-  id TEXT PRIMARY KEY,
-  path TEXT NOT NULL UNIQUE,
-  label TEXT NOT NULL,
-  created_at_unix_ms INTEGER NOT NULL,
-  updated_at_unix_ms INTEGER NOT NULL,
-  last_used_at_unix_ms INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS idx_user_projects_last_used
-  ON user_projects(last_used_at_unix_ms DESC, updated_at_unix_ms DESC);
+	columns := []struct {
+		name       string
+		definition string
+	}{
+		{"agent_target_id", "TEXT NOT NULL DEFAULT ''"},
+		{"model_plan_id", "TEXT NOT NULL DEFAULT ''"},
+		{"model", "TEXT NOT NULL DEFAULT ''"},
+		{"execution_directory", "TEXT NOT NULL DEFAULT ''"},
+		{"dependency_task_ids_json", "TEXT NOT NULL DEFAULT '[]'"},
+		{"permission_mode_id", "TEXT NOT NULL DEFAULT ''"},
+		{"reasoning_effort", "TEXT NOT NULL DEFAULT ''"},
+	}
+	for _, column := range columns {
+		hasColumn, err := s.hasColumn(ctx, "workspace_issue_tasks", column.name)
+		if err != nil {
+			return err
+		}
+		if hasColumn {
+			continue
+		}
+		statement := fmt.Sprintf("ALTER TABLE workspace_issue_tasks ADD COLUMN %s %s;", column.name, column.definition)
+		if _, err := s.writeDB.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("add workspace_issue_tasks.%s: %w", column.name, err)
+		}
+	}
+	if _, err := s.writeDB.ExecContext(ctx, `
 INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms)
   VALUES (?, ?);
-`, schemaMigrationUserProjectsV1, now)
-	if err != nil {
-		return fmt.Errorf("migrate workspace database for user projects: %w", err)
+`, schemaMigrationWorkspaceIssuesV12, unixMs(time.Now().UTC())); err != nil {
+		return fmt.Errorf("record workspace issue task launch overrides migration: %w", err)
 	}
-
 	return nil
 }
 
-func (s *SQLiteStore) applyUserProjectsV2(ctx context.Context) error {
-	applied, err := s.hasMigration(ctx, schemaMigrationUserProjectsV2)
+// applyWorkspaceIssuesV13 records the per-task parallel opt-in from the Tutti
+// Mode plan review. Sequential stays the default: false means the task waits
+// for its predecessors, true lets it run alongside other ready tasks.
+func (s *SQLiteStore) applyWorkspaceIssuesV13(ctx context.Context) error {
+	applied, err := s.hasMigration(ctx, schemaMigrationWorkspaceIssuesV13)
 	if err != nil {
 		return err
 	}
 	if applied {
 		return nil
 	}
-
-	tx, err := s.writeDB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin user project order migration: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `ALTER TABLE user_projects ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return fmt.Errorf("add user project sort order: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `
-WITH ordered AS (
-  SELECT id, ROW_NUMBER() OVER (
-    ORDER BY last_used_at_unix_ms DESC, updated_at_unix_ms DESC, label ASC, id ASC
-  ) - 1 AS next_sort_order
-  FROM user_projects
-)
-UPDATE user_projects
-SET sort_order = (SELECT next_sort_order FROM ordered WHERE ordered.id = user_projects.id)
-`); err != nil {
-		return fmt.Errorf("backfill user project sort order: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `
-INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms) VALUES (?, ?)
-`, schemaMigrationUserProjectsV2, unixMs(time.Now().UTC())); err != nil {
-		return fmt.Errorf("record user project order migration: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit user project order migration: %w", err)
-	}
-	return nil
-}
-
-func (s *SQLiteStore) applyUserProjectsV3(ctx context.Context) error {
-	applied, err := s.hasMigration(ctx, schemaMigrationUserProjectsV3)
+	hasColumn, err := s.hasColumn(ctx, "workspace_issue_tasks", "parallelizable")
 	if err != nil {
 		return err
 	}
-	if applied {
-		return nil
+	if !hasColumn {
+		if _, err := s.writeDB.ExecContext(ctx, "ALTER TABLE workspace_issue_tasks ADD COLUMN parallelizable INTEGER NOT NULL DEFAULT 0;"); err != nil {
+			return fmt.Errorf("add workspace_issue_tasks.parallelizable: %w", err)
+		}
 	}
-
-	tx, err := s.writeDB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin user project pin migration: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `ALTER TABLE user_projects ADD COLUMN pinned_at_unix_ms INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return fmt.Errorf("add user project pinned timestamp: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `
-INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms) VALUES (?, ?)
-`, schemaMigrationUserProjectsV3, unixMs(time.Now().UTC())); err != nil {
-		return fmt.Errorf("record user project pin migration: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit user project pin migration: %w", err)
+	if _, err := s.writeDB.ExecContext(ctx, `
+INSERT INTO tuttid_schema_migrations (id, applied_at_unix_ms)
+  VALUES (?, ?);
+`, schemaMigrationWorkspaceIssuesV13, unixMs(time.Now().UTC())); err != nil {
+		return fmt.Errorf("record workspace issue task parallelizable migration: %w", err)
 	}
 	return nil
-}
-
-func (s *SQLiteStore) hasMigration(ctx context.Context, migrationID string) (bool, error) {
-	row := s.writeDB.QueryRowContext(ctx, `
-SELECT 1
-FROM tuttid_schema_migrations
-WHERE id = ?
-`, migrationID)
-
-	var exists int
-	if err := row.Scan(&exists); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
-		}
-		return false, fmt.Errorf("check workspace migration %s: %w", migrationID, err)
-	}
-
-	return exists == 1, nil
-}
-
-func (s *SQLiteStore) hasColumn(ctx context.Context, tableName string, columnName string) (bool, error) {
-	rows, err := s.writeDB.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", tableName))
-	if err != nil {
-		return false, fmt.Errorf("inspect workspace table %s: %w", tableName, err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var (
-			columnID   int
-			name       string
-			columnType string
-			notNull    int
-			defaultSQL sql.NullString
-			pk         int
-		)
-		if err := rows.Scan(&columnID, &name, &columnType, &notNull, &defaultSQL, &pk); err != nil {
-			return false, fmt.Errorf("scan workspace table info %s: %w", tableName, err)
-		}
-		if name == columnName {
-			return true, nil
-		}
-	}
-
-	if err := rows.Err(); err != nil {
-		return false, fmt.Errorf("iterate workspace table info %s: %w", tableName, err)
-	}
-
-	return false, nil
 }

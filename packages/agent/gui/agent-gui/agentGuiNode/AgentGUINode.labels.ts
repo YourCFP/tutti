@@ -12,6 +12,7 @@ import {
 } from "./view/agentGUIConversationRailLabels";
 import { agentGUIProviderManagerLabels } from "./view/agentGUIProviderManagerLabels";
 import { agentQuickPromptLabels } from "./composer/quickPrompts/agentQuickPromptLabels";
+import { agentGUITuttiModeLabels } from "./view/agentGUITuttiModeLabels";
 
 export { buildAgentHomeSuggestions };
 
@@ -250,6 +251,18 @@ export function useAgentGUIViewLabels(input: {
         )
       },
       planModeLabel: t("agentHost.agentGui.planModeLabel"),
+      normalModeLabel: t("agentHost.agentGui.normalModeLabel"),
+      normalModeDescription: t("agentHost.agentGui.normalModeDescription"),
+      ...agentGUITuttiModeLabels(t),
+      tuttiBudgetTitle: t("agentHost.agentGui.tuttiBudgetTitle"),
+      tuttiBudgetIntensityLabel: t(
+        "agentHost.agentGui.tuttiBudgetIntensityLabel"
+      ),
+      tuttiBudgetIntensityMin: t("agentHost.agentGui.tuttiBudgetIntensityMin"),
+      tuttiBudgetIntensityMax: t("agentHost.agentGui.tuttiBudgetIntensityMax"),
+      tuttiBudgetConfirm: t("agentHost.agentGui.tuttiBudgetConfirm"),
+      tuttiBudgetCancel: t("agentHost.agentGui.tuttiBudgetCancel"),
+      planModeDescription: t("agentHost.agentGui.planModeDescription"),
       planModeOnLabel: t("agentHost.agentGui.planModeOnLabel"),
       planModeOffLabel: t("agentHost.agentGui.planModeOffLabel"),
       planUnavailable: t("agentHost.agentGui.planUnavailable"),

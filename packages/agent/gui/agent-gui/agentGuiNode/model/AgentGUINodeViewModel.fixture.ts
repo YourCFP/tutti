@@ -70,6 +70,11 @@ export function groupAgentGUINodeViewModelFixture(
       compactSupported: flat.compactSupported,
       goalPauseSupported: flat.goalPauseSupported,
       canSubmit: flat.canSubmit,
+      isTuttiModeActive: flat.isTuttiModeActive ?? false,
+      isTuttiModeUpdating: flat.isTuttiModeUpdating ?? false,
+      tuttiModeOrchestrationIntensity:
+        flat.tuttiModeOrchestrationIntensity ?? 50,
+      tuttiModeUpdateStatus: flat.tuttiModeUpdateStatus ?? "idle",
       composerSettings: flat.composerSettings,
       queueStatus: flat.queueStatus,
       queuedPrompts: flat.queuedPrompts,
