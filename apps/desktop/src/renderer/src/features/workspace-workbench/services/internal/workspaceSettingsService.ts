@@ -183,9 +183,9 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     if (!wasOpen) {
       this.reportSettingsOpened();
       void this.refreshDeveloperLogs();
-      void this.modelPlans.refresh();
+      this.refreshModelPlansSurface();
     } else if (this.store.activeSection === "apps") {
-      void this.modelPlans.refresh();
+      this.refreshModelPlansSurface();
     }
   }
 
@@ -263,7 +263,7 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     this.store.activeSection = sectionID;
     this.reportSettingsSectionSwitched(sectionID);
     if (sectionID === "apps") {
-      void this.modelPlans.refresh();
+      this.refreshModelPlansSurface();
     }
   }
 
@@ -950,6 +950,13 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
 
     this.store.developerLogs.logs = logs;
     this.store.developerLogs.loading = false;
+  }
+
+  // Plans stay Plan-only via controller.refresh(); bindings are a separate
+  // load so the Agent binding section can render enabled targets.
+  private refreshModelPlansSurface(): void {
+    void this.modelPlans.refresh();
+    void this.modelPlans.refreshBindings();
   }
 
   private reportSettingsOpened(): void {

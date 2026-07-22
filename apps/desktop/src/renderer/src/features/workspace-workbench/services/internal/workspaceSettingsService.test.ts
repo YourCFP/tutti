@@ -1260,3 +1260,74 @@ test("WorkspaceSettingsService Agents deep-link works without a provider (blank 
   assert.equal(service.store.agentTab, "agents");
   assert.equal(service.store.agentFocusProvider, null);
 });
+
+test("WorkspaceSettingsService loads agent bindings when the model-plans surface opens", async () => {
+  let listPlansCalls = 0;
+  let listBindingsCalls = 0;
+  let listTargetsCalls = 0;
+  const service = new WorkspaceSettingsService({
+    client: createWorkspaceSettingsClient({
+      listAgentTargets: async () => {
+        listTargetsCalls += 1;
+        return [
+          createTuttiAgentTarget(true),
+          {
+            ...createTuttiAgentTarget(true),
+            enabled: false,
+            id: "local:codex-disabled",
+            name: "Codex Disabled",
+            provider: "codex",
+            sortOrder: 10
+          },
+          {
+            ...createTuttiAgentTarget(true),
+            id: "local:codex",
+            name: "Codex",
+            provider: "codex",
+            sortOrder: 5
+          }
+        ];
+      },
+      listModelPlans: async () => {
+        listPlansCalls += 1;
+        return [];
+      },
+      listAgentModelBindings: async () => {
+        listBindingsCalls += 1;
+        return [
+          {
+            workspaceId: "workspace-1",
+            agentTargetId: "local:codex",
+            defaultModel: "gpt-5.5",
+            modelPlanId: "plan-1"
+          }
+        ];
+      }
+    })
+  });
+
+  service.openPanel({ id: "workspace-1" });
+  await waitFor(
+    () =>
+      service.store.modelPlans.bindings.agentTargets.length > 0 &&
+      !service.store.modelPlans.bindings.loading
+  );
+
+  assert.ok(listPlansCalls >= 1);
+  assert.ok(listBindingsCalls >= 1);
+  assert.ok(listTargetsCalls >= 1);
+  assert.deepEqual(
+    service.store.modelPlans.bindings.agentTargets.map((target) => target.id),
+    ["local:codex", "local:tutti-agent"]
+  );
+  assert.equal(
+    service.store.modelPlans.bindings.bindings[0]?.agentTargetId,
+    "local:codex"
+  );
+
+  // Selecting apps again after opening another section must reload bindings.
+  service.selectSection("appearance");
+  const bindingsBeforeApps = listBindingsCalls;
+  service.selectSection("apps");
+  await waitFor(() => listBindingsCalls > bindingsBeforeApps);
+});
