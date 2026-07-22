@@ -78,7 +78,8 @@ export interface WorkspaceAgentActivityServiceDependencies {
   tuttidClient: TuttidClient;
   reporterNow?: () => number;
   reporterService?: Pick<IReporterService, "trackEvents">;
-  runtimeApi: Pick<DesktopRuntimeApi, "logTerminalDiagnostic">;
+  runtimeApi: Pick<DesktopRuntimeApi, "logTerminalDiagnostic"> &
+    Partial<Pick<DesktopRuntimeApi, "getBackendConfig">>;
   agentProviderStatusService?: Pick<IAgentProviderStatusService, "refresh">;
   workspaceUserProjectService?: IWorkspaceUserProjectService;
 }
@@ -314,6 +315,9 @@ export class WorkspaceAgentActivityService
       throw new Error("workspace_agent_delete_result_missing");
     }
     return {
+      cleanupFailedSessionIds: [
+        ...mutation.deleteResult.cleanupFailedSessionIds
+      ],
       removedMessages: mutation.deleteResult.removedMessages,
       removedSessionIds: [...mutation.deleteResult.removedSessionIds],
       removedSessions: mutation.deleteResult.removedSessions
@@ -634,7 +638,10 @@ export class WorkspaceAgentActivityService
       signal: input.signal,
       workspaceId
     });
-    return { removed: result.removedSessionIds.includes(agentSessionId) };
+    return {
+      cleanupFailed: result.cleanupFailedSessionIds.includes(agentSessionId),
+      removed: result.removedSessionIds.includes(agentSessionId)
+    };
   }
 
   async renameSession(

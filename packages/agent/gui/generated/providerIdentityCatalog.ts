@@ -8,6 +8,7 @@ export const generatedProviderIdentityCatalog = [
     localeKey: "agentHost.agentGui.conversationFilterCodex",
     modelPlanProtocol: "openai",
     aliases: [],
+    modelPlanProtocol: "openai",
     target: {
       id: "local:codex",
       launchRefType: "local_cli",
@@ -36,6 +37,7 @@ export const generatedProviderIdentityCatalog = [
     localeKey: "agentHost.agentGui.conversationFilterClaudeCode",
     modelPlanProtocol: "anthropic",
     aliases: ["claude", "claude code"],
+    modelPlanProtocol: "anthropic",
     target: {
       id: "local:claude-code",
       launchRefType: "local_cli",
@@ -64,6 +66,7 @@ export const generatedProviderIdentityCatalog = [
     localeKey: "agentHost.agentGui.conversationFilterCursor",
     modelPlanProtocol: "",
     aliases: ["cursor-agent", "cursor agent", "cursor-cli"],
+    modelPlanProtocol: "",
     target: {
       id: "local:cursor",
       launchRefType: "local_cli",
@@ -92,6 +95,7 @@ export const generatedProviderIdentityCatalog = [
     localeKey: "agentHost.agentGui.conversationFilterTutti",
     modelPlanProtocol: "openai",
     aliases: ["tutti agent"],
+    modelPlanProtocol: "openai",
     target: {
       id: "local:tutti-agent",
       launchRefType: "local_cli",
@@ -120,6 +124,7 @@ export const generatedProviderIdentityCatalog = [
     localeKey: "agentHost.agentGui.conversationFilterOpenCode",
     modelPlanProtocol: "openai",
     aliases: ["open-code", "open code", "opencode-ai", "opencode_ai"],
+    modelPlanProtocol: "",
     target: {
       id: "local:opencode",
       launchRefType: "local_cli",
@@ -148,6 +153,7 @@ export const generatedProviderIdentityCatalog = [
     localeKey: "agentHost.agentGui.conversationFilterNexight",
     modelPlanProtocol: "",
     aliases: ["tutti"],
+    modelPlanProtocol: "",
     target: {
       id: "local:nexight",
       launchRefType: "local_cli",
@@ -204,6 +210,7 @@ export const generatedProviderIdentityCatalog = [
     localeKey: "agentHost.agentGui.conversationFilterOpenClaw",
     modelPlanProtocol: "",
     aliases: ["open-claw"],
+    modelPlanProtocol: "",
     target: {
       id: "local:openclaw",
       launchRefType: "local_cli",

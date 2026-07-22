@@ -1,6 +1,5 @@
 import { proxy } from "valtio";
 import type {
-  WorkspaceSettingsAutomationRulesMutableState,
   WorkspaceSettingsModelPlansMutableState,
   WorkspaceSettingsStoreState,
   WorkspaceSettingsWorkspaceAgentsMutableState
@@ -21,15 +20,32 @@ export function createWorkspaceSettingsAgentsState(): WorkspaceSettingsWorkspace
   };
 }
 
-export function createWorkspaceSettingsAutomationRulesState(): WorkspaceSettingsAutomationRulesMutableState {
-  return {
-    rules: []
-  };
-}
-
 export function createWorkspaceSettingsModelPlansState(): WorkspaceSettingsModelPlansMutableState {
   return {
-    plans: []
+    bindings: {
+      agentTargets: [],
+      bindings: [],
+      loadFailed: false,
+      loading: false,
+      saveFailedTargetID: null,
+      savingTargetID: null
+    },
+    confirmingDeletePlanID: null,
+    deleteBlock: null,
+    deletingPlanID: null,
+    detecting: false,
+    draft: null,
+    draftDetection: null,
+    draftDiscoveredModels: [],
+    draftFeedback: null,
+    draftSaveImpact: null,
+    duplicatingPlanID: null,
+    fetchingDraftModels: false,
+    loading: false,
+    planFeedback: {},
+    plans: [],
+    saving: false,
+    togglingPlanID: null
   };
 }
 
@@ -40,7 +56,6 @@ export function createWorkspaceSettingsStore(): WorkspaceSettingsStoreState {
     agentFocusProvider: null,
     agentFocusRequestID: 0,
     agents: createWorkspaceSettingsAgentsState(),
-    automationRules: createWorkspaceSettingsAutomationRulesState(),
     developerPanelVisible: readDeveloperPanelVisible(),
     developerLogs: {
       clearing: false,
@@ -51,18 +66,6 @@ export function createWorkspaceSettingsStore(): WorkspaceSettingsStoreState {
     },
     generalFocusAnchor: null,
     generalFocusRequestID: 0,
-    managedModels: {
-      deletingProvider: null,
-      detectingProvider: null,
-      draft: null,
-      feedback: {},
-      focusedProvider: null,
-      focusRequestID: 0,
-      loading: false,
-      providers: [],
-      savingProvider: null,
-      testingProvider: null
-    },
     modelPlans: createWorkspaceSettingsModelPlansState(),
     open: false,
     purgingDeletedConversations: false,

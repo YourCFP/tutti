@@ -51,7 +51,11 @@ export interface WorkspaceAgentServiceRegistrationInput {
   runtimeApi: Pick<
     DesktopRuntimeApi,
     "logRendererDiagnostic" | "logTerminalDiagnostic"
-  >;
+  > &
+    // Model-plan requests resolve the daemon endpoint per-call; older
+    // hosts/tests may omit the resolver and those optional commands then
+    // fail at call time instead of registration time.
+    Partial<Pick<DesktopRuntimeApi, "getBackendConfig">>;
   terminalCommandRunner: AgentProviderTerminalCommandRunner;
   windowLifecycle: WorkspaceWindowLifecycle;
   workspaceId: string;

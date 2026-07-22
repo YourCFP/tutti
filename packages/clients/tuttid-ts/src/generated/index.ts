@@ -312,7 +312,6 @@ export type {
   AuthenticateAgentTargetRuntimeRequest,
   AuthenticateAgentTargetRuntimeResponse,
   AuthenticateAgentTargetRuntimeResponses,
-  AutomationRuleTrigger,
   CancelWorkspaceAgentTurnData,
   CancelWorkspaceAgentTurnError,
   CancelWorkspaceAgentTurnErrors,

@@ -1,3 +1,5 @@
+import type { AgentActivityComposerModelConfiguration } from "./composerModelConfiguration.types.ts";
+
 export type AgentActivityDisplayStatus =
   | "working"
   | "waiting"
@@ -129,6 +131,13 @@ export interface AgentActivityComposerSettingOption {
   label: string;
   description?: string;
   supportsImageInput?: boolean;
+  /**
+   * True when the entry mirrors the requested/current selection instead of
+   * the provider catalog (daemon warm-catalog append, selected-model
+   * bootstrap echo, GUI current-value append). Requested-origin entries stay
+   * selectable but are not testimony that the provider can run the model.
+   */
+  requested?: boolean;
 }
 
 export interface AgentActivityComposerCommandOption {
@@ -254,6 +263,14 @@ export interface AgentActivityComposerOptions {
   capabilityCatalog?: AgentActivityComposerCapabilityOption[];
   behavior: AgentActivityComposerBehavior;
   slashCommandPolicy?: AgentActivitySlashCommandPolicy | null;
+  /** Credential-free model-plan identity projected from daemon runtime context. */
+  modelPlan?: {
+    id: string;
+    name: string;
+    protocol?: string | null;
+  } | null;
+  /** Authoritative model default identity for the selected agent target. */
+  modelConfiguration?: AgentActivityComposerModelConfiguration | null;
   loadedAtUnixMs: number;
 }
 
@@ -528,10 +545,16 @@ export type AgentActivityGoalControlAction =
   | "clear"
   | "set";
 
+export interface AgentActivityInitialGoalControl {
+  action: AgentActivityGoalControlAction;
+  objective?: string;
+}
+
 export interface AgentActivityGoalControlInput {
   workspaceId: string;
   agentSessionId: string;
   action: AgentActivityGoalControlAction;
+  clientSubmitId?: string;
   objective?: string;
   signal?: AbortSignal;
 }
@@ -563,6 +586,7 @@ export interface AgentActivityDeleteSessionInput {
 }
 
 export interface AgentActivityDeleteSessionResult {
+  cleanupFailed: boolean;
   removed: boolean;
 }
 
@@ -573,6 +597,7 @@ export interface AgentActivityDeleteSessionsInput {
 }
 
 export interface AgentActivityDeleteSessionsResult {
+  cleanupFailedSessionIds: string[];
   removedMessages: number;
   removedSessionIds: string[];
   removedSessions: number;
@@ -584,6 +609,11 @@ export interface AgentActivitySetSessionPinnedInput {
   pinned: boolean;
   signal?: AbortSignal;
 }
+
+export type {
+  AgentActivityModelPlanModel,
+  AgentActivityModelPlanSummary
+} from "./modelPlans.types.ts";
 
 export type AgentActivityNeedsAttentionKind =
   | "permission"
@@ -702,6 +732,7 @@ export interface AgentActivitySessionCapabilities {
   rateLimits: boolean;
   planMode: boolean;
   interrupt: boolean;
+  modelSwitch: boolean;
   activeTurnGuidance: boolean;
   browserUse: boolean;
   computerUse: boolean;

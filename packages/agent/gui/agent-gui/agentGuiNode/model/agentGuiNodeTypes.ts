@@ -87,6 +87,12 @@ export interface AgentGUIComposerSettingOption {
   label: string;
   description?: string;
   supportsImageInput?: boolean;
+  /** Bound plan identity for options aggregated from model access plans. */
+  modelPlanId?: string | null;
+  /** Display name of the plan (or provider) the option originates from. */
+  sourceName?: string;
+  /** When the option takes effect after selection. */
+  effect?: "new_session" | "next_call";
 }
 
 export interface AgentGUIProviderSkillOption {
@@ -249,6 +255,12 @@ export interface AgentHomeSuggestionCategory {
   action?: AgentHomeSuggestionAction;
 }
 
+export interface AgentGUIComposerModelPlanVM {
+  id: string;
+  name: string;
+  protocol?: string | null;
+}
+
 export interface AgentGUIComposerSettingsVM {
   sessionSettings: AgentSessionComposerSettings | null;
   draftSettings: {
@@ -289,6 +301,8 @@ export interface AgentGUIComposerSettingsVM {
   selectedProjectPath?: string | null;
   /** Persisted rail membership used to scope Agent-generated file mentions. */
   selectedProjectSectionKey?: string | null;
+  /** Resolve the durable default only before the home project intent is known. */
+  shouldApplyPreparedProjectSelection?: boolean;
   projectLocked?: boolean;
   // Mirrors the injected runtime's `projectPathIsRemote`. When true the session
   // cwd is not on the local filesystem (e.g. a shared/cloud sandbox), so the
@@ -299,6 +313,14 @@ export interface AgentGUIComposerSettingsVM {
   // whose live lists span many vendors and versions, e.g. Cursor). The
   // currently selected model always stays visible even if older.
   collapseModelOptionsToLatest?: boolean;
+  // Bound model access plan for the composer target, projected from the
+  // daemon composer options `runtimeContext.modelPlan`. Absent/null when the
+  // target keeps its provider-native model source.
+  modelPlan?: AgentGUIComposerModelPlanVM | null;
+  // Active session with a provider advertising the "modelSwitch" capability:
+  // a new model pick applies from the next request, so the model menu shows
+  // the switch-effect footer hint.
+  modelSwitchTakesEffectNextTurn?: boolean;
   availableModels: AgentGUIComposerSettingOption[];
   availableReasoningEfforts: AgentGUIComposerSettingOption[];
   availableSpeeds: AgentGUIComposerSettingOption[];
