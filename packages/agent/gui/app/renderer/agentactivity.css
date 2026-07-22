@@ -5283,6 +5283,13 @@ aside.workspace-agents-status-panel
   background: transparent !important;
   color: var(--agent-gui-workbench-header-muted) !important;
   cursor: pointer;
+  /* Header chrome icon buttons must not animate: no hover fade, no
+     press-down motion inherited from the ui-system Button base. */
+  transition: none !important;
+}
+
+.agent-gui-workbench-header__icon-button:active {
+  transform: none !important;
 }
 
 .agent-gui-workbench-header[data-agent-gui-standalone-window-header="true"]
@@ -5307,12 +5314,6 @@ aside.workspace-agents-status-panel
 
 .agent-gui-workbench-header__rail-toggle {
   margin-left: auto;
-  /* The rail toggle must not animate: no hover fade, no press-down motion. */
-  transition: none !important;
-}
-
-.agent-gui-workbench-header__rail-toggle:active {
-  transform: none !important;
 }
 
 .agent-gui-workbench-header__detached-window {
