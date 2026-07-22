@@ -6366,6 +6366,8 @@ button.agent-gui-node__conversation-section-toggle:hover
 
 .agent-gui-node__conversation-item {
   --agent-gui-conversation-actions-width: 72px;
+  --agent-gui-conversation-actions-inset: 4px;
+  --agent-gui-conversation-actions-gap: 8px;
 
   position: relative;
   display: block;
@@ -6410,7 +6412,7 @@ button.agent-gui-node__conversation-section-toggle:hover
   display: grid;
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: var(--agent-gui-conversation-actions-gap);
   align-items: center;
   width: 100%;
   max-width: 100%;
@@ -6452,7 +6454,10 @@ button.agent-gui-node__conversation-section-toggle:hover
   )
   .agent-gui-node__conversation-select {
   grid-template-columns: minmax(0, 1fr) 0;
-  padding-right: calc(var(--agent-gui-conversation-actions-width) + 24px);
+  padding-right: calc(
+    var(--agent-gui-conversation-actions-width) +
+      var(--agent-gui-conversation-actions-inset)
+  );
 }
 
 .agent-gui-node__conversation-item[data-pending-delete="true"]
@@ -6486,7 +6491,7 @@ button.agent-gui-node__conversation-section-toggle:hover
 .agent-gui-node__conversation-actions {
   position: absolute;
   top: 50%;
-  right: 4px;
+  right: var(--agent-gui-conversation-actions-inset);
   z-index: 1;
   display: inline-flex;
   align-items: center;

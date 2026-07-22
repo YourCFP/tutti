@@ -421,6 +421,12 @@ A controller may compose flows but cannot become a second lifecycle state machin
 
 Activation and existing-Session submit share a canonical prompt envelope. Submit eligibility includes text and renderable structured content; an individual composer does not redefine it.
 
+Home-composer project state distinguishes an unresolved durable default from an
+explicit selection whose path may be null. The project selector may apply the
+durable default only while that intent is unresolved. Entering the unscoped
+conversation section resolves the intent to no project, so remounting the hero
+composer or refreshing the project list cannot restore a previous project.
+
 Composer text transactions may publish the current draft, but the draft value
 must not drive synchronous pre-paint geometry reads. The dock observes the
 actual editor, input area, and attachment containers; its initial and

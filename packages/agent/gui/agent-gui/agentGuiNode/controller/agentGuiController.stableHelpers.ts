@@ -470,6 +470,8 @@ export function areComposerSettingsVMsEqual(
     arePermissionConfigsEqual(left.permissionConfig, right.permissionConfig) &&
     (left.selectedProjectPath ?? null) ===
       (right.selectedProjectPath ?? null) &&
+    Boolean(left.shouldApplyPreparedProjectSelection) ===
+      Boolean(right.shouldApplyPreparedProjectSelection) &&
     Boolean(left.projectLocked) === Boolean(right.projectLocked) &&
     Boolean(left.projectPathIsRemote) === Boolean(right.projectPathIsRemote) &&
     Boolean(left.collapseModelOptionsToLatest) ===

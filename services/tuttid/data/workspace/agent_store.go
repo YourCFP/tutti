@@ -173,6 +173,10 @@ func (s *SQLiteStore) ListSessions(ctx context.Context, workspaceID string) ([]a
 	return s.agentReadStore().ListSessions(ctx, workspaceID)
 }
 
+func (s *SQLiteStore) ListSessionsPage(ctx context.Context, input agentactivitybiz.ListSessionsPageInput) (agentactivitybiz.SessionListPage, bool, error) {
+	return s.agentReadStore().ListSessionsPage(ctx, input)
+}
+
 func (s *SQLiteStore) ListSessionSection(ctx context.Context, input agentactivitybiz.ListSessionSectionInput) (agentactivitybiz.SessionSectionPage, bool, error) {
 	return s.agentReadStore().ListSessionSection(ctx, input)
 }
