@@ -8009,6 +8009,7 @@ components:
       additionalProperties: false
       required:
         - agentTargetId
+        - clientSubmitId
         - displayName
         - prompt
       properties:
@@ -8021,6 +8022,9 @@ components:
         description:
           type: string
         agentTargetId:
+          type: string
+          minLength: 1
+        clientSubmitId:
           type: string
           minLength: 1
         provider:
