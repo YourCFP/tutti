@@ -343,11 +343,11 @@ func installNodeForTarget(target string) string {
 }
 
 func (s Service) providerCLIRequiresInstall(spec ProviderSpec, runtime providerRuntimeResolution) bool {
-	if !isCodexStatusSpec(spec) {
-		return false
-	}
-	if !s.codexPlatformBinaryOK(runtime.CLIPath) {
+	if isCodexStatusSpec(spec) && !s.codexPlatformBinaryOK(runtime.CLIPath) {
 		return true
+	}
+	if strings.TrimSpace(spec.MinVersion) == "" {
+		return false
 	}
 	return !cliVersionMeetsMinimum(s.cliVersion(context.Background(), runtime.CLIPath, runtime.Env), spec.MinVersion)
 }

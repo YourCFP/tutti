@@ -46,6 +46,38 @@ func TestMigratedProviderUpdateSupportMatrixIsDescriptorDriven(t *testing.T) {
 	}
 }
 
+func TestMigratedTuttiAgentDescriptorRequiresRefreshCapableVersion(t *testing.T) {
+	descriptor, ok := Find(TuttiAgentProviderID)
+	if !ok {
+		t.Fatal("Find(tutti-agent) ok = false")
+	}
+	if descriptor.Status.MinVersion != TuttiAgentMinVersion {
+		t.Fatalf("Status.MinVersion = %q, want %q", descriptor.Status.MinVersion, TuttiAgentMinVersion)
+	}
+	if descriptor.Status.Install.PackageName != "@tutti-os/tutti-agent" ||
+		descriptor.Status.Install.BinaryName != "tutti-agent" ||
+		!descriptor.Status.Install.IncludeOptional {
+		t.Fatalf("Status.Install = %#v", descriptor.Status.Install)
+	}
+}
+
+func TestValidateRejectsInvalidMinimumVersionFloor(t *testing.T) {
+	t.Run("invalid semantic version", func(t *testing.T) {
+		descriptor := tuttiAgentDescriptor()
+		descriptor.Status.MinVersion = "latest"
+		if err := Validate(descriptor); err == nil {
+			t.Fatal("Validate() error = nil")
+		}
+	})
+	t.Run("missing repair installer", func(t *testing.T) {
+		descriptor := tuttiAgentDescriptor()
+		descriptor.Status.Install = InstallerDescriptor{}
+		if err := Validate(descriptor); err == nil {
+			t.Fatal("Validate() error = nil")
+		}
+	})
+}
+
 func TestValidateRejectsUnsafeProviderUpdateDeclarations(t *testing.T) {
 	tests := []struct {
 		name   string
