@@ -1,28 +1,6 @@
-// Model access plan, model choice history, and model consult copy for the
-// agent GUI. Split from en.agentGui.ts to keep that module under the
-// 800-line budget.
+// Model access plan and model choice history copy for the agent GUI. Split
+// from en.agentGui.ts to keep that module under the 800-line budget.
 export const enAgentGuiModelPlans = {
-  collaborationModeConsult: "Consult",
-  collaborationModeFork: "Fork",
-  collaborationModeDelegate: "Delegate",
-  collaborationModeHandoff: "Handoff",
-  collaborationTriggerUser: "Manual",
-  collaborationTriggerAgent: "Agent",
-  collaborationTriggerPolicy: "Policy",
-  collaborationStatusRunning: "Running",
-  collaborationStatusCompleted: "Completed",
-  collaborationStatusFailed: "Failed",
-  collaborationStatusCanceled: "Canceled",
-  collaborationPlanLabel: "Plan: {{name}}",
-  collaborationUsageTokens: "Tokens: {{input}} in · {{output}} out",
-  collaborationFailureReason: "Failure: {{reason}}",
-  collaborationResultShow: "Show result",
-  collaborationResultHide: "Hide result",
-  collaborationAdopt: "Adopt",
-  collaborationReject: "Reject",
-  collaborationAdopted: "Adopted",
-  collaborationRejected: "Not adopted",
-  collaborationAdoptionFailed: "Failed to record the adoption decision.",
   composerModelPlanBadge: "Plan: {{name}}",
   composerModelSearchPlaceholder: "Search models",
   composerModelSearchEmpty: "No matching models",
@@ -30,17 +8,5 @@ export const enAgentGuiModelPlans = {
   composerModelRecentsGroup: "Recently used",
   composerModelSwitchNextTurnHint: "Applies from the next request",
   composerModelFavoriteAdd: "Add to favorites",
-  composerModelFavoriteRemove: "Remove from favorites",
-  consultEntryLabel: "Consult model",
-  consultDialogTitle: "Consult a model",
-  consultPlanLabel: "Plan",
-  consultModelLabel: "Model",
-  consultQuestionLabel: "Question",
-  consultQuestionPlaceholder: "Ask another model for advice...",
-  consultIncludeContextLabel: "Attach the latest assistant reply as context",
-  consultSubmit: "Consult",
-  consultSubmitting: "Consulting...",
-  consultLoadPlansFailed: "Failed to load model plans.",
-  consultNoPlans: "No enabled model plans",
-  consultFailed: "Model consult failed."
+  composerModelFavoriteRemove: "Remove from favorites"
 } as const;

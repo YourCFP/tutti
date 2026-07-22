@@ -57,7 +57,6 @@ import type { useAgentQuickPromptLibrary } from "./quickPrompts/useAgentQuickPro
 import {
   agentComposerDraftHasContent,
   agentComposerDraftImages,
-  agentComposerDraftPrompt,
   updateAgentComposerDraft
 } from "../model/agentComposerDraft";
 
@@ -137,12 +136,10 @@ export function AgentComposerView(input: Props): React.JSX.Element {
     onHandoffConversation,
     onSlashStatusRefresh,
     compactSupported = null,
-    hasCompactableContext = true,
-    modelConsult = null
+    hasCompactableContext = true
   } = input.props;
   const draftImages = agentComposerDraftImages(draftContent);
   const slashStatusAgentSessionId = slashStatus?.agentSessionId ?? null;
-  const draftPrompt = agentComposerDraftPrompt(draftContent);
   const { availableCapabilities, slashPaletteEntries, slashQuery } =
     input.paletteCatalog;
   const { mentionPaletteFrame, mentionPaletteHeightPx, mentionPaletteStyle } =
@@ -584,7 +581,6 @@ export function AgentComposerView(input: Props): React.JSX.Element {
             </ComposerFloatingMenuSurface>
           </Popover>
           <ComposerFooter
-            workspaceId={workspaceId}
             labels={labels}
             provider={provider}
             composerSettings={composerSettings}
@@ -626,8 +622,6 @@ export function AgentComposerView(input: Props): React.JSX.Element {
             onSettingsChange={onSettingsChange}
             onSubmit={onSubmit}
             onClearGoalMode={clearGoalModeBadge}
-            modelConsult={modelConsult}
-            draftPrompt={draftPrompt}
           />
         </div>
         {showProjectRow ? (

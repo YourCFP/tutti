@@ -483,18 +483,6 @@ export function createDesktopAgentActivityRuntime(
       : {}),
     renameSession: (input) =>
       workspaceAgentActivityService.renameSession(input),
-    // Model consult runs on collaboration-run daemon endpoints owned by the
-    // collaboration branch; the desktop runtime only wires listModelPlans
-    // here, so AgentGUI keeps the consult affordance hidden on this branch.
-    ...(workspaceAgentActivityService.listModelPlans
-      ? {
-          listModelPlans: (
-            input: Parameters<
-              NonNullable<AgentActivityRuntime["listModelPlans"]>
-            >[0]
-          ) => workspaceAgentActivityService.listModelPlans!(input)
-        }
-      : {}),
     async setSessionPinned(input) {
       const session =
         await workspaceAgentActivityService.setSessionPinned(input);

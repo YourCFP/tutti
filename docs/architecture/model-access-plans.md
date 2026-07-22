@@ -158,21 +158,14 @@ Rules:
 
 `modelpolicy` keeps a per-session acceptance ladder:
 `agent_claimed → auto_checked → user_accepted`. Only an explicit user action
-reaches `user_accepted` today. Automated review consults and automated ladder
+reaches `user_accepted` today. Automated review runs and automated ladder
 advancement remain deferred; do not document or UI-promise those behaviors
-until the later stack layer lands. Review runs, when enabled later, must land
-in collaboration-run accounting and must never close work without the user.
+until the later stack layer lands. Review runs must never close work without
+the user.
 
-## Collaboration Runs
-
-`collabrun.Run` records every 模型咨询 (consult) / Fork / 委派 (delegate) /
-Handoff with trigger source and reason, source/target sessions, actual plan
-and model, context scope, status, duration, token usage, failure, and result
-adoption. Consult executes daemon-side through the plan protocol client
-(`modelplan.Service.Complete`) with an advisor system prompt — advice only, no
-tools, ownership stays with the source session. Fork/delegate/handoff runs are
-records around the existing session-create/handoff launch paths. Updates
-publish on the strict-schema `agent.collaboration.updated` topic.
+Explicit in-composer “model consult” (ask another plan/model for advice from
+the current session) is not a product surface: do not ship composer entry
+points, runtime commands, or timeline cards for it.
 
 ## Migration
 

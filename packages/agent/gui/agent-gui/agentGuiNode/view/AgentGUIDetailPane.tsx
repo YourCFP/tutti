@@ -13,7 +13,6 @@ import type { WorkspaceLinkAction } from "../../../actions/workspaceLinkActions"
 import type { UiLanguage } from "../../../contexts/settings/domain/agentSettings";
 import type { AgentPromptContentBlock } from "../../../shared/contracts/dto";
 import type { AgentMessageMarkdownWorkspaceAppIcon } from "../../../shared/AgentMessageMarkdown";
-import { latestAssistantMessageText } from "../../../shared/agentConversation/projection/agentConversationProjection";
 import { AGENT_GUI_WORKBENCH_OPEN_EXTERNAL_IMPORT_EVENT } from "../../../workbench/contribution";
 import { resolveAgentGuiWorkbenchProviderLabel } from "../../../workbench/providerCatalog";
 import type {
@@ -476,13 +475,6 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       handoffMenuLabel: labels.handoffConversationMenu,
       isInterrupting:
         viewModel.composer.isInterrupting || viewModel.composer.isCancelPending,
-      modelConsult:
-        viewModel.rail.activeConversationId !== null
-          ? {
-              agentSessionId: viewModel.rail.activeConversationId,
-              lastAssistantMessageText: latestAssistantMessageText(conversation)
-            }
-          : null,
       isSendingTurn: isComposerSending,
       isSubmittingPrompt: isInteractionPending,
       projectMissingProbeEnabled: !viewModel.composer.isCreatingConversation,

@@ -611,18 +611,8 @@ export interface AgentActivitySetSessionPinnedInput {
 }
 
 export type {
-  AgentActivityCollaborationMode,
-  AgentActivityCollaborationTriggerSource,
-  AgentActivityCollaborationStatus,
-  AgentActivityCollaborationAdoption,
-  AgentActivityCollaborationUsage,
-  AgentActivityCollaborationRun,
-  AgentActivityStartModelConsultInput,
-  AgentActivitySetCollaborationAdoptionInput,
   AgentActivityModelPlanModel,
-  AgentActivityModelPlanSummary,
-  AgentActivityListModelPlansInput,
-  AgentActivityListModelPlansResult
+  AgentActivityModelPlanSummary
 } from "./modelPlans.types.ts";
 
 export type AgentActivityNeedsAttentionKind =
