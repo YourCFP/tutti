@@ -353,10 +353,6 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		// the plan: agent model bindings and model usage policies alike.
 		References: modelplanservice.CompositeReferenceResolver{modelBindings, modelPolicies},
 	}
-	modelPolicyStore, _ := store.(modelpolicyservice.Store)
-	modelPolicies := &modelpolicyservice.Service{
-		Store: modelPolicyStore,
-	}
 	events.RegisterIntentHandler(
 		eventstreamservice.TopicPreferencesDesktopUpdateRequested,
 		eventstreamservice.NewPreferencesDesktopUpdateRequestedHandler(preferences),
