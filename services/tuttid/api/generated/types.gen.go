@@ -702,6 +702,7 @@ const (
 	PreferencesOperationFailed      ApiErrorDetailsCode = "preferences_operation_failed"
 	ServiceUnavailable              ApiErrorDetailsCode = "service_unavailable"
 	Unauthorized                    ApiErrorDetailsCode = "unauthorized"
+	WorkspaceAgentNotFound          ApiErrorDetailsCode = "workspace_agent_not_found"
 	WorkspaceAppNotFound            ApiErrorDetailsCode = "workspace_app_not_found"
 	WorkspaceFileNotFound           ApiErrorDetailsCode = "workspace_file_not_found"
 	WorkspaceIssueResourceExists    ApiErrorDetailsCode = "workspace_issue_resource_exists"
@@ -737,6 +738,8 @@ func (e ApiErrorDetailsCode) Valid() bool {
 	case ServiceUnavailable:
 		return true
 	case Unauthorized:
+		return true
+	case WorkspaceAgentNotFound:
 		return true
 	case WorkspaceAppNotFound:
 		return true

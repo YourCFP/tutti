@@ -927,6 +927,7 @@ export const zhCN = {
           referenceKinds: {
             agentTarget: "Agent",
             modelPolicy: "模型策略",
+            workspaceAgent: "工作区 Agent",
             workspaceApp: "应用"
           },
           remedies: {

@@ -3,7 +3,6 @@ import {
   deleteWorkspaceAgent,
   listWorkspaceAgents,
   updateWorkspaceAgent,
-  type AutomationRuleTrigger,
   type DeleteWorkspaceAgentResponse,
   type ListWorkspaceAgentsResponse,
   type ModelPlanStatus,
@@ -17,6 +16,8 @@ import { unwrapData } from "./tuttidClientResponse.ts";
 // OpenAPI surface only carries automation suggestions embedded in
 // WorkspaceAgentDraftGeneration; once the rule CRUD schemas land in
 // tuttid.v1.yaml these types should be replaced by the generated ones.
+export type AutomationRuleTrigger = "on_task_complete" | "on_task_failed";
+
 export type AutomationRuleAction = "consult" | "fork" | "delegate" | "handoff";
 
 export type AutomationRuleTargetKind = "model" | "agent";

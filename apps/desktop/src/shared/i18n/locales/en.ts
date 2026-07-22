@@ -985,6 +985,7 @@ export const en = {
           referenceKinds: {
             agentTarget: "Agent",
             modelPolicy: "Model policy",
+            workspaceAgent: "Workspace agent",
             workspaceApp: "App"
           },
           remedies: {

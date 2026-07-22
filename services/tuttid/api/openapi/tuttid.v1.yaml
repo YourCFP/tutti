@@ -5984,6 +5984,7 @@ components:
             - model_plan_not_found
             - model_plan_referenced
             - model_policy_referenced
+            - workspace_agent_not_found
         reason:
           type: string
         params:

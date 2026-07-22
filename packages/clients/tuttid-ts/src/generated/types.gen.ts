@@ -317,7 +317,8 @@ export type ApiErrorDetails = {
     | "agent_target_not_found"
     | "model_plan_not_found"
     | "model_plan_referenced"
-    | "model_policy_referenced";
+    | "model_policy_referenced"
+    | "workspace_agent_not_found";
   reason?: string;
   params?: {
     [key: string]: unknown;

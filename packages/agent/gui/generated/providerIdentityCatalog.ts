@@ -6,7 +6,6 @@ export const generatedProviderIdentityCatalog = [
     displayName: "Codex",
     iconKey: "codex",
     localeKey: "agentHost.agentGui.conversationFilterCodex",
-    modelPlanProtocol: "openai",
     aliases: [],
     modelPlanProtocol: "openai",
     target: {
@@ -35,7 +34,6 @@ export const generatedProviderIdentityCatalog = [
     displayName: "Claude Code",
     iconKey: "claude-code",
     localeKey: "agentHost.agentGui.conversationFilterClaudeCode",
-    modelPlanProtocol: "anthropic",
     aliases: ["claude", "claude code"],
     modelPlanProtocol: "anthropic",
     target: {
@@ -64,7 +62,6 @@ export const generatedProviderIdentityCatalog = [
     displayName: "Cursor",
     iconKey: "cursor",
     localeKey: "agentHost.agentGui.conversationFilterCursor",
-    modelPlanProtocol: "",
     aliases: ["cursor-agent", "cursor agent", "cursor-cli"],
     modelPlanProtocol: "",
     target: {
@@ -93,7 +90,6 @@ export const generatedProviderIdentityCatalog = [
     displayName: "Tutti Agent",
     iconKey: "tutti",
     localeKey: "agentHost.agentGui.conversationFilterTutti",
-    modelPlanProtocol: "openai",
     aliases: ["tutti agent"],
     modelPlanProtocol: "openai",
     target: {
@@ -122,7 +118,6 @@ export const generatedProviderIdentityCatalog = [
     displayName: "OpenCode",
     iconKey: "opencode",
     localeKey: "agentHost.agentGui.conversationFilterOpenCode",
-    modelPlanProtocol: "openai",
     aliases: ["open-code", "open code", "opencode-ai", "opencode_ai"],
     modelPlanProtocol: "",
     target: {
@@ -151,7 +146,6 @@ export const generatedProviderIdentityCatalog = [
     displayName: "Nexight",
     iconKey: "tutti",
     localeKey: "agentHost.agentGui.conversationFilterNexight",
-    modelPlanProtocol: "",
     aliases: ["tutti"],
     modelPlanProtocol: "",
     target: {
@@ -176,39 +170,10 @@ export const generatedProviderIdentityCatalog = [
     }
   },
   {
-    providerId: "hermes",
-    displayName: "Hermes Agent",
-    iconKey: "hermes",
-    localeKey: "agentHost.agentGui.conversationFilterHermes",
-    modelPlanProtocol: "",
-    aliases: ["hermes-agent", "hermes agent"],
-    target: {
-      id: "local:hermes",
-      launchRefType: "local_cli",
-      enabled: false,
-      sortOrder: 70
-    },
-    desktop: {
-      managed: true,
-      managedOrder: 6,
-      statusProbePriority: 6,
-      usageProbeKind: "",
-      visibilityGate: "",
-      runtimeProbeFallback: "",
-      installBootstrap: false,
-      refreshOnAccountChange: false,
-      unavailableDockOrderOffset: 0,
-      developerLogs: false,
-      defaultProviderEligible: false,
-      defaultProviderPriority: 0
-    }
-  },
-  {
     providerId: "openclaw",
     displayName: "OpenClaw",
     iconKey: "openclaw",
     localeKey: "agentHost.agentGui.conversationFilterOpenClaw",
-    modelPlanProtocol: "",
     aliases: ["open-claw"],
     modelPlanProtocol: "",
     target: {
