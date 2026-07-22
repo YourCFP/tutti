@@ -127,6 +127,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     onDraftContentChange,
     onSettingsChange,
     capabilityMenuState,
+    capabilityControlsReadOnly = false,
     onSubmit,
     onSubmitGuidance,
     onInterruptCurrentTurn,
@@ -242,6 +243,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     compactSupported,
     composerSettings,
     capabilityMenuState,
+    capabilityControlsReadOnly,
     labels,
     uiLanguage,
     editorHandleRef
@@ -365,6 +367,7 @@ export function AgentComposer(props: AgentComposerProps): React.JSX.Element {
     promptImagesSupported: canUploadAttachment && promptImagesSupported,
     availableSkills,
     composerSettings,
+    capabilityControlsReadOnly,
     onDraftContentChange,
     onSettingsChange,
     onSubmit,

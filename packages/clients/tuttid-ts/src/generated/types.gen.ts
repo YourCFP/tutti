@@ -1225,6 +1225,7 @@ export type CreateWorkspaceAppFactoryJobRequest = {
   displayName: string;
   description?: string;
   agentTargetId: string;
+  clientSubmitId: string;
   /**
    * @deprecated
    */

@@ -291,6 +291,7 @@ export interface AgentComposerProps {
     permissionModeId?: string | null;
   }) => void;
   capabilityMenuState?: AgentComposerCapabilityMenuState;
+  capabilityControlsReadOnly?: boolean;
   onCapabilitySettingsRequest?: (
     capability: AgentComposerCapabilitySettingsTarget
   ) => void;
