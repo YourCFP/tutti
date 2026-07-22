@@ -26,6 +26,7 @@ type Service struct {
 	AgentTargetStore               AgentTargetStore
 	SessionInitializer             SessionInitializer
 	SessionReader                  SessionReader
+	SessionPageReader              SessionPageReader
 	SessionPurgeStore              agenthost.SessionPurgeStore
 	AgentSessionResourceReleaser   AgentSessionResourceReleaser
 	UserProjectReader              UserProjectReader
@@ -364,6 +365,16 @@ type SessionReader interface {
 	GetSession(workspaceID string, agentSessionID string) (PersistedSession, bool)
 	ListSessions(workspaceID string) ([]PersistedSession, bool)
 	SessionDeleted(ctx context.Context, workspaceID string, agentSessionID string) (bool, error)
+}
+
+type PersistedSessionListPage struct {
+	Sessions   []PersistedSession
+	HasMore    bool
+	NextCursor string
+}
+
+type SessionPageReader interface {
+	ListSessionsPage(context.Context, agentactivitybiz.ListSessionsPageInput) (PersistedSessionListPage, bool, error)
 }
 
 // SessionInitializer synchronously persists the canonical session shell that

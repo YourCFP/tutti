@@ -43,6 +43,10 @@ type ListSessionSectionInput = agentstore.ListSessionSectionInput
 
 type ListSessionSectionsInput = agentstore.ListSessionSectionsInput
 
+type ListSessionsPageInput = agentstore.ListSessionsPageInput
+
+type SessionListPage = agentstore.SessionListPage
+
 type SessionSectionPage = agentstore.SessionSectionPage
 
 type SessionSectionsPage = agentstore.SessionSectionsPage

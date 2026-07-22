@@ -29,6 +29,7 @@ type ActivityProjection struct {
 
 var (
 	_ SessionReader         = (*ActivityProjection)(nil)
+	_ SessionPageReader     = (*ActivityProjection)(nil)
 	_ SessionSectionsReader = (*ActivityProjection)(nil)
 )
 
@@ -498,6 +499,28 @@ func (p *ActivityProjection) ListSessions(workspaceID string) ([]PersistedSessio
 		out = append(out, p.projectPersistedSession(ctx, persistedSessionFromActivity(session)))
 	}
 	return out, true
+}
+
+func (p *ActivityProjection) ListSessionsPage(
+	ctx context.Context,
+	input agentactivitybiz.ListSessionsPageInput,
+) (PersistedSessionListPage, bool, error) {
+	if p == nil || p.repo == nil {
+		return PersistedSessionListPage{}, false, nil
+	}
+	page, ok, err := p.repo.ListSessionsPage(ctx, input)
+	if err != nil || !ok {
+		return PersistedSessionListPage{}, ok, err
+	}
+	sessions := make([]PersistedSession, 0, len(page.Sessions))
+	for _, session := range page.Sessions {
+		sessions = append(sessions, p.projectPersistedSession(ctx, persistedSessionFromActivity(session)))
+	}
+	return PersistedSessionListPage{
+		Sessions:   sessions,
+		HasMore:    page.HasMore,
+		NextCursor: page.NextCursor,
+	}, true, nil
 }
 
 func (p *ActivityProjection) ListChildSessions(

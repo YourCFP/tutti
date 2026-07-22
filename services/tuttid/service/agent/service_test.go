@@ -4753,47 +4753,25 @@ func TestServiceFallsBackToPersistedSessions(t *testing.T) {
 	}
 }
 
-type conversationOrderTurnStore struct {
-	failingTurnStore
-	latestTurns map[string]agentactivitybiz.Turn
+type recordingSessionPageReader struct {
+	inputs []agentactivitybiz.ListSessionsPageInput
+	pages  map[string]PersistedSessionListPage
+	err    error
 }
 
-func (s conversationOrderTurnStore) ListLatestTurns(
-	context.Context,
-	string,
-	[]string,
-) (map[string]agentactivitybiz.Turn, error) {
-	return s.latestTurns, nil
+func (r *recordingSessionPageReader) ListSessionsPage(
+	_ context.Context,
+	input agentactivitybiz.ListSessionsPageInput,
+) (PersistedSessionListPage, bool, error) {
+	r.inputs = append(r.inputs, input)
+	if r.err != nil {
+		return PersistedSessionListPage{}, false, r.err
+	}
+	return r.pages[input.CursorSessionID], true, nil
 }
 
-func TestServiceListPageMatchesSearchVisibilityTargetCursorAndTurnStartOrder(t *testing.T) {
+func TestServiceListPageDelegatesSearchTargetAndCursorToCanonicalReader(t *testing.T) {
 	runtime := newFakeRuntime()
-	olderUpdatedAt := time.UnixMilli(2000)
-	newerUpdatedAt := time.UnixMilli(4000)
-	hiddenUpdatedAt := time.UnixMilli(5000)
-	runtime.sessions["ws-1:session-hidden"] = ProviderRuntimeSession{
-		ID:              "session-hidden",
-		WorkspaceID:     "ws-1",
-		Provider:        "codex",
-		Cwd:             "/workspace/hidden",
-		Status:          "completed",
-		Visible:         false,
-		Title:           "Mention hidden",
-		CreatedAtUnixMS: time.UnixMilli(1000).UnixMilli(),
-		UpdatedAtUnixMS: hiddenUpdatedAt.UnixMilli(),
-	}
-	runtime.sessions["ws-1:session-older"] = ProviderRuntimeSession{
-		ID:              "session-older",
-		WorkspaceID:     "ws-1",
-		AgentTargetID:   "local:codex",
-		Provider:        "codex",
-		Cwd:             "/workspace/older",
-		Status:          "completed",
-		Visible:         true,
-		Title:           "Mention older",
-		CreatedAtUnixMS: time.UnixMilli(1000).UnixMilli(),
-		UpdatedAtUnixMS: olderUpdatedAt.UnixMilli(),
-	}
 	runtime.sessions["ws-1:session-newer"] = ProviderRuntimeSession{
 		ID:              "session-newer",
 		WorkspaceID:     "ws-1",
@@ -4804,42 +4782,28 @@ func TestServiceListPageMatchesSearchVisibilityTargetCursorAndTurnStartOrder(t *
 		Visible:         true,
 		Title:           "Mention newer",
 		CreatedAtUnixMS: time.UnixMilli(1000).UnixMilli(),
-		UpdatedAtUnixMS: newerUpdatedAt.UnixMilli(),
-	}
-	runtime.sessions["ws-1:session-other-target"] = ProviderRuntimeSession{
-		ID:              "session-other-target",
-		WorkspaceID:     "ws-1",
-		AgentTargetID:   "local:claude-code",
-		Provider:        "claude-code",
-		Cwd:             "/workspace/other",
-		Status:          "completed",
-		Visible:         true,
-		Title:           "Mention other target",
-		CreatedAtUnixMS: time.UnixMilli(1000).UnixMilli(),
-		UpdatedAtUnixMS: time.UnixMilli(6000).UnixMilli(),
+		UpdatedAtUnixMS: time.UnixMilli(4000).UnixMilli(),
 	}
 
 	service := newIsolatedAgentService(runtime)
-	service.TurnStore = conversationOrderTurnStore{
-		latestTurns: map[string]agentactivitybiz.Turn{
-			"session-older": {
-				WorkspaceID:     "ws-1",
-				AgentSessionID:  "session-older",
-				TurnID:          "turn-older",
-				Phase:           agentactivitybiz.TurnPhaseSettled,
-				StartedAtUnixMS: 2_000,
-				UpdatedAtUnixMS: 9_000,
-			},
-			"session-newer": {
-				WorkspaceID:     "ws-1",
-				AgentSessionID:  "session-newer",
-				TurnID:          "turn-newer",
-				Phase:           agentactivitybiz.TurnPhaseSettled,
-				StartedAtUnixMS: 4_000,
-				UpdatedAtUnixMS: 4_000,
-			},
+	reader := &recordingSessionPageReader{pages: map[string]PersistedSessionListPage{
+		"": {
+			Sessions: []PersistedSession{{
+				ID: "session-newer", WorkspaceID: "ws-1", AgentTargetID: "local:codex",
+				Provider: "codex", RailSectionKey: "conversations",
+				Metadata: agentactivitybiz.SessionMetadata{Visible: true},
+			}},
+			HasMore: true, NextCursor: "4000|session-newer",
 		},
-	}
+		"session-newer": {
+			Sessions: []PersistedSession{{
+				ID: "session-older", WorkspaceID: "ws-1", AgentTargetID: "local:codex",
+				Provider: "codex", RailSectionKey: "conversations",
+				Metadata: agentactivitybiz.SessionMetadata{Visible: true},
+			}},
+		},
+	}}
+	service.SessionPageReader = reader
 	page, err := service.ListPage(context.Background(), "ws-1", ListSessionsInput{
 		AgentTargetID: "local:codex",
 		SearchQuery:   "mention",
@@ -4867,40 +4831,11 @@ func TestServiceListPageMatchesSearchVisibilityTargetCursorAndTurnStartOrder(t *
 	if len(nextPage.Sessions) != 1 || nextPage.Sessions[0].ID != "session-older" || nextPage.HasMore {
 		t.Fatalf("next page = %#v, want final older session", nextPage)
 	}
-}
-
-func TestServiceListDeletesStalePersistedHiddenLiveModelDiscoverySession(t *testing.T) {
-	reader := fakeSessionReader{
-		sessions: map[string]PersistedSession{
-			"ws-1:hidden": {
-				ID:              "hidden",
-				WorkspaceID:     "ws-1",
-				Provider:        "claude-code",
-				Cwd:             "/",
-				Metadata:        agentactivitybiz.SessionMetadata{Visible: false},
-				UpdatedAtUnixMS: time.UnixMilli(5000).UnixMilli(),
-			},
-			"ws-1:session-1": {
-				ID:              "session-1",
-				WorkspaceID:     "ws-1",
-				Provider:        "claude-code",
-				Metadata:        agentactivitybiz.SessionMetadata{Visible: true, Capabilities: []string{}},
-				UpdatedAtUnixMS: time.UnixMilli(4000).UnixMilli(),
-			},
-		},
+	if len(reader.inputs) != 2 || reader.inputs[0].AgentTargetID != "local:codex" || reader.inputs[0].SearchQuery != "mention" || reader.inputs[0].Limit != 1 {
+		t.Fatalf("canonical reader inputs = %#v", reader.inputs)
 	}
-	service := newIsolatedAgentService(newFakeRuntime())
-	service.SessionReader = reader
-
-	list, err := service.List(context.Background(), "ws-1")
-	if err != nil {
-		t.Fatalf("List returned error: %v", err)
-	}
-	if len(list) != 1 || list[0].ID != "session-1" {
-		t.Fatalf("sessions = %#v, want only session-1", list)
-	}
-	if _, ok := reader.sessions["ws-1:hidden"]; ok {
-		t.Fatal("hidden discovery session still persisted, want deleted")
+	if reader.inputs[1].CursorSortTimeUnixMS != 4000 || reader.inputs[1].CursorSessionID != "session-newer" {
+		t.Fatalf("canonical reader cursor = %#v", reader.inputs[1])
 	}
 }
 
@@ -5077,6 +5012,14 @@ func TestServiceListSessionPageReadersPropagateStorageErrors(t *testing.T) {
 	want := errors.New("section page store unavailable")
 	service := newIsolatedAgentService(newFakeRuntime())
 	service.SessionReader = &fakeSectionReader{singleSectionErr: want}
+	service.SessionPageReader = &recordingSessionPageReader{err: want}
+
+	t.Run("workspace list", func(t *testing.T) {
+		_, err := service.ListPage(context.Background(), "ws-1", ListSessionsInput{Limit: 5})
+		if !errors.Is(err, want) {
+			t.Fatalf("ListPage() error = %v, want original store error", err)
+		}
+	})
 
 	t.Run("ordinary section", func(t *testing.T) {
 		_, err := service.ListSessionSectionPage(context.Background(), "ws-1", ListSessionSectionPageInput{
@@ -7959,6 +7902,10 @@ func (*activityProjectionRepoStub) SessionDeleted(context.Context, string, strin
 
 func (*activityProjectionRepoStub) ListSessions(context.Context, string) ([]agentactivitybiz.Session, bool, error) {
 	return nil, false, nil
+}
+
+func (*activityProjectionRepoStub) ListSessionsPage(context.Context, agentactivitybiz.ListSessionsPageInput) (agentactivitybiz.SessionListPage, bool, error) {
+	return agentactivitybiz.SessionListPage{}, false, nil
 }
 
 func (*activityProjectionRepoStub) ListSessionSection(context.Context, agentactivitybiz.ListSessionSectionInput) (agentactivitybiz.SessionSectionPage, bool, error) {
