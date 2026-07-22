@@ -435,6 +435,12 @@ durable default only while that intent is unresolved. Entering the unscoped
 conversation section resolves the intent to no project, so remounting the hero
 composer or refreshing the project list cannot restore a previous project.
 
+A locked Session cwd existence check is UI-local observation, not Session
+truth. AgentGUI starts it only after pending creation has resolved, scopes its
+result to the exact Session composer identity, and discards callbacks from a
+previous selection. A host probe failure leaves existence unknown; only a
+successful check that confirms absence may render missing-project chrome.
+
 Composer text transactions may publish the current draft, but the draft value
 must not drive synchronous pre-paint geometry reads. The dock observes the
 actual editor, input area, and attachment containers; its initial and

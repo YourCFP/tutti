@@ -80,6 +80,8 @@ export interface AgentComposerProps {
   isInterrupting: boolean;
   isSendingTurn: boolean;
   isSubmittingPrompt: boolean;
+  /** Whether the active session is authoritative enough to probe its cwd. */
+  projectMissingProbeEnabled?: boolean;
   uiLanguage?: UiLanguage;
   isActive?: boolean;
   previewMode?: boolean;
