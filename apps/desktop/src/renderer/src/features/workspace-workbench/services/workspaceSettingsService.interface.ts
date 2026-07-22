@@ -1,13 +1,13 @@
 import { createDecorator } from "@tutti-os/infra/di";
 import type {
-  DesktopDeveloperLogsExportScope,
   DesktopComputerUseActionResult,
   DesktopComputerUsePermissionGrantStatus,
   DesktopComputerUsePermissionPane,
   DesktopComputerUseRestartDriverInput,
   DesktopComputerUseRestartDriverResult,
   DesktopComputerUseStatus,
-  DesktopDeveloperLogKind
+  DesktopDeveloperLogKind,
+  ExportDeveloperLogsInput
 } from "@shared/contracts/ipc";
 import type { DesktopLocale } from "@shared/i18n";
 import type {
@@ -124,7 +124,7 @@ export interface IWorkspaceSettingsService {
   clearConversationHistory(): Promise<void>;
   purgeDeletedConversations(): Promise<void>;
   clearDeveloperLogs(): Promise<void>;
-  exportDeveloperLogs(scope: DesktopDeveloperLogsExportScope): Promise<void>;
+  exportDeveloperLogs(input: ExportDeveloperLogsInput): Promise<void>;
   openLogDirectory(): Promise<void>;
   openLogFile(kind: DesktopDeveloperLogKind): Promise<void>;
   refreshDeveloperLogs(): Promise<void>;

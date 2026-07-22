@@ -1223,12 +1223,15 @@ test("WorkspaceSettingsService tracks theme changes without developer log clear 
   ]);
 });
 
-test("WorkspaceSettingsService forwards the selected developer log export scope", async () => {
-  const scopes: string[] = [];
+test("WorkspaceSettingsService forwards the selected developer log export options", async () => {
+  const inputs: Array<{
+    includeAgentSessions: boolean;
+    scope: string;
+  }> = [];
   const service = new WorkspaceSettingsService({
     client: createWorkspaceSettingsClient({
-      exportLogs: async (scope) => {
-        scopes.push(scope);
+      exportLogs: async (input) => {
+        inputs.push(input);
         return {
           canceled: true,
           fileCount: 0,
@@ -1238,9 +1241,14 @@ test("WorkspaceSettingsService forwards the selected developer log export scope"
     })
   });
 
-  await service.exportDeveloperLogs("recent-10-minutes");
+  await service.exportDeveloperLogs({
+    includeAgentSessions: true,
+    scope: "recent-3-days"
+  });
 
-  assert.deepEqual(scopes, ["recent-10-minutes"]);
+  assert.deepEqual(inputs, [
+    { includeAgentSessions: true, scope: "recent-3-days" }
+  ]);
 });
 
 test("WorkspaceSettingsService clears workspace conversation history", async () => {
