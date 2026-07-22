@@ -1381,6 +1381,10 @@ export type AgentProviderComposerConfigOptionValue = {
   label: string;
   description?: string;
   supportsImageInput?: boolean;
+  /**
+   * True when the entry mirrors the requested/current selection instead of the provider catalog (warm-catalog append of the requested model, selected-model bootstrap echo). Clients keep such entries selectable but must not treat them as proof the provider can run the model; create validation runs against the raw catalog only.
+   */
+  requested?: boolean;
 };
 
 export type AgentProviderComposerConfig = {
@@ -1941,6 +1945,10 @@ export type WorkspaceAgentInteraction = {
 export type WorkspaceAgentCapabilities = {
   imageInput: boolean;
   modelImageInputRequired: boolean;
+  /**
+   * The provider can apply a model change to the next call in the current session.
+   */
+  modelSwitch: boolean;
   /**
    * The provider runtime accepts a session-scoped model access plan endpoint and credential.
    */

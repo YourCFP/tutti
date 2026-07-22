@@ -1,6 +1,7 @@
 import { zhCNAgentGuiProviderIdentity } from "./zh-CN.agentGuiProviderIdentity.ts";
 import { zhCNAgentGuiQuickPrompts } from "./zh-CN.agentGuiQuickPrompts.ts";
 import { zhCNAgentGuiReferencePicker } from "./zh-CN.agentGuiReferencePicker.ts";
+import { zhCNAgentGuiModelPlans } from "./zh-CN.agentGuiModelPlans.ts";
 import { zhCNAgentGuiRuntimeNotices } from "./zh-CN.agentGuiRuntimeNotices.ts";
 import { zhCNAgentGuiSlashPalette } from "./zh-CN.agentGuiSlashPalette.ts";
 import { zhCNAgentGuiSessionActions } from "./zh-CN.agentGuiSessionActions.ts";
@@ -514,6 +515,7 @@ export const zhCNAgentGui = {
   contextCompactionInProgress: "正在压缩上下文",
   contextCompactionCompleted: "已压缩上下文",
   contextCompactionInterrupted: "上下文压缩已中断",
+  ...zhCNAgentGuiModelPlans,
   turnSummary: "已变更文件",
   userMessageLocator: "用户消息",
   turnSummaryFilesChanged: "变更了 {{count}} 个文件",

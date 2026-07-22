@@ -7,6 +7,7 @@ export interface AgentGUIProviderIdentityCatalogEntry {
   iconKey: string;
   localeKey: string;
   aliases: readonly string[];
+  modelPlanProtocol: string;
   target: {
     id: string;
     launchRefType: string;

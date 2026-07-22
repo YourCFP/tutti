@@ -2,6 +2,7 @@ import { enAgentGuiProviderIdentity } from "./en.agentGuiProviderIdentity.ts";
 import { enAgentGuiQuickPrompts } from "./en.agentGuiQuickPrompts.ts";
 import { enAgentGuiReferencePicker } from "./en.agentGuiReferencePicker.ts";
 import { enAgentGuiRuntimeNotices } from "./en.agentGuiRuntimeNotices.ts";
+import { enAgentGuiModelPlans } from "./en.agentGuiModelPlans.ts";
 import { enAgentGuiSlashPalette } from "./en.agentGuiSlashPalette.ts";
 import { enAgentGuiSessionActions } from "./en.agentGuiSessionActions.ts";
 
@@ -554,6 +555,7 @@ export const enAgentGui = {
   contextCompactionInProgress: "Compacting context",
   contextCompactionCompleted: "Context compacted.",
   contextCompactionInterrupted: "Context compaction interrupted.",
+  ...enAgentGuiModelPlans,
   turnSummary: "Changed files",
   userMessageLocator: "User messages",
   turnSummaryFilesChanged: "{{count}} files changed",

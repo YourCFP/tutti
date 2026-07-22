@@ -33,9 +33,15 @@ func composerModelOptionsFromCatalog(ctx context.Context, catalog AgentModelCata
 	catalogProjection := modelcatalog.ProjectComposerCatalog(result.Models, selectedModel)
 	options := composerModelOptionsFromCanonicalCatalog(result.Models)
 	selection := catalogProjection.Selection
+	// SelectModel keeps a non-catalog requested id as the effective selection.
+	// That synthesized entry must stay selectable, but it is provenance-marked:
+	// create validation runs against the raw catalog and would reject it.
 	if selection.Found && !containsModelOption(options, selection.Model.ID) {
 		options = append(options, ComposerConfigOptionValue{
-			ID: selection.Model.ID, Label: selection.Model.DisplayName, Value: selection.Model.ID,
+			ID:        selection.Model.ID,
+			Label:     selection.Model.DisplayName,
+			Value:     selection.Model.ID,
+			Requested: true,
 		})
 	}
 	return composerModelCatalogProjection{

@@ -515,6 +515,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       composerEngagement,
       composerHandoffProviderTargets,
       composerLabels,
+      conversation,
       composerProviderTargets,
       composerSelectedProviderTarget,
       timelineInteractionLocked,

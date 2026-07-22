@@ -78,7 +78,8 @@ export interface WorkspaceAgentActivityServiceDependencies {
   tuttidClient: TuttidClient;
   reporterNow?: () => number;
   reporterService?: Pick<IReporterService, "trackEvents">;
-  runtimeApi: Pick<DesktopRuntimeApi, "logTerminalDiagnostic">;
+  runtimeApi: Pick<DesktopRuntimeApi, "logTerminalDiagnostic"> &
+    Partial<Pick<DesktopRuntimeApi, "getBackendConfig">>;
   agentProviderStatusService?: Pick<IAgentProviderStatusService, "refresh">;
   workspaceUserProjectService?: IWorkspaceUserProjectService;
 }

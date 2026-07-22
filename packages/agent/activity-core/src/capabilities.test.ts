@@ -66,6 +66,7 @@ test("vocabulary matches the Go side", () => {
     "interrupt",
     "modelImageInputRequired",
     "modelPlanBinding",
+    "modelSwitch",
     "permissionModeChangeDeferred",
     "permissionModeChangeDuringTurn",
     "planImplementation",

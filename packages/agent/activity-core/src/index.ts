@@ -1,4 +1,5 @@
 export type { AgentActivityAdapter } from "./adapter.ts";
+export type { AgentActivityComposerModelConfiguration } from "./composerModelConfiguration.types.ts";
 export {
   normalizeAgentActivitySession,
   type AgentActivitySessionInput
@@ -269,6 +270,9 @@ export type {
   AgentActivityDeleteSessionResult,
   AgentActivityDeleteSessionsInput,
   AgentActivityDeleteSessionsResult,
+  AgentActivityModelPlanModel,
+  AgentActivityModelPlanSummary,
+  AgentActivityCompletedCommand,
   AgentActivityMessage,
   AgentActivityMessageSemantics,
   AgentActivityLoadComposerOptionsInput,

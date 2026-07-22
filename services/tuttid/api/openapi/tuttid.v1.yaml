@@ -8399,6 +8399,15 @@ components:
           type: string
         supportsImageInput:
           type: boolean
+        requested:
+          type: boolean
+          description: >-
+            True when the entry mirrors the requested/current selection
+            instead of the provider catalog (warm-catalog append of the
+            requested model, selected-model bootstrap echo). Clients keep
+            such entries selectable but must not treat them as proof the
+            provider can run the model; create validation runs against the
+            raw catalog only.
     AgentProviderComposerConfig:
       type: object
       additionalProperties: false
@@ -9623,6 +9632,7 @@ components:
       required:
         - imageInput
         - modelImageInputRequired
+        - modelSwitch
         - modelPlanBinding
         - skills
         - compact
@@ -9644,6 +9654,11 @@ components:
           type: boolean
         modelImageInputRequired:
           type: boolean
+        modelSwitch:
+          type: boolean
+          description: >-
+            The provider can apply a model change to the next call in the
+            current session.
         modelPlanBinding:
           type: boolean
           description: >-
