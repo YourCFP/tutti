@@ -6,6 +6,7 @@ import type {
 import type {
   AgentTarget,
   DeletedAgentConversationPurgeResult,
+  PutWorkspaceAgentRequest,
   TuttidClient
 } from "@tutti-os/client-tuttid-ts";
 import { getTuttidProtocolErrorCode } from "@tutti-os/client-tuttid-ts";
@@ -23,6 +24,7 @@ import type {
   ExportDeveloperLogsResult
 } from "@shared/contracts/ipc";
 import type {
+  WorkspaceAgentDefinition,
   WorkspaceAgentModelBinding,
   WorkspaceModelPlan,
   WorkspaceModelPlanDetection,
@@ -48,6 +50,8 @@ interface ClearWorkspaceAgentSessionsResponse {
   removedMessages: number;
   removedSessions: number;
 }
+
+export type PutWorkspaceAgentInput = PutWorkspaceAgentRequest;
 
 export interface PutModelPlanInput {
   /** Omitted keeps the stored credential on update. */
@@ -139,6 +143,20 @@ export interface DesktopWorkspaceSettingsClient {
   getLogsState(): Promise<DesktopDeveloperLogsState>;
   openLogDirectory(): Promise<void>;
   openLogFile(kind: DesktopDeveloperLogKind): Promise<void>;
+  listWorkspaceAgents(workspaceID: string): Promise<WorkspaceAgentDefinition[]>;
+  createWorkspaceAgent(
+    workspaceID: string,
+    input: PutWorkspaceAgentInput
+  ): Promise<WorkspaceAgentDefinition>;
+  updateWorkspaceAgent(
+    workspaceID: string,
+    workspaceAgentID: string,
+    input: PutWorkspaceAgentInput
+  ): Promise<WorkspaceAgentDefinition>;
+  deleteWorkspaceAgent(
+    workspaceID: string,
+    workspaceAgentID: string
+  ): Promise<void>;
   listModelPlans(workspaceID: string): Promise<WorkspaceModelPlan[]>;
   createModelPlan(
     workspaceID: string,
@@ -183,9 +201,13 @@ export function createDesktopWorkspaceSettingsClient(input: {
   runtimeApi: DesktopRuntimeApi;
   tuttidClient: Pick<
     TuttidClient,
+    | "createWorkspaceAgent"
+    | "deleteWorkspaceAgent"
     | "listAgentTargets"
-    | "setSystemAgentTargetEnabled"
+    | "listWorkspaceAgents"
     | "purgeDeletedAgentConversations"
+    | "setSystemAgentTargetEnabled"
+    | "updateWorkspaceAgent"
   >;
 }): DesktopWorkspaceSettingsClient {
   return {
@@ -224,6 +246,25 @@ export function createDesktopWorkspaceSettingsClient(input: {
     },
     async listAgentTargets() {
       return (await input.tuttidClient.listAgentTargets()).targets;
+    },
+    async listWorkspaceAgents(workspaceID) {
+      return (await input.tuttidClient.listWorkspaceAgents(workspaceID)).agents;
+    },
+    async createWorkspaceAgent(workspaceID, body) {
+      return await input.tuttidClient.createWorkspaceAgent(workspaceID, body);
+    },
+    async updateWorkspaceAgent(workspaceID, workspaceAgentID, body) {
+      return await input.tuttidClient.updateWorkspaceAgent(
+        workspaceID,
+        workspaceAgentID,
+        body
+      );
+    },
+    async deleteWorkspaceAgent(workspaceID, workspaceAgentID) {
+      await input.tuttidClient.deleteWorkspaceAgent(
+        workspaceID,
+        workspaceAgentID
+      );
     },
     setSystemAgentTargetEnabled(agentTargetID, enabled) {
       return input.tuttidClient.setSystemAgentTargetEnabled(

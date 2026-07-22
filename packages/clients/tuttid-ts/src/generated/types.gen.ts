@@ -317,7 +317,8 @@ export type ApiErrorDetails = {
     | "agent_target_not_found"
     | "model_plan_not_found"
     | "model_plan_referenced"
-    | "model_policy_referenced";
+    | "model_policy_referenced"
+    | "workspace_agent_not_found";
   reason?: string;
   params?: {
     [key: string]: unknown;
@@ -783,7 +784,7 @@ export type DetectModelPlanResponse = {
 };
 
 export type ModelPlanReference = {
-  kind: "agent_target" | "model_policy";
+  kind: "agent_target" | "model_policy" | "workspace_agent";
   id: string;
   name?: string | null;
   /**
@@ -1342,6 +1343,101 @@ export type WorkspaceTerminalCloseGuard = {
 export type WorkspaceTerminalCloseGuardResponse = {
   guard: WorkspaceTerminalCloseGuard;
 };
+
+export type DeleteWorkspaceAgentResponse = {
+  workspaceAgentId: string;
+};
+
+export type ListWorkspaceAgentsResponse = {
+  agents: Array<WorkspaceAgent>;
+};
+
+export type PutWorkspaceAgentRequest = {
+  name: string;
+  /**
+   * Short human-readable description shown with the Agent in directories and cards.
+   */
+  description: string;
+  harnessAgentTargetId: string;
+  modelPlanId?: string | null;
+  defaultModel?: string | null;
+  /**
+   * Ordered fallback Plan/model references. Omit or pass an empty array to disable failover.
+   */
+  modelFallbacks?: Array<WorkspaceAgentModelRef>;
+  instructions: string;
+  callConditions: Array<string>;
+  /**
+   * When true, Skills and tools are an explicit allowlist, including the ability to select none. Omit on update to preserve the stored mode; new Agents default to automatic compatible capabilities.
+   */
+  capabilitiesExplicit?: boolean;
+  skills: Array<string>;
+  tools: Array<string>;
+};
+
+/**
+ * A selectable, workspace-scoped Agent made from one Harness target plus an optional model access plan and Agent-specific behavior configuration.
+ */
+export type WorkspaceAgent = {
+  /**
+   * Opaque Agent option id. New ids use the workspace-agent prefix and may be passed to workspace Agent session APIs.
+   */
+  id: string;
+  /**
+   * Compatibility alias of id for AgentGUI and session creation surfaces.
+   */
+  agentTargetId: string;
+  workspaceId: string;
+  name: string;
+  /**
+   * Short human-readable description shown with the Agent in directories and cards.
+   */
+  description: string;
+  harness: WorkspaceAgentHarness;
+  modelPlanId?: string | null;
+  defaultModel?: string | null;
+  /**
+   * Dormant contract field without an editor surface. Ordered, explicit fallback chain used only when starting a new session and the primary Plan/model is not usable. Credentials remain daemon-owned.
+   */
+  modelFallbacks: Array<WorkspaceAgentModelRef>;
+  instructions: string;
+  /**
+   * Explicit, user-editable conditions that explain when another Agent or user should invoke this Agent.
+   */
+  callConditions: Array<string>;
+  /**
+   * Dormant contract field without an editor surface. False keeps Skills and tools synchronized with all capabilities compatible with the selected Harness. True makes the Skills and tools arrays an explicit allowlist; empty arrays then mean none.
+   */
+  capabilitiesExplicit: boolean;
+  skills: Array<string>;
+  tools: Array<string>;
+  source: WorkspaceAgentSource;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WorkspaceAgentHarness = {
+  agentTargetId: string;
+  /**
+   * False when the referenced Harness target no longer exists. The Agent remains listable so it can be repaired or deleted.
+   */
+  available: boolean;
+  provider?: AgentTargetProvider | null;
+  name?: string | null;
+  iconKey?: string | null;
+  enabled?: boolean | null;
+};
+
+export type WorkspaceAgentModelRef = {
+  modelPlanId: string;
+  model?: string | null;
+};
+
+/**
+ * Origin of the workspace Agent configuration. legacy_binding rows were migrated from the former fixed-target binding model.
+ */
+export type WorkspaceAgentSource = "user" | "legacy_binding";
 
 export type WorkspaceAgentProvider = string;
 
@@ -3133,6 +3229,8 @@ export type WorkspaceAppId = string;
 export type WorkspaceAppFactoryJobId = string;
 
 export type ModelPlanId = string;
+
+export type WorkspaceAgentId = string;
 
 export type ModelPolicyId = string;
 
@@ -10418,6 +10516,250 @@ export type OpenWorkspaceResponses = {
 
 export type OpenWorkspaceResponse =
   OpenWorkspaceResponses[keyof OpenWorkspaceResponses];
+
+export type ListWorkspaceAgentsData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agents";
+};
+
+export type ListWorkspaceAgentsErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type ListWorkspaceAgentsError =
+  ListWorkspaceAgentsErrors[keyof ListWorkspaceAgentsErrors];
+
+export type ListWorkspaceAgentsResponses = {
+  /**
+   * Workspace Agent configurations
+   */
+  200: ListWorkspaceAgentsResponse;
+};
+
+export type ListWorkspaceAgentsResponse2 =
+  ListWorkspaceAgentsResponses[keyof ListWorkspaceAgentsResponses];
+
+export type CreateWorkspaceAgentData = {
+  body: PutWorkspaceAgentRequest;
+  path: {
+    workspaceID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agents";
+};
+
+export type CreateWorkspaceAgentErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type CreateWorkspaceAgentError =
+  CreateWorkspaceAgentErrors[keyof CreateWorkspaceAgentErrors];
+
+export type CreateWorkspaceAgentResponses = {
+  /**
+   * Created workspace Agent
+   */
+  201: WorkspaceAgent;
+};
+
+export type CreateWorkspaceAgentResponse =
+  CreateWorkspaceAgentResponses[keyof CreateWorkspaceAgentResponses];
+
+export type DeleteWorkspaceAgentData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+    workspaceAgentID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agents/{workspaceAgentID}";
+};
+
+export type DeleteWorkspaceAgentErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type DeleteWorkspaceAgentError =
+  DeleteWorkspaceAgentErrors[keyof DeleteWorkspaceAgentErrors];
+
+export type DeleteWorkspaceAgentResponses = {
+  /**
+   * Workspace Agent deleted
+   */
+  200: DeleteWorkspaceAgentResponse;
+};
+
+export type DeleteWorkspaceAgentResponse2 =
+  DeleteWorkspaceAgentResponses[keyof DeleteWorkspaceAgentResponses];
+
+export type GetWorkspaceAgentData = {
+  body?: never;
+  path: {
+    workspaceID: string;
+    workspaceAgentID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agents/{workspaceAgentID}";
+};
+
+export type GetWorkspaceAgentErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type GetWorkspaceAgentError =
+  GetWorkspaceAgentErrors[keyof GetWorkspaceAgentErrors];
+
+export type GetWorkspaceAgentResponses = {
+  /**
+   * Workspace Agent configuration
+   */
+  200: WorkspaceAgent;
+};
+
+export type GetWorkspaceAgentResponse =
+  GetWorkspaceAgentResponses[keyof GetWorkspaceAgentResponses];
+
+export type UpdateWorkspaceAgentData = {
+  body: PutWorkspaceAgentRequest;
+  path: {
+    workspaceID: string;
+    workspaceAgentID: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspaceID}/agents/{workspaceAgentID}";
+};
+
+export type UpdateWorkspaceAgentErrors = {
+  /**
+   * Request payload or parameters are invalid
+   */
+  400: ApiErrorResponse;
+  /**
+   * Bearer token is missing or invalid
+   */
+  401: ApiErrorResponse;
+  /**
+   * Workspace id was not found
+   */
+  404: ApiErrorResponse;
+  /**
+   * HTTP method is not supported on this route
+   */
+  405: ApiErrorResponse;
+  /**
+   * Workspace operation failed in an upstream adapter or command
+   */
+  502: ApiErrorResponse;
+  /**
+   * Required daemon service dependency is unavailable
+   */
+  503: ApiErrorResponse;
+};
+
+export type UpdateWorkspaceAgentError =
+  UpdateWorkspaceAgentErrors[keyof UpdateWorkspaceAgentErrors];
+
+export type UpdateWorkspaceAgentResponses = {
+  /**
+   * Updated workspace Agent
+   */
+  200: WorkspaceAgent;
+};
+
+export type UpdateWorkspaceAgentResponse =
+  UpdateWorkspaceAgentResponses[keyof UpdateWorkspaceAgentResponses];
 
 export type ListWorkspaceIssueTopicsData = {
   body?: never;

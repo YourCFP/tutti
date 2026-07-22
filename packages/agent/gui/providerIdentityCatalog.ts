@@ -6,8 +6,8 @@ export interface AgentGUIProviderIdentityCatalogEntry {
   displayName: string;
   iconKey: string;
   localeKey: string;
+  modelPlanProtocol: "" | "anthropic" | "openai";
   aliases: readonly string[];
-  modelPlanProtocol: string;
   target: {
     id: string;
     launchRefType: string;

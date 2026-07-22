@@ -780,6 +780,48 @@ export const zhCN = {
           staging: "测试应用"
         },
         appCatalogChannelSaveFailed: "暂时无法切换应用来源",
+        agents: {
+          addAgent: "添加 Agent",
+          defaultModelLabel: "默认模型",
+          delete: "删除",
+          deleteConfirm: "删除这个 Agent？",
+          deleteFailed: "Agent 删除失败，请重试",
+          deleting: "删除中...",
+          description:
+            "将 Agent Runtime 与模型方案、指令组合成具名的 Agent 选项",
+          disabled: "已停用",
+          edit: "编辑",
+          editTitle: "编辑 {{agent}}",
+          editorDescription: "保存后，它会成为新会话中可选择的一个 Agent",
+          emptyDescription:
+            "添加 Agent，把 Agent Runtime 和模型方案映射成可复用的会话选项",
+          emptyTitle: "还没有工作区 Agent",
+          ready: "可用",
+          harnessLabel: "Agent Runtime",
+          harnessUnavailable: "Agent Runtime 不可用",
+          behaviorDetailsTitle: "完整指令与调用条件",
+          callConditionsLabel: "调用条件",
+          callConditionsPlaceholder: "发布决策前调用\n架构风险较高时调用",
+          instructionsLabel: "指令",
+          instructionsPlaceholder: "描述这个 Agent 应该如何开展工作",
+          loadFailed: "暂时无法加载工作区 Agent",
+          migrated: "由旧版绑定迁移",
+          modelPlanLabel: "模型方案",
+          nameLabel: "名称",
+          namePlaceholder: "前端审查 Agent",
+          noHarnesses: "暂无可用的 Agent Runtime",
+          noModelPlan: "使用 Agent Runtime 默认模型",
+          onePerLine: "每行填写一项",
+          planDefaultModel: "使用方案默认模型",
+          descriptionLabel: "描述",
+          descriptionPlaceholder: "描述这个 Agent 的职责与适用场景",
+          requiredFields: "请填写名称并选择 Agent Runtime",
+          retry: "重试",
+          save: "保存 Agent",
+          saveFailed: "Agent 保存失败，请检查配置后重试",
+          saving: "保存中...",
+          title: "Agents"
+        },
         modelPlans: {
           addModel: "添加模型",
           addPlan: "添加方案",
@@ -885,6 +927,7 @@ export const zhCN = {
           referenceKinds: {
             agentTarget: "Agent",
             modelPolicy: "模型策略",
+            workspaceAgent: "工作区 Agent",
             workspaceApp: "应用"
           },
           remedies: {

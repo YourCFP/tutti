@@ -78,6 +78,7 @@ import {
   type WorkspaceFeatureFlagSettings
 } from "./workspaceFeatureFlagSettings.ts";
 import { WorkspaceModelPlansController } from "./workspaceModelPlansController.ts";
+import { WorkspaceAgentsController } from "./workspaceAgentsController.ts";
 
 export interface WorkspaceSettingsServiceDependencies {
   client: DesktopWorkspaceSettingsClient;
@@ -99,6 +100,7 @@ const tuttiAgentTargetID = "local:tutti-agent";
 export class WorkspaceSettingsService implements IWorkspaceSettingsService {
   readonly _serviceBrand: undefined;
   readonly store = createWorkspaceSettingsStore();
+  readonly agents: WorkspaceAgentsController;
   readonly modelPlans: WorkspaceModelPlansController;
 
   private readonly dependencies: WorkspaceSettingsServiceDependencies;
@@ -143,6 +145,11 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       notifications,
       store: this.store
     });
+    this.agents = new WorkspaceAgentsController({
+      client: dependencies.client,
+      onWorkspaceAgentsChanged: dependencies.onAgentTargetsChanged,
+      store: this.store
+    });
     this.scheduleTuttiAgentSwitchInitialization();
   }
 
@@ -183,9 +190,15 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     if (!wasOpen) {
       this.reportSettingsOpened();
       void this.refreshDeveloperLogs();
-      this.refreshModelPlansSurface();
+      if (
+        this.store.activeSection === "agent" ||
+        this.store.agentTab === "agents"
+      ) {
+        this.refreshAgentSettings();
+      } else {
+        this.refreshModelPlansSurface();
+      }
     } else if (this.store.activeSection === "apps") {
-      this.refreshModelPlansSurface();
     }
   }
 
@@ -252,6 +265,7 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
       this.store.generalFocusAnchor = null;
       this.store.generalFocusRequestID = 0;
       this.modelPlans.reset();
+      this.agents.reset();
     }
   }
 
@@ -265,13 +279,16 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
     if (sectionID === "apps") {
       this.refreshModelPlansSurface();
     }
+    if (sectionID === "agent") {
+      this.refreshAgentSettings();
+    }
   }
 
   selectAgentTab(tab: WorkspaceSettingsAgentTab): void {
-    if (this.store.agentTab === tab) {
-      return;
-    }
     this.store.agentTab = tab;
+    if (tab === "agents") {
+      this.refreshAgentSettings();
+    }
   }
 
   setDeveloperPanelVisible(visible: boolean): void {
@@ -954,6 +971,11 @@ export class WorkspaceSettingsService implements IWorkspaceSettingsService {
 
   // Plans stay Plan-only via controller.refresh(); bindings are a separate
   // load so the Agent binding section can render enabled targets.
+  private refreshAgentSettings(): void {
+    this.refreshModelPlansSurface();
+    void this.agents.refresh();
+  }
+
   private refreshModelPlansSurface(): void {
     void this.modelPlans.refresh();
     void this.modelPlans.refreshBindings();

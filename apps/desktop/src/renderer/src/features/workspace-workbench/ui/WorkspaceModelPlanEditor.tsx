@@ -56,6 +56,8 @@ const referenceKindLabelKeys: Record<
 > = {
   agent_target: "workspace.settings.apps.modelPlans.referenceKinds.agentTarget",
   model_policy: "workspace.settings.apps.modelPlans.referenceKinds.modelPolicy",
+  workspace_agent:
+    "workspace.settings.apps.modelPlans.referenceKinds.workspaceAgent",
   workspace_app:
     "workspace.settings.apps.modelPlans.referenceKinds.workspaceApp"
 };

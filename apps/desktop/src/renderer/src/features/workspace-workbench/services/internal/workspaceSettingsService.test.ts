@@ -963,6 +963,14 @@ function createWorkspaceSettingsClient(
       }
     }),
     listAgentTargets: async () => [],
+    listWorkspaceAgents: async () => [],
+    createWorkspaceAgent: async () => {
+      throw new Error("not used");
+    },
+    updateWorkspaceAgent: async () => {
+      throw new Error("not used");
+    },
+    deleteWorkspaceAgent: async () => {},
     setSystemAgentTargetEnabled: async () => {
       throw new Error("not used");
     },

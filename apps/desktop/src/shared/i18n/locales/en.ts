@@ -827,6 +827,53 @@ export const en = {
           staging: "Test"
         },
         appCatalogChannelSaveFailed: "We couldn't switch the app source.",
+        agents: {
+          addAgent: "Add Agent",
+          defaultModelLabel: "Default model",
+          delete: "Delete",
+          deleteConfirm: "Delete this Agent?",
+          deleteFailed: "Couldn't delete the Agent — try again.",
+          deleting: "Deleting...",
+          description:
+            "Create named Agent options by combining an Agent Runtime with a model plan and instructions.",
+          disabled: "Disabled",
+          edit: "Edit",
+          editTitle: "Edit {{agent}}",
+          editorDescription:
+            "This configuration becomes one selectable Agent in new conversations.",
+          emptyDescription:
+            "Add an Agent to map an Agent Runtime and model plan into a reusable conversation option.",
+          emptyTitle: "No workspace Agents yet",
+          ready: "Ready",
+          harnessLabel: "Agent Runtime",
+          harnessUnavailable: "Agent Runtime unavailable",
+          behaviorDetailsTitle: "Instructions and call conditions",
+          callConditionsLabel: "Call conditions",
+          callConditionsPlaceholder:
+            "Use before a release decision\nUse when architecture risk is high",
+          instructionsLabel: "Instructions",
+          instructionsPlaceholder:
+            "Describe how this Agent should approach its work.",
+          loadFailed: "We couldn't load workspace Agents.",
+          migrated: "Migrated from an earlier binding",
+          modelPlanLabel: "Model plan",
+          nameLabel: "Name",
+          namePlaceholder: "Frontend reviewer",
+          noHarnesses: "No Agent Runtimes are available",
+          noModelPlan: "Agent Runtime default models",
+          onePerLine: "One entry per line",
+          planDefaultModel: "Plan default",
+          descriptionLabel: "Description",
+          descriptionPlaceholder:
+            "Describe this Agent's responsibilities and when to use it.",
+          requiredFields: "Enter a name and choose an Agent Runtime.",
+          retry: "Try again",
+          save: "Save Agent",
+          saveFailed:
+            "Couldn't save the Agent — check the fields and try again.",
+          saving: "Saving...",
+          title: "Agents"
+        },
         modelPlans: {
           addModel: "Add model",
           addPlan: "Add plan",
@@ -938,6 +985,7 @@ export const en = {
           referenceKinds: {
             agentTarget: "Agent",
             modelPolicy: "Model policy",
+            workspaceAgent: "Workspace agent",
             workspaceApp: "App"
           },
           remedies: {

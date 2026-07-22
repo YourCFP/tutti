@@ -316,6 +316,7 @@ func RegisterRoutes(mux *http.ServeMux, routes Routes) {
 		routes.SetAgentModelBinding(w, r, tuttigenerated.WorkspaceID(r.PathValue("workspaceID")), r.PathValue("agentTargetID"))
 	})
 
+	registerWorkspaceAgentRoutes(mux, routes, wrapper)
 	registerModelGovernanceRoutes(mux, routes, wrapper)
 
 	mux.HandleFunc("/v1/workspaces/{workspaceID}/managed-model-providers", func(w http.ResponseWriter, r *http.Request) {

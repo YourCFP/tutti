@@ -175,8 +175,13 @@ type Model struct {
 
 // Plan is the durable model access plan record.
 type Plan struct {
-	ID           string
-	WorkspaceID  string
+	ID          string
+	WorkspaceID string
+	// Revision is a monotonically increasing immutable configuration version.
+	// Runtime-facing consumers use it to pin the exact plan configuration a
+	// session started with. Zero means unspecified for records written
+	// before revisions were tracked.
+	Revision     uint64
 	Name         string
 	TemplateKind TemplateKind
 	Protocol     Protocol
@@ -253,8 +258,9 @@ func Public(plan Plan) PublicPlan {
 type ReferenceKind string
 
 const (
-	ReferenceAgentTarget ReferenceKind = "agent_target"
-	ReferenceModelPolicy ReferenceKind = "model_policy"
+	ReferenceAgentTarget    ReferenceKind = "agent_target"
+	ReferenceModelPolicy    ReferenceKind = "model_policy"
+	ReferenceWorkspaceAgent ReferenceKind = "workspace_agent"
 )
 
 // Reference is one consumer that currently references a plan. Deleting a plan

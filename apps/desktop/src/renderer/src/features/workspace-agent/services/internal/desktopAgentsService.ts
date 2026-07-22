@@ -1,4 +1,8 @@
-import type { AgentTarget, TuttidClient } from "@tutti-os/client-tuttid-ts";
+import type {
+  AgentTarget,
+  TuttidClient,
+  WorkspaceAgent
+} from "@tutti-os/client-tuttid-ts";
 import type { AgentGUIAgent, AgentGUIProvider } from "@tutti-os/agent-gui";
 import {
   isAgentGuiWorkbenchProvider,
@@ -13,13 +17,19 @@ import type {
 export interface DesktopAgentsServiceDependencies {
   earlyAccessEnabled?: boolean;
   clearTimeout?: (timer: ReturnType<typeof setTimeout>) => void;
+  isAgentTargetProviderGated?: (provider: string) => boolean;
   now?: () => number;
+  resolveAgentTargetIconUrl?: (identity: {
+    iconKey: string | null;
+    provider: string;
+  }) => string;
   retryDelayMs?: number;
   setTimeout?: (
     callback: () => void,
     delayMs: number
   ) => ReturnType<typeof setTimeout>;
-  tuttidClient: Pick<TuttidClient, "listAgentTargets">;
+  tuttidClient: Pick<TuttidClient, "listAgentTargets" | "listWorkspaceAgents">;
+  workspaceId: string;
 }
 
 const EMPTY_AGENTS_SNAPSHOT: AgentsSnapshot = Object.freeze({
@@ -144,7 +154,12 @@ export class DesktopAgentsService implements IAgentsService {
       status: "loading"
     });
     try {
-      const response = await this.dependencies.tuttidClient.listAgentTargets();
+      const [targetResponse, workspaceAgentResponse] = await Promise.all([
+        this.dependencies.tuttidClient.listAgentTargets(),
+        this.dependencies.tuttidClient.listWorkspaceAgents(
+          this.dependencies.workspaceId
+        )
+      ]);
       if (signal?.aborted || requestSequence !== this.requestSequence) {
         if (requestSequence === this.requestSequence) {
           this.setSnapshot(previousSnapshot);
@@ -152,12 +167,31 @@ export class DesktopAgentsService implements IAgentsService {
         return this.snapshot;
       }
       const daemonAgentTargets = mapAgentTargetsToPresentations(
-        response.targets
+        targetResponse.targets,
+        {
+          resolveAgentTargetIconUrl: this.dependencies.resolveAgentTargetIconUrl
+        }
       );
       const agentTargets = daemonAgentTargets;
-      const agents = mapAgentTargetPresentationsToAgents(daemonAgentTargets, {
-        earlyAccessEnabled: this.earlyAccessEnabled
-      });
+      // Built-in Harness targets and explicit workspace Agents coexist in the
+      // AgentGUI directory: built-ins keep their placement and workspace
+      // Agents are appended, deduped by agentTargetId.
+      const builtinAgents = mapAgentTargetPresentationsToAgents(
+        daemonAgentTargets,
+        { earlyAccessEnabled: this.earlyAccessEnabled }
+      );
+      const workspaceAgents = mapWorkspaceAgentsToAgents(
+        workspaceAgentResponse.agents,
+        {
+          isAgentTargetProviderGated:
+            this.dependencies.isAgentTargetProviderGated,
+          resolveAgentTargetIconUrl: this.dependencies.resolveAgentTargetIconUrl
+        }
+      );
+      const agents = dedupeAgentsByAgentTargetId([
+        ...builtinAgents,
+        ...workspaceAgents
+      ]);
       const nextSnapshot: AgentsSnapshot = {
         agents,
         agentTargets,
@@ -220,11 +254,38 @@ export class DesktopAgentsService implements IAgentsService {
   }
 }
 
+function dedupeAgentsByAgentTargetId(
+  agents: readonly AgentGUIAgent[]
+): readonly AgentGUIAgent[] {
+  const seenAgentTargetIds = new Set<string>();
+  return agents.filter((agent) => {
+    if (seenAgentTargetIds.has(agent.agentTargetId)) {
+      return false;
+    }
+    seenAgentTargetIds.add(agent.agentTargetId);
+    return true;
+  });
+}
+
 export function mapAgentTargetsToPresentations(
-  targets: readonly AgentTarget[]
+  targets: readonly AgentTarget[],
+  options: {
+    resolveAgentTargetIconUrl?: (identity: {
+      iconKey: string | null;
+      provider: string;
+    }) => string;
+  } = {}
 ): readonly AgentTargetPresentation[] {
   return [...targets].sort(compareAgentTargetsForDisplay).map((target) => {
-    const iconUrl = target.iconUrl?.trim() ?? "";
+    const isExtension = target.launchRef.type === "agent_extension";
+    const iconUrl =
+      target.iconUrl?.trim() ||
+      (isExtension
+        ? ""
+        : (options.resolveAgentTargetIconUrl?.({
+            iconKey: target.iconKey?.trim() || null,
+            provider: target.provider
+          }) ?? ""));
     return {
       agentTargetId: target.id,
       createdAtUnixMs: target.createdAtUnixMs,
@@ -282,6 +343,44 @@ export function mapAgentTargetPresentationsToAgents(
         ? { setupKind: "target_runtime" as const }
         : {})
     }));
+}
+
+export function mapWorkspaceAgentsToAgents(
+  agents: readonly WorkspaceAgent[],
+  options: {
+    isAgentTargetProviderGated?: (provider: string) => boolean;
+    resolveAgentTargetIconUrl?: (identity: {
+      iconKey: string | null;
+      provider: string;
+    }) => string;
+  } = {}
+): readonly AgentGUIAgent[] {
+  return agents.flatMap((agent) => {
+    const provider = agent.harness.provider;
+    if (!provider) {
+      return [];
+    }
+    const availability =
+      options.isAgentTargetProviderGated?.(provider) === true
+        ? ({ status: "coming_soon" } as const)
+        : !agent.harness.available || agent.harness.enabled === false
+          ? ({ status: "unavailable" } as const)
+          : ({ status: "ready" } as const);
+    return [
+      {
+        agentTargetId: agent.id,
+        availability,
+        description: agent.description || null,
+        iconUrl:
+          options.resolveAgentTargetIconUrl?.({
+            iconKey: agent.harness.iconKey?.trim() || null,
+            provider
+          }) ?? "",
+        name: agent.name,
+        provider: provider as AgentGUIProvider
+      }
+    ];
+  });
 }
 
 function compareAgentTargetsForDisplay(

@@ -1,9 +1,24 @@
 import { proxy } from "valtio";
 import type {
   WorkspaceSettingsModelPlansMutableState,
-  WorkspaceSettingsStoreState
+  WorkspaceSettingsStoreState,
+  WorkspaceSettingsWorkspaceAgentsMutableState
 } from "../workspaceSettingsTypes";
 import { readDeveloperPanelVisible } from "./developerPanelVisibility.ts";
+
+export function createWorkspaceSettingsAgentsState(): WorkspaceSettingsWorkspaceAgentsMutableState {
+  return {
+    agents: [],
+    confirmingDeleteAgentID: null,
+    deletingAgentID: null,
+    draft: null,
+    feedback: null,
+    harnessTargets: [],
+    loadFailed: false,
+    loading: false,
+    saving: false
+  };
+}
 
 export function createWorkspaceSettingsModelPlansState(): WorkspaceSettingsModelPlansMutableState {
   return {
@@ -40,6 +55,7 @@ export function createWorkspaceSettingsStore(): WorkspaceSettingsStoreState {
     agentTab: "general",
     agentFocusProvider: null,
     agentFocusRequestID: 0,
+    agents: createWorkspaceSettingsAgentsState(),
     developerPanelVisible: readDeveloperPanelVisible(),
     developerLogs: {
       clearing: false,

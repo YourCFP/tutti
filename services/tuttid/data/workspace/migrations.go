@@ -19,6 +19,10 @@ const schemaMigrationWorkspaceIssuesV2 = "workspace_issues_v2"
 const schemaMigrationWorkspaceIssuesV3 = "workspace_issues_v3"
 const schemaMigrationWorkspaceIssuesV4 = "workspace_issues_v4"
 const schemaMigrationWorkspaceIssuesV5 = "workspace_issues_v5"
+const schemaMigrationWorkspaceAgentsV1 = "workspace_agents_v1"
+const schemaMigrationWorkspaceAgentsV2 = "workspace_agents_model_fallbacks_v1"
+const schemaMigrationWorkspaceAgentsV3 = "workspace_agents_call_conditions_v1"
+const schemaMigrationWorkspaceAgentsV4 = "workspace_agents_capability_selection_v1"
 const schemaMigrationDesktopPreferencesV1 = "desktop_preferences_v1"
 const schemaMigrationDesktopPreferencesAgentDockLayoutV1 = "desktop_preferences_agent_dock_layout_v1"
 const schemaMigrationDesktopPreferencesSleepPreventionModeV1 = "desktop_preferences_sleep_prevention_mode_v1"
@@ -53,6 +57,7 @@ const schemaMigrationModelPlansV1 = "model_plans_v1"
 const schemaMigrationAgentModelBindingsV1 = "agent_model_bindings_v1"
 const schemaMigrationAgentModelBindingsV2 = "agent_model_bindings_v2"
 const schemaMigrationAgentModelBindingsV3 = "agent_model_bindings_v3"
+const schemaMigrationWorkspaceAgentsV5 = "workspace_agents_contract_cleanup_v1"
 const schemaMigrationAppFactoryJobsV1 = "app_factory_jobs_v1"
 const schemaMigrationAppFactoryJobsV2 = "app_factory_jobs_v2"
 const schemaMigrationAppFactoryJobsV3 = "app_factory_jobs_v3"
@@ -230,6 +235,21 @@ INSERT OR IGNORE INTO tuttid_schema_migrations (id, applied_at_unix_ms)
 		return err
 	}
 	if err := s.applyAgentModelBindingsV2(ctx); err != nil {
+		return err
+	}
+	if err := s.applyWorkspaceAgentsV1(ctx); err != nil {
+		return err
+	}
+	if err := s.applyWorkspaceAgentsV2(ctx); err != nil {
+		return err
+	}
+	if err := s.applyWorkspaceAgentsV3(ctx); err != nil {
+		return err
+	}
+	if err := s.applyWorkspaceAgentsV4(ctx); err != nil {
+		return err
+	}
+	if err := s.applyWorkspaceAgentsV5(ctx); err != nil {
 		return err
 	}
 	if err := s.applyModelPoliciesV1(ctx); err != nil {

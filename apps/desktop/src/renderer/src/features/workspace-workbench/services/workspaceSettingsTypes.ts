@@ -2,6 +2,16 @@ import type {
   DesktopDeveloperLogFileSummary,
   DesktopDeveloperLogsState
 } from "@shared/contracts/ipc";
+import type {
+  WorkspaceAgent,
+  WorkspaceAgentProvider
+} from "@tutti-os/client-tuttid-ts";
+
+type WorkspaceSettingsReadonly<T> = T extends readonly (infer Item)[]
+  ? readonly WorkspaceSettingsReadonly<Item>[]
+  : T extends object
+    ? { readonly [Key in keyof T]: WorkspaceSettingsReadonly<T[Key]> }
+    : T;
 
 export type WorkspaceSettingsSectionID =
   | "about"
@@ -114,6 +124,7 @@ export interface WorkspaceModelPlan {
 export type WorkspaceModelPlanReferenceKind =
   | "agent_target"
   | "model_policy"
+  | "workspace_agent"
   | "workspace_app";
 
 export interface WorkspaceModelPlanReference {
@@ -121,6 +132,89 @@ export interface WorkspaceModelPlanReference {
   readonly id: string;
   readonly name?: string | null;
   readonly role?: string | null;
+}
+
+export type WorkspaceAgentHarness = WorkspaceSettingsReadonly<
+  WorkspaceAgent["harness"]
+>;
+
+export interface WorkspaceAgentHarnessTargetOption {
+  readonly enabled: boolean;
+  readonly id: string;
+  readonly name: string;
+  readonly provider: WorkspaceAgentProvider;
+}
+
+export type WorkspaceAgentSource = WorkspaceAgent["source"];
+
+/**
+ * One explicit selectable Agent configuration. Its id is also the opaque
+ * AgentGUI target identity; harness/provider details are presentation and
+ * execution metadata rather than directory identity.
+ */
+export type WorkspaceAgentDefinition =
+  WorkspaceSettingsReadonly<WorkspaceAgent>;
+
+/**
+ * Local edit buffer for the simplified Agent editor: name, Agent Runtime,
+ * plan + default model, description, and behavior text. Dormant contract
+ * fields (fallback chain, capability allowlists) are not editable; the draft
+ * carries the stored values through opaquely so saving never clears them.
+ */
+export interface WorkspaceAgentDraft {
+  agentId: string | null;
+  name: string;
+  description: string;
+  harnessAgentTargetId: string;
+  modelPlanId: string;
+  defaultModel: string;
+  instructions: string;
+  callConditions: string;
+  dormant: WorkspaceAgentDormantFields;
+}
+
+/**
+ * Dormant WorkspaceAgent contract fields preserved verbatim between load and
+ * save. They have no editor surface; the daemon remains their authority.
+ */
+export interface WorkspaceAgentDormantFields {
+  readonly capabilitiesExplicit: boolean;
+  readonly modelFallbacks: WorkspaceAgentDefinition["modelFallbacks"];
+  readonly skills: readonly string[];
+  readonly tools: readonly string[];
+}
+
+export type WorkspaceAgentFeedbackKind =
+  | "deleteFailed"
+  | "requiredFields"
+  | "saveFailed";
+
+export interface WorkspaceAgentFeedback {
+  readonly kind: WorkspaceAgentFeedbackKind;
+}
+
+export interface WorkspaceSettingsWorkspaceAgentsMutableState {
+  agents: WorkspaceAgentDefinition[];
+  confirmingDeleteAgentID: string | null;
+  deletingAgentID: string | null;
+  draft: WorkspaceAgentDraft | null;
+  feedback: WorkspaceAgentFeedback | null;
+  harnessTargets: WorkspaceAgentHarnessTargetOption[];
+  loadFailed: boolean;
+  loading: boolean;
+  saving: boolean;
+}
+
+export interface WorkspaceSettingsWorkspaceAgentsSnapshotState {
+  readonly agents: readonly WorkspaceAgentDefinition[];
+  readonly confirmingDeleteAgentID: string | null;
+  readonly deletingAgentID: string | null;
+  readonly draft: Readonly<WorkspaceAgentDraft> | null;
+  readonly feedback: WorkspaceAgentFeedback | null;
+  readonly harnessTargets: readonly WorkspaceAgentHarnessTargetOption[];
+  readonly loadFailed: boolean;
+  readonly loading: boolean;
+  readonly saving: boolean;
 }
 
 export interface WorkspaceAgentModelBinding {
@@ -278,6 +372,7 @@ export interface WorkspaceSettingsStoreState {
   agentTab: WorkspaceSettingsAgentTab;
   agentFocusProvider: string | null;
   agentFocusRequestID: number;
+  agents: WorkspaceSettingsWorkspaceAgentsMutableState;
   developerPanelVisible: boolean;
   developerLogs: WorkspaceSettingsDeveloperLogsMutableState;
   generalFocusAnchor: WorkspaceSettingsGeneralFocusAnchor | null;
@@ -294,6 +389,7 @@ export interface WorkspaceSettingsReadableStoreState {
   readonly agentTab: WorkspaceSettingsAgentTab;
   readonly agentFocusProvider: string | null;
   readonly agentFocusRequestID: number;
+  readonly agents: WorkspaceSettingsWorkspaceAgentsSnapshotState;
   readonly developerPanelVisible: boolean;
   readonly developerLogs: WorkspaceSettingsDeveloperLogsSnapshotState;
   readonly generalFocusAnchor: WorkspaceSettingsGeneralFocusAnchor | null;

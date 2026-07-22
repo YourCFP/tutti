@@ -53,6 +53,7 @@ import (
 	tuttiagentservice "github.com/tutti-os/tutti/services/tuttid/service/tuttiagent"
 	userprojectservice "github.com/tutti-os/tutti/services/tuttid/service/userproject"
 	workspaceservice "github.com/tutti-os/tutti/services/tuttid/service/workspace"
+	workspaceagentservice "github.com/tutti-os/tutti/services/tuttid/service/workspaceagent"
 	tuttitypes "github.com/tutti-os/tutti/services/tuttid/types"
 )
 
@@ -346,12 +347,21 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		Store:             modelPolicyStore,
 		BindingReferences: policyBindingReferences,
 	}
+	modelConfigurationPublisher := eventstreamservice.AgentModelConfigurationPublisher{Service: events}
+	workspaceAgentsStore, _ := store.(workspacedata.WorkspaceAgentsStore)
+	workspaceAgents := &workspaceagentservice.Service{
+		Store:      workspaceAgentsStore,
+		Targets:    agentTargetStore,
+		Plans:      modelPlansStore,
+		Workspaces: store,
+		Publisher:  modelConfigurationPublisher,
+	}
 	modelPlans := &modelplanservice.Service{
 		Store:         modelPlansStore,
 		FirstUseStore: modelPlanFirstUseStore,
 		// Plan deletion stays blocked while any consumer domain still points at
-		// the plan: agent model bindings and model usage policies alike.
-		References: modelplanservice.CompositeReferenceResolver{modelBindings, modelPolicies},
+		// the plan: agent model bindings, model usage policies, and workspace agents.
+		References: modelplanservice.CompositeReferenceResolver{modelBindings, modelPolicies, workspaceAgents},
 	}
 	events.RegisterIntentHandler(
 		eventstreamservice.TopicPreferencesDesktopUpdateRequested,
@@ -711,6 +721,7 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		AgentMaintenanceService:   agentMaintenance,
 		ManagedCredentialsService: managedCredentials,
 		ModelPlanService:          modelPlans,
+		WorkspaceAgentService:     workspaceAgents,
 		AgentModelBindingService:  modelBindings,
 		ModelPolicyService:        modelPolicies,
 		EventStreamService:        events,

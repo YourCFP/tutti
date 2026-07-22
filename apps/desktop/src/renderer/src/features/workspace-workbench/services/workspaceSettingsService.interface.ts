@@ -33,6 +33,7 @@ import type {
   WorkspaceSettingsAgentTab,
   WorkspaceSettingsGeneralFocusAnchor,
   WorkspaceSettingsSectionID,
+  WorkspaceAgentDraft,
   WorkspaceModelPlanDraft,
   WorkspaceModelPlanDraftSeed
 } from "./workspaceSettingsTypes";
@@ -46,6 +47,24 @@ export interface WorkspaceSettingsWorkspaceInput {
 export interface WorkspaceAgentModelBindingChange {
   defaultModel?: string | null;
   modelPlanID?: string | null;
+}
+
+/**
+ * Workspace Agent directory operations exposed by the settings service. All
+ * state lives on the settings store's `agents` slice; the daemon remains
+ * authoritative for validation, migration, revisions, and the Harness +
+ * ModelPlan runtime mapping.
+ */
+export interface IWorkspaceAgentsController {
+  beginDraft(): void;
+  beginEditAgent(agentID: string): void;
+  cancelDeleteAgent(): void;
+  cancelDraft(): void;
+  confirmDeleteAgent(agentID: string): Promise<void>;
+  refresh(): Promise<void>;
+  requestDeleteAgent(agentID: string): void;
+  saveDraft(): Promise<void>;
+  updateDraft(patch: Partial<WorkspaceAgentDraft>): void;
 }
 
 /**
@@ -83,6 +102,7 @@ export interface WorkspaceSettingsOpenOptions {
 
 export interface IWorkspaceSettingsService {
   readonly _serviceBrand: undefined;
+  readonly agents: IWorkspaceAgentsController;
   readonly modelPlans: IWorkspaceModelPlansController;
   readonly store: WorkspaceSettingsReadableStoreState;
 
