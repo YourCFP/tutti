@@ -75,6 +75,7 @@ WITH section_sessions AS (
                       latest.started_at_unix_ms DESC, latest.turn_id DESC
              LIMIT 1
            ), 0),
+           NULLIF(workspace_agent_sessions.started_at_unix_ms, 0),
            workspace_agent_sessions.created_at_unix_ms
          ) AS conversation_sort_time_unix_ms
   FROM workspace_agent_sessions INDEXED BY ` + indexName + `
@@ -321,6 +322,7 @@ WITH requested_sections(section_key) AS MATERIALIZED (
                                    latest.started_at_unix_ms DESC, latest.turn_id DESC
                           LIMIT 1
                         ), 0),
+                        NULLIF(sessions.started_at_unix_ms, 0),
                         sessions.created_at_unix_ms
                       ) AS conversation_sort_time_unix_ms
                FROM workspace_agent_sessions AS sessions INDEXED BY {{ORDINARY_INDEX}}

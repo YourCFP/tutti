@@ -450,7 +450,6 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 	}
 	agentSessionService.SessionInitializer = agentActivityProjection
 	agentSessionService.SessionReader = agentActivityProjection
-	agentSessionService.SessionPageReader = agentActivityProjection
 	agentSessionPurgeStore, ok := agentActivityRepo.(agenthost.SessionPurgeStore)
 	if !ok {
 		return tuttiapi.DaemonAPI{}, nil, nil, nil, fmt.Errorf("agent session purge store is unavailable")

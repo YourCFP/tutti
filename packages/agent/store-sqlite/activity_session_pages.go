@@ -60,6 +60,7 @@ WITH session_rows AS (
                       latest.started_at_unix_ms DESC, latest.turn_id DESC
              LIMIT 1
            ), 0),
+           NULLIF(workspace_agent_sessions.started_at_unix_ms, 0),
            workspace_agent_sessions.created_at_unix_ms
          ) AS conversation_sort_time_unix_ms
   FROM workspace_agent_sessions

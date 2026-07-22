@@ -110,6 +110,51 @@ func TestStoreListSessionsPageAppliesTargetVisibilityAndLiteralSearchTokens(t *t
 	}
 }
 
+func TestStoreSessionPagesUseSessionStartBeforePersistenceTimeWithoutTurns(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t, testOptions(&staticProjectPaths{paths: []string{"/workspace/app"}}))
+	ctx := context.Background()
+	reports := []ActivityStateReport{
+		sectionBatchActivityReport("ws-session-start-order", "started-older", testTargetIDCodex, "/workspace/app", 2_000),
+		sectionBatchActivityReport("ws-session-start-order", "started-newer", testTargetIDCodex, "/workspace/app", 3_000),
+	}
+	reports[0].Turn = nil
+	reports[0].Session.StartedAtUnixMS = 2_000
+	reports[0].Session.CreatedAtUnixMS = 5_000
+	reports[1].Turn = nil
+	reports[1].Session.StartedAtUnixMS = 3_000
+	reports[1].Session.CreatedAtUnixMS = 4_000
+	for _, report := range reports {
+		if _, err := store.ReportActivityState(ctx, report); err != nil {
+			t.Fatalf("ReportActivityState(%s) error = %v", report.Session.AgentSessionID, err)
+		}
+	}
+
+	page, ok, err := store.ListSessionsPage(ctx, ListSessionsPageInput{
+		WorkspaceID: "ws-session-start-order",
+		Limit:       10,
+	})
+	if err != nil || !ok {
+		t.Fatalf("ListSessionsPage() ok=%v error=%v", ok, err)
+	}
+	if got := sessionIDsFromSessions(page.Sessions); !slices.Equal(got, []string{"started-newer", "started-older"}) {
+		t.Fatalf("session page ids = %#v, want session start order", got)
+	}
+
+	section, ok, err := store.ListSessionSection(ctx, ListSessionSectionInput{
+		WorkspaceID: "ws-session-start-order",
+		SectionKey:  RailSectionKeyForProject("/workspace/app"),
+		Limit:       10,
+	})
+	if err != nil || !ok {
+		t.Fatalf("ListSessionSection() ok=%v error=%v", ok, err)
+	}
+	if got := sessionIDsFromSessions(section.Sessions); !slices.Equal(got, []string{"started-newer", "started-older"}) {
+		t.Fatalf("section page ids = %#v, want session start order", got)
+	}
+}
+
 func TestStoreRailQueriesApplyIncludedSessionIDsBeforePagingAndCounting(t *testing.T) {
 	t.Parallel()
 

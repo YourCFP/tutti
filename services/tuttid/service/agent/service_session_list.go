@@ -23,7 +23,8 @@ func (s *Service) ListFiltered(ctx context.Context, workspaceID string, input Li
 
 func (s *Service) ListPage(ctx context.Context, workspaceID string, input ListSessionsInput) (SessionListPage, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
-	if workspaceID == "" || s.SessionPageReader == nil {
+	reader, ok := s.SessionReader.(SessionPageReader)
+	if workspaceID == "" || !ok {
 		return SessionListPage{}, fmt.Errorf("%w: canonical session page reader is unavailable", ErrInvalidArgument)
 	}
 	cursor := sessionPageCursor{}
@@ -34,7 +35,7 @@ func (s *Service) ListPage(ctx context.Context, workspaceID string, input ListSe
 		}
 		cursor = parsed
 	}
-	page, ok, err := s.SessionPageReader.ListSessionsPage(ctx, agentactivitybiz.ListSessionsPageInput{
+	page, ok, err := reader.ListSessionsPage(ctx, agentactivitybiz.ListSessionsPageInput{
 		WorkspaceID:          workspaceID,
 		AgentTargetID:        strings.TrimSpace(input.AgentTargetID),
 		SearchQuery:          input.SearchQuery,

@@ -26,7 +26,6 @@ type Service struct {
 	AgentTargetStore               AgentTargetStore
 	SessionInitializer             SessionInitializer
 	SessionReader                  SessionReader
-	SessionPageReader              SessionPageReader
 	SessionPurgeStore              agenthost.SessionPurgeStore
 	AgentSessionResourceReleaser   AgentSessionResourceReleaser
 	UserProjectReader              UserProjectReader

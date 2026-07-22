@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -4754,6 +4756,7 @@ func TestServiceFallsBackToPersistedSessions(t *testing.T) {
 }
 
 type recordingSessionPageReader struct {
+	fakeSessionReader
 	inputs []agentactivitybiz.ListSessionsPageInput
 	pages  map[string]PersistedSessionListPage
 	err    error
@@ -4803,7 +4806,7 @@ func TestServiceListPageDelegatesSearchTargetAndCursorToCanonicalReader(t *testi
 			}},
 		},
 	}}
-	service.SessionPageReader = reader
+	service.SessionReader = reader
 	page, err := service.ListPage(context.Background(), "ws-1", ListSessionsInput{
 		AgentTargetID: "local:codex",
 		SearchQuery:   "mention",
@@ -5012,10 +5015,11 @@ func TestServiceListSessionPageReadersPropagateStorageErrors(t *testing.T) {
 	want := errors.New("section page store unavailable")
 	service := newIsolatedAgentService(newFakeRuntime())
 	service.SessionReader = &fakeSectionReader{singleSectionErr: want}
-	service.SessionPageReader = &recordingSessionPageReader{err: want}
 
 	t.Run("workspace list", func(t *testing.T) {
-		_, err := service.ListPage(context.Background(), "ws-1", ListSessionsInput{Limit: 5})
+		listService := newIsolatedAgentService(newFakeRuntime())
+		listService.SessionReader = &recordingSessionPageReader{err: want}
+		_, err := listService.ListPage(context.Background(), "ws-1", ListSessionsInput{Limit: 5})
 		if !errors.Is(err, want) {
 			t.Fatalf("ListPage() error = %v, want original store error", err)
 		}
@@ -7638,6 +7642,81 @@ func (f fakeSessionReader) ListSessions(workspaceID string) ([]PersistedSession,
 		}
 	}
 	return result, len(result) > 0
+}
+
+func (f fakeSessionReader) ListSessionsPage(
+	_ context.Context,
+	input agentactivitybiz.ListSessionsPageInput,
+) (PersistedSessionListPage, bool, error) {
+	workspaceID := strings.TrimSpace(input.WorkspaceID)
+	if workspaceID == "" {
+		return PersistedSessionListPage{}, false, nil
+	}
+	targetID := strings.TrimSpace(input.AgentTargetID)
+	searchTokens := strings.Fields(strings.ToLower(input.SearchQuery))
+	sessions := make([]PersistedSession, 0, len(f.sessions))
+	for key, session := range f.sessions {
+		if strings.TrimSpace(session.WorkspaceID) != workspaceID || f.tombstoned[key] {
+			continue
+		}
+		if kind := strings.TrimSpace(session.Kind); kind != "" && kind != agentactivitybiz.SessionKindRoot {
+			continue
+		}
+		if !session.Metadata.Visible || (targetID != "" && strings.TrimSpace(session.AgentTargetID) != targetID) {
+			continue
+		}
+		title := strings.ToLower(strings.TrimSpace(session.Title))
+		matches := true
+		for _, token := range searchTokens {
+			if !strings.Contains(title, token) {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			if strings.TrimSpace(session.RailSectionKey) == "" {
+				session.RailSectionKey = "conversations"
+			}
+			sessions = append(sessions, session)
+		}
+	}
+	sort.SliceStable(sessions, func(left, right int) bool {
+		leftSortTime := fakePersistedSessionConversationSortTime(sessions[left])
+		rightSortTime := fakePersistedSessionConversationSortTime(sessions[right])
+		if leftSortTime == rightSortTime {
+			return strings.TrimSpace(sessions[left].ID) < strings.TrimSpace(sessions[right].ID)
+		}
+		return leftSortTime > rightSortTime
+	})
+	if cursorID := strings.TrimSpace(input.CursorSessionID); cursorID != "" {
+		start := len(sessions)
+		for index, session := range sessions {
+			sortTime := fakePersistedSessionConversationSortTime(session)
+			if sortTime < input.CursorSortTimeUnixMS ||
+				(sortTime == input.CursorSortTimeUnixMS && strings.TrimSpace(session.ID) > cursorID) {
+				start = index
+				break
+			}
+		}
+		sessions = sessions[start:]
+	}
+	hasMore := input.Limit > 0 && len(sessions) > input.Limit
+	if hasMore {
+		sessions = sessions[:input.Limit]
+	}
+	nextCursor := ""
+	if hasMore && len(sessions) > 0 {
+		last := sessions[len(sessions)-1]
+		nextCursor = strconv.FormatInt(fakePersistedSessionConversationSortTime(last), 10) + "|" + strings.TrimSpace(last.ID)
+	}
+	return PersistedSessionListPage{Sessions: sessions, HasMore: hasMore, NextCursor: nextCursor}, true, nil
+}
+
+func fakePersistedSessionConversationSortTime(session PersistedSession) int64 {
+	if session.StartedAtUnixMS > 0 {
+		return session.StartedAtUnixMS
+	}
+	return session.CreatedAtUnixMS
 }
 
 func (f fakeSessionReader) ListChildSessions(_ context.Context, workspaceID string, rootAgentSessionID string) ([]PersistedSession, error) {
