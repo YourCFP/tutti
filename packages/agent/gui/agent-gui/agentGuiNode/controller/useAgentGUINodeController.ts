@@ -732,6 +732,7 @@ export function useAgentGUINodeController({
     isLoadingConversations,
     isLoadingMessages,
     normalizedComingSoonProviders,
+    nodeId,
     operationActions,
     persistActiveConversation,
     planImplementationTurnIdRef,
