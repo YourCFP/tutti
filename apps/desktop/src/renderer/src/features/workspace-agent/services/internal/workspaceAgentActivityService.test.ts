@@ -2205,6 +2205,7 @@ test("WorkspaceAgentActivityService deletes one exact session batch", async () =
       ) => {
         calls.push({ request, workspaceId });
         return {
+          cleanupFailedSessionIds: [],
           removedMessages: 3,
           removedSessionIds: ["session-1", "child-1"],
           removedSessions: 2
@@ -2232,6 +2233,7 @@ test("WorkspaceAgentActivityService deletes one exact session batch", async () =
     }
   ]);
   assert.deepEqual(result, {
+    cleanupFailedSessionIds: [],
     removedMessages: 3,
     removedSessionIds: ["session-1", "child-1"],
     removedSessions: 2
@@ -2305,6 +2307,7 @@ test("WorkspaceAgentActivityService single delete uses the authoritative batch r
       ) => {
         calls.push({ request, workspaceId });
         return {
+          cleanupFailedSessionIds: [],
           removedMessages: 2,
           removedSessionIds: ["session-1", "child-1"],
           removedSessions: 2
@@ -2325,7 +2328,7 @@ test("WorkspaceAgentActivityService single delete uses the authoritative batch r
     workspaceId: "ws-1"
   });
 
-  assert.deepEqual(result, { removed: true });
+  assert.deepEqual(result, { cleanupFailed: false, removed: true });
   assert.deepEqual(calls, [
     {
       request: { sessionIds: ["session-1"] },

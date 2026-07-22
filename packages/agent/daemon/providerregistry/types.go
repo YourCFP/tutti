@@ -445,6 +445,8 @@ type ComposerProfileDescriptor struct {
 	DefaultReasoningEffort  string
 	ConfiguredModelOverride ConfiguredModelOverrideKind
 	Speed                   bool
+	SpeedValues             []string
+	DefaultSpeed            string
 	Capabilities            []string
 	PermissionConfigurable  bool
 	DefaultPermissionModeID string

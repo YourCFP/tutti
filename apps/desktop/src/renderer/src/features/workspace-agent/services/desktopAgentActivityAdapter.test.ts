@@ -1583,7 +1583,7 @@ test("desktop agent activity adapter loads Claude options without mutating draft
       },
       async deleteWorkspaceAgentSession(_workspaceId, agentSessionId) {
         calls.push(`delete:${agentSessionId}`);
-        return { removed: true };
+        return { cleanupFailed: false, removed: true };
       }
     }),
     runtimeApi: createRuntimeApi()

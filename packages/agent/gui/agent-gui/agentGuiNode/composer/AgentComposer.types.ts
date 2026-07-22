@@ -81,6 +81,8 @@ export interface AgentComposerProps {
   isInterrupting: boolean;
   isSendingTurn: boolean;
   isSubmittingPrompt: boolean;
+  /** Whether the active session is authoritative enough to probe its cwd. */
+  projectMissingProbeEnabled?: boolean;
   uiLanguage?: UiLanguage;
   isActive?: boolean;
   previewMode?: boolean;
@@ -201,6 +203,13 @@ export interface AgentComposerProps {
     }) => string;
     slashStatusContextUnavailable: string;
     slashStatusLimitsUnavailable: string;
+    slashStatusEmptyValue: string;
+    slashStatusUsageJustUpdated: string;
+    slashStatusUsageMinutesAgo: (count: number) => string;
+    slashStatusUsageHoursAgo: (count: number) => string;
+    slashStatusUsageUpdating: string;
+    slashStatusUsageRefreshFailed: string;
+    slashStatusUsageRefreshAria: string;
     usageChipLabel: (input: { percent: number }) => string;
     usageTooltipLabel: string;
     usagePopoverTitle: string;
@@ -239,6 +248,7 @@ export interface AgentComposerProps {
     handoffConversation: string;
     handoffConversationTooltip: string;
     handoffConversationMenu: string;
+    handoffTargetDeviceSource: (deviceLabel: string) => string;
     handoffTargetSelf: string;
     handoffTargetShared: string;
     providerSwitchLabel: string;
@@ -284,10 +294,13 @@ export interface AgentComposerProps {
     permissionModeId?: string | null;
   }) => void;
   capabilityMenuState?: AgentComposerCapabilityMenuState;
+  capabilityControlsReadOnly?: boolean;
   onCapabilitySettingsRequest?: (
     capability: AgentComposerCapabilitySettingsTarget
   ) => void;
   onSlashStatusOpen?: () => void;
+  onSlashStatusClose?: () => void;
+  onSlashStatusRefresh?: () => void;
   onSubmit: (
     content: AgentPromptContentBlock[],
     displayPrompt?: string,
@@ -366,6 +379,10 @@ export interface AgentComposerSlashStatus {
   limits?: readonly AgentComposerSlashStatusLimit[];
   limitsLoading?: boolean;
   limitsUnavailable?: boolean;
+  limitsResolvedEmpty?: boolean;
+  limitsCapturedAtUnixMs?: number | null;
+  refreshFailed?: boolean;
+  isRefreshing?: boolean;
 }
 
 export interface AgentComposerSlashStatusLimit {

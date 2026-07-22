@@ -316,7 +316,8 @@ export type ApiErrorDetails = {
     | "agent_quick_prompt_operation_failed"
     | "agent_target_not_found"
     | "model_plan_not_found"
-    | "model_plan_referenced";
+    | "model_plan_referenced"
+    | "model_policy_referenced";
   reason?: string;
   params?: {
     [key: string]: unknown;
@@ -782,11 +783,11 @@ export type DetectModelPlanResponse = {
 };
 
 export type ModelPlanReference = {
-  kind: "agent_target";
+  kind: "agent_target" | "model_policy";
   id: string;
   name?: string | null;
   /**
-   * How the agent target uses the plan, currently default.
+   * How the consumer uses the plan. Agent target bindings report "default"; model usage policies report the bound role (execution, planning, or review).
    */
   role?: string | null;
 };
@@ -1224,6 +1225,7 @@ export type CreateWorkspaceAppFactoryJobRequest = {
   displayName: string;
   description?: string;
   agentTargetId: string;
+  clientSubmitId: string;
   /**
    * @deprecated
    */
@@ -2212,6 +2214,7 @@ export type ExternalAgentImportResultResponse = {
 
 export type DeleteWorkspaceAgentSessionResponse = {
   removed: boolean;
+  cleanupFailed: boolean;
 };
 
 export type WorkspaceAgentSessionSectionDeletionCandidatesResponse = {
@@ -2230,11 +2233,13 @@ export type DeleteWorkspaceAgentSessionsBatchResponse = {
   removedMessages: number;
   removedSessions: number;
   removedSessionIds: Array<string>;
+  cleanupFailedSessionIds: Array<string>;
 };
 
 export type ClearWorkspaceAgentSessionsResponse = {
   removedMessages: number;
   removedSessions: number;
+  cleanupFailedSessionIds: Array<string>;
 };
 
 export type UpdateWorkspaceAgentSessionPinRequest = {
@@ -5527,6 +5532,10 @@ export type DeleteModelPolicyErrors = {
    * HTTP method is not supported on this route
    */
   405: ApiErrorResponse;
+  /**
+   * Model usage policy is still referenced by agent bindings
+   */
+  409: ApiErrorResponse;
   /**
    * Workspace operation failed in an upstream adapter or command
    */

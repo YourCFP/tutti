@@ -5,10 +5,18 @@ supported agent runtimes through a named model endpoint. A plan owns its wire
 protocol, endpoint, encrypted credential, model catalog, default model,
 detection state, enabled state, and first-successful-use state.
 
-This slice covers plans, per-agent-target bindings, and model usage policies
-(execution/planning/review roles with the fixed review rule and the session
-acceptance ladder). It does not define review automation orchestration or
-workspace-app plan consumers.
+This slice owns plans and per-agent-target bindings. A separate staged layer,
+`services/tuttid/service/modelpolicy`, adds model-usage policies (role-to-plan
+mappings, per-session overrides, and a session acceptance record) and registers
+those policies as plan consumers for the deletion protection below. Binding and
+policy links are validated in both directions: a binding may reference only a
+model-usage policy that exists in the same workspace, and a policy cannot be
+deleted while any agent binding references it — deletion is rejected with a 409
+until those bindings are cleared or rebound. The daemon does not yet execute a
+policy's role map or its fixed review rule: review automation and automated
+acceptance advancement remain deferred to a later stack layer, so only the
+explicit user-acceptance endpoint moves the acceptance ladder today. This slice
+does not define workspace-app plan consumers.
 
 ## Ownership
 
@@ -29,11 +37,16 @@ workspace-app plan consumers.
   binding, supplies the endpoint to runtime preparation, and projects the
   first completed turn back to the plan service. It does not change session or
   Turn lifecycle semantics owned by `packages/agent/host`.
+- Desktop settings and AgentGUI composer surfaces consume the daemon APIs
+  behind the `lab.modelPlans` gate; they do not own plan credentials or
+  detection state.
 
 Provider support is fail-closed. A provider may advertise
 `modelPlanBinding` only when its registry descriptor declares a protocol and a
 matching runtime-preparation adapter exists. OpenCode and Cursor currently keep
-their provider-native credential sources.
+their provider-native credential sources. Provider catalog identity carries
+`modelPlanProtocol` so desktop resolves protocols through the catalog instead
+of provider-identity switches.
 
 ## Request And Runtime Flow
 
@@ -54,16 +67,21 @@ their provider-native credential sources.
    observer failure or process shutdown.
 
 Disabling a plan prevents new sessions from using it; existing running
-sessions are not interrupted. Deleting a plan is rejected while an agent
-target binding references it. The references API currently returns only
-`agent_target` entries.
+sessions are not interrupted. Deleting a plan is rejected while any consumer
+still references it: agent target bindings and model-usage policies both
+count. The references API returns `agent_target` and `model_policy` entries,
+each carrying the consumer's role (bindings report `default`; policies report
+`execution`, `planning`, or `review`). Symmetrically, deleting a model-usage
+policy is rejected while any agent binding still references it; rebind or clear
+those bindings first.
 
 ## Rollout Gate
 
-Model plan, agent-binding, and model policy write routes require the
-device-global `lab.modelPlans` preference. Reads and previously established
-runtime bindings continue to work when the flag is off. Missing or unreadable
-preferences fail closed for writes.
+Model plan and agent-binding write routes require the device-global
+`lab.modelPlans` preference. Reads and previously established runtime bindings
+continue to work when the flag is off. Missing or unreadable preferences fail
+closed for writes. The desktop model-plan settings entry is hidden unless the
+same Lab toggle is on.
 
 ## Credential Ownership
 
@@ -139,15 +157,11 @@ Rules:
 ## Acceptance Ladder And The Fixed Review Rule
 
 `modelpolicy` keeps a per-session acceptance ladder:
-`agent_claimed → auto_checked → user_accepted`. A settled turn with a
-completed outcome records `agent_claimed`. When the effective policy (binding
-default, overridable or disableable per session) enables the fixed
-`on_task_complete` review rule, the daemon runs a policy-triggered review
-consult — bounded by `MaxRunsPerSession` and `MaxTotalTokensPerSession` — and
-a `VERDICT: PASS` final line raises the ladder to `auto_checked`. Only an
-explicit user action reaches `user_accepted`, and only that state may close
-work. Review runs land in the collaboration-run accounting and timeline like
-any other consult.
+`agent_claimed → auto_checked → user_accepted`. Only an explicit user action
+reaches `user_accepted` today. Automated review consults and automated ladder
+advancement remain deferred; do not document or UI-promise those behaviors
+until the later stack layer lands. Review runs, when enabled later, must land
+in collaboration-run accounting and must never close work without the user.
 
 ## Collaboration Runs
 
@@ -173,7 +187,10 @@ sessions are untouched: bindings only affect sessions that have not started.
 `model_plan_referenced`) while agent bindings or policies reference the plan;
 `GET .../references` lists the consumers so the UI shows impact before edits.
 The resolver composes per-consumer sources (`modelbinding.Service`,
-`modelpolicy.Service`).
+`modelpolicy.Service`). Symmetrically,
+`DELETE /v1/workspaces/{id}/model-policies/{policyId}` is blocked (409
+`model_policy_referenced`) while any agent binding still references the
+policy.
 
 ## What To Avoid
 

@@ -84,10 +84,14 @@ export interface AgentGUIDetailPaneProps {
   slashStatusLimits: readonly AgentComposerSlashStatusLimit[];
   slashStatusLimitsLoading: boolean;
   slashStatusLimitsUnavailable: boolean;
+  slashStatusOverride?: AgentComposerProps["slashStatus"];
   onSlashStatusOpen?: AgentComposerProps["onSlashStatusOpen"];
+  onSlashStatusClose?: AgentComposerProps["onSlashStatusClose"];
+  onSlashStatusRefresh?: AgentComposerProps["onSlashStatusRefresh"];
   onLinkAction?: (action: WorkspaceLinkAction) => void;
   onHandoffConversation?: AgentGUINodeViewProps["onHandoffConversation"];
   capabilityMenuState?: AgentComposerProps["capabilityMenuState"];
+  capabilityControlsReadOnly?: AgentComposerProps["capabilityControlsReadOnly"];
   onCapabilitySettingsRequest?: AgentComposerProps["onCapabilitySettingsRequest"];
   onAgentProviderLogin?: (provider?: string | null) => void;
   onRequestWorkspaceReferences?:
@@ -167,10 +171,14 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
   slashStatusLimits,
   slashStatusLimitsLoading,
   slashStatusLimitsUnavailable,
+  slashStatusOverride,
   onSlashStatusOpen,
+  onSlashStatusClose,
+  onSlashStatusRefresh,
   onLinkAction,
   onHandoffConversation,
   capabilityMenuState,
+  capabilityControlsReadOnly = false,
   onCapabilitySettingsRequest,
   onAgentProviderLogin,
   onRequestWorkspaceReferences,
@@ -227,7 +235,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     showStopButton,
     showTimelineSkeleton,
     showUnavailableChatEmpty,
-    slashStatus,
+    slashStatus: derivedSlashStatus,
     submitDisabled,
     timelineConversationId,
     timelineInteractionLocked
@@ -239,6 +247,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     slashStatusLimitsUnavailable,
     viewModel
   });
+  const slashStatus = slashStatusOverride ?? derivedSlashStatus;
   const handleInterruptCurrentTurn = useCallback(() => {
     actions.interruptCurrentTurn(labels.noRunningResponse);
   }, [actions.interruptCurrentTurn, labels.noRunningResponse]);
@@ -416,6 +425,8 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       provider: composerProvider,
       slashStatus,
       onSlashStatusOpen,
+      onSlashStatusClose,
+      onSlashStatusRefresh,
       usage: viewModel.detail.usage,
       draftContent: viewModel.composer.draftContent,
       engagement: composerEngagement,
@@ -474,10 +485,12 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
           : null,
       isSendingTurn: isComposerSending,
       isSubmittingPrompt: isInteractionPending,
+      projectMissingProbeEnabled: !viewModel.composer.isCreatingConversation,
       uiLanguage,
       labels: composerLabels,
       workspaceUserProjectI18n,
       capabilityMenuState,
+      capabilityControlsReadOnly,
       onDraftContentChange: updateDraftContent,
       onProjectPathChange: updateSelectedProjectPath,
       onSettingsChange: updateComposerSettings,
@@ -502,6 +515,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
     [
       canQueueWhileBusy,
       capabilityMenuState,
+      capabilityControlsReadOnly,
       canSwitchComposerProvider,
       composerDisabled,
       composerDisabledReason,
@@ -564,6 +578,7 @@ export const AgentGUIDetailPane = memo(function AgentGUIDetailPane({
       viewModel.composer.drainingQueuedPromptId,
       viewModel.detail.hasSentUserMessage,
       viewModel.composer.isInterrupting,
+      viewModel.composer.isCreatingConversation,
       viewModel.interaction.isRespondingApproval,
       viewModel.interaction.isRuntimeBlocked,
       viewModel.composer.promptImagesSupported,

@@ -545,10 +545,16 @@ export type AgentActivityGoalControlAction =
   | "clear"
   | "set";
 
+export interface AgentActivityInitialGoalControl {
+  action: AgentActivityGoalControlAction;
+  objective?: string;
+}
+
 export interface AgentActivityGoalControlInput {
   workspaceId: string;
   agentSessionId: string;
   action: AgentActivityGoalControlAction;
+  clientSubmitId?: string;
   objective?: string;
   signal?: AbortSignal;
 }
@@ -580,6 +586,7 @@ export interface AgentActivityDeleteSessionInput {
 }
 
 export interface AgentActivityDeleteSessionResult {
+  cleanupFailed: boolean;
   removed: boolean;
 }
 
@@ -590,6 +597,7 @@ export interface AgentActivityDeleteSessionsInput {
 }
 
 export interface AgentActivityDeleteSessionsResult {
+  cleanupFailedSessionIds: string[];
   removedMessages: number;
   removedSessionIds: string[];
   removedSessions: number;

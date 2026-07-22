@@ -290,8 +290,9 @@ export const enAgentGui = {
   slashStatusLimitReset: "resets {{reset}}",
   slashStatusContextValue:
     "{{percentLeft}}% left ({{usedTokens}} used / {{totalTokens}})",
-  slashStatusContextUnavailable: "Context usage unavailable",
+  slashStatusContextUnavailable: "—",
   slashStatusLimitsUnavailable: "Rate limits unavailable from this agent",
+  slashStatusEmptyValue: "—",
   slashStatusUsageJustUpdated: "Updated just now",
   slashStatusUsageMinutesAgo: "Updated {{count}}m ago",
   slashStatusUsageHoursAgo: "Updated {{count}}h ago",
@@ -434,6 +435,7 @@ export const enAgentGui = {
   handoffConversation: "Handoff",
   handoffConversationTooltip: "Hand off to another agent",
   handoffConversationMenu: "Choose an agent for handoff",
+  handoffTargetDeviceSource: "From {{device}}",
   handoffTargetSelf: "My Agent",
   handoffTargetShared: "Shared Agent",
   startConversation: "Start session",

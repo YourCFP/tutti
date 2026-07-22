@@ -65,6 +65,7 @@ interface UseAgentGUIComposerPresentationInput {
   providerComposerOptions: AgentActivityComposerOptions | null;
   selectedComposerTargetData: AgentGUIComposerTargetData;
   selectedProjectPath: string | null;
+  shouldApplyPreparedProjectSelection: boolean;
   userProjects: readonly AgentGUIConversationUserProject[];
   setDraftSettingsBySessionId: Dispatch<
     SetStateAction<Record<string, AgentSessionComposerSettings>>
@@ -288,6 +289,9 @@ export function useAgentGUIComposerPresentation(
               input.selectedProjectPath,
               input.userProjects
             ),
+      shouldApplyPreparedProjectSelection:
+        input.activeConversationId === null &&
+        input.shouldApplyPreparedProjectSelection,
       projectLocked: input.activeConversationId !== null,
       projectPathIsRemote: input.agentActivityRuntime.projectPathIsRemote,
       collapseModelOptionsToLatest:
@@ -337,6 +341,7 @@ export function useAgentGUIComposerPresentation(
     input.providerComposerOptions,
     input.selectedComposerTargetData.agentTargetId,
     input.selectedProjectPath,
+    input.shouldApplyPreparedProjectSelection,
     input.userProjects,
     optionsReasoningEffort,
     sessionSettings,

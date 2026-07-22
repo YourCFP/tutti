@@ -698,6 +698,7 @@ const (
 	MethodNotAllowed                ApiErrorDetailsCode = "method_not_allowed"
 	ModelPlanNotFound               ApiErrorDetailsCode = "model_plan_not_found"
 	ModelPlanReferenced             ApiErrorDetailsCode = "model_plan_referenced"
+	ModelPolicyReferenced           ApiErrorDetailsCode = "model_policy_referenced"
 	PreferencesOperationFailed      ApiErrorDetailsCode = "preferences_operation_failed"
 	ServiceUnavailable              ApiErrorDetailsCode = "service_unavailable"
 	Unauthorized                    ApiErrorDetailsCode = "unauthorized"
@@ -728,6 +729,8 @@ func (e ApiErrorDetailsCode) Valid() bool {
 	case ModelPlanNotFound:
 		return true
 	case ModelPlanReferenced:
+		return true
+	case ModelPolicyReferenced:
 		return true
 	case PreferencesOperationFailed:
 		return true
@@ -1432,12 +1435,15 @@ func (e ModelPlanProtocol) Valid() bool {
 // Defines values for ModelPlanReferenceKind.
 const (
 	ModelPlanReferenceKindAgentTarget ModelPlanReferenceKind = "agent_target"
+	ModelPlanReferenceKindModelPolicy ModelPlanReferenceKind = "model_policy"
 )
 
 // Valid indicates whether the value is a known member of the ModelPlanReferenceKind enum.
 func (e ModelPlanReferenceKind) Valid() bool {
 	switch e {
 	case ModelPlanReferenceKindAgentTarget:
+		return true
+	case ModelPlanReferenceKindModelPolicy:
 		return true
 	default:
 		return false
@@ -3298,8 +3304,9 @@ type CheckUserProjectPathRequest struct {
 
 // ClearWorkspaceAgentSessionsResponse defines model for ClearWorkspaceAgentSessionsResponse.
 type ClearWorkspaceAgentSessionsResponse struct {
-	RemovedMessages int `json:"removedMessages"`
-	RemovedSessions int `json:"removedSessions"`
+	CleanupFailedSessionIds []string `json:"cleanupFailedSessionIds"`
+	RemovedMessages         int      `json:"removedMessages"`
+	RemovedSessions         int      `json:"removedSessions"`
 }
 
 // CliCapabilitiesResponse defines model for CliCapabilitiesResponse.
@@ -3546,6 +3553,7 @@ type CreateWorkspaceAgentSessionRequest struct {
 // CreateWorkspaceAppFactoryJobRequest defines model for CreateWorkspaceAppFactoryJobRequest.
 type CreateWorkspaceAppFactoryJobRequest struct {
 	AgentTargetId    string  `json:"agentTargetId"`
+	ClientSubmitId   string  `json:"clientSubmitId"`
 	Description      *string `json:"description,omitempty"`
 	DisplayName      string  `json:"displayName"`
 	Model            *string `json:"model,omitempty"`
@@ -3622,7 +3630,8 @@ type DeleteUserProjectRequest struct {
 
 // DeleteWorkspaceAgentSessionResponse defines model for DeleteWorkspaceAgentSessionResponse.
 type DeleteWorkspaceAgentSessionResponse struct {
-	Removed bool `json:"removed"`
+	CleanupFailed bool `json:"cleanupFailed"`
+	Removed       bool `json:"removed"`
 }
 
 // DeleteWorkspaceAgentSessionsBatchRequest defines model for DeleteWorkspaceAgentSessionsBatchRequest.
@@ -3632,9 +3641,10 @@ type DeleteWorkspaceAgentSessionsBatchRequest struct {
 
 // DeleteWorkspaceAgentSessionsBatchResponse defines model for DeleteWorkspaceAgentSessionsBatchResponse.
 type DeleteWorkspaceAgentSessionsBatchResponse struct {
-	RemovedMessages   int      `json:"removedMessages"`
-	RemovedSessionIds []string `json:"removedSessionIds"`
-	RemovedSessions   int      `json:"removedSessions"`
+	CleanupFailedSessionIds []string `json:"cleanupFailedSessionIds"`
+	RemovedMessages         int      `json:"removedMessages"`
+	RemovedSessionIds       []string `json:"removedSessionIds"`
+	RemovedSessions         int      `json:"removedSessions"`
 }
 
 // DeleteWorkspaceAppResponse defines model for DeleteWorkspaceAppResponse.
@@ -4339,7 +4349,7 @@ type ModelPlanReference struct {
 	Kind ModelPlanReferenceKind `json:"kind"`
 	Name *string                `json:"name,omitempty"`
 
-	// Role How the agent target uses the plan, currently default.
+	// Role How the consumer uses the plan. Agent target bindings report "default"; model usage policies report the bound role (execution, planning, or review).
 	Role *string `json:"role,omitempty"`
 }
 
@@ -5825,6 +5835,9 @@ type ModelPlanNotFoundError = ApiErrorResponse
 
 // ModelPlanReferencedError defines model for ModelPlanReferencedError.
 type ModelPlanReferencedError = ApiErrorResponse
+
+// ModelPolicyReferencedError defines model for ModelPolicyReferencedError.
+type ModelPolicyReferencedError = ApiErrorResponse
 
 // PreferencesOperationError defines model for PreferencesOperationError.
 type PreferencesOperationError = ApiErrorResponse

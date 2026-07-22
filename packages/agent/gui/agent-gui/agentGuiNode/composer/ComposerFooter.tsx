@@ -236,6 +236,7 @@ export function ComposerFooter({
               disabled={handoffDisabled}
               labels={{
                 action: effectiveHandoffLabel,
+                deviceSource: labels.handoffTargetDeviceSource,
                 menu: effectiveHandoffMenuLabel,
                 self: labels.handoffTargetSelf,
                 shared: labels.handoffTargetShared,

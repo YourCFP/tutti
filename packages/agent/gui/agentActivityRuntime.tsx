@@ -10,6 +10,7 @@ import type {
   AgentActivityCollaborationRun,
   AgentActivityGoalControlInput,
   AgentActivityGoalControlResult,
+  AgentActivityInitialGoalControl,
   AgentActivityCreateSessionInput,
   AgentActivityDeleteSessionInput,
   AgentActivityDeleteSessionResult,
@@ -217,11 +218,13 @@ export type AgentActivityRuntimeActivateSessionInput =
   | (AgentActivityRuntimeActivateSessionInputBase & {
       agentTargetId: string;
       clientSubmitId: string;
+      initialGoalControl?: AgentActivityInitialGoalControl;
       mode: "new";
     })
   | (AgentActivityRuntimeActivateSessionInputBase & {
       agentTargetId?: string | null;
       clientSubmitId?: never;
+      initialGoalControl?: never;
       mode: "existing";
     });
 
@@ -310,6 +313,7 @@ export interface AgentActivityRuntimeDeleteSessionsBatchInput {
 }
 
 export interface AgentActivityRuntimeDeleteSessionsBatchResult {
+  cleanupFailedSessionIds: string[];
   removedMessages: number;
   removedSessionIds: string[];
   removedSessions: number;

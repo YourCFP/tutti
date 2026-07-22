@@ -301,6 +301,8 @@ export interface AgentGUIComposerSettingsVM {
   selectedProjectPath?: string | null;
   /** Persisted rail membership used to scope Agent-generated file mentions. */
   selectedProjectSectionKey?: string | null;
+  /** Resolve the durable default only before the home project intent is known. */
+  shouldApplyPreparedProjectSelection?: boolean;
   projectLocked?: boolean;
   // Mirrors the injected runtime's `projectPathIsRemote`. When true the session
   // cwd is not on the local filesystem (e.g. a shared/cloud sandbox), so the

@@ -331,6 +331,9 @@ export class WorkspaceAgentActivityService
       throw new Error("workspace_agent_delete_result_missing");
     }
     return {
+      cleanupFailedSessionIds: [
+        ...mutation.deleteResult.cleanupFailedSessionIds
+      ],
       removedMessages: mutation.deleteResult.removedMessages,
       removedSessionIds: [...mutation.deleteResult.removedSessionIds],
       removedSessions: mutation.deleteResult.removedSessions
@@ -699,7 +702,10 @@ export class WorkspaceAgentActivityService
       signal: input.signal,
       workspaceId
     });
-    return { removed: result.removedSessionIds.includes(agentSessionId) };
+    return {
+      cleanupFailed: result.cleanupFailedSessionIds.includes(agentSessionId),
+      removed: result.removedSessionIds.includes(agentSessionId)
+    };
   }
 
   async renameSession(
