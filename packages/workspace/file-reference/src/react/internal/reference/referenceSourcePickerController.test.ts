@@ -81,6 +81,9 @@ function fakeAggregator(options: FakeOptions): ReferenceSourceAggregator {
     resolveSelection(node): SelectedReference {
       return { path: node.ref.nodeId, kind: node.kind };
     },
+    async prepareSelection(_scope, node): Promise<SelectedReference> {
+      return { path: node.ref.nodeId, kind: node.kind };
+    },
     locateTarget: async (_scope, sourceId) =>
       options.locate?.[sourceId] ?? null,
     getLoadedSource: (sourceId: string) =>

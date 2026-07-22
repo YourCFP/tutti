@@ -1070,7 +1070,7 @@ export function createReferenceSourcePickerController(
       };
       for (const node of selection) {
         if (node.kind !== "folder") {
-          push(aggregator.resolveSelection(node));
+          push(await aggregator.prepareSelection(scope, node));
           continue;
         }
         const navigable =
@@ -1078,13 +1078,13 @@ export function createReferenceSourcePickerController(
             .navigable ?? false;
         if (!navigable) {
           // 本地源:文件夹保持单条引用(目录路径在 filesystem 里有效)。
-          push(aggregator.resolveSelection(node));
+          push(await aggregator.prepareSelection(scope, node));
           continue;
         }
         // app/issue 源:文件夹下文件不一定落在该目录路径,递归枚举展开成逐个文件引用。
         const files = await collectFolderFiles(node);
         for (const fileNode of files) {
-          push(aggregator.resolveSelection(fileNode));
+          push(await aggregator.prepareSelection(scope, fileNode));
         }
       }
       return resolved;
@@ -1106,7 +1106,7 @@ export function createReferenceSourcePickerController(
           node.kind === "folder" && (source?.capabilities.navigable ?? false);
         if (!navigable) {
           // 文件、或非 navigable 源的文件夹:保持单条引用。
-          pushFile(aggregator.resolveSelection(node));
+          pushFile(await aggregator.prepareSelection(scope, node));
           continue;
         }
         // navigable 源文件夹:折叠成一个 bundle。句柄由源解码,供 agent 经

@@ -145,6 +145,7 @@ export interface SelectedReference {
   path: string;
   kind: "file" | "folder";
   displayName?: string;
+  sizeBytes?: number | null;
   /** Host-local original path, when path is an opaque transfer handle. */
   hostPath?: string;
   /** 保留引用来源,供上层区分 workspace 文件与 host 本地文件等同形 path。 */
@@ -249,6 +250,17 @@ export interface ReferenceSourceService {
 
   /** 选中产物归一,见 SelectedReference。 */
   resolveSelection(node: ReferenceNode): SelectedReference;
+
+  /**
+   * 可选的确认阶段 preparation。仅当 source 返回的 selection 尚不是 consumer 可直接读取的
+   * locator 时实现，例如 host 需要先把 capability handle 物化到 provider runtime。
+   * picker 会等待 preparation 完成；失败时不得提交部分结果或关闭弹窗。
+   */
+  prepareSelection?(
+    scope: ReferenceScope,
+    node: ReferenceNode,
+    selection: SelectedReference
+  ): Promise<SelectedReference>;
 }
 
 export interface ReferenceSourceRegistry {

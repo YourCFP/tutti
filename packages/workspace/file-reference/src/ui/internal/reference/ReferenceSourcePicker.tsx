@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -192,6 +193,11 @@ export function ReferenceSourcePicker({
     searchResultKind: purpose === "directory" ? "folder" : "file",
     selectionMode: purpose === "directory" ? "single" : "multiple"
   });
+  const requestClose = useCallback(() => {
+    if (!view.isConfirming) {
+      onClose();
+    }
+  }, [onClose, view.isConfirming]);
   const [createDirectoryDialog, setCreateDirectoryDialog] = useState<{
     errorMessage: string | null;
     name: string;
@@ -229,7 +235,7 @@ export function ReferenceSourcePicker({
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      onClose();
+      requestClose();
     };
     document.addEventListener("keydown", handleEscapeKeyDown, {
       capture: true
@@ -239,7 +245,7 @@ export function ReferenceSourcePicker({
         capture: true
       });
     };
-  }, [onClose, open]);
+  }, [open, requestClose]);
 
   useEffect(() => {
     if (!open) {
@@ -485,14 +491,14 @@ export function ReferenceSourcePicker({
     }
     event.preventDefault();
     event.stopPropagation();
-    onClose();
+    requestClose();
   };
 
   const pickerDialog = (
     <div
       className="nodrag fixed inset-0 grid place-items-center bg-[var(--backdrop)] px-3 py-4 backdrop-blur-md [-webkit-app-region:no-drag] sm:px-6 sm:py-8"
       style={{ zIndex: "var(--z-panel)" }}
-      onClick={onClose}
+      onClick={requestClose}
       onKeyDownCapture={handleReferencePickerKeyDownCapture}
     >
       <Card
@@ -513,10 +519,11 @@ export function ReferenceSourcePicker({
             </CardTitle>
             <Button
               aria-label={copy.t("actions.cancel")}
+              disabled={view.isConfirming}
               size="icon-sm"
               type="button"
               variant="ghost"
-              onClick={onClose}
+              onClick={requestClose}
             >
               <CloseIcon size={16} />
             </Button>
@@ -843,9 +850,15 @@ export function ReferenceSourcePicker({
             count: view.selectionCount
           })}
           disabled={view.selectionCount === 0}
+          errorMessage={
+            view.confirmError
+              ? (fileManagerCopy?.t("unknownErrorMessage") ??
+                copy.t("referencePicker.loadError"))
+              : null
+          }
           loading={view.isConfirming}
           selection={view.selection}
-          onClose={onClose}
+          onClose={requestClose}
           onConfirm={() => void view.confirm()}
         />
       </Card>
@@ -1841,6 +1854,7 @@ function Footer({
   confirmLabel,
   countLabel,
   disabled,
+  errorMessage = null,
   loading = false,
   selection,
   onClose,
@@ -1850,6 +1864,7 @@ function Footer({
   confirmLabel: string;
   countLabel: string;
   disabled: boolean;
+  errorMessage?: string | null;
   loading?: boolean;
   selection: readonly ReferenceNode[];
   onClose: () => void;
@@ -1864,21 +1879,32 @@ function Footer({
   return (
     <div className="flex items-center justify-between gap-3 border-t border-[var(--line-1)] px-4 py-3 sm:px-6">
       <div className="flex min-w-0 items-center gap-2">
-        <span className="shrink-0 text-[13px] text-[var(--text-secondary)]">
-          {countLabel}
-        </span>
-        {selection.slice(0, 2).map((node) => (
-          <Badge
-            key={nodeRefKey(node.ref)}
-            className="min-w-0 max-w-[12rem]"
-            variant="secondary"
+        {errorMessage ? (
+          <span
+            className="truncate text-[13px] text-[var(--state-danger)]"
+            role="alert"
           >
-            <FullTextTooltip content={node.displayName}>
-              <span className="truncate">{node.displayName}</span>
-            </FullTextTooltip>
-          </Badge>
-        ))}
-        {selection.length > 2 ? (
+            {errorMessage}
+          </span>
+        ) : (
+          <>
+            <span className="shrink-0 text-[13px] text-[var(--text-secondary)]">
+              {countLabel}
+            </span>
+            {selection.slice(0, 2).map((node) => (
+              <Badge
+                key={nodeRefKey(node.ref)}
+                className="min-w-0 max-w-[12rem]"
+                variant="secondary"
+              >
+                <FullTextTooltip content={node.displayName}>
+                  <span className="truncate">{node.displayName}</span>
+                </FullTextTooltip>
+              </Badge>
+            ))}
+          </>
+        )}
+        {!errorMessage && selection.length > 2 ? (
           <span
             className="relative inline-flex shrink-0"
             onBlur={() => setSelectionTooltipOpen(false)}
@@ -1915,7 +1941,12 @@ function Footer({
         ) : null}
       </div>
       <div className="flex items-center gap-2">
-        <Button type="button" variant="secondary" onClick={onClose}>
+        <Button
+          disabled={loading}
+          type="button"
+          variant="secondary"
+          onClick={onClose}
+        >
           {cancelLabel}
         </Button>
         <Button

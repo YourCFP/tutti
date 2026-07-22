@@ -701,6 +701,25 @@ export function useReferenceSourcePickerView({
 
   // app/issue 源的文件夹引用需异步递归枚举展开,故 confirm 异步;期间置 isConfirming 防重复提交。
   const [isConfirming, setIsConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<Error | null>(null);
+  const confirmingRef = useRef(false);
+  const confirmationGenerationRef = useRef(0);
+  useEffect(() => {
+    if (open) {
+      return;
+    }
+    confirmationGenerationRef.current += 1;
+    confirmingRef.current = false;
+    setIsConfirming(false);
+    setConfirmError(null);
+  }, [open]);
+  useEffect(
+    () => () => {
+      confirmationGenerationRef.current += 1;
+      confirmingRef.current = false;
+    },
+    []
+  );
   const [isOpeningReference, setIsOpeningReference] = useState(false);
   const runReferenceAction = useCallback(
     async (action: () => Promise<void>): Promise<void> => {
@@ -717,17 +736,23 @@ export function useReferenceSourcePickerView({
     [isOpeningReference]
   );
   const confirm = useCallback(async () => {
-    if (isConfirming) {
+    if (confirmingRef.current) {
       return;
     }
     if (selectableSelection.length === 0) {
       controller.clearSelection();
       return;
     }
+    const confirmationGeneration = ++confirmationGenerationRef.current;
+    confirmingRef.current = true;
     setIsConfirming(true);
+    setConfirmError(null);
     try {
       if (onConfirmBundles) {
         const grouped = await controller.confirmGrouped(selectableSelection);
+        if (confirmationGeneration !== confirmationGenerationRef.current) {
+          return;
+        }
         onConfirmBundles({
           files: grouped.files.map(selectedReferenceToWorkspaceFileReference),
           bundles: grouped.bundles.map((bundle) => ({
@@ -743,20 +768,28 @@ export function useReferenceSourcePickerView({
       } else {
         const selected: SelectedReference[] =
           await controller.confirm(selectableSelection);
+        if (confirmationGeneration !== confirmationGenerationRef.current) {
+          return;
+        }
         onConfirm(selected.map(selectedReferenceToWorkspaceFileReference));
       }
       onClose();
+    } catch (error) {
+      if (confirmationGeneration !== confirmationGenerationRef.current) {
+        return;
+      }
+      setConfirmError(
+        error instanceof Error
+          ? error
+          : new Error("reference confirmation failed")
+      );
     } finally {
-      setIsConfirming(false);
+      if (confirmationGeneration === confirmationGenerationRef.current) {
+        confirmingRef.current = false;
+        setIsConfirming(false);
+      }
     }
-  }, [
-    controller,
-    isConfirming,
-    onClose,
-    onConfirm,
-    onConfirmBundles,
-    selectableSelection
-  ]);
+  }, [controller, onClose, onConfirm, onConfirmBundles, selectableSelection]);
 
   // 焦点节点预览:文件夹→directory;文件→走源 readPreview,字节经 file-preview 分类
   // 成 image/text/readonly。image 用 object URL,切换/卸载时回收避免泄漏。
@@ -1028,6 +1061,7 @@ export function useReferenceSourcePickerView({
     revealNode: (node: ReferenceNode) =>
       runReferenceAction(() => aggregator.reveal(scope, node)),
     confirm,
+    confirmError,
     isConfirming
   };
 }
