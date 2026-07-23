@@ -294,11 +294,11 @@ Runtime command availability is session-scoped whenever one workspace engine
 can contain Sessions backed by different transports. The host projects
 `available`, `transport_reconnecting`, or `transport_unavailable`; the engine
 uses that single fact to gate sends, cancellation, settings, and Interaction or
-plan responses. AgentGUI preserves an editable composer draft, disables
-runtime-dependent actions, and keeps an active Stop control visible but disabled
-until the transport recovers. It must not reuse the engine-wide connection state
-for this case, because one remote Session losing its owner must not disable Local
-Agent or another remote Session.
+plan responses. AgentGUI preserves the composer draft content but disables
+editing and runtime-dependent actions, and keeps an active Stop control visible
+but disabled until the transport recovers. It must not reuse the engine-wide
+connection state for this case, because one remote Session losing its owner must
+not disable Local Agent or another remote Session.
 
 Device connection presentation is target-scoped rather than Session-scoped.
 The host exposes a target connection source keyed by `agentTargetId` with the
