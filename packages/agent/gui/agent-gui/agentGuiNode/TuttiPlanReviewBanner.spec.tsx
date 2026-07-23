@@ -13,8 +13,20 @@ const labels = {
 const intensityPopoverLabels = {
   title: "Tutti intensity",
   intensityLabel: "Intensity",
-  intensityMin: "Minimal",
-  intensityMax: "Maximal",
+  previewTitle: "Planner tendency",
+  previewHint:
+    "The exact model, total task count, and safe parallelism are inferred from the request and selected Skills.",
+  previewCost: "Cost",
+  previewBalance: "Balance",
+  previewPowerful: "Powerful",
+  modelStrengthLabel: "Model strength",
+  modelStrengthCost: "Economical",
+  modelStrengthBalance: "Balanced",
+  modelStrengthPowerful: "Most capable",
+  agentCountLabel: "Parallel Agents",
+  agentCountCost: "1",
+  agentCountBalance: "2–3",
+  agentCountPowerful: "Up to 4",
   confirm: "Confirm",
   cancel: "Cancel"
 };
