@@ -23,8 +23,10 @@ export {
   latestAgentActivityMessageVersion,
   mergeAgentActivityMessages
 } from "./merge.ts";
+export type { AgentActivitySessionMessageWindow } from "./messageWindow.types.ts";
 export { parseInlineActivityMessages } from "./inlineActivityMessages.ts";
 export {
+  agentActivitySessionMessageWindowFromDescendingPage,
   loadAllAgentSessionMessages,
   type AgentActivityMessagePageLike,
   type LoadAllAgentSessionMessagesInput,
