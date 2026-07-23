@@ -439,6 +439,13 @@ provider ID
 
 An unknown provider produces explicit unsupported behavior. Provider adapters normalize their own wire; shared renderers consume canonical message/tool/notice contracts only.
 
+Skill invocation follows the same boundary. Filesystem and runtime adapters
+discover skill identity, source, and plugin ownership; `providerregistry`
+projects the provider-authored trigger and invocation strategy. Composer and
+host adapters consume that projection and must not rebuild `$` versus `/`,
+plugin namespaces, or prompt-item versus text-trigger behavior from provider
+names.
+
 ### 5.3 Agent Directory and setup
 
 The host provides a complete, ordered Agent Directory with this load lifecycle:
