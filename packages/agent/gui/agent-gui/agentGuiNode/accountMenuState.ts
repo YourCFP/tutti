@@ -13,6 +13,11 @@ export interface AgentGUIAccountMenuState {
   } | null;
   membershipLabel: string;
   /**
+   * Host-provided membership tier icon URL shown next to the membership
+   * label. Optional; the badge renders label text only when absent.
+   */
+  membershipIconUrl?: string | null;
+  /**
    * Normalized by the Commerce domain. Hosts must not infer access from
    * provider-specific tier/status strings.
    */

@@ -193,7 +193,7 @@ export const en = {
     accountMenu: {
       title: "Tutti Agent",
       member: "Manage subscription",
-      upgradeMembership: "Upgrade membership",
+      upgradeMembership: "Upgrade",
       rechargeCredits: "Recharge credits",
       viewCreditPlans: "View credit options",
       creditsBalance: "Credits",

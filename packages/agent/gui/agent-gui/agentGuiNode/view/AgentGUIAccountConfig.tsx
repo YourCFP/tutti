@@ -179,6 +179,7 @@ export const AgentGUIAccountRailMenu = memo(function AgentGUIAccountRailMenu({
               </span>
               <AccountMembershipBadge
                 className="mt-0.5"
+                iconUrl={accountMenuState.membershipIconUrl ?? null}
                 label={membershipLabel}
               />
             </span>
