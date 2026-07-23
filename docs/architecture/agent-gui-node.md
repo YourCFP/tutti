@@ -631,6 +631,13 @@ External OS file paste and drop enter one host-injected classification boundary 
 
 Workspace picker results and internal workspace-reference drags remain live references. They enter the rich-text document as mentions and never pass through external-file preparation. A picker source whose selected locator is not yet consumer-readable may perform source-owned confirmation preparation before the mention is inserted; the picker waits in a loading state, publishes no partial result on failure, and remains open for retry. This confirmation transaction belongs to the reference source contract and is distinct from the external OS file preparation pipeline. Removing an inline external-file mention removes its draft intent; a later async result must not revive it or lose its error reason when the draft is in another scope.
 
+A host may map a reference-source content error to a labeled recovery action
+through the optional workspace contract. AgentGUI passes that policy through to
+the shared picker without copying error state. The picker owns centered error
+presentation and retries the failed browse or search; the host remains the
+authority for deciding which structured errors can request authorization or
+otherwise recover interactively.
+
 ### 6.2 Public node contract
 
 `AgentGUINodeProps` groups fields by semantic responsibility:
