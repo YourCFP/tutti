@@ -51,7 +51,6 @@ import {
   useAgentGUIConversationRailResizePointerMove,
   type AgentGUIConversationRailResizeInteraction
 } from "./view/useAgentGUIConversationRailResizePointerMove";
-
 export type {
   AgentGUINodeViewProps,
   AgentGUIAgentsEmptyRenderer,
@@ -143,6 +142,7 @@ export function AgentGUINodeView({
   onRequestGitBranches = null,
   projectDirectorySourceAggregator = null,
   referenceSourceAggregator = null,
+  resolveReferenceContentErrorAction,
   resolveWorkspaceReferenceEntryIconUrl,
   resolveMentionReferenceTarget = null,
   resolveWorkspaceReferenceInitialTarget = null,
@@ -768,6 +768,7 @@ export function AgentGUINodeView({
           isNodeSelectable={isWorkspaceReferencePickerNodeSelectable}
           open={workspaceReferencePickerOpen}
           purpose={workspaceReferencePickerPurpose}
+          resolveContentErrorAction={resolveReferenceContentErrorAction}
           resolveEntryIconUrl={resolveWorkspaceReferenceEntryIconUrl}
           workspaceId={viewModel.shell.workspaceId}
           onClose={closeWorkspaceReferencePicker}
@@ -795,6 +796,5 @@ export function AgentGUINodeView({
       </AgentTargetSetupRoot>
     </AgentTargetPresentationProvider>
   );
-
   return previewMode ? content : <TooltipProvider>{content}</TooltipProvider>;
 }

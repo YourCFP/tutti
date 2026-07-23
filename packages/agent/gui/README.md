@@ -102,6 +102,15 @@ accepted for host capabilities that are not agent activity data:
 AgentGUI has no host-API activity fallback. A host must inject the runtime and
 the grouped `AgentGUINodeProps` responsibility objects.
 
+## Reference Picker Error Recovery
+
+Hosts may provide `workspace.resolveReferenceContentErrorAction` to map a
+reference-source content error to a labeled recovery action. AgentGUI passes
+the resolver to the shared `ReferenceSourcePicker`; the picker renders the
+action in its centered error state and retries the failed browse or search when
+the user activates it. Hosts should return an action only for errors they can
+recover interactively, such as requesting filesystem authorization again.
+
 ## Standalone Conversation Participant Presentation
 
 The `@tutti-os/agent-gui/agent-conversation` entrypoint exposes one optional,
