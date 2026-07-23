@@ -42,7 +42,7 @@ test("desktop agent gui project menu opens the project folder path in workspace 
   const launchedFiles: unknown[] = [];
   const action: WorkspaceLinkAction = {
     directoryPath: "/Users/local/project",
-    mode: "open-directory",
+    mode: "open",
     path: "/Users/local/project",
     source: "agent-project-menu",
     type: "open-workspace-file",
@@ -66,7 +66,7 @@ test("desktop agent gui project menu opens the project folder path in workspace 
   assert.deepEqual(launchedFiles, [
     {
       homeDirectory: "/Users/local",
-      mode: "open-directory",
+      mode: "open",
       path: "/Users/local/project",
       source: "agent_command",
       validateExists: true,

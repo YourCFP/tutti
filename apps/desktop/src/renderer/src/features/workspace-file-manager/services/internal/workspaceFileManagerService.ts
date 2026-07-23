@@ -59,10 +59,7 @@ import {
 export interface WorkspaceFileManagerServiceDependencies {
   hostFilesApi: DesktopHostFilesApi;
   tuttidClient: TuttidClient;
-  platformApi: Pick<
-    DesktopPlatformApi,
-    "homeDirectory" | "os" | "resolveDroppedPaths"
-  >;
+  platformApi: Pick<DesktopPlatformApi, "homeDirectory" | "os">;
   desktopPreferencesService?: Pick<IDesktopPreferencesService, "store">;
   reporterService?: Pick<IReporterService, "trackEvents">;
   workspaceUserProjectService?: IWorkspaceUserProjectService;

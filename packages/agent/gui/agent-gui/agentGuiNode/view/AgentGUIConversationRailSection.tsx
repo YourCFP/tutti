@@ -257,7 +257,7 @@ export const AgentGUIConversationRailSection = memo(
             if (isRailInteractionLocked()) return;
             onOpenProjectFiles({
               directoryPath: projectPath,
-              mode: "open-directory",
+              mode: "open",
               path: projectPath,
               source: "agent-project-menu",
               type: "open-workspace-file",

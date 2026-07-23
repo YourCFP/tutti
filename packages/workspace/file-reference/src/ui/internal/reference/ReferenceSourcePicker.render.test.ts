@@ -592,10 +592,8 @@ function buildReferenceSourcePickerRenderModule(tempDir: string): string {
       }
       export function WorkspaceFileManagerContextMenu({
         contextMenu,
-        copy,
-        onClose,
-        onCreateDirectory,
-        showCreateDirectoryAction
+        items,
+        onClose
       }) {
         if (!contextMenu) {
           return null;
@@ -603,20 +601,27 @@ function buildReferenceSourcePickerRenderModule(tempDir: string): string {
         return createElement(
           "div",
           { "data-testid": "reference-context-menu" },
-          showCreateDirectoryAction && contextMenu.entry?.kind === "directory"
-            ? createElement(
-                "button",
-                {
-                  "data-testid": "context-create-directory",
-                  type: "button",
-                  onClick() {
-                    onClose();
-                    onCreateDirectory();
-                  }
-                },
-                copy.t("createDirectoryLabel")
-              )
-            : null
+          (items ?? []).map((item) => {
+            if (item.type !== "item") {
+              return null;
+            }
+            return createElement(
+              "button",
+              {
+                key: item.id,
+                "data-testid":
+                  item.id === "create-directory"
+                    ? "context-create-directory"
+                    : item.id,
+                type: "button",
+                onClick() {
+                  onClose();
+                  void item.onSelect();
+                }
+              },
+              item.label
+            );
+          })
         );
       }
       export function WorkspaceFileManagerCreateDialog({
@@ -672,6 +677,40 @@ function buildReferenceSourcePickerRenderModule(tempDir: string): string {
           reportEntryIconViewportEnter() {},
           reportEntryIconViewportLeave() {}
         };
+      }
+    `
+  );
+  const contextMenuHelperUrl = writeMock(
+    tempDir,
+    "reference-context-menu-helper.mjs",
+    `
+      export function buildReferenceSourcePickerContextMenuItems(input) {
+        const items = [];
+        if (input.showOpenAction) {
+          items.push({
+            type: "item",
+            id: "open",
+            label: input.fileManagerCopy.t("openLabel"),
+            onSelect: input.onOpen
+          });
+        }
+        if (input.showCreateDirectoryAction) {
+          items.push({
+            type: "item",
+            id: "create-directory",
+            label: input.fileManagerCopy.t("createDirectoryLabel"),
+            onSelect: input.onCreateDirectory
+          });
+        }
+        if (input.showRevealInFolderAction) {
+          items.push({
+            type: "item",
+            id: "reveal",
+            label: "Reveal in Folder",
+            onSelect: input.onRevealInFolder
+          });
+        }
+        return items;
       }
     `
   );
@@ -768,6 +807,10 @@ function buildReferenceSourcePickerRenderModule(tempDir: string): string {
         resolveRevealInFolderLabel,
         useWorkspaceFileEntryIconUrls
       } from "${fileManagerUrl}";`
+    )
+    .replace(
+      /import \{ buildReferenceSourcePickerContextMenuItems \} from "\.\/referenceSourcePickerContextMenu\.tsx";/,
+      `import { buildReferenceSourcePickerContextMenuItems } from "${contextMenuHelperUrl}";`
     )
     .replace(
       new RegExp(

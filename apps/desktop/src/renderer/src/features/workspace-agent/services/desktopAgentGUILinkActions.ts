@@ -34,7 +34,7 @@ export interface DesktopAgentGUILinkActionDependencies {
   }): Promise<boolean> | boolean;
   launchWorkspaceFiles(input: {
     homeDirectory?: string | null;
-    mode?: "reveal" | "open-directory";
+    mode?: "select" | "open";
     path: string;
     source?: "agent_command";
     validateExists?: boolean;

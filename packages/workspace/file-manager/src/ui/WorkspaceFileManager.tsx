@@ -1,6 +1,5 @@
 import type {
   CSSProperties,
-  DragEvent as ReactDragEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
@@ -20,21 +19,19 @@ import type { WorkspaceFileManagerSession } from "../services/workspaceFileManag
 import type { WorkspaceFileManagerI18nRuntime } from "../i18n/workspaceFileManagerI18n.ts";
 import type {
   WorkspaceFileEntry,
-  WorkspaceFileLocation,
-  WorkspaceFileOpenWithApplication
+  WorkspaceFileLocation
 } from "../services/workspaceFileManagerTypes.ts";
 import { WorkspaceFileManagerContextMenuContainer } from "./WorkspaceFileManagerContextMenuContainer.tsx";
 import {
   WorkspaceFileManagerCreateDialog,
   WorkspaceFileManagerDeleteDialog,
-  WorkspaceFileManagerUnsupportedDialog,
-  WorkspaceFileManagerImportConflictDialog
+  WorkspaceFileManagerUnsupportedDialog
 } from "./WorkspaceFileManagerMenus.tsx";
 import {
-  hasFileDragPayload,
   type WorkspaceFileManagerEntryDragMode,
   WorkspaceFileManagerPanels
 } from "./WorkspaceFileManagerPanels.tsx";
+import type { ResolveWorkspaceFileManagerContextMenu } from "./workspaceFileManagerContextMenuTypes.ts";
 import { WorkspaceFileManagerToolbar } from "./WorkspaceFileManagerToolbar.tsx";
 import { WorkspaceFileManagerSidebar } from "./WorkspaceFileManagerSidebar.tsx";
 import {
@@ -82,27 +79,21 @@ export interface WorkspaceFileManagerProps {
   className?: string;
   dateLocale?: TuttiDateLocale;
   entryDragMode?: WorkspaceFileManagerEntryDragMode;
-  openInAppBrowserIcon?: ReactElement;
-  resolveOpenWithApplicationIcon?: (
-    application: WorkspaceFileOpenWithApplication
-  ) => ReactElement | null;
   onCopyEntry?: () => Promise<void> | void;
-  onCopyPath?: (path: string) => Promise<void> | void;
   onDirectoryExpanded?: (path: string) => void;
   onEntryDragStart?: (
     entry: WorkspaceFileEntry,
     dataTransfer: DataTransfer
   ) => void;
+  resolveContextMenu: ResolveWorkspaceFileManagerContextMenu;
   resolveEntryIconUrl?: (
     entry: WorkspaceFileEntry
   ) => Promise<string | null | undefined>;
   renderExternalLocationContent?: (
     location: Extract<WorkspaceFileLocation, { kind: "external" }>
   ) => ReactElement | null;
-  hostOs?: NodeJS.Platform;
   i18n: WorkspaceFileManagerI18nRuntime;
   session: WorkspaceFileManagerSession;
-  showInternalOpenWithActions?: boolean;
   showPreviewPanel?: boolean;
   surface?: "card" | "embedded";
 }
@@ -113,16 +104,12 @@ export function WorkspaceFileManager({
   entryDragMode,
   i18n,
   onCopyEntry,
-  onCopyPath,
   onDirectoryExpanded,
   onEntryDragStart,
-  openInAppBrowserIcon,
-  resolveOpenWithApplicationIcon,
+  resolveContextMenu,
   resolveEntryIconUrl,
   renderExternalLocationContent,
-  hostOs = "linux",
   session,
-  showInternalOpenWithActions = true,
   showPreviewPanel = true,
   surface = "card"
 }: WorkspaceFileManagerProps): ReactElement {
@@ -394,31 +381,6 @@ export function WorkspaceFileManager({
     session
   ]);
 
-  useEffect(() => {
-    function resetDropOverlay(): void {
-      session.resetDragDepth();
-    }
-
-    function handleDocumentDragOver(event: DragEvent): void {
-      if (isPointInsideElement(rootRef.current, event.clientX, event.clientY)) {
-        return;
-      }
-      session.resetDragDepth();
-    }
-
-    window.addEventListener("blur", resetDropOverlay);
-    window.addEventListener("dragend", resetDropOverlay);
-    window.addEventListener("drop", resetDropOverlay);
-    document.addEventListener("dragover", handleDocumentDragOver, true);
-
-    return () => {
-      window.removeEventListener("blur", resetDropOverlay);
-      window.removeEventListener("dragend", resetDropOverlay);
-      window.removeEventListener("drop", resetDropOverlay);
-      document.removeEventListener("dragover", handleDocumentDragOver, true);
-    };
-  }, [session]);
-
   function openContextMenu(
     event: ReactMouseEvent<HTMLElement>,
     entry: WorkspaceFileEntry | null
@@ -451,66 +413,6 @@ export function WorkspaceFileManager({
     });
   }
 
-  function handleDragEnter(event: ReactDragEvent<HTMLElement>): void {
-    if (
-      !rootView.canImportFromDrop ||
-      rootView.isBusy ||
-      !hasFileDragPayload(event.dataTransfer)
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-    session.incrementDragDepth();
-  }
-
-  function handleDragOver(event: ReactDragEvent<HTMLElement>): void {
-    if (
-      !rootView.canImportFromDrop ||
-      rootView.isBusy ||
-      !hasFileDragPayload(event.dataTransfer)
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-  }
-
-  function handleDragLeave(event: ReactDragEvent<HTMLElement>): void {
-    if (
-      !rootView.canImportFromDrop ||
-      !hasFileDragPayload(event.dataTransfer)
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-    const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && rootRef.current?.contains(nextTarget)) {
-      return;
-    }
-    session.resetDragDepth();
-  }
-
-  function handleDrop(event: ReactDragEvent<HTMLElement>): void {
-    if (
-      !rootView.canImportFromDrop ||
-      rootView.isBusy ||
-      !hasFileDragPayload(event.dataTransfer)
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    session.resetDragDepth();
-    void session.importDroppedFiles(
-      event.dataTransfer,
-      rootView.currentDirectoryPath
-    );
-  }
-
   return (
     <section
       className={cn(
@@ -522,10 +424,6 @@ export function WorkspaceFileManager({
       )}
       data-slot="viewport-menu-boundary"
       data-workspace-file-manager=""
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
       ref={rootRef}
     >
       <WorkspaceFileManagerSidebar
@@ -600,14 +498,8 @@ export function WorkspaceFileManager({
         <>
           <WorkspaceFileManagerDialogsContainer i18n={i18n} session={session} />
           <WorkspaceFileManagerContextMenuContainer
-            hostOs={hostOs}
-            i18n={i18n}
-            onCopyEntry={onCopyEntry}
-            onCopyPath={onCopyPath}
-            openInAppBrowserIcon={openInAppBrowserIcon}
-            resolveOpenWithApplicationIcon={resolveOpenWithApplicationIcon}
+            resolveContextMenu={resolveContextMenu}
             session={session}
-            showInternalOpenWithActions={showInternalOpenWithActions}
           />
         </>
       ) : null}
@@ -825,7 +717,6 @@ function WorkspaceFileManagerPanelsContainer({
       selectedEntry={view.selectedEntry}
       selectedPath={view.selectedPath}
       showPreviewPanel={showPreviewPanel}
-      showDropOverlay={view.showDropOverlay}
       state={{
         entries: displayedEntries,
         error: view.isSearchMode ? view.searchError : state.error,
@@ -904,17 +795,6 @@ function WorkspaceFileManagerDialogsContainer({
           void session.confirmDeleteDialog();
         }}
       />
-      <WorkspaceFileManagerImportConflictDialog
-        busy={view.isImporting}
-        copy={i18n}
-        dialog={view.importConflictDialog}
-        onClose={() => {
-          session.closeImportConflictDialog();
-        }}
-        onConfirm={() => {
-          void session.confirmImportConflict();
-        }}
-      />
       <WorkspaceFileManagerUnsupportedDialog
         copy={i18n}
         dialog={view.unsupportedDialog}
@@ -950,22 +830,4 @@ function clampContextMenuCoordinate(
 ): number {
   const max = Math.max(8, boundarySize - menuSize - 8);
   return Math.min(Math.max(coordinate, 8), max);
-}
-
-function isPointInsideElement(
-  element: HTMLElement | null,
-  clientX: number,
-  clientY: number
-): boolean {
-  if (!element) {
-    return false;
-  }
-
-  const bounds = element.getBoundingClientRect();
-  return (
-    clientX >= bounds.left &&
-    clientX <= bounds.right &&
-    clientY >= bounds.top &&
-    clientY <= bounds.bottom
-  );
 }

@@ -1,7 +1,4 @@
-import type {
-  WorkspaceFileManagerHostFallbackAction,
-  WorkspaceFileManagerHostImportConflict
-} from "./workspaceFileManagerHostTypes.ts";
+import type { WorkspaceFileManagerHostFallbackAction } from "./workspaceFileManagerHostTypes.ts";
 import type {
   WorkspaceFilePreviewKind as SharedWorkspaceFilePreviewKind,
   WorkspaceFilePreviewTarget
@@ -11,7 +8,6 @@ export const workspaceFileManagerLogicalRoot = "/" as const;
 
 export type WorkspaceFileEntryKind = "file" | "directory" | "unknown";
 export type WorkspaceFileSearchMatchTarget = "basename" | "path";
-export type WorkspaceFileImportConflictKind = "replaceable" | "type_mismatch";
 export type WorkspaceFilePreviewKind = SharedWorkspaceFilePreviewKind;
 export type WorkspaceFileLocationKind = "directory" | "external" | "recent";
 export type WorkspaceFileManagerFileDefaultOpener =
@@ -141,31 +137,6 @@ export interface WorkspaceFileRecentLocation {
   label: string;
 }
 
-export interface WorkspaceFileImportConflict {
-  conflictKind: WorkspaceFileImportConflictKind;
-  destinationKind: WorkspaceFileEntryKind;
-  destinationPath: string;
-  name: string;
-  sourcePath: string;
-}
-
-export type WorkspaceFileImportSummaryReason =
-  | "ignored"
-  | "symlink"
-  | "system_metadata";
-
-export interface WorkspaceFileImportSummaryReasonCount {
-  count: number;
-  reason: WorkspaceFileImportSummaryReason;
-}
-
-export interface WorkspaceFileImportSummary {
-  filteredCount?: number;
-  ignoredCount?: number;
-  reasonBreakdown?: WorkspaceFileImportSummaryReasonCount[];
-  selectedCount?: number;
-}
-
 export interface WorkspaceFileManagerPersistedState {
   currentDirectoryPath: string;
   navigationBackStack: string[];
@@ -192,9 +163,6 @@ export interface WorkspaceFileManagerCapabilities {
   canCreateDirectory: boolean;
   canCreateFile: boolean;
   canDelete: boolean;
-  canExport: boolean;
-  canImportFromDrop: boolean;
-  canImportFromPicker: boolean;
   canMove: boolean;
   canOpenInAppBrowser: boolean;
   canOpenInDefaultBrowser: boolean;
@@ -208,8 +176,6 @@ export interface WorkspaceFileManagerCapabilities {
 export type WorkspaceFileManagerBusyAction =
   | "create"
   | "delete"
-  | "export"
-  | "import"
   | "move"
   | "rename"
   | "view";
@@ -235,7 +201,7 @@ export interface WorkspaceFileManagerContextMenuState {
 export interface WorkspaceFileManagerUnsupportedDialogState {
   actions?: WorkspaceFileManagerHostFallbackAction[] | null;
   entryPath?: string | null;
-  kind: "import" | "view";
+  kind: "view";
   message?: string | null;
   title?: string | null;
 }
@@ -254,7 +220,6 @@ export interface WorkspaceFileManagerState {
   >;
   inlineRenameEntryPath: string | null;
   inlineRenameValidation: WorkspaceFileManagerInlineRenameValidation | null;
-  dragDepth: number;
   entries: WorkspaceFileEntry[];
   error: string | null;
   expandedDirectoryPaths: Record<string, boolean>;
@@ -273,6 +238,5 @@ export interface WorkspaceFileManagerState {
   selectedLocationId: string | null;
   selectedPath: string | null;
   unsupportedDialog: WorkspaceFileManagerUnsupportedDialogState | null;
-  importConflictDialog: WorkspaceFileManagerHostImportConflict | null;
   workspaceID: string;
 }

@@ -28,9 +28,6 @@ export {
   type WorkspaceFileDirectoryListing,
   type WorkspaceFileEntry,
   type WorkspaceFileEntryKind,
-  type WorkspaceFileImportSummary,
-  type WorkspaceFileImportSummaryReason,
-  type WorkspaceFileImportSummaryReasonCount,
   type WorkspaceFileLocation,
   type WorkspaceFileLocationKind,
   type WorkspaceFileLocationSection,
@@ -43,7 +40,6 @@ export {
   type WorkspaceFilePreviewKind,
   type WorkspaceFilePreviewState,
   type WorkspaceFileSearchEntry,
-  type WorkspaceFileImportConflict,
   type WorkspaceFileManagerState,
   type WorkspaceFileSearchResult
 } from "./services/workspaceFileManagerTypes.ts";
@@ -59,15 +55,19 @@ export { WorkspaceFileManagerCreateDialog } from "./ui/WorkspaceFileManagerMenus
 export { WorkspaceFileEntryIcon } from "./ui/WorkspaceFileEntryIcon.tsx";
 export { useWorkspaceFileEntryIconUrls } from "./ui/useWorkspaceFileEntryIconUrls.ts";
 export type { WorkspaceFileManagerEntryDragMode } from "./ui/WorkspaceFileManagerPanels.tsx";
+export {
+  resolveWorkspaceFileManagerContextMenuTarget,
+  type ResolveWorkspaceFileManagerContextMenu,
+  type WorkspaceFileManagerContextMenuActionItem,
+  type WorkspaceFileManagerContextMenuItem,
+  type WorkspaceFileManagerContextMenuRequest,
+  type WorkspaceFileManagerContextMenuSeparatorItem,
+  type WorkspaceFileManagerContextMenuSubmenuItem,
+  type WorkspaceFileManagerContextMenuTarget
+} from "./ui/workspaceFileManagerContextMenuTypes.ts";
 export type {
   WorkspaceFileManagerFileActivationRequest,
-  WorkspaceFileManagerHostActionMessage,
-  WorkspaceFileManagerHostActionMessageStatus,
-  WorkspaceFileManagerHostActionResult,
-  WorkspaceFileManagerHostExportResult,
   WorkspaceFileManagerHostFallbackAction,
   WorkspaceFileManagerHostFallbackActionKind,
-  WorkspaceFileManagerHostFileActivationResult,
-  WorkspaceFileManagerHostImportConflict,
-  WorkspaceFileManagerHostImportResult
+  WorkspaceFileManagerHostFileActivationResult
 } from "./services/workspaceFileManagerHostTypes.ts";

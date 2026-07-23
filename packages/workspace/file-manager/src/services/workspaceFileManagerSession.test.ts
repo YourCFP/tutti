@@ -379,53 +379,6 @@ test("openEntry can re-enter a directory after navigating back", async () => {
   session.dispose();
 });
 
-test("import conflict confirm flow refreshes and clears the dialog", async () => {
-  let listCalls = 0;
-  let confirmCalls = 0;
-  const session = createSession({
-    host: {
-      async listDirectory(input) {
-        listCalls += 1;
-        return createDirectoryListing(input.path);
-      },
-      async importFiles() {
-        return {
-          supported: true,
-          importConflict: {
-            conflicts: [
-              {
-                conflictKind: "replaceable",
-                destinationKind: "file",
-                destinationPath: "/Users/demo/project/conflict.txt",
-                name: "conflict.txt",
-                sourcePath: "/tmp/conflict.txt"
-              }
-            ],
-            onConfirm: async () => {
-              confirmCalls += 1;
-              return { supported: true };
-            }
-          }
-        };
-      }
-    }
-  });
-
-  await session.initialize();
-  assert.equal(listCalls, 1);
-
-  await session.importFiles("/Users/demo/project");
-  assert.equal(session.store.importConflictDialog?.conflicts.length, 1);
-  assert.equal(listCalls, 1);
-
-  await session.confirmImportConflict();
-  assert.equal(confirmCalls, 1);
-  assert.equal(session.store.importConflictDialog, null);
-  assert.equal(listCalls, 2);
-
-  session.dispose();
-});
-
 test("activation failures surface through the shared unsupported dialog state", async () => {
   const entry = createEntry("/Users/demo/project/notes.txt");
   const session = createSession({
@@ -877,16 +830,11 @@ test("setLocations reloads the selected directory when its path changes", async 
 
 test("external locations select without loading directories and persist their id", async () => {
   let copyCalls = 0;
-  let importCalls = 0;
   const listedPaths: string[] = [];
   const session = createWorkspaceFileManagerService().createSession({
     host: {
       async copyEntriesToClipboard() {
         copyCalls += 1;
-      },
-      async importFiles() {
-        importCalls += 1;
-        return { supported: true };
       },
       async listDirectory(input) {
         listedPaths.push(input.path);
@@ -952,7 +900,6 @@ test("external locations select without loading directories and persist their id
   await session.copyToClipboard(entry);
   session.startInlineRename(entry);
   session.openCreateFileDialog();
-  await session.importFiles("/Users/demo");
 
   assert.equal(
     session.store.selectedLocationId,
@@ -965,7 +912,6 @@ test("external locations select without loading directories and persist their id
   assert.equal(session.store.createDialog, null);
   assert.deepEqual(listedPaths, ["/Users/demo"]);
   assert.equal(copyCalls, 0);
-  assert.equal(importCalls, 0);
   assert.equal(
     session.getPersistedState().selectedLocationId,
     "reference:app-artifact:g:app"
@@ -1062,14 +1008,12 @@ test("recent locations load recent entries, search locally, and block mutations"
   assert.deepEqual(session.store.searchEntries, []);
 
   await session.createFile("/Users/demo/new.txt");
-  const importResult = await session.importFiles("/Users/demo");
   await session.refresh();
 
   assert.equal(createFileCalls, 0);
   assert.equal(hostSearchCalls, 0);
   assert.equal(listDirectoryCalls, 0);
   assert.equal(listRecentCalls, 4);
-  assert.equal(importResult.supported, false);
   session.dispose();
 });
 
@@ -1134,7 +1078,7 @@ test("explicit directory loads leave recent read-only mode", async () => {
 
   await session.initialize();
   await session.applyRevealIntent({
-    mode: "open-directory",
+    mode: "open",
     path: "/Users/demo/project",
     requestID: "open-directory-from-recent"
   });
@@ -1191,79 +1135,6 @@ test("directory location search is scoped with within", async () => {
   await session.search("app");
 
   assert.deepEqual(withinValues, ["/Users/demo/repo"]);
-  session.dispose();
-});
-
-test("host action result messages are emitted through the session callback", async () => {
-  const messages: string[] = [];
-  const session = createWorkspaceFileManagerService().createSession({
-    host: {
-      async listDirectory(input) {
-        return {
-          directoryPath: input.path,
-          entries: [],
-          root: "/Users/demo/project",
-          workspaceID: input.workspaceID
-        };
-      },
-      async importFiles() {
-        return {
-          completedMessage: "Import complete",
-          startedMessage: "Import started",
-          supported: true
-        };
-      }
-    },
-    i18n: createTestI18nRuntime(),
-    onHostActionMessage(message) {
-      messages.push(
-        `${message.actionKind}:${message.status}:${message.message}`
-      );
-    },
-    workspaceID: "workspace-1"
-  });
-
-  await session.initialize();
-  await session.importFiles("/Users/demo/project");
-
-  assert.deepEqual(messages, ["import:completed:Import complete"]);
-
-  session.dispose();
-});
-
-test("host action result emits started only when no terminal message is present", async () => {
-  const messages: string[] = [];
-  const session = createWorkspaceFileManagerService().createSession({
-    host: {
-      async listDirectory(input) {
-        return {
-          directoryPath: input.path,
-          entries: [],
-          root: "/Users/demo/project",
-          workspaceID: input.workspaceID
-        };
-      },
-      async importFiles() {
-        return {
-          startedMessage: "Import queued",
-          supported: true
-        };
-      }
-    },
-    i18n: createTestI18nRuntime(),
-    onHostActionMessage(message) {
-      messages.push(
-        `${message.actionKind}:${message.status}:${message.message}`
-      );
-    },
-    workspaceID: "workspace-1"
-  });
-
-  await session.initialize();
-  await session.importFiles("/Users/demo/project");
-
-  assert.deepEqual(messages, ["import:started:Import queued"]);
-
   session.dispose();
 });
 
@@ -1402,31 +1273,6 @@ test("opening the context menu does not change the selected preview target", asy
   session.dispose();
 });
 
-test("picker-only import capability does not claim drag-and-drop support", () => {
-  const session = createWorkspaceFileManagerService().createSession({
-    host: {
-      async listDirectory(input) {
-        return {
-          directoryPath: input.path,
-          entries: [],
-          root: "/Users/demo/project",
-          workspaceID: input.workspaceID
-        };
-      },
-      async importFiles() {
-        return { supported: true };
-      }
-    },
-    i18n: createTestI18nRuntime(),
-    workspaceID: "workspace-1"
-  });
-
-  assert.equal(session.store.capabilities.canImportFromPicker, true);
-  assert.equal(session.store.capabilities.canImportFromDrop, false);
-
-  session.dispose();
-});
-
 test("persisted state restores navigation state and excludes transient selection", async () => {
   const fileEntry: WorkspaceFileEntry = {
     hasChildren: false,
@@ -1515,7 +1361,7 @@ test("applyRevealIntent opens target directories directly when requested", async
   });
 
   await session.applyRevealIntent({
-    mode: "open-directory",
+    mode: "open",
     path: "/Users/demo/project/src",
     requestID: "open-directory-1"
   });
