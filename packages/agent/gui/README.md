@@ -9,6 +9,8 @@ Hosts own authentication, Commerce fetching, navigation, clipboard, and
 notification side effects. `AgentGUIAccountMenu` renders the shared account
 surface from `AgentGUIAccountMenuState`; `membershipAccess` must come from the
 normalized Commerce contract (`free`, `active`, `inactive`, or `unknown`).
+Hosts may pass `membershipIconUrl` to render their tier icon next to the
+membership label; the badge renders label text only when it is absent.
 
 Pass `hostCapabilities.commercePresentation` to `AgentGUI` so insufficient
 credit cards can select upgrade, recharge, or neutral copy and use the

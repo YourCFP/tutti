@@ -189,7 +189,7 @@ export const zhCN = {
     accountMenu: {
       title: "Tutti Agent",
       member: "管理订阅",
-      upgradeMembership: "升级会员",
+      upgradeMembership: "升级",
       rechargeCredits: "充值积分",
       viewCreditPlans: "查看积分方案",
       creditsBalance: "积分余额",
@@ -779,7 +779,36 @@ export const zhCN = {
         reopenLogin: "重新打开登录页",
         signedOutTitle: "未登录",
         signingIn: "登录中...",
-        signingOut: "退出中..."
+        signingOut: "退出中...",
+        mobileRemote: {
+          cancel: "取消配对",
+          confirming: "正在确认这台手机...",
+          copyPairingCode: "复制配对码",
+          copyPairingCodeFailed: "暂时无法复制配对码",
+          description:
+            "与登录同一 Tutti 账号的手机配对，随后可在手机上访问这台电脑的 Agent 会话",
+          empty: "尚未有手机与这台电脑配对",
+          errors: {
+            list: "暂时无法读取已配对手机",
+            revoke: "暂时无法移除这台手机",
+            start: "暂时无法开始配对",
+            status: "暂时无法更新配对状态"
+          },
+          mobileDevice: "移动设备",
+          pairedDevices: "已配对手机",
+          pairingCodeCopied: "配对码已复制",
+          qrAlt: "手机配对二维码",
+          qrError: "二维码生成失败",
+          remove: "移除",
+          removing: "移除中...",
+          revoked: "已移除",
+          scanHint:
+            "在手机上打开 Tutti 并扫描此二维码，二维码将在短时间后过期且仅对当前账号有效",
+          start: "配对手机",
+          starting: "正在创建...",
+          title: "手机远程访问",
+          waitingForScan: "等待手机扫码"
+        }
       },
       apps: {
         appCatalogChannelDescription:
@@ -1063,6 +1092,11 @@ export const zhCN = {
         logsSizeLabel: "日志大小",
         logsSummary: "{{count}} 个文件，共 {{size}}",
         logsTitle: "日志",
+        mobileRemoteAccessSettingsDescription:
+          "在账号设置中显示手机配对与远程访问控制项",
+        mobileRemoteAccessSettingsLabel: "显示手机远程访问设置",
+        mobileRemoteAccessSettingsSaveFailed:
+          "暂时无法更新手机远程访问显示设置",
         openDaemonLog: "打开 daemon 日志",
         openDesktopLog: "打开 desktop 日志",
         openLogsDirectory: "打开日志目录",

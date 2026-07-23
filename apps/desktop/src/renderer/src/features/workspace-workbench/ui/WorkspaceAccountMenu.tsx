@@ -65,9 +65,7 @@ function WorkspaceAccountMenuEnabled({
   );
 }
 
-type WorkspaceAccountMenuState = AgentGUIAccountMenuState & {
-  membershipTierKey: string | null;
-};
+type WorkspaceAccountMenuState = AgentGUIAccountMenuState;
 
 function useWorkspaceAccountMenuState(): WorkspaceAccountMenuState {
   const { locale, t } = useTranslation();
@@ -92,6 +90,7 @@ function useWorkspaceAccountMenuState(): WorkspaceAccountMenuState {
       summary?.membership?.display_name?.trim() ||
       summary?.membership?.tier_key?.trim() ||
       "";
+    const membershipTierKey = summary?.membership?.tier_key?.trim() || null;
     const creditsLabel = formatCreditsLabel(
       summary?.credits?.available_credits,
       locale
@@ -126,7 +125,10 @@ function useWorkspaceAccountMenuState(): WorkspaceAccountMenuState {
         : null,
       membershipLabel,
       membershipAccess: summary?.membership_access ?? "unknown",
-      membershipTierKey: summary?.membership?.tier_key?.trim() || null,
+      membershipIconUrl: resolveMembershipIconSource(
+        membershipTierKey,
+        membershipLabel
+      ),
       creditsLabel,
       loading: accountState.productSummaryLoading,
       error: user ? null : accountState.productSummaryError,
@@ -253,10 +255,8 @@ const WorkspaceAccountMenuView = memo(function WorkspaceAccountMenuView({
     accountMenuState.user?.userId?.trim() ||
     labels.title;
   const initials = agentGUIAccountInitials(userLabel);
-  const membershipIconSource = resolveMembershipIconSource(
-    accountMenuState.membershipTierKey,
-    accountMenuState.membershipLabel
-  );
+  const membershipIconSource =
+    accountMenuState.membershipIconUrl ?? PLAN_ICON_SOURCES.free;
 
   if (!accountMenuState.user) {
     return (

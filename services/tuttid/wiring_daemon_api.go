@@ -234,6 +234,13 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 		UpdateCache:          agentstatusservice.NewProviderUpdateCache(),
 	}
 	accountService := accountservice.NewService("")
+	mobileRemoteService, err := buildMobileRemoteService(
+		agentExtensionStateDir,
+		accountService,
+	)
+	if err != nil {
+		return tuttiapi.DaemonAPI{}, nil, nil, nil, err
+	}
 	agentProcessTransport := agentdaemon.NewLocalProcessTransport()
 	agentHostMetadata := agentdaemon.HostMetadata{
 		ClientInfo:       agentdaemon.ClientInfo{Name: "tutti-desktop", Title: "Tutti", Version: "0.1.0"},
@@ -633,6 +640,7 @@ func buildDaemonAPI(ctx context.Context, store workspacedata.CatalogStore, analy
 
 	return tuttiapi.DaemonAPI{
 		AccountService:            accountService,
+		MobileRemoteService:       mobileRemoteService,
 		UserProjectService:        userProjectService,
 		AgentQuickPromptService:   agentQuickPromptService,
 		AgentTargetService:        agentTargets,
