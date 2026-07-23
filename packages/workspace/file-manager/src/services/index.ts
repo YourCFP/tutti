@@ -13,15 +13,9 @@ export type {
 } from "./workspaceFileManagerService.interface.ts";
 export type {
   WorkspaceFileManagerFileActivationRequest,
-  WorkspaceFileManagerHostActionMessage,
-  WorkspaceFileManagerHostActionMessageStatus,
-  WorkspaceFileManagerHostActionResult,
-  WorkspaceFileManagerHostExportResult,
   WorkspaceFileManagerHostFallbackAction,
   WorkspaceFileManagerHostFallbackActionKind,
-  WorkspaceFileManagerHostFileActivationResult,
-  WorkspaceFileManagerHostImportConflict,
-  WorkspaceFileManagerHostImportResult
+  WorkspaceFileManagerHostFileActivationResult
 } from "./workspaceFileManagerHostTypes.ts";
 export type {
   CreateWorkspaceFileManagerSessionInput,
@@ -58,9 +52,6 @@ export {
   type WorkspaceFileDirectoryListing,
   type WorkspaceFileEntry,
   type WorkspaceFileEntryKind,
-  type WorkspaceFileImportSummary,
-  type WorkspaceFileImportSummaryReason,
-  type WorkspaceFileImportSummaryReasonCount,
   type WorkspaceFileLocation,
   type WorkspaceFileLocationKind,
   type WorkspaceFileLocationSection,
@@ -75,8 +66,7 @@ export {
   type WorkspaceFilePreviewState,
   type WorkspaceFileSearchEntry,
   type WorkspaceFileManagerState,
-  type WorkspaceFileSearchResult,
-  type WorkspaceFileImportConflict
+  type WorkspaceFileSearchResult
 } from "./workspaceFileManagerTypes.ts";
 // 排序能力(纯逻辑,供 file-reference picker 复用)。
 export {

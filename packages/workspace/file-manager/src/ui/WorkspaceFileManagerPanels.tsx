@@ -106,7 +106,6 @@ export function WorkspaceFileManagerPanels({
   selectedPath,
   showPreviewPanel: showPreviewPanelEnabled = true,
   state,
-  showDropOverlay,
   treeRows,
   onBlankContextMenu,
   onCancelInlineRename,
@@ -145,7 +144,6 @@ export function WorkspaceFileManagerPanels({
     isLoading: boolean;
     isSearchMode: boolean;
   };
-  showDropOverlay: boolean;
   treeRows: readonly WorkspaceFileManagerVisibleTreeRow[];
   onBlankContextMenu: (event: ReactMouseEvent<HTMLElement>) => void;
   onCancelInlineRename: () => void;
@@ -782,17 +780,6 @@ export function WorkspaceFileManagerPanels({
           />
         ) : null}
         {previewPanel}
-      </div>
-      <div
-        aria-hidden="true"
-        className={cn(
-          "pointer-events-none absolute inset-0 grid place-items-center rounded-[var(--workbench-window-radius,8px)] border border-dashed border-[var(--border-focus)] bg-[var(--accent-bg)] opacity-0 transition-opacity duration-150 ease-out",
-          showDropOverlay && "opacity-100"
-        )}
-      >
-        <div className="rounded-lg border border-[var(--border-1)] bg-[var(--background-fronted)] px-5 py-3 text-sm font-normal text-[var(--text-primary)] shadow-panel">
-          {copy.t("dropToImportLabel")}
-        </div>
       </div>
       {moveDragPreview ? (
         <MoveDragPreview
@@ -1661,8 +1648,4 @@ function FeedbackState({ message }: { message: string }): ReactElement {
       <span className="max-w-[34ch] [overflow-wrap:anywhere]">{message}</span>
     </div>
   );
-}
-
-export function hasFileDragPayload(dataTransfer: DataTransfer): boolean {
-  return Array.from(dataTransfer.types).includes("Files");
 }

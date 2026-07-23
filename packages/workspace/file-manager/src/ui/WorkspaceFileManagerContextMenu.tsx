@@ -1,19 +1,9 @@
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
-  CopyIcon,
-  DeleteIcon,
-  DownloadIcon,
-  EditIcon,
-  EyeIcon,
-  FileLinedIcon,
-  ImportLinedIcon as ImportIcon,
   LaunchIcon,
-  LocateFolderIcon,
   MenuSurface,
-  NewWorkspaceLinedIcon,
   ViewportMenuSurface,
-  WebIcon,
   cn
 } from "@tutti-os/ui-system";
 import {
@@ -30,107 +20,30 @@ import {
   clampContextMenuPosition,
   estimateOpenWithSubmenuHeight,
   resolveOpenWithSubmenuPlacement,
-  shouldShowOpenWithSectionDivider,
   type OpenWithSubmenuPlacement
 } from "./contextMenuPlacement.ts";
-import type { WorkspaceFileManagerI18nRuntime } from "../i18n/workspaceFileManagerI18n.ts";
 import type {
-  WorkspaceFileEntry,
-  WorkspaceFileOpenWithApplication
-} from "../services/workspaceFileManagerTypes.ts";
+  WorkspaceFileManagerContextMenuItem,
+  WorkspaceFileManagerContextMenuSubmenuItem
+} from "./workspaceFileManagerContextMenuTypes.ts";
 
 export interface WorkspaceFileManagerContextMenuProps {
-  busy: boolean;
-  copy: WorkspaceFileManagerI18nRuntime;
   contextMenu: {
-    entry: WorkspaceFileEntry | null;
     x: number;
     y: number;
   } | null;
   contextMenuRef: RefObject<HTMLDivElement | null>;
-  openInAppBrowserIcon?: ReactElement;
+  items: readonly WorkspaceFileManagerContextMenuItem[];
   positionMode?: "local" | "viewport";
-  resolveOpenWithApplicationIcon?: (
-    application: WorkspaceFileOpenWithApplication
-  ) => ReactElement | null;
-  showCopyAction: boolean;
-  showCopyPathAction: boolean;
-  showCreateDirectoryAction: boolean;
-  showCreateFileAction: boolean;
-  showDeleteAction: boolean;
-  showImportAction: boolean;
-  showExportAction: boolean;
-  showOpenInAppBrowserAction: boolean;
-  showOpenInDefaultBrowserAction: boolean;
-  showOpenInFileViewerAction: boolean;
-  showOpenAction: boolean;
-  showOpenWithAction: boolean;
-  showOpenWithOtherAction: boolean;
-  showRevealInFolderAction: boolean;
-  showRenameAction: boolean;
-  revealInFolderLabel: string;
-  openWithApplications: readonly WorkspaceFileOpenWithApplication[];
-  openWithLoading: boolean;
   onClose: () => void;
-  onCreateDirectory: () => void;
-  onCreateFile: () => void;
-  onCopy: () => Promise<void>;
-  onCopyPath: () => Promise<void>;
-  onDelete: () => void;
-  onExport: () => Promise<void>;
-  onOpen: () => Promise<void>;
-  onOpenInAppBrowser: () => Promise<void>;
-  onOpenInDefaultBrowser: () => Promise<void>;
-  onOpenInFileViewer: () => Promise<void>;
-  onOpenWithApplication: (applicationPath: string) => Promise<void>;
-  onOpenWithOtherApplication: () => Promise<void>;
-  onImport: () => Promise<void>;
-  onRevealInFolder: () => Promise<void>;
-  onRename: () => void;
 }
 
 export function WorkspaceFileManagerContextMenu({
-  busy,
-  copy,
   contextMenu,
   contextMenuRef,
-  openInAppBrowserIcon,
+  items,
   positionMode = "local",
-  showCopyAction,
-  showCopyPathAction,
-  showCreateDirectoryAction,
-  showCreateFileAction,
-  showDeleteAction,
-  showImportAction,
-  showExportAction,
-  showOpenInAppBrowserAction,
-  showOpenInDefaultBrowserAction,
-  showOpenInFileViewerAction,
-  showOpenAction,
-  showOpenWithAction,
-  showOpenWithOtherAction,
-  showRevealInFolderAction,
-  showRenameAction,
-  revealInFolderLabel,
-  openWithApplications,
-  openWithLoading,
-  resolveOpenWithApplicationIcon,
-  onClose,
-  onCreateDirectory,
-  onCreateFile,
-  onCopy,
-  onCopyPath,
-  onDelete,
-  onExport,
-  onOpen,
-  onOpenInAppBrowser,
-  onOpenInDefaultBrowser,
-  onOpenInFileViewer,
-  onOpenWithApplication,
-  onOpenWithOtherApplication,
-  onImport,
-  onRevealInFolder,
-  onRename
+  onClose
 }: WorkspaceFileManagerContextMenuProps): ReactElement | null {
   const [position, setPosition] = useState({
     x: contextMenu?.x ?? 0,
@@ -141,7 +54,6 @@ export function WorkspaceFileManagerContextMenu({
     if (!contextMenu) {
       return;
     }
-
     setPosition({ x: contextMenu.x, y: contextMenu.y });
   }, [contextMenu?.x, contextMenu?.y]);
 
@@ -149,12 +61,10 @@ export function WorkspaceFileManagerContextMenu({
     if (!contextMenu) {
       return;
     }
-
     const menu = contextMenuRef.current;
     if (!menu) {
       return;
     }
-
     const menuRect = menu.getBoundingClientRect();
     const boundary =
       positionMode === "local"
@@ -176,153 +86,11 @@ export function WorkspaceFileManagerContextMenu({
         y: contextMenu.y
       })
     );
-  }, [
-    contextMenu,
-    contextMenuRef,
-    openWithApplications.length,
-    openWithLoading,
-    positionMode,
-    showCopyAction,
-    showCopyPathAction,
-    showCreateDirectoryAction,
-    showCreateFileAction,
-    showExportAction,
-    showImportAction,
-    showOpenInAppBrowserAction,
-    showOpenInDefaultBrowserAction,
-    showOpenInFileViewerAction,
-    showOpenAction,
-    showOpenWithAction,
-    showOpenWithOtherAction,
-    showRevealInFolderAction,
-    showRenameAction
-  ]);
+  }, [contextMenu, contextMenuRef, items, positionMode]);
 
-  if (!contextMenu) {
+  if (!contextMenu || items.length === 0) {
     return null;
   }
-
-  const entry = contextMenu.entry;
-  const isDirectory = entry?.kind === "directory";
-  const editItems: ContextMenuActionItem[] = [];
-  const transferItems: ContextMenuActionItem[] = [];
-  const dangerItems: ContextMenuActionItem[] = [];
-  const createItems: ContextMenuActionItem[] = [];
-
-  if (!entry || isDirectory) {
-    if (showCreateFileAction) {
-      createItems.push({
-        action: onCreateFile,
-        disabled: busy,
-        icon: <NewWorkspaceLinedIcon className="size-4" />,
-        key: "create-file",
-        label: copy.t("createFileLabel")
-      });
-    }
-    if (showCreateDirectoryAction) {
-      createItems.push({
-        action: onCreateDirectory,
-        disabled: busy,
-        icon: <FileLinedIcon className="size-4" />,
-        key: "create-directory",
-        label: copy.t("createDirectoryLabel")
-      });
-    }
-  }
-
-  if (entry) {
-    if (showRenameAction) {
-      editItems.push({
-        action: onRename,
-        disabled: busy,
-        icon: <EditIcon className="size-4" />,
-        key: "rename",
-        label: copy.t("renameLabel")
-      });
-    }
-    if (showCopyAction) {
-      editItems.push({
-        action: onCopy,
-        disabled: busy,
-        icon: <CopyIcon className="size-4" />,
-        key: "copy",
-        label: copy.t("copyLabel")
-      });
-    }
-    if (showCopyPathAction) {
-      editItems.push({
-        action: onCopyPath,
-        disabled: busy,
-        icon: <CopyIcon className="size-4" />,
-        key: "copy-path",
-        label: copy.t("copyPathLabel")
-      });
-    }
-    if (showRevealInFolderAction) {
-      editItems.push({
-        action: onRevealInFolder,
-        disabled: busy,
-        icon: <LocateFolderIcon className="size-4" />,
-        key: "reveal-in-folder",
-        label: revealInFolderLabel
-      });
-    }
-    if (isDirectory && showImportAction) {
-      transferItems.push({
-        action: onImport,
-        disabled: busy,
-        icon: <ImportIcon className="size-4" />,
-        key: "import",
-        label: copy.t("importLabel")
-      });
-    }
-    if (showExportAction) {
-      transferItems.push({
-        action: onExport,
-        disabled: busy,
-        icon: <DownloadIcon className="size-4" />,
-        key: "export",
-        label: copy.t("downloadLabel")
-      });
-    }
-    if (showDeleteAction) {
-      dangerItems.push({
-        action: onDelete,
-        disabled: busy,
-        danger: true,
-        icon: <DeleteIcon className="size-4" />,
-        key: "delete",
-        label: copy.t("deleteLabel")
-      });
-    }
-  } else {
-    if (showImportAction) {
-      transferItems.push({
-        action: onImport,
-        disabled: busy,
-        icon: <ImportIcon className="size-4" />,
-        key: "import",
-        label: copy.t("importLabel")
-      });
-    }
-  }
-  const menuGroups: Array<{
-    items: readonly ContextMenuActionItem[];
-    key: string;
-  }> = entry
-    ? [
-        { items: createItems, key: "create" },
-        { items: editItems, key: "edit" },
-        { items: transferItems, key: "transfer" },
-        { items: dangerItems, key: "danger" }
-      ]
-    : [
-        { items: createItems, key: "create" },
-        { items: transferItems, key: "transfer" }
-      ];
-  const visibleMenuGroups = menuGroups.filter(
-    (group) => group.items.length > 0
-  );
 
   return (
     <MenuSurface
@@ -342,87 +110,44 @@ export function WorkspaceFileManagerContextMenu({
         event.preventDefault();
       }}
     >
-      {entry && showOpenAction ? (
-        <ContextMenuActionButton
-          disabled={busy}
-          icon={<EyeIcon className="size-4" />}
-          label={copy.t("openLabel")}
-          onClick={() => {
-            onClose();
-            void onOpen();
-          }}
-        />
-      ) : null}
-      {entry && showOpenWithAction ? (
-        <OpenWithMenuItem
-          applications={openWithApplications}
-          busy={busy}
-          copy={copy}
-          isLoading={openWithLoading}
-          openInAppBrowserIcon={openInAppBrowserIcon}
-          resolveOpenWithApplicationIcon={resolveOpenWithApplicationIcon}
-          showOpenInAppBrowser={showOpenInAppBrowserAction}
-          showOpenInDefaultBrowser={showOpenInDefaultBrowserAction}
-          showOpenInFileViewer={showOpenInFileViewerAction}
-          showOpenWithOther={showOpenWithOtherAction}
-          onClose={onClose}
-          onOpenInAppBrowser={onOpenInAppBrowser}
-          onOpenInDefaultBrowser={onOpenInDefaultBrowser}
-          onOpenInFileViewer={onOpenInFileViewer}
-          onOpenWithApplication={onOpenWithApplication}
-          onOpenWithOtherApplication={onOpenWithOtherApplication}
-        />
-      ) : null}
-      {visibleMenuGroups.map((group, groupIndex) => (
-        <ContextMenuActionGroup
-          key={group.key}
-          items={group.items}
-          showDivider={
-            groupIndex > 0 ||
-            (entry !== null && (showOpenAction || showOpenWithAction))
-          }
-          onClose={onClose}
-        />
+      {items.map((item) => (
+        <ContextMenuItemRenderer key={item.id} item={item} onClose={onClose} />
       ))}
     </MenuSurface>
   );
 }
-interface ContextMenuActionItem {
-  action: () => Promise<void> | void;
-  disabled?: boolean;
-  danger?: boolean;
-  icon: ReactElement;
-  key: string;
-  label: string;
-}
 
-function ContextMenuActionGroup({
-  items,
+function ContextMenuItemRenderer({
+  item,
   onClose,
-  showDivider
+  activateOnPointerDown = false
 }: {
-  items: readonly ContextMenuActionItem[];
+  activateOnPointerDown?: boolean;
+  item: WorkspaceFileManagerContextMenuItem;
   onClose: () => void;
-  showDivider: boolean;
-}): ReactElement {
-  return (
-    <>
-      {showDivider ? <ContextMenuDivider /> : null}
-      {items.map((item) => (
+}): ReactElement | null {
+  switch (item.type) {
+    case "separator":
+      return <ContextMenuDivider />;
+    case "submenu":
+      return <ContextMenuSubmenu item={item} onClose={onClose} />;
+    case "item":
+      return (
         <ContextMenuActionButton
-          key={item.key}
+          activateOnPointerDown={activateOnPointerDown}
           danger={item.danger}
           disabled={item.disabled}
-          icon={item.icon}
+          icon={item.icon ?? <LaunchIcon className="size-4" />}
           label={item.label}
           onClick={() => {
             onClose();
-            void item.action();
+            void item.onSelect();
           }}
         />
-      ))}
-    </>
-  );
+      );
+    default:
+      return null;
+  }
 }
 
 function ContextMenuActionButton({
@@ -509,48 +234,23 @@ function ContextMenuDivider(): ReactElement {
   );
 }
 
-function OpenWithMenuItem({
-  applications,
-  busy,
-  copy,
-  isLoading,
-  openInAppBrowserIcon,
-  resolveOpenWithApplicationIcon,
-  showOpenInAppBrowser,
-  showOpenInDefaultBrowser,
-  showOpenInFileViewer,
-  showOpenWithOther,
-  onClose,
-  onOpenInAppBrowser,
-  onOpenInDefaultBrowser,
-  onOpenInFileViewer,
-  onOpenWithApplication,
-  onOpenWithOtherApplication
+function ContextMenuSubmenu({
+  item,
+  onClose
 }: {
-  applications: readonly WorkspaceFileOpenWithApplication[];
-  busy: boolean;
-  copy: WorkspaceFileManagerI18nRuntime;
-  isLoading: boolean;
-  openInAppBrowserIcon?: ReactElement;
-  resolveOpenWithApplicationIcon?: (
-    application: WorkspaceFileOpenWithApplication
-  ) => ReactElement | null;
-  showOpenInAppBrowser: boolean;
-  showOpenInDefaultBrowser: boolean;
-  showOpenInFileViewer: boolean;
-  showOpenWithOther: boolean;
+  item: WorkspaceFileManagerContextMenuSubmenuItem;
   onClose: () => void;
-  onOpenInAppBrowser: () => Promise<void>;
-  onOpenInDefaultBrowser: () => Promise<void>;
-  onOpenInFileViewer: () => Promise<void>;
-  onOpenWithApplication: (applicationPath: string) => Promise<void>;
-  onOpenWithOtherApplication: () => Promise<void>;
 }): ReactElement {
   const triggerRef = useRef<HTMLDivElement | null>(null);
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const submenuRef = useRef<HTMLDivElement | null>(null);
   const focusSubmenuOnOpenRef = useRef(false);
   const [open, setOpen] = useState(false);
+  const controlledChildren = item.children;
+  const [asyncChildren, setAsyncChildren] = useState<
+    readonly WorkspaceFileManagerContextMenuItem[] | null
+  >(null);
+  const [asyncLoading, setAsyncLoading] = useState(false);
   const [submenuPosition, setSubmenuPosition] =
     useState<OpenWithSubmenuPlacement>({
       left: 0,
@@ -559,25 +259,25 @@ function OpenWithMenuItem({
       width: OPEN_WITH_SUBMENU_WIDTH_PX
     });
   const closeTimerRef = useRef<number | null>(null);
-  const showExternalSection =
-    showOpenInDefaultBrowser ||
-    showOpenWithOther ||
-    isLoading ||
-    applications.length > 0;
-  const showSectionDivider = shouldShowOpenWithSectionDivider({
-    showExternalSection,
-    showOpenInAppBrowser,
-    showOpenInFileViewer
-  });
+  const children = controlledChildren ?? asyncChildren ?? [];
+  const isLoading = Boolean(item.loading) || asyncLoading;
+  const childActionCount = countRenderableMenuActions(children);
   const estimatedSubmenuHeight = estimateOpenWithSubmenuHeight({
-    applicationCount: applications.length,
+    applicationCount: Math.max(0, childActionCount - 2),
     isLoading,
-    showExternalSection,
-    showOpenInAppBrowser,
-    showOpenInDefaultBrowser,
-    showOpenInFileViewer,
-    showOpenWithOther
+    showExternalSection: childActionCount > 0 || isLoading,
+    showOpenInAppBrowser: false,
+    showOpenInDefaultBrowser: false,
+    showOpenInFileViewer: false,
+    showOpenWithOther: false
   });
+
+  useEffect(() => {
+    if (controlledChildren !== undefined) {
+      setAsyncChildren(null);
+      setAsyncLoading(false);
+    }
+  }, [controlledChildren]);
 
   const cancelClose = useCallback(() => {
     if (closeTimerRef.current !== null) {
@@ -594,11 +294,35 @@ function OpenWithMenuItem({
     }, 120);
   }, [cancelClose]);
 
+  const ensureChildrenLoaded = useCallback(() => {
+    if (
+      controlledChildren !== undefined ||
+      asyncChildren !== null ||
+      !item.loadChildren ||
+      asyncLoading
+    ) {
+      return;
+    }
+    setAsyncLoading(true);
+    void item
+      .loadChildren()
+      .then((next) => {
+        setAsyncChildren(next);
+      })
+      .catch(() => {
+        setAsyncChildren([]);
+      })
+      .finally(() => {
+        setAsyncLoading(false);
+      });
+  }, [asyncChildren, asyncLoading, controlledChildren, item]);
+
   const openSubmenu = useCallback(() => {
     focusSubmenuOnOpenRef.current = false;
     cancelClose();
+    ensureChildrenLoaded();
     setOpen(true);
-  }, [cancelClose]);
+  }, [cancelClose, ensureChildrenLoaded]);
 
   const closeSubmenuToTrigger = useCallback(() => {
     cancelClose();
@@ -611,7 +335,6 @@ function OpenWithMenuItem({
     if (!trigger) {
       return;
     }
-
     const triggerRect = trigger.getBoundingClientRect();
     const parentMenuRect =
       trigger
@@ -622,7 +345,6 @@ function OpenWithMenuItem({
       480,
       Math.max(0, window.innerHeight - 24)
     );
-
     setSubmenuPosition(
       resolveOpenWithSubmenuPlacement({
         parentMenuLeft: parentMenuRect.left,
@@ -647,15 +369,13 @@ function OpenWithMenuItem({
     if (!open) {
       return;
     }
-
     updateSubmenuPosition();
-  }, [open, updateSubmenuPosition]);
+  }, [open, updateSubmenuPosition, children.length, isLoading]);
 
   useEffect(() => {
     if (!open) {
       return;
     }
-
     window.addEventListener("resize", updateSubmenuPosition);
     window.addEventListener("scroll", updateSubmenuPosition, true);
     return () => {
@@ -668,7 +388,6 @@ function OpenWithMenuItem({
     if (!open || !focusSubmenuOnOpenRef.current) {
       return;
     }
-
     focusSubmenuOnOpenRef.current = false;
     const frame = window.requestAnimationFrame(() => {
       submenuRef.current
@@ -695,7 +414,7 @@ function OpenWithMenuItem({
           "flex h-8 w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left text-[13px] text-[var(--text-primary)] transition-colors hover:bg-transparency-block disabled:cursor-default disabled:opacity-50",
           open && "bg-transparency-block"
         )}
-        disabled={busy}
+        disabled={item.disabled}
         role="menuitem"
         type="button"
         onClick={(event) => {
@@ -704,6 +423,7 @@ function OpenWithMenuItem({
             const next = !current;
             if (next) {
               cancelClose();
+              ensureChildrenLoaded();
             } else {
               focusSubmenuOnOpenRef.current = false;
             }
@@ -718,15 +438,14 @@ function OpenWithMenuItem({
           event.stopPropagation();
           focusSubmenuOnOpenRef.current = true;
           cancelClose();
+          ensureChildrenLoaded();
           setOpen(true);
         }}
       >
         <span className="grid size-4 flex-none place-items-center text-[var(--text-secondary)]">
-          <LaunchIcon className="size-4" />
+          {item.icon ?? <LaunchIcon className="size-4" />}
         </span>
-        <span className="min-w-0 flex-1 truncate">
-          {copy.t("openWithLabel")}
-        </span>
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
         <span
           aria-hidden="true"
           className="grid size-4 flex-none place-items-center text-[var(--text-tertiary)]"
@@ -736,7 +455,8 @@ function OpenWithMenuItem({
       </button>
       <ViewportMenuSurface
         ref={submenuRef}
-        aria-label={copy.t("openWithLabel")}
+        aria-label={item.label}
+        data-workspace-file-manager-submenu=""
         data-workspace-file-manager-submenu-mode={submenuPosition.mode}
         open={open}
         className="max-h-[min(480px,calc(100vh-24px))] max-w-[calc(100vw-24px)] overflow-y-auto p-1"
@@ -763,21 +483,20 @@ function OpenWithMenuItem({
             closeSubmenuToTrigger();
             return;
           }
-
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
             return;
           }
-          const items = Array.from(
+          const buttons = Array.from(
             event.currentTarget.querySelectorAll<HTMLButtonElement>(
               "button:not(:disabled)"
             )
           );
-          if (items.length === 0) {
+          if (buttons.length === 0) {
             return;
           }
           event.preventDefault();
           event.stopPropagation();
-          const currentIndex = items.indexOf(
+          const currentIndex = buttons.indexOf(
             document.activeElement as HTMLButtonElement
           );
           const offset = event.key === "ArrowDown" ? 1 : -1;
@@ -785,9 +504,9 @@ function OpenWithMenuItem({
             currentIndex < 0
               ? offset > 0
                 ? 0
-                : items.length - 1
-              : (currentIndex + offset + items.length) % items.length;
-          items[nextIndex]?.focus();
+                : buttons.length - 1
+              : (currentIndex + offset + buttons.length) % buttons.length;
+          buttons[nextIndex]?.focus();
         }}
       >
         {submenuPosition.mode === "overlay" ? (
@@ -795,102 +514,40 @@ function OpenWithMenuItem({
             <ContextMenuActionButton
               activateOnPointerDown
               icon={<ArrowLeftIcon className="size-4" />}
-              label={copy.t("openWithLabel")}
+              label={item.label}
               onClick={closeSubmenuToTrigger}
             />
             <ContextMenuDivider />
           </>
         ) : null}
-        {showOpenInFileViewer ? (
-          <ContextMenuActionButton
-            activateOnPointerDown
-            disabled={busy}
-            icon={<EyeIcon className="size-4" />}
-            label={copy.t("openInFileViewerLabel")}
-            onClick={() => {
-              const openPromise = onOpenInFileViewer();
-              onClose();
-              void openPromise;
-            }}
-          />
-        ) : null}
-        {showOpenInAppBrowser ? (
-          <ContextMenuActionButton
-            activateOnPointerDown
-            disabled={busy}
-            icon={openInAppBrowserIcon ?? <WebIcon className="size-4" />}
-            label={copy.t("openInAppBrowserLabel")}
-            onClick={() => {
-              const openPromise = onOpenInAppBrowser();
-              onClose();
-              void openPromise;
-            }}
-          />
-        ) : null}
-        {showSectionDivider ? <ContextMenuDivider /> : null}
         {isLoading ? (
           <div className="px-2 py-1.5 text-[11px] text-[var(--text-tertiary)]">
-            {copy.t("openWithLoadingLabel")}
+            {item.loadingLabel ?? "…"}
           </div>
         ) : null}
-        {applications.map((application) => {
-          const resolvedIcon = resolveOpenWithApplicationIcon?.(application);
-
-          return (
-            <ContextMenuActionButton
-              activateOnPointerDown
-              key={application.applicationPath}
-              disabled={busy}
-              icon={
-                resolvedIcon ??
-                (application.iconDataUrl ? (
-                  <img
-                    alt=""
-                    className="size-4 rounded-[4px] object-contain"
-                    src={application.iconDataUrl}
-                  />
-                ) : (
-                  <EyeIcon className="size-4" />
-                ))
-              }
-              label={application.name}
-              onClick={() => {
-                const openPromise = onOpenWithApplication(
-                  application.applicationPath
-                );
-                onClose();
-                void openPromise;
-              }}
-            />
-          );
-        })}
-        {showOpenInDefaultBrowser ? (
-          <ContextMenuActionButton
+        {children.map((child) => (
+          <ContextMenuItemRenderer
+            key={child.id}
             activateOnPointerDown
-            disabled={busy}
-            icon={<WebIcon className="size-4" />}
-            label={copy.t("openInDefaultBrowserLabel")}
-            onClick={() => {
-              const openPromise = onOpenInDefaultBrowser();
-              onClose();
-              void openPromise;
-            }}
+            item={child}
+            onClose={onClose}
           />
-        ) : null}
-        {showOpenWithOther ? (
-          <ContextMenuActionButton
-            activateOnPointerDown
-            disabled={busy}
-            icon={<LaunchIcon className="size-4" />}
-            label={copy.t("openWithOtherLabel")}
-            onClick={() => {
-              const openPromise = onOpenWithOtherApplication();
-              onClose();
-              void openPromise;
-            }}
-          />
-        ) : null}
+        ))}
       </ViewportMenuSurface>
     </div>
   );
+}
+
+function countRenderableMenuActions(
+  items: readonly WorkspaceFileManagerContextMenuItem[]
+): number {
+  let count = 0;
+  for (const item of items) {
+    if (item.type === "item") {
+      count += 1;
+    } else if (item.type === "submenu") {
+      count += 1 + countRenderableMenuActions(item.children ?? []);
+    }
+  }
+  return count;
 }

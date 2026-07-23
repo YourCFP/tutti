@@ -19,8 +19,6 @@ import type {
 } from "../workspaceFileManagerHost.interface.ts";
 import type {
   WorkspaceFileManagerFileActivationRequest,
-  WorkspaceFileManagerHostActionMessage,
-  WorkspaceFileManagerHostActionResult,
   WorkspaceFileManagerHostFallbackAction
 } from "../workspaceFileManagerHostTypes.ts";
 import type { WorkspaceFileManagerSession } from "../workspaceFileManagerService.interface.ts";
@@ -37,7 +35,6 @@ import { WorkspaceFileManagerActivationController } from "./workspaceFileManager
 import { WorkspaceFileManagerMutationController } from "./workspaceFileManagerMutationController.ts";
 import { WorkspaceFileManagerNavigationController } from "./workspaceFileManagerNavigationController.ts";
 import { WorkspaceFileManagerPreviewController } from "./workspaceFileManagerPreviewController.ts";
-import { WorkspaceFileManagerImportController } from "./workspaceFileManagerImportController.ts";
 import { WorkspaceFileManagerTreeController } from "./workspaceFileManagerTreeController.ts";
 import { findWorkspaceFileEntry } from "./model/entryLookup.ts";
 import {
@@ -48,9 +45,6 @@ import {
 export interface WorkspaceFileManagerSessionInput {
   copy: WorkspaceFileManagerI18nRuntime;
   host: WorkspaceFileManagerHost;
-  onHostActionMessage?: (
-    message: WorkspaceFileManagerHostActionMessage
-  ) => void;
   onMutationErrorMessage?: (
     message: WorkspaceFileManagerMutationErrorMessage
   ) => boolean | void;
@@ -58,14 +52,6 @@ export interface WorkspaceFileManagerSessionInput {
   resolveFileDefaultOpener?: CreateWorkspaceFileManagerSessionInput["resolveFileDefaultOpener"];
   store: WorkspaceFileManagerState;
 }
-
-type WorkspaceFileManagerHostActionResultFallback =
-  | {
-      actionKind?: "export";
-      entry: WorkspaceFileEntry;
-      kind: "view";
-    }
-  | { actionKind?: "import"; kind: "import" };
 
 export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerSession {
   readonly store: WorkspaceFileManagerState;
@@ -78,9 +64,6 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
   private lastObservedPersistedState: string;
   private lastObservedSelectedPath: WorkspaceFileManagerState["selectedPath"];
   private lastRevealRequestID: string | null = null;
-  private readonly onHostActionMessage?: (
-    message: WorkspaceFileManagerHostActionMessage
-  ) => void;
   private readonly onMutationErrorMessage?: (
     message: WorkspaceFileManagerMutationErrorMessage
   ) => boolean | void;
@@ -93,14 +76,12 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
   private readonly treeController: WorkspaceFileManagerTreeController;
   private readonly persistence?: CreateWorkspaceFileManagerSessionInput["persistence"];
   private unsubscribeStore: (() => void) | null = null;
-  private readonly importController: WorkspaceFileManagerImportController;
   private readonly openWithApplicationsCache =
     new WorkspaceFileOpenWithApplicationsCache();
 
   constructor(input: WorkspaceFileManagerSessionInput) {
     this.copy = input.copy;
     this.host = input.host;
-    this.onHostActionMessage = input.onHostActionMessage;
     this.onMutationErrorMessage = input.onMutationErrorMessage;
     this.persistence = input.persistence;
     this.store = input.store;
@@ -137,15 +118,6 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
         this.resolveErrorMessage(error, overrides),
       store: this.store
     });
-    this.importController = new WorkspaceFileManagerImportController({
-      applyHostActionResult: (result, fallback) =>
-        this.applyHostActionResult(result, fallback),
-      copy: () => this.copy,
-      host: input.host,
-      refresh: () => this.refresh(),
-      resolveErrorMessage: (error) => this.resolveErrorMessage(error),
-      store: this.store
-    });
     this.lastObservedEntries = this.store.entries;
     this.lastObservedPersistedState = serializePersistedState(
       this.getPersistedState()
@@ -159,7 +131,7 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
 
   async applyRevealIntent(
     intent: {
-      mode?: "reveal" | "open-directory";
+      mode?: "select" | "open";
       path: string;
       requestID: string;
     } | null
@@ -171,7 +143,7 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
       return;
     }
     this.lastRevealRequestID = intent.requestID;
-    if (intent.mode === "open-directory") {
+    if (intent.mode === "open") {
       await this.loadDirectory(intent.path);
       return;
     }
@@ -216,7 +188,6 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
     this.store.inlineRenameEntryPath = null;
     this.store.inlineRenameValidation = null;
     this.store.unsupportedDialog = null;
-    this.store.importConflictDialog = null;
   }
 
   closeUnsupportedDialog(): void {
@@ -224,13 +195,6 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
       return;
     }
     this.store.unsupportedDialog = null;
-  }
-
-  closeImportConflictDialog(): void {
-    if (this.store.busyAction === "import") {
-      return;
-    }
-    this.store.importConflictDialog = null;
   }
 
   async confirmCreateDialog(): Promise<void> {
@@ -322,10 +286,6 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
     }
   }
 
-  async confirmImportConflict(): Promise<void> {
-    await this.importController.confirmImportConflict();
-  }
-
   async createDirectory(path: string): Promise<void> {
     if (this.isReadOnlyLocationSelected()) {
       return;
@@ -345,11 +305,6 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
       return;
     }
     await this.mutationController.deleteSelected();
-  }
-
-  decrementDragDepth(): void {
-    this.store.dragDepth =
-      this.store.dragDepth <= 1 ? 0 : this.store.dragDepth - 1;
   }
 
   dispose(): void {
@@ -382,50 +337,6 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
     action: WorkspaceFileManagerHostFallbackAction
   ): Promise<void> {
     await this.activationController.handleFallbackAction(action);
-  }
-
-  async exportEntry(
-    entry: WorkspaceFileEntry
-  ): Promise<WorkspaceFileManagerHostActionResult> {
-    if (!this.host.exportEntry) {
-      return { supported: false } as const;
-    }
-
-    this.store.busyAction = "export";
-    this.store.error = null;
-    try {
-      const result = await this.host.exportEntry({
-        entry,
-        workspaceID: this.store.workspaceID
-      });
-      this.applyHostActionResult(result, {
-        actionKind: "export",
-        entry,
-        kind: "view"
-      });
-      return result;
-    } catch (error) {
-      const result = {
-        message: this.resolveErrorMessage(error),
-        supported: false,
-        title: this.copy.t("downloadFailedTitle")
-      } as const;
-      this.applyHostActionResult(result, {
-        actionKind: "export",
-        entry,
-        kind: "view"
-      });
-      return result;
-    } finally {
-      this.store.busyAction = null;
-    }
-  }
-
-  incrementDragDepth(): void {
-    if (!this.isActive) {
-      return;
-    }
-    this.store.dragDepth += 1;
   }
 
   async initialize(): Promise<void> {
@@ -677,10 +588,6 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
     this.syncSelectedDirectoryLocation();
   }
 
-  resetDragDepth(): void {
-    this.store.dragDepth = 0;
-  }
-
   async search(query: string): Promise<void> {
     const requestID = ++this.searchRequestSeq;
     this.store.searchQuery = query;
@@ -767,7 +674,6 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
     }
     this.store.contextMenu = null;
     this.store.contextMenuEntryPath = null;
-    this.store.dragDepth = 0;
   }
 
   setI18nRuntime(copy: WorkspaceFileManagerI18nRuntime): void {
@@ -831,59 +737,6 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
 
   clearInlineRenameValidation(): void {
     this.store.inlineRenameValidation = null;
-  }
-
-  async importDroppedFiles(
-    dataTransfer: Pick<DataTransfer, "files" | "items">,
-    targetDirectoryPath: string
-  ): Promise<WorkspaceFileManagerHostActionResult> {
-    if (this.isReadOnlyLocationSelected()) {
-      return { supported: false } as const;
-    }
-    return this.importController.importDroppedFiles(
-      dataTransfer,
-      targetDirectoryPath
-    );
-  }
-
-  async importFiles(
-    targetDirectoryPath: string
-  ): Promise<WorkspaceFileManagerHostActionResult> {
-    if (this.isReadOnlyLocationSelected()) {
-      return { supported: false } as const;
-    }
-    return this.importController.importFiles(targetDirectoryPath);
-  }
-
-  private applyHostActionResult(
-    result: WorkspaceFileManagerHostActionResult | void,
-    fallback: WorkspaceFileManagerHostActionResultFallback
-  ): void {
-    if (!result) {
-      return;
-    }
-
-    this.notifyHostActionMessages(result, fallback);
-
-    if (result.importConflict) {
-      this.store.unsupportedDialog = null;
-      this.store.importConflictDialog = result.importConflict;
-      return;
-    }
-
-    if (result.supported === false) {
-      this.store.importConflictDialog = null;
-      this.store.unsupportedDialog = {
-        entryPath: "entry" in fallback ? fallback.entry.path : null,
-        kind: fallback.kind,
-        message: result.message,
-        title: result.title
-      };
-      return;
-    }
-
-    this.store.unsupportedDialog = null;
-    this.store.importConflictDialog = null;
   }
 
   private hasLoadedDirectoryState(): boolean {
@@ -1071,54 +924,6 @@ export class DefaultWorkspaceFileManagerSession implements WorkspaceFileManagerS
         path: entry.path,
         score: listing.entries.length - index
       }));
-  }
-
-  private notifyHostActionMessages(
-    result: WorkspaceFileManagerHostActionResult,
-    fallback: WorkspaceFileManagerHostActionResultFallback
-  ): void {
-    if (!this.onHostActionMessage) {
-      return;
-    }
-
-    const entry = "entry" in fallback ? fallback.entry : null;
-    const actionKind =
-      fallback.actionKind ?? (fallback.kind === "import" ? "import" : "export");
-    if (result.cancelledMessage?.trim()) {
-      this.notifyHostActionMessage(actionKind, entry, "cancelled", result);
-      return;
-    }
-    if (result.supported === false || result.importConflict) {
-      return;
-    }
-    if (result.completedMessage?.trim()) {
-      this.notifyHostActionMessage(actionKind, entry, "completed", result);
-      return;
-    }
-    this.notifyHostActionMessage(actionKind, entry, "started", result);
-  }
-
-  private notifyHostActionMessage(
-    actionKind: WorkspaceFileManagerHostActionMessage["actionKind"],
-    entry: WorkspaceFileEntry | null,
-    status: WorkspaceFileManagerHostActionMessage["status"],
-    result: WorkspaceFileManagerHostActionResult
-  ): void {
-    const messageByStatus = {
-      cancelled: "cancelledMessage",
-      completed: "completedMessage",
-      started: "startedMessage"
-    } as const;
-    const message = result[messageByStatus[status]]?.trim();
-    if (!message) {
-      return;
-    }
-    this.onHostActionMessage?.({
-      actionKind,
-      entry,
-      message,
-      status
-    });
   }
 
   private observeStore(): void {

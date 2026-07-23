@@ -45,7 +45,6 @@ export function createWorkspaceFileManagerStore(input: {
     directoryExpansionByPath: {},
     inlineRenameEntryPath: null,
     inlineRenameValidation: null,
-    dragDepth: 0,
     entries: [],
     error: null,
     expandedDirectoryPaths: {},
@@ -64,7 +63,6 @@ export function createWorkspaceFileManagerStore(input: {
     selectedLocationId,
     selectedPath: null,
     unsupportedDialog: null,
-    importConflictDialog: null,
     workspaceID: input.workspaceID
   });
 }

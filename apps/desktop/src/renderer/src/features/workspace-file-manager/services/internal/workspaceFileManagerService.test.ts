@@ -800,10 +800,7 @@ function createWorkspaceUserProjectServiceStub(
 function createDependenciesStub(): {
   hostFilesApi: DesktopHostFilesApi;
   tuttidClient: TuttidClient;
-  platformApi: Pick<
-    DesktopPlatformApi,
-    "homeDirectory" | "os" | "resolveDroppedPaths"
-  >;
+  platformApi: Pick<DesktopPlatformApi, "homeDirectory" | "os">;
 } & Pick<
   WorkspaceFileManagerServiceDependencies,
   "reporterService" | "workspaceUserProjectService"
@@ -1012,8 +1009,7 @@ function createDependenciesStub(): {
     },
     platformApi: {
       homeDirectory: "/Users/local",
-      os: "darwin",
-      resolveDroppedPaths: fail
+      os: "darwin"
     }
   };
 }

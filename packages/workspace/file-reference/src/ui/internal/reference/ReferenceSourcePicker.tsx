@@ -49,7 +49,6 @@ import {
   WorkspaceFileManagerCreateDialog,
   useWorkspaceFileEntryIconUrls,
   WorkspaceFileManagerContextMenu,
-  resolveRevealInFolderLabel,
   type WorkspaceFileEntry,
   type WorkspaceFileManagerI18nRuntime,
   type WorkspaceFileOpenWithApplication
@@ -74,6 +73,7 @@ import {
   type ReferenceNodePreviewState,
   type ReferenceGroupedSelection
 } from "../../../react/internal/reference/useReferenceSourcePickerView.ts";
+import { buildReferenceSourcePickerContextMenuItems } from "./referenceSourcePickerContextMenu.tsx";
 import {
   formatReferenceNodePathText,
   formatReferencePreviewDateTime,
@@ -430,6 +430,55 @@ export function ReferenceSourcePicker({
     };
   }, [contextMenu]);
 
+  const referenceContextMenuItems = useMemo(
+    () =>
+      fileManagerCopy && contextMenu
+        ? buildReferenceSourcePickerContextMenuItems({
+            fileManagerCopy,
+            hostOs,
+            isBusy: view.isOpeningReference,
+            openWithApplications,
+            openWithLoading,
+            resolveOpenWithApplicationIcon,
+            showCreateDirectoryAction:
+              purpose === "directory" &&
+              view.canCreateDirectory &&
+              contextMenu.node.kind === "folder",
+            showOpenAction: purpose === "reference",
+            showOpenWithAction: purpose === "reference",
+            showRevealInFolderAction: purpose === "reference",
+            onCreateDirectory: () => {
+              openCreateDirectoryDialog(contextMenu.node);
+            },
+            onOpen: async () => {
+              await view.openNode(contextMenu.node);
+            },
+            onOpenWithApplication: async (applicationPath) => {
+              await view.openWithApplication(contextMenu.node, applicationPath);
+            },
+            onOpenWithOtherApplication: async () => {
+              await view.openWithOtherApplication(
+                contextMenu.node,
+                fileManagerCopy.t("openWithOtherPickerPrompt")
+              );
+            },
+            onRevealInFolder: async () => {
+              await view.revealNode(contextMenu.node);
+            }
+          })
+        : [],
+    [
+      contextMenu,
+      fileManagerCopy,
+      hostOs,
+      openWithApplications,
+      openWithLoading,
+      purpose,
+      resolveOpenWithApplicationIcon,
+      view
+    ]
+  );
+
   const openReferenceContextMenu = (
     event: MouseEvent<HTMLElement>,
     node: ReferenceNode
@@ -724,92 +773,18 @@ export function ReferenceSourcePicker({
                   </ScrollArea>
                   {fileManagerCopy ? (
                     <WorkspaceFileManagerContextMenu
-                      busy={view.isOpeningReference}
                       contextMenu={
                         contextMenu
                           ? {
-                              entry: referenceNodeToWorkspaceFileEntry(
-                                contextMenu.node
-                              ),
                               x: contextMenu.x,
                               y: contextMenu.y
                             }
                           : null
                       }
                       contextMenuRef={contextMenuRef}
-                      copy={fileManagerCopy}
-                      openWithApplications={openWithApplications}
-                      openWithLoading={openWithLoading}
+                      items={referenceContextMenuItems}
                       positionMode="viewport"
-                      revealInFolderLabel={resolveRevealInFolderLabel(
-                        fileManagerCopy,
-                        hostOs
-                      )}
-                      resolveOpenWithApplicationIcon={
-                        resolveOpenWithApplicationIcon
-                      }
-                      showCopyAction={false}
-                      showCopyPathAction={false}
-                      showCreateDirectoryAction={
-                        purpose === "directory" &&
-                        view.canCreateDirectory &&
-                        contextMenu?.node.kind === "folder"
-                      }
-                      showCreateFileAction={false}
-                      showDeleteAction={false}
-                      showExportAction={false}
-                      showImportAction={false}
-                      showOpenInAppBrowserAction={false}
-                      showOpenInDefaultBrowserAction={false}
-                      showOpenInFileViewerAction={false}
-                      showOpenAction={purpose === "reference"}
-                      showOpenWithAction={purpose === "reference"}
-                      showOpenWithOtherAction={purpose === "reference"}
-                      showRevealInFolderAction={purpose === "reference"}
-                      showRenameAction={false}
                       onClose={() => setContextMenu(null)}
-                      onCopy={noopAsync}
-                      onCopyPath={noopAsync}
-                      onCreateDirectory={() => {
-                        const parent = contextMenu?.node;
-                        if (parent?.kind === "folder") {
-                          openCreateDirectoryDialog(parent);
-                        }
-                      }}
-                      onCreateFile={noopVoid}
-                      onDelete={noopVoid}
-                      onExport={noopAsync}
-                      onImport={noopAsync}
-                      onOpen={async () => {
-                        if (contextMenu) {
-                          await view.openNode(contextMenu.node);
-                        }
-                      }}
-                      onOpenInAppBrowser={noopAsync}
-                      onOpenInDefaultBrowser={noopAsync}
-                      onOpenInFileViewer={noopAsync}
-                      onOpenWithApplication={async (applicationPath) => {
-                        if (contextMenu) {
-                          await view.openWithApplication(
-                            contextMenu.node,
-                            applicationPath
-                          );
-                        }
-                      }}
-                      onOpenWithOtherApplication={async () => {
-                        if (contextMenu) {
-                          await view.openWithOtherApplication(
-                            contextMenu.node,
-                            fileManagerCopy.t("openWithOtherPickerPrompt")
-                          );
-                        }
-                      }}
-                      onRevealInFolder={async () => {
-                        if (contextMenu) {
-                          await view.revealNode(contextMenu.node);
-                        }
-                      }}
-                      onRename={noopVoid}
                     />
                   ) : null}
                 </div>
@@ -1086,6 +1061,49 @@ export function ReferenceSourceContentPane({
     };
   }, [contextMenu]);
 
+  const referenceContextMenuItems = useMemo(
+    () =>
+      fileManagerCopy && contextMenu
+        ? buildReferenceSourcePickerContextMenuItems({
+            fileManagerCopy,
+            hostOs,
+            isBusy: view.isOpeningReference,
+            openWithApplications,
+            openWithLoading,
+            resolveOpenWithApplicationIcon,
+            showCreateDirectoryAction: false,
+            showOpenAction: true,
+            showOpenWithAction: true,
+            showRevealInFolderAction: true,
+            onCreateDirectory: noopVoid,
+            onOpen: async () => {
+              await view.openNode(contextMenu.node);
+            },
+            onOpenWithApplication: async (applicationPath) => {
+              await view.openWithApplication(contextMenu.node, applicationPath);
+            },
+            onOpenWithOtherApplication: async () => {
+              await view.openWithOtherApplication(
+                contextMenu.node,
+                fileManagerCopy.t("openWithOtherPickerPrompt")
+              );
+            },
+            onRevealInFolder: async () => {
+              await view.revealNode(contextMenu.node);
+            }
+          })
+        : [],
+    [
+      contextMenu,
+      fileManagerCopy,
+      hostOs,
+      openWithApplications,
+      openWithLoading,
+      resolveOpenWithApplicationIcon,
+      view
+    ]
+  );
+
   const openReferenceContextMenu = (
     event: MouseEvent<HTMLElement>,
     node: ReferenceNode
@@ -1228,79 +1246,18 @@ export function ReferenceSourceContentPane({
         </ScrollArea>
         {fileManagerCopy ? (
           <WorkspaceFileManagerContextMenu
-            busy={view.isOpeningReference}
             contextMenu={
               contextMenu
                 ? {
-                    entry: referenceNodeToWorkspaceFileEntry(contextMenu.node),
                     x: contextMenu.x,
                     y: contextMenu.y
                   }
                 : null
             }
             contextMenuRef={contextMenuRef}
-            copy={fileManagerCopy}
-            openWithApplications={openWithApplications}
-            openWithLoading={openWithLoading}
+            items={referenceContextMenuItems}
             positionMode="viewport"
-            revealInFolderLabel={resolveRevealInFolderLabel(
-              fileManagerCopy,
-              hostOs
-            )}
-            resolveOpenWithApplicationIcon={resolveOpenWithApplicationIcon}
-            showCopyAction={false}
-            showCopyPathAction={false}
-            showCreateDirectoryAction={false}
-            showCreateFileAction={false}
-            showDeleteAction={false}
-            showExportAction={false}
-            showImportAction={false}
-            showOpenInAppBrowserAction={false}
-            showOpenInDefaultBrowserAction={false}
-            showOpenInFileViewerAction={false}
-            showOpenAction={true}
-            showOpenWithAction={true}
-            showOpenWithOtherAction={true}
-            showRevealInFolderAction={true}
-            showRenameAction={false}
             onClose={() => setContextMenu(null)}
-            onCopy={noopAsync}
-            onCopyPath={noopAsync}
-            onCreateDirectory={noopVoid}
-            onCreateFile={noopVoid}
-            onDelete={noopVoid}
-            onExport={noopAsync}
-            onImport={noopAsync}
-            onOpen={async () => {
-              if (contextMenu) {
-                await view.openNode(contextMenu.node);
-              }
-            }}
-            onOpenInAppBrowser={noopAsync}
-            onOpenInDefaultBrowser={noopAsync}
-            onOpenInFileViewer={noopAsync}
-            onOpenWithApplication={async (applicationPath) => {
-              if (contextMenu) {
-                await view.openWithApplication(
-                  contextMenu.node,
-                  applicationPath
-                );
-              }
-            }}
-            onOpenWithOtherApplication={async () => {
-              if (contextMenu) {
-                await view.openWithOtherApplication(
-                  contextMenu.node,
-                  fileManagerCopy.t("openWithOtherPickerPrompt")
-                );
-              }
-            }}
-            onRevealInFolder={async () => {
-              if (contextMenu) {
-                await view.revealNode(contextMenu.node);
-              }
-            }}
-            onRename={noopVoid}
           />
         ) : null}
       </div>
@@ -2467,5 +2424,3 @@ function resolveReferenceNodeIconPath(node: ReferenceNode): string {
 }
 
 function noopVoid(): void {}
-
-async function noopAsync(): Promise<void> {}

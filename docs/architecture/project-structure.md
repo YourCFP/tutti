@@ -316,7 +316,8 @@ Current packages:
 - `packages/workspace/files`: Go domain kernel for logical workspace file
   semantics, path normalization, search scoring, and host-owned file adapters.
 - `packages/workspace/file-manager`: TypeScript state, actions, adapter
-  contract, and optional React UI for a workspace file manager.
+  contract, and optional React UI for a workspace file manager. Ownership
+  boundaries live in that package’s `CONTRACT.md`.
 - `packages/workspace/terminal`: shared terminal node contract and frontend
   surface for workbench hosts.
 - `packages/workspace/issue-manager`: reusable issue-manager contracts, OpenAPI

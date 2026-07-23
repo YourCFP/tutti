@@ -10,10 +10,7 @@ import { IWorkspaceFileManagerService } from "./workspaceFileManagerService.inte
 export interface WorkspaceFileManagerServiceRegistrationInput {
   hostFilesApi: DesktopHostFilesApi;
   tuttidClient: TuttidClient;
-  platformApi: Pick<
-    DesktopPlatformApi,
-    "homeDirectory" | "os" | "resolveDroppedPaths"
-  >;
+  platformApi: Pick<DesktopPlatformApi, "homeDirectory" | "os">;
   desktopPreferencesService?: Pick<IDesktopPreferencesService, "store">;
   reporterService?: Pick<IReporterService, "trackEvents">;
   workspaceUserProjectService?: IWorkspaceUserProjectService;
