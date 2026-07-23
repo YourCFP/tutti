@@ -740,17 +740,20 @@
 
 .rich-text-at-mention-row__session-participant--structured {
   display: flex;
-  min-width: min-content;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .rich-text-at-mention-row__session-participant-entity {
   display: flex;
-  flex: 1 1 auto;
-  min-width: 3em;
+  flex: 0 1 auto;
+  min-width: 2em;
   overflow: hidden;
 }
 
 .rich-text-at-mention-row__session-participant-segment {
+  display: block;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
