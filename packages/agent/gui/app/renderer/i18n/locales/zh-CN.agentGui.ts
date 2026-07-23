@@ -402,7 +402,7 @@ export const zhCNAgentGui = {
   newConversation: "新建会话",
   accountMenuTitle: "Tutti Agent",
   accountMenuMember: "会员",
-  accountMenuUpgrade: "升级会员",
+  accountMenuUpgrade: "升级",
   accountMenuRecharge: "充值积分",
   accountMenuViewPlans: "查看积分方案",
   accountMenuCreditsBalance: "积分余额",

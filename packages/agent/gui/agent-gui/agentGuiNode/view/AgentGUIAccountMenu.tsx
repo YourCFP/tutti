@@ -90,9 +90,9 @@ export function AgentGUIAccountMenu({
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <div className="flex min-w-0 flex-col">
-          <div className="flex min-w-0 items-center gap-2 px-2 py-2">
+          <div className="flex min-w-0 items-center gap-2 px-2 pt-2">
             <AgentGUIAccountAvatar state={state} label={labels.copyUserId}>
-              <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--background-fronted)] text-[13px] font-semibold text-[var(--text-primary)]">
+              <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--background-fronted)] text-[13px] font-semibold text-[var(--text-primary)]">
                 {state.user?.avatar ? (
                   <img
                     alt=""
@@ -110,11 +110,15 @@ export function AgentGUIAccountMenu({
               </span>
               <AccountMembershipBadge
                 className="mt-1"
+                iconUrl={state.membershipIconUrl ?? null}
                 label={membershipLabel}
               />
             </span>
           </div>
-          <span aria-hidden="true" className="mx-2 h-px bg-[var(--border-1)]" />
+          <span
+            aria-hidden="true"
+            className="mx-2 mb-1 mt-3 h-px bg-[var(--border-1)]"
+          />
           {state.user ? (
             <>
               <button
