@@ -229,7 +229,10 @@ also supplies the Session row's initiator label and avatar so an external
 mention provider does not need to duplicate member presentation in its mention
 payload. A collaboration host also owns the Session row's Agent display label,
 including an owner-qualified label for another member's shared Agent, and must
-project the same label used by its Agent filter option.
+project the same label used by its Agent filter option. The host also projects
+the Agent's provider identity separately as `agentProviderId`; AgentGUI resolves
+the provider icon from that identity and never infers it from an
+owner-qualified display label.
 
 Catalog option identity is host-owned and normalized at the shared-package
 boundary. Agent options require a durable `agentTargetId`; product-local target

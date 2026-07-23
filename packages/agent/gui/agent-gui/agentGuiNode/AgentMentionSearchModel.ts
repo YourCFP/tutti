@@ -3,6 +3,7 @@ import { getOptionalAgentHostApi } from "../../agentActivityHost";
 import type { AgentContextMentionItem } from "./agentRichText/agentFileMentionExtension";
 import type { AgentContextMentionDirectoryDescriptor } from "./agentContextMentionProvider";
 import { normalizeAgentSessionMentionTitle } from "./agentRichText/agentFileMentionExtension";
+import { resolveAgentSessionMentionIconUrl } from "./agentRichText/agentMentionPresentation";
 import type { AgentContextMentionInsertResult } from "./agentContextMentionProvider";
 import type { AgentMentionProviderQueryDiagnostic } from "./agentMentionSearchDiagnostics";
 import type {
@@ -702,10 +703,14 @@ export function providerItemToAgentMentionItem(input: {
       ...(scope.userId ? { initiatorUserId: scope.userId } : {}),
       initiatorName: "",
       agentName,
-      agentIconUrl:
-        presentation.agentIconUrl?.trim() ||
-        presentation.iconUrl?.trim() ||
-        undefined,
+      agentIconUrl: resolveAgentSessionMentionIconUrl({
+        agentIconUrl:
+          presentation.agentIconUrl?.trim() ||
+          presentation.iconUrl?.trim() ||
+          undefined,
+        agentProviderId: presentation.agentProviderId,
+        agentTargetId: scope.agentTargetId
+      }),
       ...(scope.agentTargetId ? { agentTargetId: scope.agentTargetId } : {}),
       status: presentation.status?.trim() || undefined,
       inputPreview: description || undefined,
