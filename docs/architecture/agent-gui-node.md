@@ -565,11 +565,12 @@ The Desktop command host and HTTP adapter must preserve both the optimistic
 CAS revision and the optional orchestration intensity; dropping either field
 turns a valid UI intent into a stale or semantically mismatched response.
 
-The intensity popup uses one interactive Cost-to-Balance-to-Powerful gradient
-slider and projects its local draft into equal tendency bands while it moves.
+The intensity popup uses one interactive Economical-to-Balanced-to-Powerful
+gradient slider and projects its local draft into equal tendency bands while it
+moves.
 That projection is explanatory UI, not a model or task assignment: it previews
-economical, balanced, or most-capable model strength and 1, 2–3, or up to 4
-parallel Agents. Four is the current hard workspace-wide Issue execution
+Economical, Balanced, or Powerful model strength (matching the slider bands)
+and 1, 2–3, or up to 4 parallel Agents. Four is the current hard workspace-wide Issue execution
 ceiling, not a cap on the total planned Agent or task count. The planning Agent
 still derives the exact model, total task graph, and safe parallelism from the
 request, selected Skills, available composer catalog, and workspace state.

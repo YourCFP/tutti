@@ -9,13 +9,13 @@ const labels = {
   previewTitle: "Planner tendency",
   previewHint:
     "The exact model, total task count, and safe parallelism are inferred from the request and selected Skills.",
-  previewCost: "Cost",
-  previewBalance: "Balance",
+  previewCost: "Economical",
+  previewBalance: "Balanced",
   previewPowerful: "Powerful",
   modelStrengthLabel: "Model strength",
   modelStrengthCost: "Economical",
   modelStrengthBalance: "Balanced",
-  modelStrengthPowerful: "Most capable",
+  modelStrengthPowerful: "Powerful",
   agentCountLabel: "Parallel Agents",
   agentCountCost: "1",
   agentCountBalance: "2–3",
@@ -54,8 +54,8 @@ describe("TuttiBudgetPopover", () => {
     expect(
       screen.getAllByRole("slider", { name: "Orchestration intensity" })
     ).toHaveLength(1);
-    expect(screen.getByText("Cost")).toBeInTheDocument();
-    expect(screen.getAllByText("Balance").length).toBeGreaterThan(0);
+    expect(screen.getByText("Economical")).toBeInTheDocument();
+    expect(screen.getAllByText("Balanced").length).toBeGreaterThan(0);
     expect(screen.getByText("Powerful")).toBeInTheDocument();
   });
 
@@ -92,7 +92,7 @@ describe("TuttiBudgetPopover", () => {
       "data-agent-tutti-budget-slider-tone",
       "balance"
     );
-    expect(preview).toHaveTextContent("Balance");
+    expect(preview).toHaveTextContent("Balanced");
     expect(
       document.querySelector("[data-agent-tutti-budget-model-strength]")
     ).toHaveTextContent("Balanced");
@@ -116,7 +116,7 @@ describe("TuttiBudgetPopover", () => {
     expect(preview).toHaveTextContent("Powerful");
     expect(
       document.querySelector("[data-agent-tutti-budget-model-strength]")
-    ).toHaveTextContent("Most capable");
+    ).toHaveTextContent("Powerful");
     expect(
       document.querySelector("[data-agent-tutti-budget-agent-count]")
     ).toHaveTextContent("Up to 4");
