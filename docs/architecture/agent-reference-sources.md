@@ -247,8 +247,10 @@ project the same label used by its Agent filter option. The host also projects
 the Agent's provider identity separately as `agentProviderId`; AgentGUI resolves
 the provider icon from that identity and never infers it from an
 owner-qualified display label. AgentGUI also resolves that label's structured
-owner and Agent segments from the matching provenance catalog entries so a
-long owner name may truncate without hiding the Agent name.
+owner and Agent segments from the matching provenance catalog entries. Session
+rows truncate the initiator and Agent owner independently with a minimum visible
+segment, keep the Agent label fully visible, and reserve visible space for the
+Session title.
 
 Catalog option identity is host-owned and normalized at the shared-package
 boundary. Agent options require a durable `agentTargetId`; product-local target

@@ -487,20 +487,21 @@ function agentMentionItemToRowItem(
     const participant = isMySession
       ? item.agentName
       : `${item.initiatorName} & ${item.agentName}`;
-    const participantTruncatablePrefix =
+    const participantTruncatableSegments =
       item.agentOwnerLabel && item.agentLabel
         ? isMySession
-          ? item.agentOwnerLabel
-          : `${item.initiatorName} & ${item.agentOwnerLabel}`
+          ? [item.agentOwnerLabel]
+          : [item.initiatorName, item.agentOwnerLabel]
         : null;
     const participantFixedSuffix =
-      participantTruncatablePrefix && item.agentLabel
+      participantTruncatableSegments && item.agentLabel
         ? ` · ${item.agentLabel}`
         : null;
     return {
       kind: "session",
       participant,
-      participantTruncatablePrefix,
+      participantTruncatableSegments,
+      participantSegmentSeparator: " & ",
       participantFixedSuffix,
       summary: item.title,
       userAvatarUrl: isMySession ? null : (item.initiatorAvatarUrl ?? null),
