@@ -26,7 +26,8 @@ import {
 import { presentAgentGeneratedFileMentionItems } from "./agentMentionAgentGeneratedFilesPresentation";
 import type {
   ReferenceProvenanceCatalog,
-  ReferenceProvenanceFilter
+  ReferenceProvenanceFilter,
+  ReferenceProvenanceOption
 } from "@tutti-os/workspace-file-reference/contracts";
 import {
   buildEmptyGroup,
@@ -180,15 +181,22 @@ function buildAgentProvenanceGroups(input: {
   const selectedAgentTargetIds = input.provenanceFilter?.agentTargetIds ?? null;
   const selectedAgentTargetIdSet =
     selectedAgentTargetIds === null ? null : new Set(selectedAgentTargetIds);
-  const sourceItems = agentProvenanceItemsForFilter(input).filter((item) => {
-    if (selectedAgentTargetIdSet === null) {
-      return true;
-    }
-    const agentTargetId = agentTargetIdForMentionItem(item);
-    return (
-      agentTargetId !== null && selectedAgentTargetIdSet.has(agentTargetId)
-    );
-  });
+  const memberOptionsById = new Map(
+    input.provenanceCatalog.memberOptions.map((member) => [member.id, member])
+  );
+  const sourceItems = agentProvenanceItemsForFilter(input)
+    .map((item) =>
+      projectAgentProvenanceMemberPresentation(item, memberOptionsById)
+    )
+    .filter((item) => {
+      if (selectedAgentTargetIdSet === null) {
+        return true;
+      }
+      const agentTargetId = agentTargetIdForMentionItem(item);
+      return (
+        agentTargetId !== null && selectedAgentTargetIdSet.has(agentTargetId)
+      );
+    });
   const cataloguedItemIds = new Set<string>();
   const catalogGroups = agentProvenanceGroupSpecs(
     input.currentFilter,
@@ -324,6 +332,29 @@ function agentTargetIdForMentionItem(
     return item.targetId.trim() || null;
   }
   return null;
+}
+
+function projectAgentProvenanceMemberPresentation(
+  item: AgentProvenanceMentionItem,
+  memberOptionsById: ReadonlyMap<string, ReferenceProvenanceOption>
+): AgentProvenanceMentionItem {
+  if (item.kind !== "session") {
+    return item;
+  }
+  const initiatorUserId = item.initiatorUserId?.trim();
+  const member = initiatorUserId
+    ? memberOptionsById.get(initiatorUserId)
+    : undefined;
+  if (!member) {
+    return item;
+  }
+  const initiatorAvatarUrl =
+    member.iconUrl?.trim() || item.initiatorAvatarUrl?.trim();
+  return {
+    ...item,
+    initiatorName: member.label,
+    ...(initiatorAvatarUrl ? { initiatorAvatarUrl } : {})
+  };
 }
 
 function unmatchedAgentProvenanceIdentity(

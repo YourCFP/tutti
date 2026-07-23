@@ -645,7 +645,11 @@ describe("AgentMentionSearchController", () => {
       ],
       memberOptions: [
         { id: "user-1", label: "Me" },
-        { id: "user-2", label: "Lin" }
+        {
+          id: "user-2",
+          label: "Lin",
+          iconUrl: "https://cdn.example.com/lin.png"
+        }
       ]
     });
 
@@ -675,6 +679,8 @@ describe("AgentMentionSearchController", () => {
             label: "Lin",
             items: [
               expect.objectContaining({
+                initiatorAvatarUrl: "https://cdn.example.com/lin.png",
+                initiatorName: "Lin",
                 initiatorUserId: "user-2",
                 targetId: "session-shared-by-owner"
               })
