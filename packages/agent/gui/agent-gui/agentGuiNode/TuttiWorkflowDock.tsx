@@ -153,6 +153,21 @@ export function TuttiWorkflowDock({
       expanded: reviewPanelId !== null,
       reviewPanelId
     }));
+  // Echo the intensity the user just dragged to until the canonical composer
+  // state catches up (review intensity updates via an async daemon command),
+  // so the banner and the open popover never display diverging values. The
+  // echo clears during render (same adjustment pattern as the disclosure
+  // above) once the canonical value matches.
+  const [echoedIntensity, setEchoedIntensity] = useState<number | null>(null);
+  if (echoedIntensity !== null && review?.intensity === echoedIntensity) {
+    setEchoedIntensity(null);
+  }
+  const reviewDisplayIntensity =
+    review !== null ? (echoedIntensity ?? review.intensity) : null;
+  const handleIntensityChange = (value: number): void => {
+    setEchoedIntensity(value);
+    onIntensityChange(value);
+  };
 
   // A newly actionable checkpoint starts open once. Recording its stable panel
   // identity prevents ordinary snapshot updates from overriding a user's
@@ -200,8 +215,8 @@ export function TuttiWorkflowDock({
     );
 
   const reviewTier =
-    review !== null
-      ? projectTuttiIntensityPreview(review.intensity).tier
+    reviewDisplayIntensity !== null
+      ? projectTuttiIntensityPreview(reviewDisplayIntensity).tier
       : null;
   const reviewTierLabel =
     reviewTier !== null
@@ -216,9 +231,9 @@ export function TuttiWorkflowDock({
     review !== null ? (
       <>
         <TuttiBudgetPopover
-          intensity={review.intensity}
+          intensity={reviewDisplayIntensity ?? review.intensity}
           labels={intensityPopoverLabels}
-          onChange={onIntensityChange}
+          onChange={handleIntensityChange}
         >
           <button
             type="button"
@@ -239,7 +254,7 @@ export function TuttiWorkflowDock({
                 <span className="text-[11px]">{reviewTierLabel}</span>
               ) : null}
               <span className="inline-block w-[3ch] text-left text-[11px] tabular-nums">
-                {review.intensity}
+                {reviewDisplayIntensity ?? review.intensity}
               </span>
             </span>
           </button>
