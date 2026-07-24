@@ -454,9 +454,12 @@ infers identity readiness from a missing image URL. The host supplies user and
 Agent names and optional avatar URLs; AgentGUI owns the UI System Avatar,
 fixed-size loading slot, fallback initial, and user-right/Agent-left layout.
 Participant-header placement is projected from presentation turns rather than
-individual message or tool-progress rows: each speaker renders at most one
-header per turn, and a collapsed completed turn keeps the Agent header on
-visible reply content.
+individual message, tool-progress, or canonical Turn rows. A presentation turn
+starts at a user message and continues until the next user message, so recovery
+or provider continuation may span canonical Turns without duplicating the
+participant header. Each speaker renders at most one header per presentation
+turn, and a collapsed completed canonical Turn keeps the Agent header on visible
+reply content.
 This presentation input is view data only and must not enter canonical Session,
 Turn, Message, activity-runtime, or workspace-engine state.
 
