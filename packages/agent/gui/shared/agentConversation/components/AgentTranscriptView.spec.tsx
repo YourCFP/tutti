@@ -304,6 +304,130 @@ describe("AgentTranscriptView", () => {
     );
   });
 
+  it("keeps one Agent header when a visible reply spans canonical Turns", () => {
+    const baseConversation = projectAgentConversationVM(detailViewModel());
+    const message = (id: string, turnId: string, body: string) => ({
+      kind: "message-content" as const,
+      id,
+      turnId,
+      body,
+      presentationKind: "content" as const,
+      occurredAtUnixMs: 1
+    });
+    const conversation = {
+      ...baseConversation,
+      rows: [
+        {
+          kind: "message" as const,
+          id: "user-first",
+          turnId: "turn-1",
+          speaker: "user" as const,
+          messages: [message("user-first-message", "turn-1", "Check prices")],
+          thinking: [],
+          occurredAtUnixMs: 1
+        },
+        {
+          kind: "message" as const,
+          id: "assistant-progress",
+          turnId: "turn-1",
+          speaker: "assistant" as const,
+          messages: [
+            message(
+              "assistant-progress-message",
+              "turn-1",
+              "Loading tools and fetching the latest data"
+            )
+          ],
+          thinking: [],
+          occurredAtUnixMs: 2
+        },
+        {
+          kind: "tool-group" as const,
+          id: "recovery-tool-group",
+          turnId: "turn-recovery",
+          grouped: true,
+          calls: [],
+          entries: [],
+          occurredAtUnixMs: 3
+        },
+        {
+          kind: "message" as const,
+          id: "assistant-restart-warning",
+          turnId: "turn-recovery",
+          speaker: "assistant" as const,
+          messages: [
+            message(
+              "assistant-restart-warning-message",
+              "turn-recovery",
+              "Agent run was interrupted by an application restart."
+            )
+          ],
+          thinking: [],
+          occurredAtUnixMs: 4
+        },
+        {
+          kind: "message" as const,
+          id: "user-second",
+          turnId: "turn-2",
+          speaker: "user" as const,
+          messages: [message("user-second-message", "turn-2", "Try again")],
+          thinking: [],
+          occurredAtUnixMs: 5
+        },
+        {
+          kind: "message" as const,
+          id: "assistant-second",
+          turnId: "turn-2",
+          speaker: "assistant" as const,
+          messages: [
+            message("assistant-second-message", "turn-2", "Trying again")
+          ],
+          thinking: [],
+          occurredAtUnixMs: 6
+        }
+      ]
+    };
+
+    const { container } = render(
+      <AgentTranscriptView
+        conversation={conversation}
+        participantPresentation={{
+          enabled: true,
+          status: "ready",
+          user: { name: "Alice", avatarUrl: "user.png" },
+          agent: { name: "Claude Code", avatarUrl: "agent.png" }
+        }}
+        labels={{
+          thinkingLabel: "Thought process",
+          toolCallsLabel: (count) => `Tool calls (${count})`,
+          processing: "Planning next moves",
+          turnSummary: "Changed files"
+        }}
+      />
+    );
+
+    const agentHeaders = container.querySelectorAll(
+      '[data-agent-conversation-participant-header="assistant"]'
+    );
+    expect(agentHeaders).toHaveLength(2);
+    expect(
+      agentHeaders[0]?.closest("[data-agent-transcript-row]")
+    ).toHaveAttribute("data-agent-transcript-row", "assistant-progress");
+    expect(
+      screen
+        .getByText("Agent run was interrupted by an application restart.")
+        .closest("[data-agent-transcript-row]")
+    ).not.toContainElement(agentHeaders[0] as HTMLElement);
+    expect(
+      agentHeaders[1]?.closest("[data-agent-transcript-row]")
+    ).toHaveAttribute("data-agent-transcript-row", "assistant-second");
+    expect(
+      container.querySelectorAll(
+        '[data-agent-conversation-participant-header="user"]'
+      )
+    ).toHaveLength(2);
+  });
+
   it("rerenders when canonical turn timing changes", () => {
     const labels = {
       thinkingLabel: "Thought process",
