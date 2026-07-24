@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { useReferenceProvenanceFilterCatalog } from "@tutti-os/workspace-file-reference/react";
 import type { ReferenceProvenanceCatalog } from "@tutti-os/workspace-file-reference/contracts";
+import { resolveAgentGUIReferenceProvenanceFilterCatalog } from "../model/agentReferenceProvenanceCatalog";
 import type { AgentComposerReferenceProvenanceFilters } from "./AgentComposer.types";
 
 const DISABLED_REFERENCE_PROVENANCE_CATALOG: ReferenceProvenanceCatalog = {
@@ -9,8 +11,12 @@ const DISABLED_REFERENCE_PROVENANCE_CATALOG: ReferenceProvenanceCatalog = {
 };
 
 export function useAgentMentionProvenanceFilters(
-  catalog: ReferenceProvenanceCatalog | null
+  input: Parameters<typeof resolveAgentGUIReferenceProvenanceFilterCatalog>[0]
 ): AgentComposerReferenceProvenanceFilters | null {
+  const catalog = useMemo(
+    () => resolveAgentGUIReferenceProvenanceFilterCatalog(input),
+    [input.agentTargets, input.injectedCatalog, input.legacyAgentFilterEnabled]
+  );
   const effectiveCatalog = catalog ?? DISABLED_REFERENCE_PROVENANCE_CATALOG;
   const session = useReferenceProvenanceFilterCatalog(effectiveCatalog);
   const file = useReferenceProvenanceFilterCatalog(effectiveCatalog);
@@ -18,17 +24,19 @@ export function useAgentMentionProvenanceFilters(
   const agent = useReferenceProvenanceFilterCatalog(effectiveCatalog);
   const app = useReferenceProvenanceFilterCatalog(effectiveCatalog);
 
-  if (session.snapshot.catalog.enabledDimensions.length === 0) {
-    return null;
-  }
-
-  return {
-    byFilter: {
-      session,
-      file,
-      issue,
-      agent,
-      app
-    }
-  };
+  return useMemo(
+    () =>
+      session.snapshot.catalog.enabledDimensions.length === 0
+        ? null
+        : {
+            byFilter: {
+              session,
+              file,
+              issue,
+              agent,
+              app
+            }
+          },
+    [agent, app, file, issue, session]
+  );
 }

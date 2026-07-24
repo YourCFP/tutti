@@ -28,7 +28,6 @@ import {
   resolveNextAgentGUIConversationRailWidthPx,
   resolveAgentGUIConversationRailMaxWidthPx
 } from "./model/agentGuiRailLayout";
-import { resolveAgentGUIReferenceProvenanceFilterCatalog } from "./model/agentReferenceProvenanceCatalog";
 import type { AgentGUINodeProps } from "./AgentGUINode.types";
 import { areAgentGUINodePropsEqual } from "./AgentGUINode.types";
 import { AgentGUIMentionServiceBoundary } from "./AgentGUIMentionServiceBoundary";
@@ -113,15 +112,11 @@ export const AgentGUINode = memo(function AgentGUINode({
     referenceProvenanceFilterCatalog: injectedReferenceProvenanceFilterCatalog,
     referenceProvenanceFilterEnabled = false
   } = hostCapabilities;
-  const referenceProvenanceFilterCatalog =
-    resolveAgentGUIReferenceProvenanceFilterCatalog({
-      agentTargets,
-      injectedCatalog: injectedReferenceProvenanceFilterCatalog,
-      legacyAgentFilterEnabled: referenceProvenanceFilterEnabled
-    });
-  const referenceProvenanceFilters = useAgentMentionProvenanceFilters(
-    referenceProvenanceFilterCatalog
-  );
+  const referenceProvenanceFilters = useAgentMentionProvenanceFilters({
+    agentTargets,
+    injectedCatalog: injectedReferenceProvenanceFilterCatalog,
+    legacyAgentFilterEnabled: referenceProvenanceFilterEnabled
+  });
   const {
     onLinkAction,
     onHandoffConversation,
