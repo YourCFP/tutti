@@ -1952,6 +1952,9 @@ describe("agent GUI workbench contribution copy", () => {
       /\.agent-gui-workbench-header__detached-window\s*{\s*margin-left:\s*auto;/s
     );
     expect(css).toMatch(
+      /\.agent-gui-workbench-header\[data-agent-gui-workbench-header-collapsed="true"\]\s*\.agent-gui-workbench-header__detached-window\s*{[^}]*margin-left:\s*0;/s
+    );
+    expect(css).toMatch(
       /\.agent-gui-workbench-header__detached-window\s*\+\s*\.agent-gui-workbench-header__rail-toggle\s*{[^}]*margin-left:\s*-4px;/s
     );
   });
