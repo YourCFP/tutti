@@ -77,7 +77,6 @@ export interface DesktopAgentGUIWorkbenchBodyProps {
   }) => Promise<void> | void;
   onStateChange: (state: DesktopAgentGUIWorkbenchState) => void;
   prefillPromptBootstrapRequest?: DesktopAgentGUIPrefillPromptRequest | null;
-  previewMode?: boolean;
   providerStatusBootstrapSnapshot?: AgentProviderStatusSnapshot | null;
   agentDirectory: AgentGUIAgentDirectorySnapshot;
   allAgentsPresentation?: AgentGUIAllAgentsPresentation | null;
@@ -170,7 +169,6 @@ export function areDesktopAgentGUIWorkbenchBodyPropsEqual(
       next.onOpenAgentConversationWindow &&
     previous.prefillPromptBootstrapRequest ===
       next.prefillPromptBootstrapRequest &&
-    previous.previewMode === next.previewMode &&
     previous.providerStatusBootstrapSnapshot ===
       next.providerStatusBootstrapSnapshot &&
     previous.agentDirectory === next.agentDirectory &&

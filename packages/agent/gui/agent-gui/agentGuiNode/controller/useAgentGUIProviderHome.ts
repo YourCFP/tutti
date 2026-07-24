@@ -23,7 +23,6 @@ import type {
   AgentGUIAgentTarget
 } from "../../../types";
 import {
-  matchesAgentGUIConversationSummaryFilter,
   normalizeAgentGUIConversationFilter,
   type AgentGUIConversationFilter
 } from "../model/agentGuiConversationFilter";
@@ -59,8 +58,6 @@ interface UseAgentGUIProviderHomeInput {
   clearRailRevealRequest(): void;
   conversationFilter: AgentGUIConversationFilter;
   conversationFilterRef: CurrentValue<AgentGUIConversationFilter>;
-  conversationListInitialized: boolean;
-  conversations: readonly AgentGUIConversationSummary[];
   conversationsRef: CurrentValue<readonly AgentGUIConversationSummary[]>;
   data: AgentGUINodeData;
   dataRef: CurrentValue<AgentGUINodeData>;
@@ -76,11 +73,9 @@ interface UseAgentGUIProviderHomeInput {
     (updater: (current: AgentGUINodeData) => AgentGUINodeData) => void
   >;
   persistActiveConversation(agentSessionId: string | null): void;
-  previewMode: boolean;
   providerReadinessGates: Partial<
     Record<AgentGUIProvider, AgentGUIProviderReadinessGate | null>
   > | null;
-  agentTargetsLoading: boolean;
   selectedComposerTargetDataRef: CurrentValue<AgentGUIComposerTargetData>;
   selectConversation(
     agentSessionId: string,
@@ -127,7 +122,7 @@ export function useAgentGUIProviderHome(input: UseAgentGUIProviderHomeInput) {
 
   const resetHomeComposerAgentTargetToDefault = useCallback(() => {
     const currentInput = inputRef.current;
-    if (currentInput.previewMode) return;
+
     const nextTarget = resolveDefaultHomeComposerTarget();
     if (!nextTarget) return;
     const nextTargetIsExplicit =
@@ -186,7 +181,7 @@ export function useAgentGUIProviderHome(input: UseAgentGUIProviderHomeInput) {
       agentTargetId?: string | null;
     }) => {
       const currentInput = inputRef.current;
-      if (currentInput.previewMode) return;
+
       const nextTarget = resolveAgentGUIAgentTarget({
         agentTargetId: selection.agentTargetId,
         defaultAgentTargetId: currentInput.defaultAgentTargetId,
@@ -286,7 +281,6 @@ export function useAgentGUIProviderHome(input: UseAgentGUIProviderHomeInput) {
 
   useEffect(() => {
     if (
-      input.previewMode ||
       input.activeConversationId !== null ||
       input.conversationFilter.kind !== "all" ||
       input.homeComposerTargetOverride !== null ||
@@ -329,7 +323,6 @@ export function useAgentGUIProviderHome(input: UseAgentGUIProviderHomeInput) {
     input.effectiveSelectedProviderTarget,
     input.firstReadyHomeComposerProviderTarget,
     input.homeComposerTargetOverride,
-    input.previewMode,
     input.providerReadinessGates,
     selectHomeComposerAgentTarget
   ]);
@@ -437,49 +430,6 @@ export function useAgentGUIProviderHome(input: UseAgentGUIProviderHomeInput) {
     },
     [selectHomeComposerAgentTarget]
   );
-
-  useEffect(() => {
-    if (
-      input.previewMode ||
-      input.agentTargetsLoading ||
-      input.activeConversationId === null ||
-      input.conversationFilter.kind !== "agentTarget" ||
-      input.isLoadingConversations ||
-      !input.conversationListInitialized
-    ) {
-      return;
-    }
-    if (
-      input.conversations.some((conversation) =>
-        matchesAgentGUIConversationSummaryFilter(
-          conversation,
-          input.conversationFilter
-        )
-      )
-    ) {
-      return;
-    }
-    const filterAgentTargetId = input.conversationFilter.agentTargetId;
-    const target = input.normalizedProviderTargets.find(
-      (candidate) =>
-        (candidate.agentTargetId?.trim() ?? "") === filterAgentTargetId
-    );
-    if (!target) return;
-    selectHomeComposerAgentTarget({
-      provider: target.provider,
-      agentTargetId: filterAgentTargetId
-    });
-  }, [
-    input.activeConversationId,
-    input.conversationFilter,
-    input.conversationListInitialized,
-    input.conversations,
-    input.isLoadingConversations,
-    input.normalizedProviderTargets,
-    input.previewMode,
-    input.agentTargetsLoading,
-    selectHomeComposerAgentTarget
-  ]);
 
   return {
     resetHomeComposerAgentTargetToDefault,

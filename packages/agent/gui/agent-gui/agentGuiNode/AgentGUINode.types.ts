@@ -97,7 +97,6 @@ export interface AgentGUINodeFrameLayout {
    * the default responsive policy.
    */
   conversationRailAutoCollapseMode?: "preserve-middle-content";
-  previewMode?: boolean;
 }
 
 export type AgentGUISessionActionRequest =
@@ -372,7 +371,6 @@ export function areAgentGUINodePropsEqual(
     pf.embedded === nf.embedded &&
     pf.conversationRailAutoCollapseMode ===
       nf.conversationRailAutoCollapseMode &&
-    pf.previewMode === nf.previewMode &&
     pr.composerFocusSequence === nr.composerFocusSequence &&
     pr.composerAppend === nr.composerAppend &&
     pr.newConversationSequence === nr.newConversationSequence &&

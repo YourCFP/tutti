@@ -89,8 +89,7 @@ export const AgentGUINode = memo(function AgentGUINode({
     isMaximized = false,
     isActive,
     isVisible = true,
-    embedded = false,
-    previewMode = false
+    embedded = false
   } = frame;
   const widthRef = useRef(width);
   widthRef.current = width;
@@ -200,18 +199,12 @@ export const AgentGUINode = memo(function AgentGUINode({
   );
   const handleDataChange = useCallback(
     (updater: (current: AgentGUINodeData) => AgentGUINodeData) => {
-      if (previewMode) {
-        return;
-      }
       onUpdateNode(updater);
     },
-    [onUpdateNode, previewMode]
+    [onUpdateNode]
   );
   const handleConversationRailWidthChanged = useCallback(
     (widthPx: number) => {
-      if (previewMode) {
-        return;
-      }
       onUpdateNode((current) => {
         const nextWidthPx = resolveNextAgentGUIConversationRailWidthPx({
           currentWidthPx: current.conversationRailWidthPx,
@@ -228,7 +221,7 @@ export const AgentGUINode = memo(function AgentGUINode({
         };
       });
     },
-    [onUpdateNode, previewMode]
+    [onUpdateNode]
   );
   const conversationRailPresentation =
     resolveAgentGUIConversationRailPresentation({
@@ -248,18 +241,12 @@ export const AgentGUINode = memo(function AgentGUINode({
     []
   );
   const toggleConversationRailCollapsed = useCallback(() => {
-    if (previewMode) {
-      return;
-    }
     onUpdateNode((current) => ({
       ...current,
       conversationRailCollapsed: current.conversationRailCollapsed !== true
     }));
-  }, [onUpdateNode, previewMode]);
+  }, [onUpdateNode]);
   const handleConversationRailToggle = useCallback(() => {
-    if (previewMode) {
-      return;
-    }
     if (!isConversationRailAutoCollapsed) {
       toggleConversationRailCollapsed();
       return;
@@ -290,7 +277,6 @@ export const AgentGUINode = memo(function AgentGUINode({
     onResize,
     onUpdateNode,
     position,
-    previewMode,
     state.conversationRailWidthPx,
     toggleConversationRailCollapsed,
     width
@@ -314,14 +300,13 @@ export const AgentGUINode = memo(function AgentGUINode({
     providerReadinessGates,
     targetConnectionSource,
     defaultAgentTargetId,
-    previewMode,
     onDataChange: handleDataChange,
     onRememberComposerDefaults,
     onShowMessage
   });
   const handleCreateConversation = useCallback(
     (...args: Parameters<typeof actions.createConversation>) => {
-      if (!previewMode) {
+      {
         onUpdateNode((current) =>
           current.lastActiveAgentSessionId === null
             ? current
@@ -333,7 +318,7 @@ export const AgentGUINode = memo(function AgentGUINode({
       }
       actions.createConversation(...args);
     },
-    [actions, onUpdateNode, previewMode]
+    [actions, onUpdateNode]
   );
   const viewActions = useMemo(
     () => ({
@@ -381,7 +366,6 @@ export const AgentGUINode = memo(function AgentGUINode({
   } = useAgentGUIStatus({
     activeProvider,
     agentStatusController,
-    previewMode,
     t,
     viewModel
   });
@@ -498,7 +482,6 @@ export const AgentGUINode = memo(function AgentGUINode({
               onSlashStatusOpen={handleSlashStatusOpen}
               onSlashStatusClose={handleSlashStatusClose}
               onSlashStatusRefresh={handleSlashStatusRefresh}
-              previewMode={previewMode}
               onLinkAction={handleLinkAction}
               onHandoffConversation={onHandoffConversation}
               capabilityMenuState={capabilityMenuState}
