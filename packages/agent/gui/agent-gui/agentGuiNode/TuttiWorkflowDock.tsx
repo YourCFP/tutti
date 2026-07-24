@@ -235,42 +235,41 @@ export function TuttiWorkflowDock({
             data-agent-tutti-tier={reviewTier ?? undefined}
             data-testid="agent-gui-tutti-workflow-intensity"
             className={cn(
-              "flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors",
+              "flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] transition-colors",
               "data-[state=open]:bg-[color-mix(in_srgb,var(--tutti-purple)_12%,transparent)] data-[state=open]:text-[var(--tutti-purple)]"
             )}
           >
             <Gauge aria-hidden className="size-3.5" />
-            <span className="flex items-center gap-0.5">
-              {/*
-                All tier labels occupy the same grid cell so the chip width is
-                always the longest label's width; switching tiers while the
-                slider moves no longer resizes the chip or shifts the anchored
-                popover.
-              */}
-              <span className="grid text-[11px]">
-                {(
-                  [
-                    ["cost", intensityPopoverLabels.previewCost],
-                    ["balance", intensityPopoverLabels.previewBalance],
-                    ["powerful", intensityPopoverLabels.previewPowerful]
-                  ] as const
-                ).map(([tier, label]) => (
-                  <span
-                    key={tier}
-                    aria-hidden={tier !== reviewTier}
-                    className={
-                      tier === reviewTier
-                        ? "[grid-area:1/1]"
-                        : "invisible [grid-area:1/1]"
-                    }
-                  >
-                    {label}
-                  </span>
-                ))}
-              </span>
-              <span className="inline-block w-[3ch] text-left text-[11px] tabular-nums">
-                {reviewDisplayIntensity ?? review.intensity}
-              </span>
+            {/*
+              All tier labels occupy the same grid cell so the chip width is
+              always the longest label's width; switching tiers while the
+              slider moves no longer resizes the chip or shifts the anchored
+              popover. Icon, label, and value share one container with a
+              uniform 4px gap.
+            */}
+            <span className="grid">
+              {(
+                [
+                  ["cost", intensityPopoverLabels.previewCost],
+                  ["balance", intensityPopoverLabels.previewBalance],
+                  ["powerful", intensityPopoverLabels.previewPowerful]
+                ] as const
+              ).map(([tier, label]) => (
+                <span
+                  key={tier}
+                  aria-hidden={tier !== reviewTier}
+                  className={
+                    tier === reviewTier
+                      ? "[grid-area:1/1]"
+                      : "invisible [grid-area:1/1]"
+                  }
+                >
+                  {label}
+                </span>
+              ))}
+            </span>
+            <span className="inline-block w-[3ch] text-left text-[11px] tabular-nums">
+              {reviewDisplayIntensity ?? review.intensity}
             </span>
           </button>
         </TuttiBudgetPopover>

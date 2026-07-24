@@ -3165,6 +3165,12 @@ aside.workspace-agents-status-panel
   color: var(--tutti-purple);
 }
 
+/* The Tutti intensity chip is a non-button-like indicator: keep it flat on
+   hover instead of picking up the goal-actions button hover background. */
+.agent-gui-chrome__goal-actions button[data-agent-tutti-tier]:hover {
+  background: transparent;
+}
+
 .agent-gui-chrome__composer-disclosure {
   display: grid;
   min-width: 0;
@@ -9141,16 +9147,25 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   min-width: 0;
 }
 
-.agent-gui-node__composer-menu-trigger[data-agent-plan-mode-badge="true"] {
+.agent-gui-node__composer-menu-trigger[data-agent-plan-mode-badge="true"],
+.agent-gui-node__composer-menu-trigger[data-agent-plan-mode-badge="true"]:hover:not(
+    :disabled
+  ) {
   color: var(--state-warning);
 }
 
-.agent-gui-node__composer-menu-trigger[data-agent-goal-badge="true"] {
+.agent-gui-node__composer-menu-trigger[data-agent-goal-badge="true"],
+.agent-gui-node__composer-menu-trigger[data-agent-goal-badge="true"]:hover:not(
+    :disabled
+  ) {
   color: var(--tutti-purple);
 }
 
 /* Active Tutti Mode chip: icon (bg-current) and label both go tutti-purple. */
-.agent-gui-node__composer-menu-trigger[data-agent-tutti-mode-active="true"] {
+.agent-gui-node__composer-menu-trigger[data-agent-tutti-mode-active="true"],
+.agent-gui-node__composer-menu-trigger[data-agent-tutti-mode-active="true"]:hover:not(
+    :disabled
+  ) {
   color: var(--tutti-purple);
 }
 .agent-gui-node__composer-menu-trigger:hover:not(:disabled) {
@@ -10865,8 +10880,16 @@ html[data-theme="light"] [data-message-center-item-id].agent-gui-edge-glow {
   top: 50%;
   left: 0;
   width: max(0px, var(--agent-gui-star-stream-width, 0px));
-  height: 28px;
-  transform: translateY(calc(-50% - 2px));
+  /* Match the slider track box (h-5 = 1.25rem). The Radix thumb is
+     absolutely positioned, so the slider root -- and therefore this
+     overlay's positioning parent -- is exactly the track height;
+     centering on it keeps stars and their glow clipped to the track
+     instead of spilling above and below it. */
+  height: 1.25rem;
+  transform: translateY(-50%);
+  /* Mirror the slider track's rounded-full so the clipped star layer
+     shares the same capsule silhouette as the gradient track beneath it. */
+  border-radius: 9999px;
   overflow: hidden;
   pointer-events: none;
 }
