@@ -758,6 +758,10 @@ The reusable tool-sidebar contract lives in
 `packages/agent/gui/workbench/tool-sidebar`. Hosts provide the supported panel
 catalog and render adapters; the shared component owns tab selection, picker,
 sizing, toolbar mechanics, and a structured `AgentToolSidebarHeaderLayout`.
+Hosts may hide the shared toolbar toggle through the explicit
+`showToggleButton` presentation input; omission preserves the standard visible
+entry. Hiding the entry does not duplicate or override sidebar behavior in the
+host.
 That layout carries the actions, open state, and reserved width into the one
 authoritative `AgentGuiWorkbenchHeader`.
 
