@@ -40,6 +40,7 @@ export type DesktopAgentGUIConversationRailToggleDetail =
 
 export interface DesktopAgentGUISurfaceContext {
   activation: WorkbenchHostNodeBodyContext["activation"];
+  conversationRailAutoCollapseMode?: "preserve-middle-content";
   displayMode: WorkbenchHostNodeBodyContext["displayMode"];
   frame: WorkbenchHostNodeBodyContext["node"]["frame"];
   host: WorkbenchHostNodeBodyContext["host"];

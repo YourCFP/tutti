@@ -176,6 +176,14 @@ message flow narrows instead of being covered. Width added from the sidebar's
 left separator follows the same adjacent layout rule. Closing the sidebar
 restores the pre-panel native width. This sizing remains renderer/main window
 presentation state and never enters AgentGUI or workbench snapshots.
+Only the Agent-only standalone window enables the constrained-shrink contract.
+Its middle conversation content reserves 408px. During native window shrink,
+the right tool sidebar keeps its chosen width and closes directly when retaining
+it would cross the current AgentGUI minimum; continued shrink then closes the
+left conversation Rail directly before that Rail can be compressed. With both
+sidebars closed, the 52px provider Rail plus the middle-content minimum gives
+the Electron window a 460px minimum width. Embedded Workbench AgentGUI surfaces
+retain the shared default responsive behavior.
 An Agent-only right sidebar with no mounted tool uses a compact picker width at
 60% of the Files panel default. The picker lists Files, Terminal, Browser,
 Tasks, Apps, and Messages in the same tool hierarchy used by the panel header.

@@ -717,6 +717,8 @@ function DesktopAgentGUISurfaceImpl({
         identity={agentGUIHostProps.identity}
         workspace={agentGUIHostProps.workspace}
         frame={{
+          conversationRailAutoCollapseMode:
+            surface.conversationRailAutoCollapseMode,
           position: DESKTOP_AGENT_GUI_POSITION,
           width: frame.width,
           height: frame.height,

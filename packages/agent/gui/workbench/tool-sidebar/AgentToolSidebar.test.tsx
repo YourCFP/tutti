@@ -90,6 +90,47 @@ describe("AgentToolSidebar", () => {
     );
   });
 
+  it("collapses for a container constraint without resizing the host window", async () => {
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    const ref = createRef<AgentToolSidebarHandle>();
+    const resizeContainerContentWidth = vi.fn(async (width: number) => ({
+      width
+    }));
+    render(
+      <AgentToolSidebar
+        ref={ref}
+        containerWidth={1500}
+        copy={copy}
+        header={{
+          layout: "overlay",
+          owner: "window",
+          render: (layout) => <header>{layout.actions}</header>
+        }}
+        mainContentMinWidthPx={750}
+        panels={panels}
+        renderPanel={({ tab }) => <div>{tab.panel} content</div>}
+        resizeContainerContentWidth={resizeContainerContentWidth}
+      >
+        <main>Agent content</main>
+      </AgentToolSidebar>
+    );
+
+    await act(async () => {
+      ref.current?.openPanel("files");
+    });
+    const resizeCallCount = resizeContainerContentWidth.mock.calls.length;
+    await act(async () => {
+      ref.current?.collapseForContainerConstraint();
+    });
+
+    expect(screen.getByLabelText("Open right panel")).toBeInTheDocument();
+    expect(resizeContainerContentWidth).toHaveBeenCalledTimes(resizeCallCount);
+  });
+
   it("registers one host-owned header without adding window chrome or a panel header", () => {
     const { container } = render(
       <AgentToolSidebar

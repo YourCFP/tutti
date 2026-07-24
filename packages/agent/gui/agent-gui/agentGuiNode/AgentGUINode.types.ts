@@ -91,6 +91,12 @@ export interface AgentGUINodeFrameLayout {
   /** Host-projected presentation visibility. Independent from node focus. */
   isVisible?: boolean;
   embedded?: boolean;
+  /**
+   * Standalone windows preserve the middle conversation width and collapse
+   * the conversation Rail before it can be compressed. Other surfaces retain
+   * the default responsive policy.
+   */
+  conversationRailAutoCollapseMode?: "preserve-middle-content";
   previewMode?: boolean;
 }
 
@@ -364,6 +370,8 @@ export function areAgentGUINodePropsEqual(
     pf.isActive === nf.isActive &&
     pf.isVisible === nf.isVisible &&
     pf.embedded === nf.embedded &&
+    pf.conversationRailAutoCollapseMode ===
+      nf.conversationRailAutoCollapseMode &&
     pf.previewMode === nf.previewMode &&
     pr.composerFocusSequence === nr.composerFocusSequence &&
     pr.composerAppend === nr.composerAppend &&

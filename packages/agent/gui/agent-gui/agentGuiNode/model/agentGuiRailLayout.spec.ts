@@ -10,9 +10,11 @@ import {
   AGENT_GUI_EXPANDED_TARGET_WIDTH_PX,
   AGENT_GUI_PROVIDER_RAIL_WIDTH_PX,
   AGENT_GUI_RAIL_RESIZE_HANDLE_WIDTH_PX,
+  AGENT_GUI_STANDALONE_MIDDLE_CONTENT_MIN_WIDTH_PX,
   clampAgentGUIConversationRailWidthPx,
   resolveAgentGUIConversationRailPresentation,
   resolveAgentGUIExpandedWindowFrame,
+  resolveStandaloneAgentGUIViewportMinimumWidthPx,
   resolveNextAgentGUIConversationRailWidthPx,
   shouldAutoCollapseAgentGUIConversationRail
 } from "./agentGuiRailLayout";
@@ -109,6 +111,46 @@ describe("agentGuiRailLayout", () => {
     ).toEqual({
       conversationRailWidthPx: AGENT_GUI_CONVERSATION_RAIL_DEFAULT_WIDTH_PX,
       isAutoCollapsed: false,
+      isCollapsed: true
+    });
+  });
+
+  it("preserves standalone middle content and directly collapses the conversation rail", () => {
+    expect(AGENT_GUI_STANDALONE_MIDDLE_CONTENT_MIN_WIDTH_PX).toBe(408);
+    expect(
+      resolveStandaloneAgentGUIViewportMinimumWidthPx({
+        conversationRailCollapsed: true,
+        conversationRailWidthPx: 520
+      })
+    ).toBe(AGENT_GUI_COLLAPSED_MIN_WIDTH_PX);
+    expect(
+      resolveStandaloneAgentGUIViewportMinimumWidthPx({
+        conversationRailCollapsed: false,
+        conversationRailWidthPx: 280
+      })
+    ).toBe(750);
+    expect(
+      resolveAgentGUIConversationRailPresentation({
+        autoCollapseMode: "preserve-middle-content",
+        containerWidthPx: 750,
+        conversationRailCollapsed: false,
+        conversationRailWidthPx: 280
+      })
+    ).toEqual({
+      conversationRailWidthPx: 280,
+      isAutoCollapsed: false,
+      isCollapsed: false
+    });
+    expect(
+      resolveAgentGUIConversationRailPresentation({
+        autoCollapseMode: "preserve-middle-content",
+        containerWidthPx: 749,
+        conversationRailCollapsed: false,
+        conversationRailWidthPx: 280
+      })
+    ).toEqual({
+      conversationRailWidthPx: 280,
+      isAutoCollapsed: true,
       isCollapsed: true
     });
   });

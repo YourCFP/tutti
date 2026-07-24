@@ -10,6 +10,7 @@ import { selectWorkspaceAgentConsumerCounts } from "@tutti-os/agent-activity-cor
 import {
   AgentToolPanelIcon,
   AgentToolSidebar,
+  shouldAutoCollapseAgentToolSidebar,
   type AgentToolBrowserController,
   type AgentToolPanelDefinition,
   type AgentToolPanelId,
@@ -63,6 +64,7 @@ interface StandaloneAgentToolSidebarProps {
   onAppsOpen: () => void;
   onAppendBrowserElementMention: (mention: string) => void;
   onBrowserElementError: (message: string) => void;
+  onLayoutWidthChange?: (width: number) => void;
   onToolHostReady: (host: WorkbenchHostHandle | null) => void;
   resizeWindowContentWidth: (
     width: number,
@@ -87,6 +89,7 @@ export function StandaloneAgentToolSidebar({
   onAppsOpen,
   onAppendBrowserElementMention,
   onBrowserElementError,
+  onLayoutWidthChange,
   onToolHostReady,
   resizeWindowContentWidth,
   workspaceId
@@ -96,6 +99,10 @@ export function StandaloneAgentToolSidebar({
     useWorkspaceAppCenterService();
   const sidebarRef = useRef<AgentToolSidebarHandle>(null);
   const [containerWidth, setContainerWidth] = useState(() => window.innerWidth);
+  const containerWidthRef = useRef(containerWidth);
+  const mainContentMinWidthRef = useRef(mainContentMinWidthPx ?? 0);
+  const toolSidebarLayoutWidthRef = useRef(0);
+  mainContentMinWidthRef.current = mainContentMinWidthPx ?? 0;
   const [activePanel, setActivePanel] = useState<AgentToolPanelId | null>(null);
   const [mountedTabs, setMountedTabs] = useState<readonly AgentToolTab[]>([]);
   const lastHandledAppOpenIdRef = useRef<string | null>(null);
@@ -168,10 +175,33 @@ export function StandaloneAgentToolSidebar({
   );
 
   useEffect(() => {
-    const handleResize = () => setContainerWidth(window.innerWidth);
+    const handleResize = () => {
+      const nextContainerWidth = window.innerWidth;
+      const previousContainerWidth = containerWidthRef.current;
+      containerWidthRef.current = nextContainerWidth;
+      if (
+        nextContainerWidth < previousContainerWidth &&
+        toolSidebarLayoutWidthRef.current > 0 &&
+        shouldAutoCollapseAgentToolSidebar({
+          containerWidth: nextContainerWidth,
+          mainContentMinWidth: mainContentMinWidthRef.current,
+          sidebarWidth: toolSidebarLayoutWidthRef.current
+        })
+      ) {
+        sidebarRef.current?.collapseForContainerConstraint();
+      }
+      setContainerWidth(nextContainerWidth);
+    };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+  const handleLayoutWidthChange = useCallback(
+    (width: number) => {
+      toolSidebarLayoutWidthRef.current = width;
+      onLayoutWidthChange?.(width);
+    },
+    [onLayoutWidthChange]
+  );
   const handleBrowserControllerReady = useCallback(
     (
       tabId: string,
@@ -423,6 +453,7 @@ export function StandaloneAgentToolSidebar({
           render: renderHeader
         }}
         mainContentMinWidthPx={mainContentMinWidthPx}
+        onLayoutWidthChange={handleLayoutWidthChange}
         panels={panels}
         quickActionPanels={[
           ...(automationBrowserCount > 0 ? (["browser"] as const) : []),

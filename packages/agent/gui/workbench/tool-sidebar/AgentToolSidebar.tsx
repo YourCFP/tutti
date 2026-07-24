@@ -27,6 +27,7 @@ import { useAgentToolSidebarController } from "./useAgentToolSidebarController.t
 export interface AgentToolSidebarHandle {
   addPanel(panel: AgentToolPanelId, resourceId?: string): string | null;
   close(): void;
+  collapseForContainerConstraint(): void;
   closeTab(tabId: string): void;
   ensurePanel(panel: AgentToolPanelId, resourceId?: string): string | null;
   openPanel(panel: AgentToolPanelId, resourceId?: string): string | null;
@@ -104,6 +105,7 @@ export const AgentToolSidebar = forwardRef<
     bindLayoutWidthProjection,
     bindLifecycle,
     closePanel,
+    collapseSidebarForContainerConstraint,
     closePanelTab,
     contentReadyTabIds,
     ensurePanel,
@@ -137,11 +139,19 @@ export const AgentToolSidebar = forwardRef<
     () => ({
       addPanel,
       close: closePanel,
+      collapseForContainerConstraint: collapseSidebarForContainerConstraint,
       closeTab: closePanelTab,
       ensurePanel,
       openPanel
     }),
-    [addPanel, closePanel, closePanelTab, ensurePanel, openPanel]
+    [
+      addPanel,
+      closePanel,
+      closePanelTab,
+      collapseSidebarForContainerConstraint,
+      ensurePanel,
+      openPanel
+    ]
   );
 
   const isHostOwnedHeader = header.owner === "host";

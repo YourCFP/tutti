@@ -232,6 +232,7 @@ export const AgentGUINode = memo(function AgentGUINode({
   );
   const conversationRailPresentation =
     resolveAgentGUIConversationRailPresentation({
+      autoCollapseMode: frame.conversationRailAutoCollapseMode,
       containerWidthPx: width,
       conversationRailCollapsed: state.conversationRailCollapsed,
       conversationRailWidthPx: state.conversationRailWidthPx
@@ -454,6 +455,7 @@ export const AgentGUINode = memo(function AgentGUINode({
           const isRenderedConversationRailCollapsed =
             isConversationRailCollapsed ||
             resolveAgentGUIConversationRailPresentation({
+              autoCollapseMode: frame.conversationRailAutoCollapseMode,
               containerWidthPx: renderedWidth,
               conversationRailCollapsed: state.conversationRailCollapsed,
               conversationRailWidthPx: state.conversationRailWidthPx
