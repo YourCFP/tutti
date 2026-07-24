@@ -34,7 +34,6 @@ import {
   buildTurnGroupIndexByRowIndex,
   buildUserMessageLocatorItems,
   escapeCssString,
-  findParticipantTurnDividerRowIndexes,
   findTurnDividerRowIndexes,
   transcriptRowKey,
   useAgentTranscriptDisplayRows,
@@ -235,7 +234,8 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
   const participantHeadersEnabled = participantPresentation?.enabled === true;
   // Participant-header presentation (Agent board session detail): tool-group
   // rows attach to the assistant message that follows them instead of sitting
-  // after the previous message, and turn dividers key off user messages. The
+  // after the previous message, and presentation turns key off user messages.
+  // Canonical Turn groups remain responsible for disclosure and timing. The
   // row projection lives in the transcript model read hook so this component
   // stays within the degradation-check memo budget.
   const transcriptRowSet = useAgentTranscriptDisplayRows(
@@ -244,6 +244,7 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
   );
   const displayRows = transcriptRowSet.rows;
   const rowKeys = transcriptRowSet.rowKeys;
+  const participantTurnProjection = transcriptRowSet.participantTurnProjection;
   const turnGroups = useMemo(
     () => buildAgentTranscriptTurnGroups(displayRows, rowKeys),
     [displayRows, rowKeys]
@@ -285,10 +286,10 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
   );
   const dividerRowIndexes = useMemo(
     () =>
-      participantHeadersEnabled
-        ? findParticipantTurnDividerRowIndexes(displayRows)
+      participantTurnProjection
+        ? participantTurnProjection.dividerRowIndexes
         : findTurnDividerRowIndexes(turnIndexById, displayRows),
-    [displayRows, turnIndexById, participantHeadersEnabled]
+    [displayRows, turnIndexById, participantTurnProjection]
   );
   const canonicalTurnById = new Map(
     (conversation.sourceDetail.sessionTurns ?? []).map((turn) => [
@@ -315,11 +316,12 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
       ] as const;
     })
   );
-  const participantHeaderRenderKeys = participantHeadersEnabled
+  const participantHeaderRenderKeys = participantTurnProjection
     ? findParticipantHeaderRenderKeys(
         turnGroups,
         rowKeys,
-        turnWorkSectionModelByKey
+        turnWorkSectionModelByKey,
+        participantTurnProjection.turnIndexByRowIndex
       )
     : null;
   const basePath = conversation.sourceDetail.cwd;
