@@ -235,18 +235,17 @@ export const AgentTranscriptView = memo(function AgentTranscriptView({
   const participantHeadersEnabled = participantPresentation?.enabled === true;
   // Participant-header presentation (Agent board session detail): tool-group
   // rows attach to the assistant message that follows them instead of sitting
-  // after the previous message, and turn dividers key off user messages.
-  const displayRows = useMemo(
-    () =>
-      participantHeadersEnabled
-        ? attachLeadingToolRowsToFollowingMessages(conversation.rows)
-        : conversation.rows,
-    [conversation.rows, participantHeadersEnabled]
-  );
-  const rowKeys = useMemo(
-    () => displayRows.map(transcriptRowKey),
-    [displayRows]
-  );
+  // after the previous message, and turn dividers key off user messages. Rows
+  // and their keys share a single projection so this component stays within
+  // the degradation-check memo budget.
+  const transcriptRowSet = useMemo(() => {
+    const rows = participantHeadersEnabled
+      ? attachLeadingToolRowsToFollowingMessages(conversation.rows)
+      : conversation.rows;
+    return { rows, rowKeys: rows.map(transcriptRowKey) };
+  }, [conversation.rows, participantHeadersEnabled]);
+  const displayRows = transcriptRowSet.rows;
+  const rowKeys = transcriptRowSet.rowKeys;
   const turnGroups = useMemo(
     () => buildAgentTranscriptTurnGroups(displayRows, rowKeys),
     [displayRows, rowKeys]
