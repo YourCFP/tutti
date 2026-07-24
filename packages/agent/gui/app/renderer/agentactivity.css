@@ -5636,8 +5636,6 @@ aside.workspace-agents-status-panel
   align-items: center;
   gap: 10px;
   min-width: 0;
-  /* Right inset mirrors the conversation list's 4px padding + 8px native
-     scrollbar gutter so the toolbar controls end flush with the row edges. */
   padding: 2px 12px 16px 12px;
 }
 
@@ -5978,10 +5976,9 @@ aside.workspace-agents-status-panel
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  /* Right inset stays 4px because the always-visible native scrollbar already
-     reserves an 8px gutter, keeping the visual right inset at 12px like the
-     left side. */
-  padding: 0 4px 18px 12px;
+  /* The native overlay scrollbar does not reserve a gutter on macOS, so the
+     right inset must match the left side explicitly. */
+  padding: 0 12px 18px 12px;
 }
 
 .agent-gui-node__conversation-section {
